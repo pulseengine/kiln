@@ -19,9 +19,9 @@
 
 use std::string::String;
 
+use kiln_error::Result;
 use kiln_foundation::values::Value;
 use std::vec::Vec;
-use kiln_error::Result;
 
 /// Component Model value types (re-exported for convenience)
 /// These are high-level values that have been lifted from core WASM representation
@@ -116,7 +116,9 @@ impl<'a> LoweringContext<'a> {
         self.alloc_offset = aligned + size;
 
         if (self.alloc_offset as usize) > self.memory.len() {
-            return Err(kiln_error::Error::runtime_error("Out of memory for lowering"));
+            return Err(kiln_error::Error::runtime_error(
+                "Out of memory for lowering",
+            ));
         }
 
         Ok(ptr)
@@ -128,7 +130,9 @@ impl<'a> LoweringContext<'a> {
         let end = start + data.len();
 
         if end > self.memory.len() {
-            return Err(kiln_error::Error::runtime_error("Memory write out of bounds"));
+            return Err(kiln_error::Error::runtime_error(
+                "Memory write out of bounds",
+            ));
         }
 
         self.memory[start..end].copy_from_slice(data);
@@ -161,7 +165,10 @@ pub enum WasiComponentType {
     /// Option<T> - discriminant + optional value
     Option(Box<WasiComponentType>),
     /// Result<T, E> - discriminant + payload
-    Result(Option<Box<WasiComponentType>>, Option<Box<WasiComponentType>>),
+    Result(
+        Option<Box<WasiComponentType>>,
+        Option<Box<WasiComponentType>>,
+    ),
     /// Resource handle (own or borrow)
     Handle,
     /// Unit type (no value)
@@ -210,21 +217,24 @@ impl WasiFunctionSignature {
     /// Count the number of flat (i32/i64) values a type occupies.
     fn flat_count(ty: &WasiComponentType) -> u32 {
         match ty {
-            WasiComponentType::Bool | WasiComponentType::U8 | WasiComponentType::S8 |
-            WasiComponentType::U16 | WasiComponentType::S16 |
-            WasiComponentType::U32 | WasiComponentType::S32 |
-            WasiComponentType::F32 | WasiComponentType::Char |
-            WasiComponentType::Handle => 1,
-            WasiComponentType::U64 | WasiComponentType::S64 |
-            WasiComponentType::F64 => 1, // i64 is 1 flat value
-            WasiComponentType::String | WasiComponentType::ListU8 |
-            WasiComponentType::List(_) => 2, // ptr + len
+            WasiComponentType::Bool
+            | WasiComponentType::U8
+            | WasiComponentType::S8
+            | WasiComponentType::U16
+            | WasiComponentType::S16
+            | WasiComponentType::U32
+            | WasiComponentType::S32
+            | WasiComponentType::F32
+            | WasiComponentType::Char
+            | WasiComponentType::Handle => 1,
+            WasiComponentType::U64 | WasiComponentType::S64 | WasiComponentType::F64 => 1, // i64 is 1 flat value
+            WasiComponentType::String | WasiComponentType::ListU8 | WasiComponentType::List(_) => 2, // ptr + len
             WasiComponentType::Option(inner) => 1 + Self::flat_count(inner), // discriminant + payload
             WasiComponentType::Result(ok, err) => {
                 let ok_flat = ok.as_ref().map_or(0, |t| Self::flat_count(t));
                 let err_flat = err.as_ref().map_or(0, |t| Self::flat_count(t));
                 1 + core::cmp::max(ok_flat, err_flat) // discriminant + max payload
-            }
+            },
             WasiComponentType::Tuple(types) => types.iter().map(Self::flat_count).sum(),
             WasiComponentType::Unit => 0,
         }
@@ -233,7 +243,10 @@ impl WasiFunctionSignature {
 
 /// Get the function signature for a WASI function.
 /// Returns None if the function is unknown.
-pub fn get_wasi_function_signature(interface: &str, function: &str) -> Option<WasiFunctionSignature> {
+pub fn get_wasi_function_signature(
+    interface: &str,
+    function: &str,
+) -> Option<WasiFunctionSignature> {
     // Strip version
     let base_interface = if let Some(at_pos) = interface.find('@') {
         &interface[..at_pos]
@@ -256,18 +269,26 @@ pub fn get_wasi_function_signature(interface: &str, function: &str) -> Option<Wa
 
         // wasi:io/streams.[method]output-stream.blocking-write-and-flush
         // (self: borrow<output-stream>, contents: list<u8>) -> result<_, stream-error>
-        ("wasi:io/streams", "[method]output-stream.blocking-write-and-flush") |
-        ("wasi:io/streams", "output-stream.blocking-write-and-flush") => Some(WasiFunctionSignature::new(
-            vec![WasiComponentType::Handle, WasiComponentType::ListU8],
-            vec![WasiComponentType::Result(None, Some(Box::new(WasiComponentType::String)))],
-        )),
+        ("wasi:io/streams", "[method]output-stream.blocking-write-and-flush")
+        | ("wasi:io/streams", "output-stream.blocking-write-and-flush") => {
+            Some(WasiFunctionSignature::new(
+                vec![WasiComponentType::Handle, WasiComponentType::ListU8],
+                vec![WasiComponentType::Result(
+                    None,
+                    Some(Box::new(WasiComponentType::String)),
+                )],
+            ))
+        },
 
         // wasi:io/streams.[method]output-stream.blocking-flush
         // (self: borrow<output-stream>) -> result<_, stream-error>
-        ("wasi:io/streams", "[method]output-stream.blocking-flush") |
-        ("wasi:io/streams", "output-stream.blocking-flush") => Some(WasiFunctionSignature::new(
+        ("wasi:io/streams", "[method]output-stream.blocking-flush")
+        | ("wasi:io/streams", "output-stream.blocking-flush") => Some(WasiFunctionSignature::new(
             vec![WasiComponentType::Handle],
-            vec![WasiComponentType::Result(None, Some(Box::new(WasiComponentType::String)))],
+            vec![WasiComponentType::Result(
+                None,
+                Some(Box::new(WasiComponentType::String)),
+            )],
         )),
 
         // wasi:cli/exit.exit(status: result<_, _>)
@@ -279,10 +300,9 @@ pub fn get_wasi_function_signature(interface: &str, function: &str) -> Option<Wa
         // wasi:cli/environment.get-environment() -> list<tuple<string, string>>
         ("wasi:cli/environment", "get-environment") => Some(WasiFunctionSignature::new(
             vec![],
-            vec![WasiComponentType::List(Box::new(WasiComponentType::Tuple(vec![
-                WasiComponentType::String,
-                WasiComponentType::String,
-            ])))],
+            vec![WasiComponentType::List(Box::new(WasiComponentType::Tuple(
+                vec![WasiComponentType::String, WasiComponentType::String],
+            )))],
         )),
 
         // wasi:cli/environment.get-arguments() -> list<string>
@@ -294,13 +314,15 @@ pub fn get_wasi_function_signature(interface: &str, function: &str) -> Option<Wa
         // wasi:cli/environment.initial-cwd() -> option<string>
         ("wasi:cli/environment", "initial-cwd") => Some(WasiFunctionSignature::new(
             vec![],
-            vec![WasiComponentType::Option(Box::new(WasiComponentType::String))],
+            vec![WasiComponentType::Option(Box::new(
+                WasiComponentType::String,
+            ))],
         )),
 
         // Resource drops
-        ("wasi:io/streams", "[resource-drop]output-stream") |
-        ("wasi:io/streams", "[resource-drop]input-stream") |
-        ("wasi:io/error", "[resource-drop]error") => Some(WasiFunctionSignature::new(
+        ("wasi:io/streams", "[resource-drop]output-stream")
+        | ("wasi:io/streams", "[resource-drop]input-stream")
+        | ("wasi:io/error", "[resource-drop]error") => Some(WasiFunctionSignature::new(
             vec![WasiComponentType::Handle],
             vec![],
         )),
@@ -320,19 +342,25 @@ pub fn get_wasi_function_signature(interface: &str, function: &str) -> Option<Wa
         // wasi:cli/terminal-stdin.get-terminal-stdin() -> option<own<terminal-input>>
         ("wasi:cli/terminal-stdin", "get-terminal-stdin") => Some(WasiFunctionSignature::new(
             vec![],
-            vec![WasiComponentType::Option(Box::new(WasiComponentType::Handle))],
+            vec![WasiComponentType::Option(Box::new(
+                WasiComponentType::Handle,
+            ))],
         )),
 
         // wasi:cli/terminal-stdout.get-terminal-stdout() -> option<own<terminal-output>>
         ("wasi:cli/terminal-stdout", "get-terminal-stdout") => Some(WasiFunctionSignature::new(
             vec![],
-            vec![WasiComponentType::Option(Box::new(WasiComponentType::Handle))],
+            vec![WasiComponentType::Option(Box::new(
+                WasiComponentType::Handle,
+            ))],
         )),
 
         // wasi:cli/terminal-stderr.get-terminal-stderr() -> option<own<terminal-output>>
         ("wasi:cli/terminal-stderr", "get-terminal-stderr") => Some(WasiFunctionSignature::new(
             vec![],
-            vec![WasiComponentType::Option(Box::new(WasiComponentType::Handle))],
+            vec![WasiComponentType::Option(Box::new(
+                WasiComponentType::Handle,
+            ))],
         )),
 
         // wasi:io/poll.poll(list<pollable>) -> list<u32>
@@ -360,39 +388,56 @@ pub fn get_wasi_function_signature(interface: &str, function: &str) -> Option<Wa
         )),
 
         // wasi:io/streams.[method]output-stream.check-write(self: borrow<output-stream>) -> result<u64, stream-error>
-        ("wasi:io/streams", "[method]output-stream.check-write") => Some(WasiFunctionSignature::new(
-            vec![WasiComponentType::Handle],
-            vec![WasiComponentType::Result(Some(Box::new(WasiComponentType::U64)), Some(Box::new(WasiComponentType::String)))],
-        )),
+        ("wasi:io/streams", "[method]output-stream.check-write") => {
+            Some(WasiFunctionSignature::new(
+                vec![WasiComponentType::Handle],
+                vec![WasiComponentType::Result(
+                    Some(Box::new(WasiComponentType::U64)),
+                    Some(Box::new(WasiComponentType::String)),
+                )],
+            ))
+        },
 
         // wasi:io/streams.[method]output-stream.write(self: borrow<output-stream>, contents: list<u8>) -> result<_, stream-error>
         ("wasi:io/streams", "[method]output-stream.write") => Some(WasiFunctionSignature::new(
             vec![WasiComponentType::Handle, WasiComponentType::ListU8],
-            vec![WasiComponentType::Result(None, Some(Box::new(WasiComponentType::String)))],
+            vec![WasiComponentType::Result(
+                None,
+                Some(Box::new(WasiComponentType::String)),
+            )],
         )),
 
         // Resource drops for terminal and poll resources
-        ("wasi:cli/terminal-input", "[resource-drop]terminal-input") |
-        ("wasi:cli/terminal-output", "[resource-drop]terminal-output") => Some(WasiFunctionSignature::new(
-            vec![WasiComponentType::Handle],
-            vec![],
-        )),
+        ("wasi:cli/terminal-input", "[resource-drop]terminal-input")
+        | ("wasi:cli/terminal-output", "[resource-drop]terminal-output") => Some(
+            WasiFunctionSignature::new(vec![WasiComponentType::Handle], vec![]),
+        ),
 
         // wasi:filesystem/types - descriptor operations
-        ("wasi:filesystem/types", "[method]descriptor.get-type") => Some(WasiFunctionSignature::new(
-            vec![WasiComponentType::Handle],
-            vec![WasiComponentType::Result(
-                Some(Box::new(WasiComponentType::U8)), // descriptor-type enum
-                Some(Box::new(WasiComponentType::U8)), // error-code enum
-            )],
-        )),
-        ("wasi:filesystem/types", "[method]descriptor.open-at") => Some(WasiFunctionSignature::new(
-            vec![WasiComponentType::Handle, WasiComponentType::U32, WasiComponentType::String, WasiComponentType::U32, WasiComponentType::U32],
-            vec![WasiComponentType::Result(
-                Some(Box::new(WasiComponentType::Handle)),
-                Some(Box::new(WasiComponentType::U8)),
-            )],
-        )),
+        ("wasi:filesystem/types", "[method]descriptor.get-type") => {
+            Some(WasiFunctionSignature::new(
+                vec![WasiComponentType::Handle],
+                vec![WasiComponentType::Result(
+                    Some(Box::new(WasiComponentType::U8)), // descriptor-type enum
+                    Some(Box::new(WasiComponentType::U8)), // error-code enum
+                )],
+            ))
+        },
+        ("wasi:filesystem/types", "[method]descriptor.open-at") => {
+            Some(WasiFunctionSignature::new(
+                vec![
+                    WasiComponentType::Handle,
+                    WasiComponentType::U32,
+                    WasiComponentType::String,
+                    WasiComponentType::U32,
+                    WasiComponentType::U32,
+                ],
+                vec![WasiComponentType::Result(
+                    Some(Box::new(WasiComponentType::Handle)),
+                    Some(Box::new(WasiComponentType::U8)),
+                )],
+            ))
+        },
         ("wasi:filesystem/types", "[method]descriptor.stat") => Some(WasiFunctionSignature::new(
             vec![WasiComponentType::Handle],
             vec![WasiComponentType::Result(
@@ -400,44 +445,69 @@ pub fn get_wasi_function_signature(interface: &str, function: &str) -> Option<Wa
                     WasiComponentType::U8,  // type
                     WasiComponentType::U64, // link-count
                     WasiComponentType::U64, // size
-                    WasiComponentType::U64, WasiComponentType::U32, // data-access-timestamp
-                    WasiComponentType::U64, WasiComponentType::U32, // data-modification-timestamp
-                    WasiComponentType::U64, WasiComponentType::U32, // status-change-timestamp
+                    WasiComponentType::U64,
+                    WasiComponentType::U32, // data-access-timestamp
+                    WasiComponentType::U64,
+                    WasiComponentType::U32, // data-modification-timestamp
+                    WasiComponentType::U64,
+                    WasiComponentType::U32, // status-change-timestamp
                 ]))),
                 Some(Box::new(WasiComponentType::U8)),
             )],
         )),
-        ("wasi:filesystem/types", "[method]descriptor.stat-at") => Some(WasiFunctionSignature::new(
-            vec![WasiComponentType::Handle, WasiComponentType::U32, WasiComponentType::String],
-            vec![WasiComponentType::Result(
-                Some(Box::new(WasiComponentType::Tuple(vec![
-                    WasiComponentType::U8, WasiComponentType::U64, WasiComponentType::U64,
-                    WasiComponentType::U64, WasiComponentType::U32,
-                    WasiComponentType::U64, WasiComponentType::U32,
-                    WasiComponentType::U64, WasiComponentType::U32,
-                ]))),
-                Some(Box::new(WasiComponentType::U8)),
-            )],
-        )),
-        ("wasi:filesystem/types", "[method]descriptor.read-via-stream") => Some(WasiFunctionSignature::new(
-            vec![WasiComponentType::Handle, WasiComponentType::U64],
-            vec![WasiComponentType::Result(
-                Some(Box::new(WasiComponentType::Handle)),
-                Some(Box::new(WasiComponentType::U8)),
-            )],
-        )),
-        ("wasi:filesystem/types", "[method]descriptor.metadata-hash") |
-        ("wasi:filesystem/types", "[method]descriptor.metadata-hash-at") => Some(WasiFunctionSignature::new(
-            vec![WasiComponentType::Handle],
-            vec![WasiComponentType::Result(
-                Some(Box::new(WasiComponentType::Tuple(vec![WasiComponentType::U64, WasiComponentType::U64]))),
-                Some(Box::new(WasiComponentType::U8)),
-            )],
-        )),
+        ("wasi:filesystem/types", "[method]descriptor.stat-at") => {
+            Some(WasiFunctionSignature::new(
+                vec![
+                    WasiComponentType::Handle,
+                    WasiComponentType::U32,
+                    WasiComponentType::String,
+                ],
+                vec![WasiComponentType::Result(
+                    Some(Box::new(WasiComponentType::Tuple(vec![
+                        WasiComponentType::U8,
+                        WasiComponentType::U64,
+                        WasiComponentType::U64,
+                        WasiComponentType::U64,
+                        WasiComponentType::U32,
+                        WasiComponentType::U64,
+                        WasiComponentType::U32,
+                        WasiComponentType::U64,
+                        WasiComponentType::U32,
+                    ]))),
+                    Some(Box::new(WasiComponentType::U8)),
+                )],
+            ))
+        },
+        ("wasi:filesystem/types", "[method]descriptor.read-via-stream") => {
+            Some(WasiFunctionSignature::new(
+                vec![WasiComponentType::Handle, WasiComponentType::U64],
+                vec![WasiComponentType::Result(
+                    Some(Box::new(WasiComponentType::Handle)),
+                    Some(Box::new(WasiComponentType::U8)),
+                )],
+            ))
+        },
+        ("wasi:filesystem/types", "[method]descriptor.metadata-hash")
+        | ("wasi:filesystem/types", "[method]descriptor.metadata-hash-at") => {
+            Some(WasiFunctionSignature::new(
+                vec![WasiComponentType::Handle],
+                vec![WasiComponentType::Result(
+                    Some(Box::new(WasiComponentType::Tuple(vec![
+                        WasiComponentType::U64,
+                        WasiComponentType::U64,
+                    ]))),
+                    Some(Box::new(WasiComponentType::U8)),
+                )],
+            ))
+        },
         // SR-72: descriptor read/write/sync-data and directory mutation. Every error-code is
         // the u8-sized `error-code` enum.
         ("wasi:filesystem/types", "[method]descriptor.read") => Some(WasiFunctionSignature::new(
-            vec![WasiComponentType::Handle, WasiComponentType::U64, WasiComponentType::U64],
+            vec![
+                WasiComponentType::Handle,
+                WasiComponentType::U64,
+                WasiComponentType::U64,
+            ],
             vec![WasiComponentType::Result(
                 // tuple<list<u8>, bool>
                 Some(Box::new(WasiComponentType::Tuple(vec![
@@ -448,94 +518,144 @@ pub fn get_wasi_function_signature(interface: &str, function: &str) -> Option<Wa
             )],
         )),
         ("wasi:filesystem/types", "[method]descriptor.write") => Some(WasiFunctionSignature::new(
-            vec![WasiComponentType::Handle, WasiComponentType::ListU8, WasiComponentType::U64],
+            vec![
+                WasiComponentType::Handle,
+                WasiComponentType::ListU8,
+                WasiComponentType::U64,
+            ],
             vec![WasiComponentType::Result(
                 Some(Box::new(WasiComponentType::U64)), // filesize
                 Some(Box::new(WasiComponentType::U8)),
             )],
         )),
-        ("wasi:filesystem/types", "[method]descriptor.sync-data") => Some(WasiFunctionSignature::new(
-            vec![WasiComponentType::Handle],
-            vec![WasiComponentType::Result(None, Some(Box::new(WasiComponentType::U8)))],
-        )),
-        ("wasi:filesystem/types", "[method]descriptor.create-directory-at") |
-        ("wasi:filesystem/types", "[method]descriptor.remove-directory-at") |
-        ("wasi:filesystem/types", "[method]descriptor.unlink-file-at") => Some(WasiFunctionSignature::new(
-            vec![WasiComponentType::Handle, WasiComponentType::String],
-            vec![WasiComponentType::Result(None, Some(Box::new(WasiComponentType::U8)))],
-        )),
-        ("wasi:filesystem/types", "[method]descriptor.rename-at") => Some(WasiFunctionSignature::new(
-            // self, old-path, new-descriptor, new-path
-            vec![WasiComponentType::Handle, WasiComponentType::String, WasiComponentType::Handle, WasiComponentType::String],
-            vec![WasiComponentType::Result(None, Some(Box::new(WasiComponentType::U8)))],
-        )),
-        ("wasi:filesystem/types", "[method]descriptor.link-at") => Some(WasiFunctionSignature::new(
-            // self, old-path-flags, old-path, new-descriptor, new-path
-            vec![
-                WasiComponentType::Handle,
-                WasiComponentType::U32,
-                WasiComponentType::String,
-                WasiComponentType::Handle,
-                WasiComponentType::String,
-            ],
-            vec![WasiComponentType::Result(None, Some(Box::new(WasiComponentType::U8)))],
-        )),
-        ("wasi:filesystem/types", "[method]descriptor.symlink-at") => Some(WasiFunctionSignature::new(
-            // self, old-path (link contents), new-path
-            vec![WasiComponentType::Handle, WasiComponentType::String, WasiComponentType::String],
-            vec![WasiComponentType::Result(None, Some(Box::new(WasiComponentType::U8)))],
-        )),
-        ("wasi:filesystem/types", "[method]descriptor.readlink-at") => Some(WasiFunctionSignature::new(
-            vec![WasiComponentType::Handle, WasiComponentType::String],
-            vec![WasiComponentType::Result(
-                Some(Box::new(WasiComponentType::String)),
-                Some(Box::new(WasiComponentType::U8)),
-            )],
-        )),
-        // SR-39: directory enumeration.
-        ("wasi:filesystem/types", "[method]descriptor.read-directory") => Some(WasiFunctionSignature::new(
-            vec![WasiComponentType::Handle],
-            vec![WasiComponentType::Result(
-                Some(Box::new(WasiComponentType::Handle)), // directory-entry-stream
-                Some(Box::new(WasiComponentType::U8)),     // error-code
-            )],
-        )),
-        ("wasi:filesystem/types", "[method]directory-entry-stream.read-directory-entry") => Some(WasiFunctionSignature::new(
-            vec![WasiComponentType::Handle],
-            vec![WasiComponentType::Result(
-                // option<directory-entry> where directory-entry = record { type: descriptor-type, name: string }.
-                // The enum descriptor-type lowers as a u8 (padded to 4) — modelled as U8; the record as a Tuple.
-                Some(Box::new(WasiComponentType::Option(Box::new(WasiComponentType::Tuple(vec![
-                    WasiComponentType::U8,
+        ("wasi:filesystem/types", "[method]descriptor.sync-data") => {
+            Some(WasiFunctionSignature::new(
+                vec![WasiComponentType::Handle],
+                vec![WasiComponentType::Result(
+                    None,
+                    Some(Box::new(WasiComponentType::U8)),
+                )],
+            ))
+        },
+        ("wasi:filesystem/types", "[method]descriptor.create-directory-at")
+        | ("wasi:filesystem/types", "[method]descriptor.remove-directory-at")
+        | ("wasi:filesystem/types", "[method]descriptor.unlink-file-at") => {
+            Some(WasiFunctionSignature::new(
+                vec![WasiComponentType::Handle, WasiComponentType::String],
+                vec![WasiComponentType::Result(
+                    None,
+                    Some(Box::new(WasiComponentType::U8)),
+                )],
+            ))
+        },
+        ("wasi:filesystem/types", "[method]descriptor.rename-at") => {
+            Some(WasiFunctionSignature::new(
+                // self, old-path, new-descriptor, new-path
+                vec![
+                    WasiComponentType::Handle,
                     WasiComponentType::String,
-                ]))))),
-                Some(Box::new(WasiComponentType::U8)), // error-code
-            )],
-        )),
-        ("wasi:filesystem/types", "[resource-drop]descriptor") |
-        ("wasi:filesystem/types", "[resource-drop]directory-entry-stream") => Some(WasiFunctionSignature::new(
-            vec![WasiComponentType::Handle],
-            vec![],
-        )),
+                    WasiComponentType::Handle,
+                    WasiComponentType::String,
+                ],
+                vec![WasiComponentType::Result(
+                    None,
+                    Some(Box::new(WasiComponentType::U8)),
+                )],
+            ))
+        },
+        ("wasi:filesystem/types", "[method]descriptor.link-at") => {
+            Some(WasiFunctionSignature::new(
+                // self, old-path-flags, old-path, new-descriptor, new-path
+                vec![
+                    WasiComponentType::Handle,
+                    WasiComponentType::U32,
+                    WasiComponentType::String,
+                    WasiComponentType::Handle,
+                    WasiComponentType::String,
+                ],
+                vec![WasiComponentType::Result(
+                    None,
+                    Some(Box::new(WasiComponentType::U8)),
+                )],
+            ))
+        },
+        ("wasi:filesystem/types", "[method]descriptor.symlink-at") => {
+            Some(WasiFunctionSignature::new(
+                // self, old-path (link contents), new-path
+                vec![
+                    WasiComponentType::Handle,
+                    WasiComponentType::String,
+                    WasiComponentType::String,
+                ],
+                vec![WasiComponentType::Result(
+                    None,
+                    Some(Box::new(WasiComponentType::U8)),
+                )],
+            ))
+        },
+        ("wasi:filesystem/types", "[method]descriptor.readlink-at") => {
+            Some(WasiFunctionSignature::new(
+                vec![WasiComponentType::Handle, WasiComponentType::String],
+                vec![WasiComponentType::Result(
+                    Some(Box::new(WasiComponentType::String)),
+                    Some(Box::new(WasiComponentType::U8)),
+                )],
+            ))
+        },
+        // SR-39: directory enumeration.
+        ("wasi:filesystem/types", "[method]descriptor.read-directory") => {
+            Some(WasiFunctionSignature::new(
+                vec![WasiComponentType::Handle],
+                vec![WasiComponentType::Result(
+                    Some(Box::new(WasiComponentType::Handle)), // directory-entry-stream
+                    Some(Box::new(WasiComponentType::U8)),     // error-code
+                )],
+            ))
+        },
+        ("wasi:filesystem/types", "[method]directory-entry-stream.read-directory-entry") => {
+            Some(WasiFunctionSignature::new(
+                vec![WasiComponentType::Handle],
+                vec![WasiComponentType::Result(
+                    // option<directory-entry> where directory-entry = record { type: descriptor-type, name: string }.
+                    // The enum descriptor-type lowers as a u8 (padded to 4) — modelled as U8; the record as a Tuple.
+                    Some(Box::new(WasiComponentType::Option(Box::new(
+                        WasiComponentType::Tuple(vec![
+                            WasiComponentType::U8,
+                            WasiComponentType::String,
+                        ]),
+                    )))),
+                    Some(Box::new(WasiComponentType::U8)), // error-code
+                )],
+            ))
+        },
+        ("wasi:filesystem/types", "[resource-drop]descriptor")
+        | ("wasi:filesystem/types", "[resource-drop]directory-entry-stream") => Some(
+            WasiFunctionSignature::new(vec![WasiComponentType::Handle], vec![]),
+        ),
         ("wasi:filesystem/preopens", "get-directories") => Some(WasiFunctionSignature::new(
             vec![],
-            vec![WasiComponentType::List(Box::new(WasiComponentType::Tuple(vec![
-                WasiComponentType::Handle, WasiComponentType::String,
-            ])))],
+            vec![WasiComponentType::List(Box::new(WasiComponentType::Tuple(
+                vec![WasiComponentType::Handle, WasiComponentType::String],
+            )))],
         )),
         // wasi:io/streams - input stream operations
-        ("wasi:io/streams", "[method]input-stream.read" | "input-stream.read") |
-        ("wasi:io/streams", "[method]input-stream.blocking-read" | "input-stream.blocking-read") => Some(WasiFunctionSignature::new(
+        ("wasi:io/streams", "[method]input-stream.read" | "input-stream.read")
+        | (
+            "wasi:io/streams",
+            "[method]input-stream.blocking-read" | "input-stream.blocking-read",
+        ) => Some(WasiFunctionSignature::new(
             vec![WasiComponentType::Handle, WasiComponentType::U64],
             vec![WasiComponentType::Result(
                 Some(Box::new(WasiComponentType::ListU8)),
                 Some(Box::new(WasiComponentType::U8)), // stream-error
             )],
         )),
-        ("wasi:io/streams", "[method]input-stream.subscribe" | "input-stream.subscribe") => Some(WasiFunctionSignature::new(
-            vec![WasiComponentType::Handle],
-            vec![WasiComponentType::Handle],
-        )),
+        ("wasi:io/streams", "[method]input-stream.subscribe" | "input-stream.subscribe") => {
+            Some(WasiFunctionSignature::new(
+                vec![WasiComponentType::Handle],
+                vec![WasiComponentType::Handle],
+            ))
+        },
         ("wasi:io/streams", "[resource-drop]input-stream") => Some(WasiFunctionSignature::new(
             vec![WasiComponentType::Handle],
             vec![],
@@ -549,8 +669,7 @@ pub fn get_wasi_function_signature(interface: &str, function: &str) -> Option<Wa
 pub fn wasi_function_needs_lifting(interface: &str, function: &str) -> bool {
     if let Some(sig) = get_wasi_function_signature(interface, function) {
         // Check if any param or result needs lifting
-        sig.params.iter().any(|t| needs_lifting(t)) ||
-        sig.results.iter().any(|t| needs_lifting(t))
+        sig.params.iter().any(|t| needs_lifting(t)) || sig.results.iter().any(|t| needs_lifting(t))
     } else {
         // Unknown function - assume it might need lifting
         false
@@ -559,13 +678,11 @@ pub fn wasi_function_needs_lifting(interface: &str, function: &str) -> bool {
 
 fn needs_lifting(ty: &WasiComponentType) -> bool {
     match ty {
-        WasiComponentType::String |
-        WasiComponentType::ListU8 |
-        WasiComponentType::List(_) => true,
+        WasiComponentType::String | WasiComponentType::ListU8 | WasiComponentType::List(_) => true,
         WasiComponentType::Option(inner) => needs_lifting(inner),
         WasiComponentType::Result(ok, err) => {
-            ok.as_ref().map(|t| needs_lifting(t)).unwrap_or(false) ||
-            err.as_ref().map(|t| needs_lifting(t)).unwrap_or(false)
+            ok.as_ref().map(|t| needs_lifting(t)).unwrap_or(false)
+                || err.as_ref().map(|t| needs_lifting(t)).unwrap_or(false)
         },
         WasiComponentType::Tuple(types) => types.iter().any(|t| needs_lifting(t)),
         _ => false,
@@ -616,68 +733,69 @@ fn lift_single_value(
         WasiComponentType::Bool => {
             let v = get_i32(core_values, 0)?;
             Ok((ComponentValue::Bool(v != 0), 1))
-        }
+        },
         WasiComponentType::U8 => {
             let v = get_i32(core_values, 0)?;
             Ok((ComponentValue::U8(v as u8), 1))
-        }
+        },
         WasiComponentType::U16 => {
             let v = get_i32(core_values, 0)?;
             Ok((ComponentValue::U16(v as u16), 1))
-        }
+        },
         WasiComponentType::U32 => {
             let v = get_i32(core_values, 0)?;
             Ok((ComponentValue::U32(v as u32), 1))
-        }
+        },
         WasiComponentType::U64 => {
             let v = get_i64(core_values, 0)?;
             Ok((ComponentValue::U64(v as u64), 1))
-        }
+        },
         WasiComponentType::S8 => {
             let v = get_i32(core_values, 0)?;
             Ok((ComponentValue::S8(v as i8), 1))
-        }
+        },
         WasiComponentType::S16 => {
             let v = get_i32(core_values, 0)?;
             Ok((ComponentValue::S16(v as i16), 1))
-        }
+        },
         WasiComponentType::S32 => {
             let v = get_i32(core_values, 0)?;
             Ok((ComponentValue::S32(v), 1))
-        }
+        },
         WasiComponentType::S64 => {
             let v = get_i64(core_values, 0)?;
             Ok((ComponentValue::S64(v), 1))
-        }
+        },
         WasiComponentType::F32 => {
             let v = get_f32(core_values, 0)?;
             Ok((ComponentValue::F32(v), 1))
-        }
+        },
         WasiComponentType::F64 => {
             let v = get_f64(core_values, 0)?;
             Ok((ComponentValue::F64(v), 1))
-        }
+        },
         WasiComponentType::Char => {
             let v = get_i32(core_values, 0)?;
             let ch = char::from_u32(v as u32)
                 .ok_or_else(|| kiln_error::Error::runtime_error("Invalid char"))?;
             Ok((ComponentValue::Char(ch), 1))
-        }
+        },
         WasiComponentType::Handle => {
             let v = get_i32(core_values, 0)?;
             Ok((ComponentValue::Handle(v as u32), 1))
-        }
+        },
         WasiComponentType::Unit => {
             Ok((ComponentValue::Bool(true), 0)) // Unit consumes nothing
-        }
+        },
 
         // String: ptr + len on stack, data in memory
         WasiComponentType::String => {
             let ptr = get_i32(core_values, 0)? as u32;
             let len = get_i32(core_values, 1)? as u32;
 
-            let mem = memory.ok_or_else(||
-                kiln_error::Error::runtime_error("Memory required for string lifting"))?;
+            let mem = memory.ok_or_else(|| {
+                kiln_error::Error::runtime_error("Memory required for string lifting")
+            })?;
 
             let start = ptr as usize;
             let end = start + len as usize;
@@ -690,15 +808,16 @@ fn lift_single_value(
                 .map_err(|_| kiln_error::Error::runtime_error("Invalid UTF-8"))?;
 
             Ok((ComponentValue::String(s.into()), 2))
-        }
+        },
 
         // List<u8>: ptr + len on stack, bytes in memory
         WasiComponentType::ListU8 => {
             let ptr = get_i32(core_values, 0)? as u32;
             let len = get_i32(core_values, 1)? as u32;
 
-            let mem = memory.ok_or_else(||
-                kiln_error::Error::runtime_error("Memory required for list lifting"))?;
+            let mem = memory.ok_or_else(|| {
+                kiln_error::Error::runtime_error("Memory required for list lifting")
+            })?;
 
             let start = ptr as usize;
             let end = start + len as usize;
@@ -707,12 +826,10 @@ fn lift_single_value(
             }
 
             let bytes = &mem[start..end];
-            let list: Vec<ComponentValue> = bytes.iter()
-                .map(|&b| ComponentValue::U8(b))
-                .collect();
+            let list: Vec<ComponentValue> = bytes.iter().map(|&b| ComponentValue::U8(b)).collect();
 
             Ok((ComponentValue::List(list), 2))
-        }
+        },
 
         // Generic List<T>: ptr + len on stack, elements in memory
         WasiComponentType::List(element_ty) => {
@@ -725,8 +842,9 @@ fn lift_single_value(
             }
 
             // For non-empty lists, we need memory access
-            let mem = memory.ok_or_else(||
-                kiln_error::Error::runtime_error("Memory required for list lifting"))?;
+            let mem = memory.ok_or_else(|| {
+                kiln_error::Error::runtime_error("Memory required for list lifting")
+            })?;
 
             // Calculate element size based on type
             let element_size = get_element_size(element_ty);
@@ -748,7 +866,7 @@ fn lift_single_value(
             }
 
             Ok((ComponentValue::List(elements), 2))
-        }
+        },
 
         // Option<T>: discriminant + optional payload
         WasiComponentType::Option(inner_ty) => {
@@ -759,7 +877,7 @@ fn lift_single_value(
                 let (inner, consumed) = lift_single_value(inner_ty, &core_values[1..], memory)?;
                 Ok((ComponentValue::Option(Some(Box::new(inner))), 1 + consumed))
             }
-        }
+        },
 
         // Result<T, E>: discriminant + payload
         WasiComponentType::Result(ok_ty, err_ty) => {
@@ -768,7 +886,10 @@ fn lift_single_value(
                 // Ok case
                 if let Some(ty) = ok_ty {
                     let (value, consumed) = lift_single_value(ty, &core_values[1..], memory)?;
-                    Ok((ComponentValue::Result(Ok(Some(Box::new(value)))), 1 + consumed))
+                    Ok((
+                        ComponentValue::Result(Ok(Some(Box::new(value)))),
+                        1 + consumed,
+                    ))
                 } else {
                     Ok((ComponentValue::Result(Ok(None)), 1))
                 }
@@ -776,12 +897,15 @@ fn lift_single_value(
                 // Err case
                 if let Some(ty) = err_ty {
                     let (value, consumed) = lift_single_value(ty, &core_values[1..], memory)?;
-                    Ok((ComponentValue::Result(Err(Some(Box::new(value)))), 1 + consumed))
+                    Ok((
+                        ComponentValue::Result(Err(Some(Box::new(value)))),
+                        1 + consumed,
+                    ))
                 } else {
                     Ok((ComponentValue::Result(Err(None)), 1))
                 }
             }
-        }
+        },
 
         // Tuple: sequence of values
         WasiComponentType::Tuple(types) => {
@@ -793,7 +917,7 @@ fn lift_single_value(
                 consumed += c;
             }
             Ok((ComponentValue::Record(values), consumed))
-        }
+        },
     }
 }
 
@@ -835,7 +959,7 @@ fn lower_single_value(value: &ComponentValue, out: &mut Vec<Value>) -> Result<()
     match value {
         ComponentValue::Bool(b) => {
             out.push(Value::I32(if *b { 1 } else { 0 }));
-        }
+        },
         ComponentValue::U8(v) => out.push(Value::I32(*v as i32)),
         ComponentValue::U16(v) => out.push(Value::I32(*v as i32)),
         ComponentValue::U32(v) => out.push(Value::I32(*v as i32)),
@@ -844,8 +968,12 @@ fn lower_single_value(value: &ComponentValue, out: &mut Vec<Value>) -> Result<()
         ComponentValue::S16(v) => out.push(Value::I32(*v as i32)),
         ComponentValue::S32(v) => out.push(Value::I32(*v)),
         ComponentValue::S64(v) => out.push(Value::I64(*v)),
-        ComponentValue::F32(v) => out.push(Value::F32(kiln_foundation::float_repr::FloatBits32::from_f32(*v))),
-        ComponentValue::F64(v) => out.push(Value::F64(kiln_foundation::float_repr::FloatBits64::from_f64(*v))),
+        ComponentValue::F32(v) => out.push(Value::F32(
+            kiln_foundation::float_repr::FloatBits32::from_f32(*v),
+        )),
+        ComponentValue::F64(v) => out.push(Value::F64(
+            kiln_foundation::float_repr::FloatBits64::from_f64(*v),
+        )),
         ComponentValue::Char(ch) => out.push(Value::I32(*ch as i32)),
         ComponentValue::Handle(h) => out.push(Value::I32(*h as i32)),
 
@@ -857,13 +985,13 @@ fn lower_single_value(value: &ComponentValue, out: &mut Vec<Value>) -> Result<()
                 #[cfg(feature = "tracing")]
                 kiln_foundation::tracing::warn!(len = s.len(), "String lowering not implemented");
                 return Err(kiln_error::Error::runtime_error(
-                    "String lowering requires memory allocation - not implemented"
+                    "String lowering requires memory allocation - not implemented",
                 ));
             }
             // Empty string can be represented as (0, 0)
             out.push(Value::I32(0));
             out.push(Value::I32(0));
-        }
+        },
 
         // List: FAIL LOUD - proper lowering requires memory allocation
         ComponentValue::List(items) => {
@@ -872,50 +1000,50 @@ fn lower_single_value(value: &ComponentValue, out: &mut Vec<Value>) -> Result<()
                 #[cfg(feature = "tracing")]
                 kiln_foundation::tracing::warn!(len = items.len(), "List lowering not implemented");
                 return Err(kiln_error::Error::runtime_error(
-                    "List lowering requires memory allocation - not implemented"
+                    "List lowering requires memory allocation - not implemented",
                 ));
             }
             // Empty list can be represented as (0, 0)
             out.push(Value::I32(0));
             out.push(Value::I32(0));
-        }
+        },
 
         // Record: flatten fields
         ComponentValue::Record(fields) => {
             for (_, field_value) in fields {
                 lower_single_value(field_value, out)?;
             }
-        }
+        },
 
         // Option: discriminant + optional payload
         ComponentValue::Option(None) => {
             out.push(Value::I32(0));
-        }
+        },
         ComponentValue::Option(Some(inner)) => {
             out.push(Value::I32(1));
             lower_single_value(inner, out)?;
-        }
+        },
 
         // Result: discriminant + payload
         ComponentValue::Result(Ok(None)) => {
             out.push(Value::I32(0));
-        }
+        },
         ComponentValue::Result(Ok(Some(inner))) => {
             out.push(Value::I32(0));
             lower_single_value(inner, out)?;
-        }
+        },
         ComponentValue::Result(Err(None)) => {
             out.push(Value::I32(1));
-        }
+        },
         ComponentValue::Result(Err(Some(inner))) => {
             out.push(Value::I32(1));
             lower_single_value(inner, out)?;
-        }
+        },
 
         // Unit: no values
         ComponentValue::Unit => {
             // Unit produces no values
-        }
+        },
     }
     Ok(())
 }
@@ -954,7 +1082,7 @@ fn lower_single_value_with_context(
         // Primitives - same as before, no memory needed
         (ComponentValue::Bool(b), _) => {
             out.push(Value::I32(if *b { 1 } else { 0 }));
-        }
+        },
         (ComponentValue::U8(v), _) => out.push(Value::I32(*v as i32)),
         (ComponentValue::U16(v), _) => out.push(Value::I32(*v as i32)),
         (ComponentValue::U32(v), _) => out.push(Value::I32(*v as i32)),
@@ -963,8 +1091,12 @@ fn lower_single_value_with_context(
         (ComponentValue::S16(v), _) => out.push(Value::I32(*v as i32)),
         (ComponentValue::S32(v), _) => out.push(Value::I32(*v)),
         (ComponentValue::S64(v), _) => out.push(Value::I64(*v)),
-        (ComponentValue::F32(v), _) => out.push(Value::F32(kiln_foundation::float_repr::FloatBits32::from_f32(*v))),
-        (ComponentValue::F64(v), _) => out.push(Value::F64(kiln_foundation::float_repr::FloatBits64::from_f64(*v))),
+        (ComponentValue::F32(v), _) => out.push(Value::F32(
+            kiln_foundation::float_repr::FloatBits32::from_f32(*v),
+        )),
+        (ComponentValue::F64(v), _) => out.push(Value::F64(
+            kiln_foundation::float_repr::FloatBits64::from_f64(*v),
+        )),
         (ComponentValue::Char(ch), _) => out.push(Value::I32(*ch as i32)),
         (ComponentValue::Handle(h), _) => out.push(Value::I32(*h as i32)),
 
@@ -982,7 +1114,7 @@ fn lower_single_value_with_context(
                 out.push(Value::I32(ptr as i32));
                 out.push(Value::I32(len as i32));
             }
-        }
+        },
 
         // List: Allocate memory, write elements, return ptr+len
         (ComponentValue::List(items), WasiComponentType::List(element_ty)) => {
@@ -1005,7 +1137,7 @@ fn lower_single_value_with_context(
                 out.push(Value::I32(ptr as i32));
                 out.push(Value::I32(items.len() as i32));
             }
-        }
+        },
 
         // ListU8: Special case for byte arrays
         (ComponentValue::List(items), WasiComponentType::ListU8) => {
@@ -1017,61 +1149,68 @@ fn lower_single_value_with_context(
                 let ptr = ctx.allocate(len, 1)?;
 
                 // Extract bytes from the list
-                let bytes: Vec<u8> = items.iter().filter_map(|v| {
-                    if let ComponentValue::U8(b) = v { Some(*b) } else { None }
-                }).collect();
+                let bytes: Vec<u8> = items
+                    .iter()
+                    .filter_map(
+                        |v| {
+                            if let ComponentValue::U8(b) = v { Some(*b) } else { None }
+                        },
+                    )
+                    .collect();
 
                 if bytes.len() != items.len() {
-                    return Err(kiln_error::Error::runtime_error("ListU8 contains non-byte elements"));
+                    return Err(kiln_error::Error::runtime_error(
+                        "ListU8 contains non-byte elements",
+                    ));
                 }
 
                 ctx.write_bytes(ptr, &bytes)?;
                 out.push(Value::I32(ptr as i32));
                 out.push(Value::I32(len as i32));
             }
-        }
+        },
 
         // Record: flatten fields (recursive)
         (ComponentValue::Record(fields), WasiComponentType::Tuple(types)) => {
             for ((_, field_value), field_ty) in fields.iter().zip(types.iter()) {
                 lower_single_value_with_context(field_value, field_ty, out, ctx)?;
             }
-        }
+        },
 
         // Option: discriminant + optional payload
         (ComponentValue::Option(None), _) => {
             out.push(Value::I32(0));
-        }
+        },
         (ComponentValue::Option(Some(inner)), WasiComponentType::Option(inner_ty)) => {
             out.push(Value::I32(1));
             lower_single_value_with_context(inner, inner_ty, out, ctx)?;
-        }
+        },
 
         // Result: discriminant + payload
         (ComponentValue::Result(Ok(None)), _) => {
             out.push(Value::I32(0));
-        }
+        },
         (ComponentValue::Result(Ok(Some(inner))), WasiComponentType::Result(Some(ok_ty), _)) => {
             out.push(Value::I32(0));
             lower_single_value_with_context(inner, ok_ty, out, ctx)?;
-        }
+        },
         (ComponentValue::Result(Err(None)), _) => {
             out.push(Value::I32(1));
-        }
+        },
         (ComponentValue::Result(Err(Some(inner))), WasiComponentType::Result(_, Some(err_ty))) => {
             out.push(Value::I32(1));
             lower_single_value_with_context(inner, err_ty, out, ctx)?;
-        }
+        },
 
         // Unit: no values
         (ComponentValue::Unit, _) => {
             // Unit produces no values
-        }
+        },
 
         // Fallback for mismatched types (delegate to simple lowering)
         _ => {
             lower_single_value(value, out)?;
-        }
+        },
     }
     Ok(())
 }
@@ -1112,78 +1251,105 @@ fn lower_type_to_memory(
     offset: &mut u32,
 ) -> Result<()> {
     match ty {
-        WasiComponentType::Bool | WasiComponentType::U8 | WasiComponentType::S8 |
-        WasiComponentType::U16 | WasiComponentType::S16 |
-        WasiComponentType::U32 | WasiComponentType::S32 |
-        WasiComponentType::Handle => {
-            let val = core_values.get(*val_idx).and_then(|v| match v {
-                Value::I32(i) => Some(*i),
-                _ => None,
-            }).unwrap_or(0);
+        WasiComponentType::Bool
+        | WasiComponentType::U8
+        | WasiComponentType::S8
+        | WasiComponentType::U16
+        | WasiComponentType::S16
+        | WasiComponentType::U32
+        | WasiComponentType::S32
+        | WasiComponentType::Handle => {
+            let val = core_values
+                .get(*val_idx)
+                .and_then(|v| match v {
+                    Value::I32(i) => Some(*i),
+                    _ => None,
+                })
+                .unwrap_or(0);
             memory.write_bytes(*offset, &val.to_le_bytes())?;
             *offset += 4;
             *val_idx += 1;
-        }
+        },
         WasiComponentType::U64 | WasiComponentType::S64 => {
-            let val = core_values.get(*val_idx).and_then(|v| match v {
-                Value::I64(i) => Some(*i),
-                _ => None,
-            }).unwrap_or(0);
+            let val = core_values
+                .get(*val_idx)
+                .and_then(|v| match v {
+                    Value::I64(i) => Some(*i),
+                    _ => None,
+                })
+                .unwrap_or(0);
             memory.write_bytes(*offset, &val.to_le_bytes())?;
             *offset += 8;
             *val_idx += 1;
-        }
+        },
         WasiComponentType::F32 => {
-            let val = core_values.get(*val_idx).and_then(|v| match v {
-                Value::F32(f) => Some(f.to_bits()),
-                Value::I32(i) => Some(*i as u32),
-                _ => None,
-            }).unwrap_or(0);
+            let val = core_values
+                .get(*val_idx)
+                .and_then(|v| match v {
+                    Value::F32(f) => Some(f.to_bits()),
+                    Value::I32(i) => Some(*i as u32),
+                    _ => None,
+                })
+                .unwrap_or(0);
             memory.write_bytes(*offset, &val.to_le_bytes())?;
             *offset += 4;
             *val_idx += 1;
-        }
+        },
         WasiComponentType::F64 => {
-            let val = core_values.get(*val_idx).and_then(|v| match v {
-                Value::F64(f) => Some(f.to_bits()),
-                Value::I64(i) => Some(*i as u64),
-                _ => None,
-            }).unwrap_or(0);
+            let val = core_values
+                .get(*val_idx)
+                .and_then(|v| match v {
+                    Value::F64(f) => Some(f.to_bits()),
+                    Value::I64(i) => Some(*i as u64),
+                    _ => None,
+                })
+                .unwrap_or(0);
             memory.write_bytes(*offset, &val.to_le_bytes())?;
             *offset += 8;
             *val_idx += 1;
-        }
+        },
         WasiComponentType::Char => {
-            let val = core_values.get(*val_idx).and_then(|v| match v {
-                Value::I32(i) => Some(*i),
-                _ => None,
-            }).unwrap_or(0);
+            let val = core_values
+                .get(*val_idx)
+                .and_then(|v| match v {
+                    Value::I32(i) => Some(*i),
+                    _ => None,
+                })
+                .unwrap_or(0);
             memory.write_bytes(*offset, &val.to_le_bytes())?;
             *offset += 4;
             *val_idx += 1;
-        }
-        WasiComponentType::String | WasiComponentType::ListU8 |
-        WasiComponentType::List(_) => {
+        },
+        WasiComponentType::String | WasiComponentType::ListU8 | WasiComponentType::List(_) => {
             // ptr (i32) + len (i32)
-            let ptr = core_values.get(*val_idx).and_then(|v| match v {
-                Value::I32(i) => Some(*i),
-                _ => None,
-            }).unwrap_or(0);
-            let len = core_values.get(*val_idx + 1).and_then(|v| match v {
-                Value::I32(i) => Some(*i),
-                _ => None,
-            }).unwrap_or(0);
+            let ptr = core_values
+                .get(*val_idx)
+                .and_then(|v| match v {
+                    Value::I32(i) => Some(*i),
+                    _ => None,
+                })
+                .unwrap_or(0);
+            let len = core_values
+                .get(*val_idx + 1)
+                .and_then(|v| match v {
+                    Value::I32(i) => Some(*i),
+                    _ => None,
+                })
+                .unwrap_or(0);
             memory.write_bytes(*offset, &ptr.to_le_bytes())?;
             memory.write_bytes(*offset + 4, &len.to_le_bytes())?;
             *offset += 8;
             *val_idx += 2;
-        }
+        },
         WasiComponentType::Option(inner_ty) => {
             // discriminant (i32) + optional payload
-            let disc = core_values.get(*val_idx).and_then(|v| match v {
-                Value::I32(i) => Some(*i),
-                _ => None,
-            }).unwrap_or(0);
+            let disc = core_values
+                .get(*val_idx)
+                .and_then(|v| match v {
+                    Value::I32(i) => Some(*i),
+                    _ => None,
+                })
+                .unwrap_or(0);
             memory.write_bytes(*offset, &disc.to_le_bytes())?;
             *offset += 4;
             *val_idx += 1;
@@ -1194,18 +1360,28 @@ fn lower_type_to_memory(
                 // None — skip payload space (advance offset by payload size)
                 *offset += canonical_flat_size(inner_ty);
             }
-        }
+        },
         WasiComponentType::Result(ok_ty, err_ty)
             if result_exact_align(ok_ty.as_deref(), err_ty.as_deref()) != 4 =>
         {
-            lower_exact_result(ok_ty.as_deref(), err_ty.as_deref(), core_values, val_idx, memory, offset)?;
-        }
+            lower_exact_result(
+                ok_ty.as_deref(),
+                err_ty.as_deref(),
+                core_values,
+                val_idx,
+                memory,
+                offset,
+            )?;
+        },
         WasiComponentType::Result(ok_ty, err_ty) => {
             // discriminant (i32) + payload
-            let disc = core_values.get(*val_idx).and_then(|v| match v {
-                Value::I32(i) => Some(*i),
-                _ => None,
-            }).unwrap_or(0);
+            let disc = core_values
+                .get(*val_idx)
+                .and_then(|v| match v {
+                    Value::I32(i) => Some(*i),
+                    _ => None,
+                })
+                .unwrap_or(0);
             memory.write_bytes(*offset, &disc.to_le_bytes())?;
             *offset += 4;
             *val_idx += 1;
@@ -1220,15 +1396,15 @@ fn lower_type_to_memory(
                     lower_type_to_memory(err, core_values, val_idx, memory, offset)?;
                 }
             }
-        }
+        },
         WasiComponentType::Tuple(types) => {
             for t in types {
                 lower_type_to_memory(t, core_values, val_idx, memory, offset)?;
             }
-        }
+        },
         WasiComponentType::Unit => {
             // Unit has no representation — skip
-        }
+        },
     }
     Ok(())
 }
@@ -1240,7 +1416,8 @@ fn lower_type_to_memory(
 fn result_exact_align(ok: Option<&WasiComponentType>, err: Option<&WasiComponentType>) -> u32 {
     fn payload_align(ty: Option<&WasiComponentType>) -> u32 {
         match ty {
-            None | Some(WasiComponentType::U8 | WasiComponentType::S8 | WasiComponentType::Bool) => 1,
+            None
+            | Some(WasiComponentType::U8 | WasiComponentType::S8 | WasiComponentType::Bool) => 1,
             Some(WasiComponentType::U64 | WasiComponentType::S64 | WasiComponentType::F64) => 8,
             Some(_) => 4,
         }
@@ -1271,7 +1448,11 @@ fn lower_exact_result(
     let start = *offset;
     let disc = match core_values.get(*val_idx) {
         Some(Value::I32(d)) if *d == 0 || *d == 1 => *d,
-        _ => return Err(kiln_error::Error::runtime_error("result lowering: missing or invalid discriminant")),
+        _ => {
+            return Err(kiln_error::Error::runtime_error(
+                "result lowering: missing or invalid discriminant",
+            ));
+        },
     };
     *val_idx += 1;
     memory.write_bytes(start, &[disc as u8])?;
@@ -1282,14 +1463,22 @@ fn lower_exact_result(
         Some(WasiComponentType::U8 | WasiComponentType::S8 | WasiComponentType::Bool) => {
             match core_values.get(*val_idx) {
                 Some(Value::I32(v)) => memory.write_bytes(payload_off, &[*v as u8])?,
-                _ => return Err(kiln_error::Error::runtime_error("result lowering: missing 1-byte payload")),
+                _ => {
+                    return Err(kiln_error::Error::runtime_error(
+                        "result lowering: missing 1-byte payload",
+                    ));
+                },
             }
             *val_idx += 1;
         },
         Some(_) => {
             match core_values.get(*val_idx) {
                 Some(Value::I64(v)) => memory.write_bytes(payload_off, &v.to_le_bytes())?,
-                _ => return Err(kiln_error::Error::runtime_error("result lowering: missing 8-byte payload")),
+                _ => {
+                    return Err(kiln_error::Error::runtime_error(
+                        "result lowering: missing 8-byte payload",
+                    ));
+                },
             }
             *val_idx += 1;
         },
@@ -1301,21 +1490,24 @@ fn lower_exact_result(
 /// Get the flat size in bytes of a canonical ABI type in memory.
 fn canonical_flat_size(ty: &WasiComponentType) -> u32 {
     match ty {
-        WasiComponentType::Bool | WasiComponentType::U8 | WasiComponentType::S8 |
-        WasiComponentType::U16 | WasiComponentType::S16 |
-        WasiComponentType::U32 | WasiComponentType::S32 |
-        WasiComponentType::Handle | WasiComponentType::F32 |
-        WasiComponentType::Char => 4,
-        WasiComponentType::U64 | WasiComponentType::S64 |
-        WasiComponentType::F64 => 8,
-        WasiComponentType::String | WasiComponentType::ListU8 |
-        WasiComponentType::List(_) => 8, // ptr + len
+        WasiComponentType::Bool
+        | WasiComponentType::U8
+        | WasiComponentType::S8
+        | WasiComponentType::U16
+        | WasiComponentType::S16
+        | WasiComponentType::U32
+        | WasiComponentType::S32
+        | WasiComponentType::Handle
+        | WasiComponentType::F32
+        | WasiComponentType::Char => 4,
+        WasiComponentType::U64 | WasiComponentType::S64 | WasiComponentType::F64 => 8,
+        WasiComponentType::String | WasiComponentType::ListU8 | WasiComponentType::List(_) => 8, // ptr + len
         WasiComponentType::Option(inner) => 4 + canonical_flat_size(inner),
         WasiComponentType::Result(ok, err) => {
             let ok_size = ok.as_ref().map_or(0, |t| canonical_flat_size(t));
             let err_size = err.as_ref().map_or(0, |t| canonical_flat_size(t));
             4 + core::cmp::max(ok_size, err_size)
-        }
+        },
         WasiComponentType::Tuple(types) => types.iter().map(canonical_flat_size).sum(),
         WasiComponentType::Unit => 0,
     }
@@ -1330,16 +1522,16 @@ fn write_element_to_memory(
 ) -> Result<()> {
     let write_bytes = |mem: &mut [u8], off: usize, data: &[u8]| -> Result<()> {
         if off + data.len() > mem.len() {
-            return Err(kiln_error::Error::runtime_error("Memory write out of bounds"));
+            return Err(kiln_error::Error::runtime_error(
+                "Memory write out of bounds",
+            ));
         }
         mem[off..off + data.len()].copy_from_slice(data);
         Ok(())
     };
 
     match (value, ty) {
-        (ComponentValue::Bool(b), _) => {
-            write_bytes(memory, offset, &[if *b { 1 } else { 0 }])
-        }
+        (ComponentValue::Bool(b), _) => write_bytes(memory, offset, &[if *b { 1 } else { 0 }]),
         (ComponentValue::U8(v), _) => write_bytes(memory, offset, &[*v]),
         (ComponentValue::S8(v), _) => write_bytes(memory, offset, &[*v as u8]),
         (ComponentValue::U16(v), _) => write_bytes(memory, offset, &v.to_le_bytes()),
@@ -1353,14 +1545,15 @@ fn write_element_to_memory(
         (ComponentValue::Char(ch), _) => write_bytes(memory, offset, &(*ch as u32).to_le_bytes()),
         (ComponentValue::Handle(h), _) => write_bytes(memory, offset, &h.to_le_bytes()),
         _ => Err(kiln_error::Error::runtime_error(
-            "Cannot write complex type directly to memory"
+            "Cannot write complex type directly to memory",
         )),
     }
 }
 
 // Helper functions to extract values
 fn get_i32(values: &[Value], idx: usize) -> Result<i32> {
-    values.get(idx)
+    values
+        .get(idx)
         .and_then(|v| match v {
             Value::I32(i) => Some(*i),
             _ => None,
@@ -1369,7 +1562,8 @@ fn get_i32(values: &[Value], idx: usize) -> Result<i32> {
 }
 
 fn get_i64(values: &[Value], idx: usize) -> Result<i64> {
-    values.get(idx)
+    values
+        .get(idx)
         .and_then(|v| match v {
             Value::I64(i) => Some(*i),
             _ => None,
@@ -1378,7 +1572,8 @@ fn get_i64(values: &[Value], idx: usize) -> Result<i64> {
 }
 
 fn get_f32(values: &[Value], idx: usize) -> Result<f32> {
-    values.get(idx)
+    values
+        .get(idx)
         .and_then(|v| match v {
             Value::F32(f) => Some(f.to_f32()),
             _ => None,
@@ -1387,7 +1582,8 @@ fn get_f32(values: &[Value], idx: usize) -> Result<f32> {
 }
 
 fn get_f64(values: &[Value], idx: usize) -> Result<f64> {
-    values.get(idx)
+    values
+        .get(idx)
         .and_then(|v| match v {
             Value::F64(f) => Some(f.to_f64()),
             _ => None,
@@ -1405,17 +1601,15 @@ fn get_element_size(ty: &WasiComponentType) -> usize {
         WasiComponentType::U64 | WasiComponentType::S64 => 8,
         WasiComponentType::F32 => 4,
         WasiComponentType::F64 => 8,
-        WasiComponentType::Char => 4, // UTF-32 code point
-        WasiComponentType::String => 8, // ptr (4) + len (4)
-        WasiComponentType::ListU8 => 8, // ptr (4) + len (4)
-        WasiComponentType::List(_) => 8, // ptr (4) + len (4)
-        WasiComponentType::Option(_) => 8, // discriminant + max(payload)
+        WasiComponentType::Char => 4,         // UTF-32 code point
+        WasiComponentType::String => 8,       // ptr (4) + len (4)
+        WasiComponentType::ListU8 => 8,       // ptr (4) + len (4)
+        WasiComponentType::List(_) => 8,      // ptr (4) + len (4)
+        WasiComponentType::Option(_) => 8,    // discriminant + max(payload)
         WasiComponentType::Result(_, _) => 8, // discriminant + max(ok, err)
-        WasiComponentType::Tuple(types) => {
-            types.iter().map(|t| get_element_size(t)).sum()
-        }
+        WasiComponentType::Tuple(types) => types.iter().map(|t| get_element_size(t)).sum(),
         WasiComponentType::Handle => 4, // u32 handle
-        WasiComponentType::Unit => 0, // no size
+        WasiComponentType::Unit => 0,   // no size
     }
 }
 
@@ -1428,120 +1622,176 @@ fn lift_element_from_memory(
     match ty {
         WasiComponentType::Bool => {
             if offset >= memory.len() {
-                return Err(kiln_error::Error::runtime_error("Memory access out of bounds"));
+                return Err(kiln_error::Error::runtime_error(
+                    "Memory access out of bounds",
+                ));
             }
             Ok(ComponentValue::Bool(memory[offset] != 0))
-        }
+        },
         WasiComponentType::U8 => {
             if offset >= memory.len() {
-                return Err(kiln_error::Error::runtime_error("Memory access out of bounds"));
+                return Err(kiln_error::Error::runtime_error(
+                    "Memory access out of bounds",
+                ));
             }
             Ok(ComponentValue::U8(memory[offset]))
-        }
+        },
         WasiComponentType::S8 => {
             if offset >= memory.len() {
-                return Err(kiln_error::Error::runtime_error("Memory access out of bounds"));
+                return Err(kiln_error::Error::runtime_error(
+                    "Memory access out of bounds",
+                ));
             }
             Ok(ComponentValue::S8(memory[offset] as i8))
-        }
+        },
         WasiComponentType::U16 => {
             if offset + 2 > memory.len() {
-                return Err(kiln_error::Error::runtime_error("Memory access out of bounds"));
+                return Err(kiln_error::Error::runtime_error(
+                    "Memory access out of bounds",
+                ));
             }
             let value = u16::from_le_bytes([memory[offset], memory[offset + 1]]);
             Ok(ComponentValue::U16(value))
-        }
+        },
         WasiComponentType::S16 => {
             if offset + 2 > memory.len() {
-                return Err(kiln_error::Error::runtime_error("Memory access out of bounds"));
+                return Err(kiln_error::Error::runtime_error(
+                    "Memory access out of bounds",
+                ));
             }
             let value = i16::from_le_bytes([memory[offset], memory[offset + 1]]);
             Ok(ComponentValue::S16(value))
-        }
+        },
         WasiComponentType::U32 => {
             if offset + 4 > memory.len() {
-                return Err(kiln_error::Error::runtime_error("Memory access out of bounds"));
+                return Err(kiln_error::Error::runtime_error(
+                    "Memory access out of bounds",
+                ));
             }
             let value = u32::from_le_bytes([
-                memory[offset], memory[offset + 1],
-                memory[offset + 2], memory[offset + 3],
+                memory[offset],
+                memory[offset + 1],
+                memory[offset + 2],
+                memory[offset + 3],
             ]);
             Ok(ComponentValue::U32(value))
-        }
+        },
         WasiComponentType::S32 => {
             if offset + 4 > memory.len() {
-                return Err(kiln_error::Error::runtime_error("Memory access out of bounds"));
+                return Err(kiln_error::Error::runtime_error(
+                    "Memory access out of bounds",
+                ));
             }
             let value = i32::from_le_bytes([
-                memory[offset], memory[offset + 1],
-                memory[offset + 2], memory[offset + 3],
+                memory[offset],
+                memory[offset + 1],
+                memory[offset + 2],
+                memory[offset + 3],
             ]);
             Ok(ComponentValue::S32(value))
-        }
+        },
         WasiComponentType::U64 => {
             if offset + 8 > memory.len() {
-                return Err(kiln_error::Error::runtime_error("Memory access out of bounds"));
+                return Err(kiln_error::Error::runtime_error(
+                    "Memory access out of bounds",
+                ));
             }
             let value = u64::from_le_bytes([
-                memory[offset], memory[offset + 1], memory[offset + 2], memory[offset + 3],
-                memory[offset + 4], memory[offset + 5], memory[offset + 6], memory[offset + 7],
+                memory[offset],
+                memory[offset + 1],
+                memory[offset + 2],
+                memory[offset + 3],
+                memory[offset + 4],
+                memory[offset + 5],
+                memory[offset + 6],
+                memory[offset + 7],
             ]);
             Ok(ComponentValue::U64(value))
-        }
+        },
         WasiComponentType::S64 => {
             if offset + 8 > memory.len() {
-                return Err(kiln_error::Error::runtime_error("Memory access out of bounds"));
+                return Err(kiln_error::Error::runtime_error(
+                    "Memory access out of bounds",
+                ));
             }
             let value = i64::from_le_bytes([
-                memory[offset], memory[offset + 1], memory[offset + 2], memory[offset + 3],
-                memory[offset + 4], memory[offset + 5], memory[offset + 6], memory[offset + 7],
+                memory[offset],
+                memory[offset + 1],
+                memory[offset + 2],
+                memory[offset + 3],
+                memory[offset + 4],
+                memory[offset + 5],
+                memory[offset + 6],
+                memory[offset + 7],
             ]);
             Ok(ComponentValue::S64(value))
-        }
+        },
         WasiComponentType::F32 => {
             if offset + 4 > memory.len() {
-                return Err(kiln_error::Error::runtime_error("Memory access out of bounds"));
+                return Err(kiln_error::Error::runtime_error(
+                    "Memory access out of bounds",
+                ));
             }
             let bits = u32::from_le_bytes([
-                memory[offset], memory[offset + 1],
-                memory[offset + 2], memory[offset + 3],
+                memory[offset],
+                memory[offset + 1],
+                memory[offset + 2],
+                memory[offset + 3],
             ]);
             Ok(ComponentValue::F32(f32::from_bits(bits)))
-        }
+        },
         WasiComponentType::F64 => {
             if offset + 8 > memory.len() {
-                return Err(kiln_error::Error::runtime_error("Memory access out of bounds"));
+                return Err(kiln_error::Error::runtime_error(
+                    "Memory access out of bounds",
+                ));
             }
             let bits = u64::from_le_bytes([
-                memory[offset], memory[offset + 1], memory[offset + 2], memory[offset + 3],
-                memory[offset + 4], memory[offset + 5], memory[offset + 6], memory[offset + 7],
+                memory[offset],
+                memory[offset + 1],
+                memory[offset + 2],
+                memory[offset + 3],
+                memory[offset + 4],
+                memory[offset + 5],
+                memory[offset + 6],
+                memory[offset + 7],
             ]);
             Ok(ComponentValue::F64(f64::from_bits(bits)))
-        }
+        },
         WasiComponentType::Char => {
             if offset + 4 > memory.len() {
-                return Err(kiln_error::Error::runtime_error("Memory access out of bounds"));
+                return Err(kiln_error::Error::runtime_error(
+                    "Memory access out of bounds",
+                ));
             }
             let code = u32::from_le_bytes([
-                memory[offset], memory[offset + 1],
-                memory[offset + 2], memory[offset + 3],
+                memory[offset],
+                memory[offset + 1],
+                memory[offset + 2],
+                memory[offset + 3],
             ]);
             let ch = char::from_u32(code)
                 .ok_or_else(|| kiln_error::Error::runtime_error("Invalid char code point"))?;
             Ok(ComponentValue::Char(ch))
-        }
+        },
         WasiComponentType::String => {
             // String is ptr + len in memory
             if offset + 8 > memory.len() {
-                return Err(kiln_error::Error::runtime_error("Memory access out of bounds"));
+                return Err(kiln_error::Error::runtime_error(
+                    "Memory access out of bounds",
+                ));
             }
             let ptr = u32::from_le_bytes([
-                memory[offset], memory[offset + 1],
-                memory[offset + 2], memory[offset + 3],
+                memory[offset],
+                memory[offset + 1],
+                memory[offset + 2],
+                memory[offset + 3],
             ]) as usize;
             let len = u32::from_le_bytes([
-                memory[offset + 4], memory[offset + 5],
-                memory[offset + 6], memory[offset + 7],
+                memory[offset + 4],
+                memory[offset + 5],
+                memory[offset + 6],
+                memory[offset + 7],
             ]) as usize;
 
             if len == 0 {
@@ -1549,34 +1799,40 @@ fn lift_element_from_memory(
             }
 
             if ptr + len > memory.len() {
-                return Err(kiln_error::Error::runtime_error("String data out of bounds"));
+                return Err(kiln_error::Error::runtime_error(
+                    "String data out of bounds",
+                ));
             }
 
             let bytes = &memory[ptr..ptr + len];
             let s = core::str::from_utf8(bytes)
                 .map_err(|_| kiln_error::Error::runtime_error("Invalid UTF-8 in string"))?;
             Ok(ComponentValue::String(s.to_string()))
-        }
+        },
         WasiComponentType::Handle => {
             if offset + 4 > memory.len() {
-                return Err(kiln_error::Error::runtime_error("Memory access out of bounds"));
+                return Err(kiln_error::Error::runtime_error(
+                    "Memory access out of bounds",
+                ));
             }
             let value = u32::from_le_bytes([
-                memory[offset], memory[offset + 1],
-                memory[offset + 2], memory[offset + 3],
+                memory[offset],
+                memory[offset + 1],
+                memory[offset + 2],
+                memory[offset + 3],
             ]);
             Ok(ComponentValue::Handle(value))
-        }
+        },
         // Unit has no size, nothing to read
         WasiComponentType::Unit => Ok(ComponentValue::Unit),
         // For complex types, we would need recursive lifting
-        WasiComponentType::ListU8 | WasiComponentType::List(_) |
-        WasiComponentType::Option(_) | WasiComponentType::Result(_, _) |
-        WasiComponentType::Tuple(_) => {
-            Err(kiln_error::Error::runtime_error(
-                "Nested complex types in lists not yet supported"
-            ))
-        }
+        WasiComponentType::ListU8
+        | WasiComponentType::List(_)
+        | WasiComponentType::Option(_)
+        | WasiComponentType::Result(_, _)
+        | WasiComponentType::Tuple(_) => Err(kiln_error::Error::runtime_error(
+            "Nested complex types in lists not yet supported",
+        )),
     }
 }
 
@@ -1693,9 +1949,7 @@ impl Wasip2Host {
 
         // Find the actual content length - some components pass buffer capacity
         // instead of actual content length. For text output, trim at null byte.
-        let actual_len = data.iter()
-            .position(|&b| b == 0)
-            .unwrap_or(data.len());
+        let actual_len = data.iter().position(|&b| b == 0).unwrap_or(data.len());
         let trimmed_data = &data[..actual_len];
 
         #[cfg(feature = "tracing")]
@@ -1727,7 +1981,7 @@ impl Wasip2Host {
             },
             OutputTarget::Memory(_buffer) => {
                 // In a real implementation, we'd append to the buffer
-            }
+            },
         }
 
         // Return ok variant (0) with no error
@@ -1735,10 +1989,7 @@ impl Wasip2Host {
     }
 
     /// wasi:io/streams.output-stream.blocking-flush
-    pub fn io_streams_output_stream_blocking_flush(
-        &mut self,
-        _handle: u32,
-    ) -> Result<Vec<Value>> {
+    pub fn io_streams_output_stream_blocking_flush(&mut self, _handle: u32) -> Result<Vec<Value>> {
         // For now, we don't buffer, so flush is a no-op
         // Return ok variant (0)
         Ok(vec![Value::I32(0)])
@@ -1756,11 +2007,7 @@ impl Wasip2Host {
     /// Extract the base interface name without version suffix
     /// e.g., "wasi:cli/stdout@0.2.4" -> "wasi:cli/stdout"
     fn strip_version(interface: &str) -> &str {
-        if let Some(idx) = interface.find('@') {
-            &interface[..idx]
-        } else {
-            interface
-        }
+        if let Some(idx) = interface.find('@') { &interface[..idx] } else { interface }
     }
 
     /// Dispatch a wasip2 function call based on interface and function name
@@ -1775,16 +2022,14 @@ impl Wasip2Host {
         let base_interface = Self::strip_version(interface);
 
         match (base_interface, function) {
-            ("wasi:cli/stdout", "get-stdout") => {
-                self.cli_stdout_get_stdout()
-            },
-            ("wasi:cli/stderr", "get-stderr") => {
-                self.cli_stderr_get_stderr()
-            },
-            ("wasi:io/streams", "[method]output-stream.blocking-write-and-flush") |
-            ("wasi:io/streams", "output-stream.blocking-write-and-flush") => {
+            ("wasi:cli/stdout", "get-stdout") => self.cli_stdout_get_stdout(),
+            ("wasi:cli/stderr", "get-stderr") => self.cli_stderr_get_stderr(),
+            ("wasi:io/streams", "[method]output-stream.blocking-write-and-flush")
+            | ("wasi:io/streams", "output-stream.blocking-write-and-flush") => {
                 if args.len() < 3 {
-                    return Err(kiln_error::Error::runtime_error("Invalid args for blocking-write-and-flush"));
+                    return Err(kiln_error::Error::runtime_error(
+                        "Invalid args for blocking-write-and-flush",
+                    ));
                 }
                 let handle = match args[0] {
                     Value::I32(h) => h as u32,
@@ -1800,15 +2045,21 @@ impl Wasip2Host {
                 };
 
                 if let Some(mem) = memory {
-                    self.io_streams_output_stream_blocking_write_and_flush(handle, data_ptr, data_len, mem)
+                    self.io_streams_output_stream_blocking_write_and_flush(
+                        handle, data_ptr, data_len, mem,
+                    )
                 } else {
-                    Err(kiln_error::Error::runtime_error("No memory for blocking-write-and-flush"))
+                    Err(kiln_error::Error::runtime_error(
+                        "No memory for blocking-write-and-flush",
+                    ))
                 }
             },
-            ("wasi:io/streams", "[method]output-stream.blocking-flush") |
-            ("wasi:io/streams", "output-stream.blocking-flush") => {
+            ("wasi:io/streams", "[method]output-stream.blocking-flush")
+            | ("wasi:io/streams", "output-stream.blocking-flush") => {
                 if args.is_empty() {
-                    return Err(kiln_error::Error::runtime_error("Invalid args for blocking-flush"));
+                    return Err(kiln_error::Error::runtime_error(
+                        "Invalid args for blocking-flush",
+                    ));
                 }
                 let handle = match args[0] {
                     Value::I32(h) => h as u32,
@@ -1823,7 +2074,7 @@ impl Wasip2Host {
                 let status_ok = match args.first() {
                     Some(Value::I32(0)) => true,  // ok variant
                     Some(Value::I32(1)) => false, // error variant
-                    _ => true, // Default to success if no args or unknown
+                    _ => true,                    // Default to success if no args or unknown
                 };
                 self.cli_exit(status_ok)
             },
@@ -1844,20 +2095,19 @@ impl Wasip2Host {
                 // Return Option<terminal-output>: 0 = None (not a terminal)
                 Ok(vec![Value::I32(0)])
             },
-            ("wasi:io/poll", "poll") |
-            ("wasi:io/poll", "[method]pollable.block") => {
+            ("wasi:io/poll", "poll") | ("wasi:io/poll", "[method]pollable.block") => {
                 // Simple poll implementation - return immediately with all ready
                 // Args: list of pollable handles
                 // Returns: list of ready indices
                 let ready_indices: Vec<Value> = vec![Value::I32(0)]; // First pollable always ready
                 Ok(ready_indices)
             },
-            ("wasi:io/poll", "[resource-drop]pollable") |
-            ("wasi:io/streams", "[resource-drop]output-stream") |
-            ("wasi:io/streams", "[resource-drop]input-stream") |
-            ("wasi:io/error", "[resource-drop]error") |
-            ("wasi:cli/terminal-input", "[resource-drop]terminal-input") |
-            ("wasi:cli/terminal-output", "[resource-drop]terminal-output") => {
+            ("wasi:io/poll", "[resource-drop]pollable")
+            | ("wasi:io/streams", "[resource-drop]output-stream")
+            | ("wasi:io/streams", "[resource-drop]input-stream")
+            | ("wasi:io/error", "[resource-drop]error")
+            | ("wasi:cli/terminal-input", "[resource-drop]terminal-input")
+            | ("wasi:cli/terminal-output", "[resource-drop]terminal-output") => {
                 // Resource drops are no-ops in this simple implementation
                 Ok(vec![])
             },
@@ -1883,7 +2133,9 @@ impl Wasip2Host {
                             Value::I32(l) => l as u32,
                             _ => return Err(kiln_error::Error::runtime_error("Invalid len")),
                         };
-                        return self.io_streams_output_stream_blocking_write_and_flush(handle, data_ptr, data_len, mem);
+                        return self.io_streams_output_stream_blocking_write_and_flush(
+                            handle, data_ptr, data_len, mem,
+                        );
                     }
                 }
                 // Return success (discriminant 0)
@@ -1902,7 +2154,7 @@ impl Wasip2Host {
                 #[cfg(feature = "tracing")]
                 kiln_foundation::tracing::warn!(interface = %base_interface, function = %function, "unknown wasip2 function");
                 Err(kiln_error::Error::runtime_error("Unknown wasip2 function"))
-            }
+            },
         }
     }
 
@@ -1942,12 +2194,12 @@ impl Wasip2Host {
 
             // wasi:io/streams.[method]output-stream.blocking-write-and-flush
             // (self: borrow<output-stream>, contents: list<u8>) -> result<_, stream-error>
-            ("wasi:io/streams", "[method]output-stream.blocking-write-and-flush") |
-            ("wasi:io/streams", "output-stream.blocking-write-and-flush") => {
+            ("wasi:io/streams", "[method]output-stream.blocking-write-and-flush")
+            | ("wasi:io/streams", "output-stream.blocking-write-and-flush") => {
                 // Args: [handle, list<u8>]
                 if args.len() < 2 {
                     return Err(kiln_error::Error::runtime_error(
-                        "blocking-write-and-flush requires 2 args: handle, contents"
+                        "blocking-write-and-flush requires 2 args: handle, contents",
                     ));
                 }
 
@@ -1960,15 +2212,20 @@ impl Wasip2Host {
 
                 // Get the data - either as a lifted list<u8> or as a string
                 let data: Vec<u8> = match &args[1] {
-                    ComponentValue::List(items) => {
-                        items.iter().filter_map(|v| match v {
+                    ComponentValue::List(items) => items
+                        .iter()
+                        .filter_map(|v| match v {
                             ComponentValue::U8(b) => Some(*b),
                             ComponentValue::S8(b) => Some(*b as u8),
                             _ => None,
-                        }).collect()
-                    },
+                        })
+                        .collect(),
                     ComponentValue::String(s) => s.as_bytes().to_vec(),
-                    _ => return Err(kiln_error::Error::runtime_error("Second arg must be list<u8> or string")),
+                    _ => {
+                        return Err(kiln_error::Error::runtime_error(
+                            "Second arg must be list<u8> or string",
+                        ));
+                    },
                 };
 
                 // Perform the write
@@ -1978,15 +2235,15 @@ impl Wasip2Host {
                 match result {
                     Ok(()) => Ok(vec![ComponentValue::Result(Ok(None))]),
                     Err(e) => Ok(vec![ComponentValue::Result(Err(Some(Box::new(
-                        ComponentValue::String(e.to_string())
+                        ComponentValue::String(e.to_string()),
                     ))))]),
                 }
             },
 
             // wasi:io/streams.[method]output-stream.blocking-flush
             // (self: borrow<output-stream>) -> result<_, stream-error>
-            ("wasi:io/streams", "[method]output-stream.blocking-flush") |
-            ("wasi:io/streams", "output-stream.blocking-flush") => {
+            ("wasi:io/streams", "[method]output-stream.blocking-flush")
+            | ("wasi:io/streams", "output-stream.blocking-flush") => {
                 // Flush is a no-op for now
                 Ok(vec![ComponentValue::Result(Ok(None))])
             },
@@ -1996,7 +2253,7 @@ impl Wasip2Host {
                 let success = match args.first() {
                     Some(ComponentValue::Result(Ok(_))) => true,
                     Some(ComponentValue::Result(Err(_))) => false,
-                    Some(ComponentValue::S32(0)) => true,  // Legacy: 0 = ok variant
+                    Some(ComponentValue::S32(0)) => true, // Legacy: 0 = ok variant
                     Some(ComponentValue::S32(1)) => false, // Legacy: 1 = err variant
                     _ => true,
                 };
@@ -2017,14 +2274,12 @@ impl Wasip2Host {
             },
 
             // wasi:cli/environment.initial-cwd() -> option<string>
-            ("wasi:cli/environment", "initial-cwd") => {
-                Ok(vec![ComponentValue::Option(None)])
-            },
+            ("wasi:cli/environment", "initial-cwd") => Ok(vec![ComponentValue::Option(None)]),
 
             // Resource drops
-            ("wasi:io/streams", "[resource-drop]output-stream") |
-            ("wasi:io/streams", "[resource-drop]input-stream") |
-            ("wasi:io/error", "[resource-drop]error") => {
+            ("wasi:io/streams", "[resource-drop]output-stream")
+            | ("wasi:io/streams", "[resource-drop]input-stream")
+            | ("wasi:io/error", "[resource-drop]error") => {
                 // No-op for now
                 Ok(vec![])
             },
@@ -2036,9 +2291,15 @@ impl Wasip2Host {
 
             _ => {
                 #[cfg(feature = "tracing")]
-                kiln_foundation::tracing::warn!(interface = interface, function = function, "Unknown WASIP2 component function");
-                Err(kiln_error::Error::runtime_error("Unknown wasip2 component function"))
-            }
+                kiln_foundation::tracing::warn!(
+                    interface = interface,
+                    function = function,
+                    "Unknown WASIP2 component function"
+                );
+                Err(kiln_error::Error::runtime_error(
+                    "Unknown wasip2 component function",
+                ))
+            },
         }
     }
 
@@ -2052,27 +2313,31 @@ impl Wasip2Host {
         match &self.output_streams[stream_idx].target {
             OutputTarget::Stdout => {
                 use std::io::{self, Write};
-                io::stdout().write_all(data).map_err(|_|
-                    kiln_error::Error::runtime_error("stdout write failed"))?;
-                io::stdout().flush().map_err(|_|
-                    kiln_error::Error::runtime_error("stdout flush failed"))?;
+                io::stdout()
+                    .write_all(data)
+                    .map_err(|_| kiln_error::Error::runtime_error("stdout write failed"))?;
+                io::stdout()
+                    .flush()
+                    .map_err(|_| kiln_error::Error::runtime_error("stdout flush failed"))?;
                 Ok(())
             },
             OutputTarget::Stderr => {
                 use std::io::{self, Write};
-                io::stderr().write_all(data).map_err(|_|
-                    kiln_error::Error::runtime_error("stderr write failed"))?;
-                io::stderr().flush().map_err(|_|
-                    kiln_error::Error::runtime_error("stderr flush failed"))?;
+                io::stderr()
+                    .write_all(data)
+                    .map_err(|_| kiln_error::Error::runtime_error("stderr write failed"))?;
+                io::stderr()
+                    .flush()
+                    .map_err(|_| kiln_error::Error::runtime_error("stderr flush failed"))?;
                 Ok(())
             },
-            OutputTarget::File(_) => {
-                Err(kiln_error::Error::runtime_error("File output not implemented"))
-            },
+            OutputTarget::File(_) => Err(kiln_error::Error::runtime_error(
+                "File output not implemented",
+            )),
             OutputTarget::Memory(_) => {
                 // Would append to buffer
                 Ok(())
-            }
+            },
         }
     }
 }
@@ -2080,8 +2345,8 @@ impl Wasip2Host {
 #[cfg(test)]
 mod sr72_lowering_tests {
     use super::*;
-    use kiln_foundation::traits::SliceMemory;
     use kiln_foundation::MemoryAccessor;
+    use kiln_foundation::traits::SliceMemory;
 
     const RETPTR: u32 = 0x100;
     const FS: &str = "wasi:filesystem/types";
@@ -2128,9 +2393,15 @@ mod sr72_lowering_tests {
     // rivet: verifies SR-72
     #[test]
     fn write_result_places_the_u64_payload_at_offset_8() -> Result<()> {
-        let ok = lower("[method]descriptor.write", &[Value::I32(0), Value::I64(0x0102_0304_0506)])?;
+        let ok = lower(
+            "[method]descriptor.write",
+            &[Value::I32(0), Value::I64(0x0102_0304_0506)],
+        )?;
         assert_eq!(bytes(&ok, RETPTR, 1), vec![0]);
-        assert_eq!(bytes(&ok, RETPTR + 8, 8), 0x0102_0304_0506u64.to_le_bytes().to_vec());
+        assert_eq!(
+            bytes(&ok, RETPTR + 8, 8),
+            0x0102_0304_0506u64.to_le_bytes().to_vec()
+        );
         let err = lower("[method]descriptor.write", &[Value::I32(1), Value::I32(3)])?;
         assert_eq!(bytes(&err, RETPTR, 1), vec![1]);
         assert_eq!(bytes(&err, RETPTR + 8, 1), vec![3]);
@@ -2143,7 +2414,12 @@ mod sr72_lowering_tests {
         // result<tuple<list<u8>, bool>, error-code>: disc @0, list ptr @4, len @8, bool @12.
         let ok = lower(
             "[method]descriptor.read",
-            &[Value::I32(0), Value::I32(0x4000), Value::I32(7), Value::I32(1)],
+            &[
+                Value::I32(0),
+                Value::I32(0x4000),
+                Value::I32(7),
+                Value::I32(1),
+            ],
         )?;
         assert_eq!(bytes(&ok, RETPTR, 1), vec![0]);
         assert_eq!(bytes(&ok, RETPTR + 4, 4), 0x4000u32.to_le_bytes().to_vec());

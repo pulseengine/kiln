@@ -36,10 +36,7 @@
 #[cfg(any(feature = "std", feature = "alloc"))]
 macro_rules! safe_capability_alloc {
     ($capability_context:expr, $crate_id:expr, $size:expr) => {{
-        use $crate::capabilities::{
-            MemoryFactory,
-            MemoryOperation,
-        };
+        use $crate::capabilities::{MemoryFactory, MemoryOperation};
 
         // CRITICAL FIX: Use the passed context instead of ignoring it
         // This eliminates circular dependency in provider creation
@@ -180,10 +177,7 @@ macro_rules! capability_wrap_provider {
 macro_rules! capability_context {
     (dynamic($crate_id:expr, $max_size:expr)) => {{
         use $crate::{
-            capabilities::{
-                DynamicMemoryCapability,
-                MemoryCapabilityContext,
-            },
+            capabilities::{DynamicMemoryCapability, MemoryCapabilityContext},
             verification::VerificationLevel,
         };
 
@@ -194,10 +188,7 @@ macro_rules! capability_context {
     }};
 
     (static($crate_id:expr, $size:expr)) => {{
-        use $crate::{
-            capabilities::MemoryCapabilityContext,
-            verification::VerificationLevel,
-        };
+        use $crate::{capabilities::MemoryCapabilityContext, verification::VerificationLevel};
 
         // Create a simple context with static capability for direct use with
         // MemoryFactory
@@ -206,10 +197,7 @@ macro_rules! capability_context {
     }};
 
     (verified($crate_id:expr, $size:expr, $proofs:expr)) => {{
-        use $crate::{
-            capabilities::MemoryCapabilityContext,
-            verification::VerificationLevel,
-        };
+        use $crate::{capabilities::MemoryCapabilityContext, verification::VerificationLevel};
 
         // Create a simple context with verified capability for direct use with
         // MemoryFactory
@@ -231,21 +219,21 @@ macro_rules! capability_context {
         // Return a placeholder struct that the no_std macro can use
         Ok($crate::capabilities::NoStdCapabilityContext {
             crate_id: $crate_id,
-            size:     $max_size,
+            size: $max_size,
         })
     }};
 
     (static($crate_id:expr, $size:expr)) => {{
         Ok($crate::capabilities::NoStdCapabilityContext {
             crate_id: $crate_id,
-            size:     $size,
+            size: $size,
         })
     }};
 
     (verified($crate_id:expr, $size:expr, $proofs:expr)) => {{
         Ok($crate::capabilities::NoStdCapabilityContext {
             crate_id: $crate_id,
-            size:     $size,
+            size: $size,
         })
     }};
 }
@@ -286,7 +274,8 @@ mod tests {
 
     #[test]
     fn test_capability_context_macro() {
-        let result: Result<_, kiln_error::Error> = capability_context!(dynamic(CrateId::Foundation, 1024));
+        let result: Result<_, kiln_error::Error> =
+            capability_context!(dynamic(CrateId::Foundation, 1024));
         assert!(result.is_ok());
 
         let context = result.unwrap();

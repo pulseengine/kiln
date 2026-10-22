@@ -816,7 +816,6 @@ impl ToolManager {
         self.check_command_version("git", &["--version"])
     }
 
-
     fn check_rustup_target(&self, target: &str) -> ToolStatus {
         // Check if rustup target is installed
         if self.version_config.check_rustup_target_installed(target) {

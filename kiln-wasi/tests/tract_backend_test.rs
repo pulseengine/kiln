@@ -3,22 +3,10 @@
 #![cfg(all(feature = "wasi-nn", feature = "tract"))]
 
 use kiln_wasi::nn::{
-    backend::{
-        BackendProvider,
-        NeuralNetworkBackend,
-        TensorCapability,
-    },
-    capabilities::{
-        DynamicNNCapability,
-        NeuralNetworkCapability,
-    },
-    tract_backend::{
-        TractBackend,
-        TractBackendProvider,
-    },
-    GraphEncoding,
-    TensorDimensions,
-    TensorType,
+    GraphEncoding, TensorDimensions, TensorType,
+    backend::{BackendProvider, NeuralNetworkBackend, TensorCapability},
+    capabilities::{DynamicNNCapability, NeuralNetworkCapability},
+    tract_backend::{TractBackend, TractBackendProvider},
 };
 
 #[test]

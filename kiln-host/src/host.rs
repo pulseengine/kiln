@@ -10,30 +10,12 @@
 // Use the prelude for consistent imports
 // Type aliases for no_std compatibility - fixed later
 #[cfg(not(feature = "std"))]
-use crate::bounded_host_infra::{
-    HostProvider,
-    HOST_MEMORY_SIZE,
-};
+use crate::bounded_host_infra::{HOST_MEMORY_SIZE, HostProvider};
 #[cfg(feature = "std")]
 use crate::prelude::Arc;
-use crate::prelude::{
-    codes,
-    str,
-    Any,
-    BuiltinType,
-    Error,
-    ErrorCategory,
-    HashMap,
-    Result,
-    Value,
-};
+use crate::prelude::{Any, BuiltinType, Error, ErrorCategory, HashMap, Result, Value, codes, str};
 #[cfg(feature = "std")]
-use crate::prelude::{
-    BeforeBuiltinResult,
-    BuiltinInterceptor,
-    ComponentValue,
-    InterceptContext,
-};
+use crate::prelude::{BeforeBuiltinResult, BuiltinInterceptor, ComponentValue, InterceptContext};
 
 /// Helper function to create host provider using existing infrastructure
 #[cfg(not(feature = "std"))]
@@ -103,10 +85,7 @@ impl kiln_foundation::traits::FromBytes for HandlerData {
 
 // Conditional imports for Kiln allocator
 #[cfg(all(feature = "std", feature = "safety-critical"))]
-use kiln_foundation::allocator::{
-    CrateId,
-    KilnHashMap,
-};
+use kiln_foundation::allocator::{CrateId, KilnHashMap};
 
 // Handler map type for different configurations
 #[cfg(all(feature = "std", feature = "safety-critical"))]
@@ -136,27 +115,36 @@ type CriticalBuiltinsMap = HashMap<BuiltinType, HandlerData, 32, HostProvider>;
 #[cfg(feature = "std")]
 fn convert_to_component_values(
     values: &[Value],
-) -> Result<Vec<
-    kiln_foundation::component_value::ComponentValue<kiln_foundation::safe_memory::NoStdProvider<64>>,
->> {
+) -> Result<
+    Vec<
+        kiln_foundation::component_value::ComponentValue<
+            kiln_foundation::safe_memory::NoStdProvider<64>,
+        >,
+    >,
+> {
     values
         .iter()
         .map(|v| match v {
             Value::I32(i) => Ok(ComponentValue::S32(*i)),
             Value::I64(i) => Ok(ComponentValue::S64(*i)),
-            Value::F32(f) => Ok(ComponentValue::F32(kiln_foundation::FloatBits32(f.to_bits()))),
-            Value::F64(f) => Ok(ComponentValue::F64(kiln_foundation::FloatBits64(f.to_bits()))),
+            Value::F32(f) => Ok(ComponentValue::F32(kiln_foundation::FloatBits32(
+                f.to_bits(),
+            ))),
+            Value::F64(f) => Ok(ComponentValue::F64(kiln_foundation::FloatBits64(
+                f.to_bits(),
+            ))),
             Value::V128(v) => {
                 // Convert V128 to i64 pair for component model (use lower 64 bits)
                 let low = i64::from_le_bytes(
-                    v.bytes[..8].try_into()
-                        .map_err(|_| Error::type_error("V128 to i64 conversion failed"))?
+                    v.bytes[..8]
+                        .try_into()
+                        .map_err(|_| Error::type_error("V128 to i64 conversion failed"))?,
                 );
                 Ok(ComponentValue::S64(low))
             },
             _other => Err(Error::type_error(
-                "Unsupported Value type for component conversion"
-            ))
+                "Unsupported Value type for component conversion",
+            )),
         })
         .collect()
 }
@@ -197,18 +185,17 @@ fn convert_from_component_values(
 #[derive(Default)]
 pub struct BuiltinHost {
     /// Component name
-    component_name:    HostString,
+    component_name: HostString,
     /// Host ID
-    host_id:           HostString,
+    host_id: HostString,
     /// Interceptor for built-in calls
     #[cfg(feature = "std")]
-    interceptor:       Option<Arc<dyn BuiltinInterceptor>>,
+    interceptor: Option<Arc<dyn BuiltinInterceptor>>,
     /// Built-in handlers (`builtin_type_name` -> handler)
-    handlers:          HandlerMap,
+    handlers: HandlerMap,
     /// Critical built-ins that should have fallbacks
     critical_builtins: CriticalBuiltinsMap,
 }
-
 
 impl BuiltinHost {
     /// Create a new built-in host
@@ -224,10 +211,10 @@ impl BuiltinHost {
     #[cfg(feature = "std")]
     pub fn new(component_name: &str, host_id: &str) -> Self {
         Self {
-            component_name:    component_name.to_string(),
-            host_id:           host_id.to_string(),
-            interceptor:       None,
-            handlers:          HandlerMap::new(),
+            component_name: component_name.to_string(),
+            host_id: host_id.to_string(),
+            interceptor: None,
+            handlers: HandlerMap::new(),
             critical_builtins: CriticalBuiltinsMap::new(),
         }
     }
@@ -238,13 +225,14 @@ impl BuiltinHost {
     pub fn new(component_name: &str, host_id: &str) -> Self {
         let string_provider = create_host_provider().expect("Failed to create host provider");
         let map_provider = create_host_provider().expect("Failed to create host provider");
-        let comp_name = HostString::try_from_str(component_name).expect("Failed to create component name");
+        let comp_name =
+            HostString::try_from_str(component_name).expect("Failed to create component name");
         let host_name = HostString::try_from_str(host_id).expect("Failed to create host id");
 
         Self {
-            component_name:    comp_name,
-            host_id:           host_name,
-            handlers:          HashMap::new(map_provider.clone()).unwrap(),
+            component_name: comp_name,
+            host_id: host_name,
+            handlers: HashMap::new(map_provider.clone()).unwrap(),
             critical_builtins: HashMap::new(map_provider).unwrap(),
         }
     }
@@ -281,7 +269,8 @@ impl BuiltinHost {
     {
         // In no_std mode, we can't store function handlers dynamically
         let provider = create_host_provider().expect("Failed to create host provider");
-        let name = HostString::try_from_str(builtin_type.name()).expect("Failed to create builtin name");
+        let name =
+            HostString::try_from_str(builtin_type.name()).expect("Failed to create builtin name");
         let _ = self.handlers.insert(name, HandlerData::default());
     }
 
@@ -328,7 +317,8 @@ impl BuiltinHost {
         {
             // In no_std mode, check if we have any handlers registered
             let provider = create_host_provider().expect("Failed to create host provider");
-            let name = HostString::try_from_str(builtin_type.name()).expect("Failed to create builtin name");
+            let name = HostString::try_from_str(builtin_type.name())
+                .expect("Failed to create builtin name");
             self.handlers.contains_key(&name).unwrap_or(false)
         }
     }
@@ -466,10 +456,10 @@ impl Clone for BuiltinHost {
         #[cfg(feature = "std")]
         {
             Self {
-                component_name:    self.component_name.clone(),
-                host_id:           self.host_id.clone(),
-                interceptor:       self.interceptor.clone(),
-                handlers:          HandlerMap::new(),
+                component_name: self.component_name.clone(),
+                host_id: self.host_id.clone(),
+                interceptor: self.interceptor.clone(),
+                handlers: HandlerMap::new(),
                 critical_builtins: CriticalBuiltinsMap::new(),
             }
         }
@@ -478,9 +468,9 @@ impl Clone for BuiltinHost {
         {
             let provider = create_host_provider().expect("Failed to create host provider");
             Self {
-                component_name:    self.component_name.clone(),
-                host_id:           self.host_id.clone(),
-                handlers:          HashMap::new(provider.clone())
+                component_name: self.component_name.clone(),
+                host_id: self.host_id.clone(),
+                handlers: HashMap::new(provider.clone())
                     .expect("HashMap creation should never fail with valid provider"),
                 critical_builtins: HashMap::new(provider)
                     .expect("HashMap creation should never fail with valid provider"),

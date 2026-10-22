@@ -13,7 +13,9 @@ use kiln_foundation::{
 #[cfg(feature = "std")]
 use kiln_foundation::bounded::BoundedVec;
 
-use crate::{bounded_component_infra::ComponentProvider, prelude::KilnComponentValue, types::Value};
+use crate::{
+    bounded_component_infra::ComponentProvider, prelude::KilnComponentValue, types::Value,
+};
 
 /// Canonical ABI processor stub
 #[derive(Debug, Default, Clone)]
@@ -162,7 +164,9 @@ impl ComponentRuntimeBridge {
 impl TryFrom<KilnComponentValue<ComponentProvider>> for Value {
     type Error = kiln_error::Error;
 
-    fn try_from(cv: KilnComponentValue<ComponentProvider>) -> core::result::Result<Self, Self::Error> {
+    fn try_from(
+        cv: KilnComponentValue<ComponentProvider>,
+    ) -> core::result::Result<Self, Self::Error> {
         Ok(match cv {
             KilnComponentValue::Bool(b) => Value::Bool(b),
             KilnComponentValue::U8(v) => Value::U8(v),

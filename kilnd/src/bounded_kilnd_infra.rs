@@ -4,21 +4,13 @@
 //! to ensure static memory allocation throughout the daemon operations.
 
 use kiln_foundation::{
-    bounded::{
-        BoundedString,
-        BoundedVec,
-    },
+    CrateId,
+    bounded::{BoundedString, BoundedVec},
     bounded_collections::BoundedMap as BoundedHashMap,
     capabilities::CapabilityAwareProvider,
-    capability_context,
-    safe_capability_alloc,
+    capability_context, safe_capability_alloc,
     safe_memory::NoStdProvider,
-    traits::{
-        Checksummable,
-        FromBytes,
-        ToBytes,
-    },
-    CrateId,
+    traits::{Checksummable, FromBytes, ToBytes},
 };
 
 /// Budget-aware memory provider for Kilnd daemon (64KB)
@@ -197,9 +189,8 @@ where
 
 /// Create a new bounded service name
 pub fn new_service_name() -> kiln_error::Result<BoundedServiceName> {
-    BoundedString::try_from_str("").map_err(|_| {
-        kiln_error::Error::runtime_execution_error("Failed to create service name")
-    })
+    BoundedString::try_from_str("")
+        .map_err(|_| kiln_error::Error::runtime_execution_error("Failed to create service name"))
 }
 
 /// Create a bounded service name from str
@@ -215,9 +206,8 @@ pub fn bounded_service_name_from_str(s: &str) -> kiln_error::Result<BoundedServi
 
 /// Create a new bounded configuration key
 pub fn new_config_key() -> kiln_error::Result<BoundedConfigKey> {
-    BoundedString::try_from_str("").map_err(|_| {
-        kiln_error::Error::runtime_execution_error("Failed to create config key")
-    })
+    BoundedString::try_from_str("")
+        .map_err(|_| kiln_error::Error::runtime_execution_error("Failed to create config key"))
 }
 
 /// Create a bounded configuration key from str
@@ -233,9 +223,8 @@ pub fn bounded_config_key_from_str(s: &str) -> kiln_error::Result<BoundedConfigK
 
 /// Create a new bounded configuration value
 pub fn new_config_value() -> kiln_error::Result<BoundedConfigValue> {
-    BoundedString::try_from_str("").map_err(|_| {
-        kiln_error::Error::runtime_execution_error("Failed to create config value")
-    })
+    BoundedString::try_from_str("")
+        .map_err(|_| kiln_error::Error::runtime_execution_error("Failed to create config value"))
 }
 
 /// Create a bounded configuration value from str
@@ -251,9 +240,8 @@ pub fn bounded_config_value_from_str(s: &str) -> kiln_error::Result<BoundedConfi
 
 /// Create a new bounded log message
 pub fn new_log_message() -> kiln_error::Result<BoundedLogMessage> {
-    BoundedString::try_from_str("").map_err(|_| {
-        kiln_error::Error::runtime_execution_error("Failed to create log message")
-    })
+    BoundedString::try_from_str("")
+        .map_err(|_| kiln_error::Error::runtime_execution_error("Failed to create log message"))
 }
 
 /// Create a bounded log message from str

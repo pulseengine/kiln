@@ -32,7 +32,7 @@
 
 #![cfg_attr(not(test), no_std)]
 
-use core::sync::atomic::{AtomicU32, AtomicPtr, Ordering};
+use core::sync::atomic::{AtomicPtr, AtomicU32, Ordering};
 
 #[cfg(not(test))]
 #[panic_handler]
@@ -310,12 +310,7 @@ pub extern "C" fn __meld_get_memory_base() -> *mut u8 {
 /// # Returns
 /// Offset from memory base of the allocated region, or 0 on failure.
 #[unsafe(no_mangle)]
-pub extern "C" fn cabi_realloc(
-    old_ptr: u32,
-    old_size: u32,
-    align: u32,
-    new_size: u32,
-) -> u32 {
+pub extern "C" fn cabi_realloc(old_ptr: u32, old_size: u32, align: u32, new_size: u32) -> u32 {
     let _ = (old_ptr, old_size);
 
     if new_size == 0 {
@@ -339,12 +334,7 @@ pub extern "C" fn cabi_realloc(
             None => return 0, // Overflow — allocation would exceed u32 range
         };
 
-        match BUMP_PTR.compare_exchange_weak(
-            current,
-            next,
-            Ordering::AcqRel,
-            Ordering::Acquire,
-        ) {
+        match BUMP_PTR.compare_exchange_weak(current, next, Ordering::AcqRel, Ordering::Acquire) {
             Ok(_) => return aligned,
             Err(_) => continue, // Retry on contention
         }
@@ -391,9 +381,7 @@ mod tests {
                 // A poisoned lock only means another test panicked; the state
                 // is reset right below, so the guard is still sound to take.
                 *held = Some(
-                    GLOBAL_STATE_LOCK
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner),
+                    GLOBAL_STATE_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
                 );
             }
         });
@@ -489,10 +477,18 @@ mod tests {
     #[test]
     fn test_dispatch_import_with_platform() {
         reset();
-        unsafe extern "C" fn test_write(_fd: u32, _data: *const u8, _len: u32) -> i32 { 0 }
-        unsafe extern "C" fn test_clock() -> u64 { 0 }
-        unsafe extern "C" fn test_random(_buf: *mut u8, _len: u32) -> i32 { 0 }
-        unsafe extern "C" fn test_exit(_code: i32) -> ! { loop {} }
+        unsafe extern "C" fn test_write(_fd: u32, _data: *const u8, _len: u32) -> i32 {
+            0
+        }
+        unsafe extern "C" fn test_clock() -> u64 {
+            0
+        }
+        unsafe extern "C" fn test_random(_buf: *mut u8, _len: u32) -> i32 {
+            0
+        }
+        unsafe extern "C" fn test_exit(_code: i32) -> ! {
+            loop {}
+        }
 
         let mut p = Platform {
             write: test_write,
@@ -520,9 +516,15 @@ mod tests {
             WRITE_CALLED.store(len as i32, Ordering::SeqCst);
             len as i32
         }
-        unsafe extern "C" fn nop_clock() -> u64 { 42 }
-        unsafe extern "C" fn nop_random(_buf: *mut u8, _len: u32) -> i32 { 0 }
-        unsafe extern "C" fn nop_exit(_code: i32) -> ! { loop {} }
+        unsafe extern "C" fn nop_clock() -> u64 {
+            42
+        }
+        unsafe extern "C" fn nop_random(_buf: *mut u8, _len: u32) -> i32 {
+            0
+        }
+        unsafe extern "C" fn nop_exit(_code: i32) -> ! {
+            loop {}
+        }
 
         reset();
         WRITE_CALLED.store(0, Ordering::SeqCst);
@@ -544,10 +546,18 @@ mod tests {
 
     #[test]
     fn test_platform_clock_callback() {
-        unsafe extern "C" fn mock_clock() -> u64 { 123_456_789 }
-        unsafe extern "C" fn nop_write(_fd: u32, _data: *const u8, _len: u32) -> i32 { 0 }
-        unsafe extern "C" fn nop_random(_buf: *mut u8, _len: u32) -> i32 { 0 }
-        unsafe extern "C" fn nop_exit(_code: i32) -> ! { loop {} }
+        unsafe extern "C" fn mock_clock() -> u64 {
+            123_456_789
+        }
+        unsafe extern "C" fn nop_write(_fd: u32, _data: *const u8, _len: u32) -> i32 {
+            0
+        }
+        unsafe extern "C" fn nop_random(_buf: *mut u8, _len: u32) -> i32 {
+            0
+        }
+        unsafe extern "C" fn nop_exit(_code: i32) -> ! {
+            loop {}
+        }
 
         reset();
         let mut p = Platform {

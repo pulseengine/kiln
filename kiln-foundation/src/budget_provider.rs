@@ -9,15 +9,11 @@ extern crate alloc;
 
 #[cfg(any(feature = "std", feature = "alloc"))]
 use crate::capabilities::{
-    CapabilityAwareProvider,
-    DynamicMemoryCapability,
-    ProviderCapabilityExt,
+    CapabilityAwareProvider, DynamicMemoryCapability, ProviderCapabilityExt,
 };
 use crate::{
-    budget_aware_provider::CrateId,
-    safe_memory::NoStdProvider,
+    Result, budget_aware_provider::CrateId, safe_memory::NoStdProvider,
     verification::VerificationLevel,
-    Result,
 };
 
 /// DEPRECATED: Use capability-driven memory management instead
@@ -57,10 +53,7 @@ impl BudgetProvider {
         // Create raw provider and wrap with capability
         use alloc::boxed::Box;
 
-        use crate::{
-            capabilities::DynamicMemoryCapability,
-            verification::VerificationLevel,
-        };
+        use crate::{capabilities::DynamicMemoryCapability, verification::VerificationLevel};
 
         let provider = NoStdProvider::<N>::default();
         let capability = Box::new(DynamicMemoryCapability::new(

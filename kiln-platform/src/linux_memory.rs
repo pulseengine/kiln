@@ -15,27 +15,16 @@
 //! Linux mmap/munmap/mprotect syscalls directly, supporting no_std/no_alloc
 //! environments.
 
-use core::ptr::{
-    self,
-    NonNull,
-};
+use core::ptr::{self, NonNull};
 
 // Safety: NonNull<u8> is safe to send between threads as it's just a pointer
 // wrapper
 unsafe impl Send for LinuxAllocator {}
 unsafe impl Sync for LinuxAllocator {}
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 
-use crate::memory::{
-    PageAllocator,
-    WASM_PAGE_SIZE,
-};
+use crate::memory::{PageAllocator, WASM_PAGE_SIZE};
 
 /// Linux syscall numbers for x86_64
 #[cfg(target_arch = "x86_64")]
@@ -69,11 +58,11 @@ const MAP_FAILED: *mut u8 = !0 as *mut u8;
 /// A `PageAllocator` implementation for Linux using direct syscalls.
 #[derive(Debug)]
 pub struct LinuxAllocator {
-    base_ptr:                Option<NonNull<u8>>,
-    total_reserved_bytes:    usize, // Total bytes reserved
+    base_ptr: Option<NonNull<u8>>,
+    total_reserved_bytes: usize,    // Total bytes reserved
     current_committed_bytes: usize, // Bytes currently committed
-    max_capacity_bytes:      usize, // Maximum bytes this instance can manage
-    use_guard_pages:         bool,  // Whether to use guard pages
+    max_capacity_bytes: usize,      // Maximum bytes this instance can manage
+    use_guard_pages: bool,          // Whether to use guard pages
 }
 
 impl LinuxAllocator {
@@ -139,11 +128,7 @@ impl LinuxAllocator {
         );
 
         // Linux syscalls return negative errno on error
-        if result < 0 && result >= -4095 {
-            MAP_FAILED
-        } else {
-            result as *mut u8
-        }
+        if result < 0 && result >= -4095 { MAP_FAILED } else { result as *mut u8 }
     }
 
     /// Performs the munmap syscall directly without libc
@@ -222,14 +207,14 @@ impl LinuxAllocator {
 #[derive(Debug)]
 pub struct LinuxAllocatorBuilder {
     maximum_pages: Option<u32>,
-    guard_pages:   bool,
+    guard_pages: bool,
 }
 
 impl Default for LinuxAllocatorBuilder {
     fn default() -> Self {
         Self {
             maximum_pages: None,
-            guard_pages:   false,
+            guard_pages: false,
         }
     }
 }

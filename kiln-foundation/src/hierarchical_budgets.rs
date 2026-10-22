@@ -6,31 +6,20 @@
 //! SW-REQ-ID: REQ_MEM_001 - Memory bounds checking
 //! SW-REQ-ID: REQ_RESOURCE_002 - Resource limits
 
-use core::sync::atomic::{
-    AtomicUsize,
-    Ordering,
-};
+use core::sync::atomic::{AtomicUsize, Ordering};
 
-use kiln_error::{
-    helpers::memory_limit_exceeded_error,
-    Result,
-};
+use kiln_error::{Result, helpers::memory_limit_exceeded_error};
 
 // Capability-based imports
 use crate::kiln_memory_system::CapabilityKilnFactory;
 use crate::{
+    Error, ErrorCategory,
     budget_aware_provider::CrateId,
-    capabilities::{
-        MemoryCapability,
-        MemoryCapabilityContext,
-        StaticMemoryCapability,
-    },
+    capabilities::{MemoryCapability, MemoryCapabilityContext, StaticMemoryCapability},
     codes,
     memory_coordinator::CrateIdentifier,
     safe_memory::NoStdProvider,
     verification::VerificationLevel,
-    Error,
-    ErrorCategory,
 };
 
 /// Priority levels for memory allocation
@@ -39,24 +28,24 @@ pub enum MemoryPriority {
     /// Critical allocations that must succeed
     Critical = 0,
     /// High priority allocations
-    High     = 1,
+    High = 1,
     /// Normal priority allocations
-    Normal   = 2,
+    Normal = 2,
     /// Low priority allocations (can be evicted)
-    Low      = 3,
+    Low = 3,
 }
 
 /// Sub-budget within a crate's allocation
 #[derive(Debug)]
 pub struct SubBudget {
     /// Name of this sub-budget
-    pub name:           &'static str,
+    pub name: &'static str,
     /// Maximum allocation for this sub-budget
     pub max_allocation: usize,
     /// Currently allocated bytes
-    pub allocated:      AtomicUsize,
+    pub allocated: AtomicUsize,
     /// Priority of allocations in this sub-budget
-    pub priority:       MemoryPriority,
+    pub priority: MemoryPriority,
 }
 
 impl SubBudget {
@@ -124,11 +113,11 @@ impl SubBudget {
 /// Hierarchical budget manager for a crate
 pub struct HierarchicalBudget<const MAX_SUB_BUDGETS: usize> {
     /// Parent crate ID
-    pub crate_id:     CrateId,
+    pub crate_id: CrateId,
     /// Total budget for this crate
     pub total_budget: usize,
     /// Sub-budgets within this crate
-    pub sub_budgets:  [Option<SubBudget>; MAX_SUB_BUDGETS],
+    pub sub_budgets: [Option<SubBudget>; MAX_SUB_BUDGETS],
     /// Number of active sub-budgets
     pub active_count: AtomicUsize,
 }
@@ -241,13 +230,13 @@ impl<const MAX_SUB_BUDGETS: usize> HierarchicalBudget<MAX_SUB_BUDGETS> {
     /// Get statistics for all sub-budgets
     pub fn get_statistics(&self) -> HierarchicalStats {
         let mut stats = HierarchicalStats {
-            total_budget:       self.total_budget,
-            total_allocated:    0,
-            sub_budget_count:   0,
+            total_budget: self.total_budget,
+            total_allocated: 0,
+            sub_budget_count: 0,
             critical_allocated: 0,
-            high_allocated:     0,
-            normal_allocated:   0,
-            low_allocated:      0,
+            high_allocated: 0,
+            normal_allocated: 0,
+            low_allocated: 0,
         };
 
         for sub_budget in &self.sub_budgets {
@@ -272,13 +261,13 @@ impl<const MAX_SUB_BUDGETS: usize> HierarchicalBudget<MAX_SUB_BUDGETS> {
 /// Statistics for hierarchical budget system
 #[derive(Debug, Clone)]
 pub struct HierarchicalStats {
-    pub total_budget:       usize,
-    pub total_allocated:    usize,
-    pub sub_budget_count:   usize,
+    pub total_budget: usize,
+    pub total_allocated: usize,
+    pub sub_budget_count: usize,
     pub critical_allocated: usize,
-    pub high_allocated:     usize,
-    pub normal_allocated:   usize,
-    pub low_allocated:      usize,
+    pub high_allocated: usize,
+    pub normal_allocated: usize,
+    pub low_allocated: usize,
 }
 
 impl HierarchicalStats {
@@ -300,17 +289,17 @@ impl HierarchicalStats {
 /// Hierarchical memory guard that tracks sub-budget
 #[cfg(any(feature = "std", feature = "alloc"))]
 pub struct HierarchicalGuard<const N: usize> {
-    guard:          crate::capabilities::CapabilityGuardedProvider<N>,
+    guard: crate::capabilities::CapabilityGuardedProvider<N>,
     sub_budget_idx: usize,
-    budget:         *const HierarchicalBudget<16>, // Max 16 sub-budgets
+    budget: *const HierarchicalBudget<16>, // Max 16 sub-budgets
 }
 
 /// Hierarchical memory guard that tracks sub-budget (no_std version)
 #[cfg(not(any(feature = "std", feature = "alloc")))]
 pub struct HierarchicalGuard<const N: usize> {
-    guard:          crate::safe_memory::NoStdProvider<N>,
+    guard: crate::safe_memory::NoStdProvider<N>,
     sub_budget_idx: usize,
-    budget:         *const HierarchicalBudget<16>, // Max 16 sub-budgets
+    budget: *const HierarchicalBudget<16>, // Max 16 sub-budgets
 }
 
 #[cfg(any(feature = "std", feature = "alloc"))]

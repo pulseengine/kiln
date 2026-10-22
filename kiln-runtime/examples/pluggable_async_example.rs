@@ -10,19 +10,11 @@ use core::{
     future::Future,
     marker::Unpin,
     pin::Pin,
-    task::{
-        Context,
-        Poll,
-    },
+    task::{Context, Poll},
 };
 
 #[cfg(feature = "async-api")]
-use kiln_foundation::{
-    is_using_fallback,
-    with_async,
-    AsyncRuntime,
-    ExecutorError,
-};
+use kiln_foundation::{AsyncRuntime, ExecutorError, is_using_fallback, with_async};
 
 #[cfg(all(feature = "async-api", feature = "std"))]
 extern crate alloc;

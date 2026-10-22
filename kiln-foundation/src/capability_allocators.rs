@@ -7,15 +7,10 @@
 use core::marker::PhantomData;
 
 use crate::{
+    Error, ErrorCategory, Result,
     budget_aware_provider::CrateId,
-    capabilities::{
-        MemoryCapabilityContext,
-        MemoryOperation,
-    },
+    capabilities::{MemoryCapabilityContext, MemoryOperation},
     codes,
-    Error,
-    ErrorCategory,
-    Result,
 };
 
 #[cfg(any(feature = "std", feature = "alloc"))]
@@ -203,9 +198,5 @@ mod no_std_impl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::capabilities::{
-        CapabilityMask,
-        DynamicMemoryCapability,
-    };
-
+    use crate::capabilities::{CapabilityMask, DynamicMemoryCapability};
 }

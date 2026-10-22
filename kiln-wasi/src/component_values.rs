@@ -3,7 +3,6 @@
 //! This module provides a temporary implementation of component model values
 //! until proper support is added to kiln-foundation.
 
-
 /// Component model value representation
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {

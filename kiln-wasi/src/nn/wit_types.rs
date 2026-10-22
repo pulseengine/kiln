@@ -3,12 +3,7 @@
 //! This module provides conversions between WASI-NN WIT types and internal
 //! Rust types, ensuring type safety across the FFI boundary.
 
-use super::{
-    ExecutionTarget,
-    GraphEncoding,
-    TensorDimensions,
-    TensorType,
-};
+use super::{ExecutionTarget, GraphEncoding, TensorDimensions, TensorType};
 use crate::prelude::*;
 
 /// Error codes from WIT interface
@@ -16,19 +11,19 @@ use crate::prelude::*;
 #[repr(u8)]
 pub enum ErrorCode {
     /// Invalid argument provided
-    InvalidArgument      = 1,
+    InvalidArgument = 1,
     /// Invalid model encoding
-    InvalidEncoding      = 2,
+    InvalidEncoding = 2,
     /// Runtime error during execution
-    RuntimeError         = 3,
+    RuntimeError = 3,
     /// Resource limits exceeded
-    ResourceExhausted    = 4,
+    ResourceExhausted = 4,
     /// Operation not supported
     UnsupportedOperation = 5,
     /// Model verification failed
-    VerificationFailed   = 6,
+    VerificationFailed = 6,
     /// Timeout during execution
-    Timeout              = 7,
+    Timeout = 7,
 }
 
 impl From<Error> for ErrorCode {

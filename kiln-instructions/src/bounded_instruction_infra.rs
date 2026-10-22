@@ -4,10 +4,7 @@
 //! to ensure static memory allocation throughout instruction handling.
 
 use kiln_foundation::{
-    bounded::{
-        BoundedString,
-        BoundedVec,
-    },
+    bounded::{BoundedString, BoundedVec},
     safe_memory::NoStdProvider,
 };
 

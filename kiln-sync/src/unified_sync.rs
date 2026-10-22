@@ -43,11 +43,7 @@
 use core::{
     cell::UnsafeCell,
     marker::PhantomData,
-    sync::atomic::{
-        AtomicBool,
-        AtomicUsize,
-        Ordering,
-    },
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
 // Import foundation types when available
@@ -122,15 +118,9 @@ mod foundation_stubs {
 }
 
 // Re-export foundation stubs for public use
-pub use foundation_stubs::{
-    AsilLevel,
-    SafetyContext,
-    SyncResult,
-};
+pub use foundation_stubs::{AsilLevel, SafetyContext, SyncResult};
 
-use foundation_stubs::{
-    Error,
-};
+use foundation_stubs::Error;
 
 /// Safety-aware mutex that integrates with ASIL safety contexts
 ///
@@ -140,18 +130,18 @@ use foundation_stubs::{
 #[derive(Debug)]
 pub struct SafeMutex<T> {
     /// The underlying data protected by the mutex
-    data:           UnsafeCell<T>,
+    data: UnsafeCell<T>,
     /// Atomic flag indicating if the mutex is locked
-    locked:         AtomicBool,
+    locked: AtomicBool,
     /// Safety context for ASIL-aware behavior
     safety_context: SafetyContext,
     /// Lock acquisition counter for verification
-    lock_count:     AtomicUsize,
+    lock_count: AtomicUsize,
 }
 
 /// Guard for SafeMutex that provides safe access to the protected data
 pub struct SafeMutexGuard<'a, T> {
-    mutex:    &'a SafeMutex<T>,
+    mutex: &'a SafeMutex<T>,
     _phantom: PhantomData<&'a mut T>,
 }
 
@@ -215,7 +205,7 @@ impl<T> SafeMutex<T> {
         self.lock_count.fetch_add(1, Ordering::Relaxed);
 
         Ok(SafeMutexGuard {
-            mutex:    self,
+            mutex: self,
             _phantom: PhantomData,
         })
     }
@@ -236,7 +226,7 @@ impl<T> SafeMutex<T> {
             Ok(_) => {
                 self.lock_count.fetch_add(1, Ordering::Relaxed);
                 Ok(Some(SafeMutexGuard {
-                    mutex:    self,
+                    mutex: self,
                     _phantom: PhantomData,
                 }))
             },
@@ -318,10 +308,10 @@ impl<'a, T> core::ops::DerefMut for SafeMutexGuard<'a, T> {
 #[derive(Debug)]
 pub struct BoundedChannel<T, const CAPACITY: usize> {
     /// Current number of items in the channel
-    count:          AtomicUsize,
+    count: AtomicUsize,
     /// Safety context for verification
     safety_context: SafetyContext,
-    _phantom:       PhantomData<T>,
+    _phantom: PhantomData<T>,
 }
 
 /// Sender handle for BoundedChannel
@@ -451,9 +441,9 @@ unsafe impl<T: Send, const CAPACITY: usize> Send for BoundedReceiver<T, CAPACITY
 #[derive(Debug)]
 pub struct SafeAtomicCounter {
     /// The atomic counter value
-    value:          AtomicUsize,
+    value: AtomicUsize,
     /// Maximum allowed value
-    max_value:      usize,
+    max_value: usize,
     /// Safety context for verification
     safety_context: SafetyContext,
 }

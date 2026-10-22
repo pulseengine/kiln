@@ -16,22 +16,9 @@ use kiln_sync::mutex::KilnMutex;
 #[cfg(feature = "std")]
 use crate::prelude::Vec;
 use crate::{
-    operations::{
-        record_global_operation,
-        Type as OperationType,
-    },
-    prelude::{
-        Clone,
-        Debug,
-        Eq,
-        PartialEq,
-        Result,
-        Sized,
-    },
-    safe_memory::{
-        Provider,
-        SafeMemoryHandler,
-    },
+    operations::{Type as OperationType, record_global_operation},
+    prelude::{Clone, Debug, Eq, PartialEq, Result, Sized},
+    safe_memory::{Provider, SafeMemoryHandler},
     verification::VerificationLevel,
 };
 
@@ -44,7 +31,7 @@ use crate::{
 #[derive(Debug)]
 pub struct AtomicMemoryOps<P: Provider> {
     /// The underlying memory handler wrapped in a mutex for atomic operations
-    handler:            KilnMutex<SafeMemoryHandler<P>>,
+    handler: KilnMutex<SafeMemoryHandler<P>>,
     /// Verification level for memory operations
     verification_level: VerificationLevel,
 }
@@ -52,7 +39,7 @@ pub struct AtomicMemoryOps<P: Provider> {
 impl<P: Provider + Clone> Clone for AtomicMemoryOps<P> {
     fn clone(&self) -> Self {
         Self {
-            handler:            KilnMutex::new(self.handler.lock().clone()),
+            handler: KilnMutex::new(self.handler.lock().clone()),
             verification_level: self.verification_level,
         }
     }
@@ -278,4 +265,3 @@ pub trait AtomicMemoryExt: Provider + Sized {
 
 // Implement the extension trait for all types that implement Provider
 impl<T: Provider> AtomicMemoryExt for T {}
-

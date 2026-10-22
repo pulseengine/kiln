@@ -10,12 +10,7 @@
 
 #![allow(unsafe_code)] // Required for platform-specific APIs
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 
 /// Platform-specific random number generator
 pub struct PlatformRandom;
@@ -82,10 +77,7 @@ impl PlatformRandom {
     /// Linux implementation using /dev/urandom
     #[cfg(all(feature = "std", target_os = "linux"))]
     fn linux_random(buffer: &mut [u8]) -> Result<()> {
-        use std::{
-            fs::File,
-            io::Read,
-        };
+        use std::{fs::File, io::Read};
 
         let mut urandom = File::open("/dev/urandom")
             .map_err(|_| Error::runtime_execution_error("Failed to open /dev/urandom"))?;
@@ -126,10 +118,7 @@ impl PlatformRandom {
     /// Windows implementation using BCryptGenRandom
     #[cfg(all(feature = "std", target_os = "windows"))]
     fn windows_random(buffer: &mut [u8]) -> Result<()> {
-        use std::{
-            os::raw::c_void,
-            ptr,
-        };
+        use std::{os::raw::c_void, ptr};
 
         #[link(name = "bcrypt")]
         unsafe extern "system" {
@@ -165,10 +154,7 @@ impl PlatformRandom {
     /// QNX implementation using /dev/random
     #[cfg(all(feature = "std", target_os = "nto"))]
     fn qnx_random(buffer: &mut [u8]) -> Result<()> {
-        use std::{
-            fs::File,
-            io::Read,
-        };
+        use std::{fs::File, io::Read};
 
         // QNX recommends /dev/random for cryptographic purposes
         let mut random = File::open("/dev/random")
@@ -204,10 +190,7 @@ impl PlatformRandom {
     #[allow(dead_code)]
     fn fallback_random(buffer: &mut [u8]) -> Result<()> {
         // Try to use /dev/urandom if available
-        use std::{
-            fs::File,
-            io::Read,
-        };
+        use std::{fs::File, io::Read};
 
         if let Ok(mut urandom) = File::open("/dev/urandom") {
             if urandom.read_exact(buffer).is_ok() {

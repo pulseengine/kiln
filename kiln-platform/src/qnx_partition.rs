@@ -7,22 +7,11 @@
 //! WebAssembly execution with strong isolation guarantees.
 
 use core::{
-    fmt::{
-        self,
-        Debug,
-    },
-    sync::atomic::{
-        AtomicU32,
-        Ordering,
-    },
+    fmt::{self, Debug},
+    sync::atomic::{AtomicU32, Ordering},
 };
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 
 /// FFI declarations for QNX system calls related to memory partitions
 #[allow(non_camel_case_types)]
@@ -40,13 +29,13 @@ mod ffi {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub enum MemPartitionFlags {
         /// No special flags
-        None            = 0,
+        None = 0,
         /// Create a hierarchical partition
-        Hierarchical    = 1,
+        Hierarchical = 1,
         /// Create a memory-isolated partition
         MemoryIsolation = 2,
         /// Create a container partition
-        Container       = 4,
+        Container = 4,
     }
 
     // SAFETY: Edition 2024 requires unsafe extern blocks
@@ -93,10 +82,10 @@ mod ffi {
     #[repr(C)]
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub enum MemPartitionFlags {
-        None            = 0,
-        Hierarchical    = 1,
+        None = 0,
+        Hierarchical = 1,
         MemoryIsolation = 2,
-        Container       = 4,
+        Container = 4,
     }
 
     // Mock functions for build compatibility
@@ -164,13 +153,13 @@ mod ffi {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QnxPartitionFlags {
     /// Standard partition with no special flags
-    Standard        = 0,
+    Standard = 0,
     /// Hierarchical partition (can have child partitions)
-    Hierarchical    = 1,
+    Hierarchical = 1,
     /// Memory-isolated partition (stronger memory isolation)
     MemoryIsolation = 2,
     /// Container partition (for full isolation)
-    Container       = 4,
+    Container = 4,
 }
 
 impl From<QnxPartitionFlags> for u32 {
@@ -184,11 +173,11 @@ impl From<QnxPartitionFlags> for u32 {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QnxPartitionConfigCmd {
     /// Set memory size limits
-    SetMemorySize     = 1,
+    SetMemorySize = 1,
     /// Set CPU limits
-    SetCpuLimits      = 2,
+    SetCpuLimits = 2,
     /// Set scheduler policy
-    SetSchedPolicy    = 3,
+    SetSchedPolicy = 3,
     /// Set security policy
     SetSecurityPolicy = 4,
 }
@@ -198,9 +187,9 @@ pub enum QnxPartitionConfigCmd {
 #[derive(Debug, Clone, Copy)]
 pub struct MemorySizeConfig {
     /// Minimum guaranteed memory in bytes
-    pub min_size:      usize,
+    pub min_size: usize,
     /// Maximum allowed memory in bytes
-    pub max_size:      usize,
+    pub max_size: usize,
     /// Reserved memory in bytes
     pub reserved_size: usize,
 }
@@ -209,22 +198,22 @@ pub struct MemorySizeConfig {
 #[derive(Debug, Clone)]
 pub struct QnxPartitionConfig {
     /// Name of the partition
-    pub name:              &'static str,
+    pub name: &'static str,
     /// Partition flags
-    pub flags:             QnxPartitionFlags,
+    pub flags: QnxPartitionFlags,
     /// Whether to use the system partition as parent
     pub use_system_parent: bool,
     /// Memory size configuration
-    pub memory_size:       Option<MemorySizeConfig>,
+    pub memory_size: Option<MemorySizeConfig>,
 }
 
 impl Default for QnxPartitionConfig {
     fn default() -> Self {
         Self {
-            name:              "kiln_partition",
-            flags:             QnxPartitionFlags::Standard,
+            name: "kiln_partition",
+            flags: QnxPartitionFlags::Standard,
             use_system_parent: true,
-            memory_size:       None,
+            memory_size: None,
         }
     }
 }
@@ -262,8 +251,8 @@ impl QnxMemoryPartitionBuilder {
     /// Set memory size configuration
     pub fn with_memory_size(mut self, min: usize, max: usize, reserved: usize) -> Self {
         self.config.memory_size = Some(MemorySizeConfig {
-            min_size:      min,
-            max_size:      max,
+            min_size: min,
+            max_size: max,
             reserved_size: reserved,
         });
         self
@@ -279,13 +268,13 @@ impl QnxMemoryPartitionBuilder {
 #[derive(Debug)]
 pub struct QnxMemoryPartition {
     /// Configuration settings for the partition
-    config:       QnxPartitionConfig,
+    config: QnxPartitionConfig,
     /// Partition ID
     partition_id: AtomicU32,
     /// Parent partition ID
-    parent_id:    u32,
+    parent_id: u32,
     /// Whether the partition has been created
-    created:      bool,
+    created: bool,
 }
 
 impl QnxMemoryPartition {
@@ -482,7 +471,7 @@ pub struct PartitionGuard<'a> {
     /// Reference to the partition
     partition: &'a QnxMemoryPartition,
     /// Whether the guard is active
-    active:    bool,
+    active: bool,
 }
 
 impl<'a> PartitionGuard<'a> {

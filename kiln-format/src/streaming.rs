@@ -14,38 +14,18 @@ use core::marker::PhantomData;
 use std::vec::Vec;
 
 #[cfg(not(any(feature = "std")))]
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-};
+use kiln_error::{Error, ErrorCategory, codes};
 #[cfg(feature = "std")]
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-};
+use kiln_error::{Error, ErrorCategory, codes};
 #[cfg(not(any(feature = "std")))]
-use kiln_foundation::{
-    traits::BoundedCapacity,
-    MemoryProvider,
-    NoStdProvider,
-};
+use kiln_foundation::{MemoryProvider, NoStdProvider, traits::BoundedCapacity};
 
 #[cfg(feature = "std")]
 use crate::binary::WASM_MAGIC;
 #[cfg(not(any(feature = "std")))]
-use crate::binary::{
-    read_leb128_u32,
-    read_string,
-    WASM_MAGIC,
-    WASM_VERSION,
-};
+use crate::binary::{WASM_MAGIC, WASM_VERSION, read_leb128_u32, read_string};
 #[cfg(not(any(feature = "std")))]
-use crate::{
-    WasmString,
-    WasmVec,
-};
+use crate::{WasmString, WasmVec};
 
 /// Maximum size of a section that can be processed in memory
 pub const MAX_SECTION_SIZE: usize = 64 * 1024; // 64KB
@@ -64,7 +44,7 @@ pub enum ParserState {
     SectionHeader,
     /// Processing section content
     SectionContent {
-        section_id:      u8,
+        section_id: u8,
         remaining_bytes: u32,
     },
     /// Parsing complete
@@ -77,9 +57,9 @@ pub enum ParserState {
 #[derive(Debug, Clone)]
 pub struct SectionInfo {
     /// Section ID
-    pub id:        u8,
+    pub id: u8,
     /// Section size in bytes
-    pub size:      u32,
+    pub size: u32,
     /// Bytes processed so far
     pub processed: u32,
 }
@@ -89,17 +69,17 @@ pub struct SectionInfo {
 #[derive(Debug)]
 pub struct StreamingParser<P: MemoryProvider + Clone + Default + Eq = NoStdProvider<1024>> {
     /// Current parser state
-    state:           ParserState,
+    state: ParserState,
     /// Memory provider for bounded collections
-    provider:        P,
+    provider: P,
     /// Bytes processed so far
     bytes_processed: usize,
     /// Current section being processed
     current_section: Option<SectionInfo>,
     /// Buffer for collecting section data
-    section_buffer:  WasmVec<u8, P>,
+    section_buffer: WasmVec<u8, P>,
     /// Phantom marker for generic parameter
-    _phantom:        PhantomData<P>,
+    _phantom: PhantomData<P>,
 }
 
 /// Binary std/no_std choice
@@ -108,13 +88,13 @@ pub struct StreamingParser<P: MemoryProvider + Clone + Default + Eq = NoStdProvi
 #[allow(dead_code)] // Stub implementation for future streaming functionality
 pub struct StreamingParser {
     /// Current parser state
-    state:           ParserState,
+    state: ParserState,
     /// Bytes processed so far
     bytes_processed: usize,
     /// Current section being processed
     current_section: Option<SectionInfo>,
     /// Buffer for collecting section data
-    section_buffer:  Vec<u8>,
+    section_buffer: Vec<u8>,
 }
 
 /// Parser result for streaming operations
@@ -357,7 +337,8 @@ impl<P: MemoryProvider + Clone + Default + Eq> StreamingParser<P> {
 impl<P: MemoryProvider + Clone + Default + Eq> Default for StreamingParser<P> {
     fn default() -> Self {
         let provider = P::default();
-        Self::new(provider).expect("Failed to create default StreamingParser: memory allocation failed")
+        Self::new(provider)
+            .expect("Failed to create default StreamingParser: memory allocation failed")
     }
 }
 
@@ -368,10 +349,10 @@ impl StreamingParser {
         _provider: P,
     ) -> core::result::Result<Self, Error> {
         Ok(Self {
-            state:           ParserState::Magic,
+            state: ParserState::Magic,
             bytes_processed: 0,
             current_section: None,
-            section_buffer:  Vec::new(),
+            section_buffer: Vec::new(),
         })
     }
 
@@ -399,7 +380,7 @@ impl StreamingParser {
 #[cfg(feature = "std")]
 pub struct SectionParser {
     /// Section data buffer
-    buffer:   Vec<u8>,
+    buffer: Vec<u8>,
     /// Current parsing position
     position: usize,
 }
@@ -411,7 +392,7 @@ impl SectionParser {
         _provider: P,
     ) -> core::result::Result<Self, Error> {
         Ok(Self {
-            buffer:   Vec::new(),
+            buffer: Vec::new(),
             position: 0,
         })
     }
@@ -424,7 +405,7 @@ pub struct SectionParser<P: MemoryProvider + Clone + Default + Eq = NoStdProvide
     /// Memory provider
     provider: P,
     /// Section data buffer
-    buffer:   WasmVec<u8, P>,
+    buffer: WasmVec<u8, P>,
     /// Current parsing position
     position: usize,
 }
@@ -469,8 +450,7 @@ impl<P: MemoryProvider + Clone + Default + Eq> SectionParser<P> {
         let str_content = core::str::from_utf8(str_bytes)
             .map_err(|_| Error::validation_parse_error("Invalid UTF-8 string"))?;
 
-        WasmString::try_from_str(str_content)
-            .map_err(|_| Error::memory_error("String too large"))
+        WasmString::try_from_str(str_content).map_err(|_| Error::memory_error("String too large"))
     }
 
     /// Parse a LEB128 u32 from current position

@@ -35,7 +35,7 @@ use core::mem::MaybeUninit;
 
 use kiln_error::Result;
 
-use crate::traits::{Checksummable, ToBytes, FromBytes, WriteStream, ReadStream};
+use crate::traits::{Checksummable, FromBytes, ReadStream, ToBytes, WriteStream};
 use crate::verification::Checksum;
 
 /// A vector with compile-time capacity and inline storage.
@@ -543,12 +543,7 @@ impl<T, const N: usize> StaticVec<T, N> {
             &[]
         } else {
             // SAFETY: Elements [0..len) are initialized per our invariant
-            unsafe {
-                core::slice::from_raw_parts(
-                    self.data.as_ptr() as *const T,
-                    self.len,
-                )
-            }
+            unsafe { core::slice::from_raw_parts(self.data.as_ptr() as *const T, self.len) }
         }
     }
 
@@ -575,12 +570,7 @@ impl<T, const N: usize> StaticVec<T, N> {
             &mut []
         } else {
             // SAFETY: Elements [0..len) are initialized per our invariant
-            unsafe {
-                core::slice::from_raw_parts_mut(
-                    self.data.as_mut_ptr() as *mut T,
-                    self.len,
-                )
-            }
+            unsafe { core::slice::from_raw_parts_mut(self.data.as_mut_ptr() as *mut T, self.len) }
         }
     }
 
@@ -641,9 +631,7 @@ impl<T, const N: usize> StaticVec<T, N> {
         assert!(index < self.len, "index out of bounds");
 
         // SAFETY: index is bounds-checked above
-        let result = unsafe {
-            self.data[index].assume_init_read()
-        };
+        let result = unsafe { self.data[index].assume_init_read() };
 
         // Shift elements left
         for i in index..self.len - 1 {
@@ -686,9 +674,7 @@ impl<T, const N: usize> StaticVec<T, N> {
         assert!(index < self.len, "index out of bounds");
 
         // SAFETY: index is bounds-checked above
-        let result = unsafe {
-            self.data[index].assume_init_read()
-        };
+        let result = unsafe { self.data[index].assume_init_read() };
 
         self.len -= 1;
 
@@ -730,9 +716,7 @@ impl<T, const N: usize> StaticVec<T, N> {
         let mut i = 0;
         while i < self.len {
             // SAFETY: i < self.len, so this element is initialized
-            let should_retain = unsafe {
-                f(self.data[i].assume_init_ref())
-            };
+            let should_retain = unsafe { f(self.data[i].assume_init_ref()) };
 
             if should_retain {
                 i += 1;
@@ -1043,7 +1027,8 @@ impl<T: Checksummable, const N: usize> Checksummable for StaticVec<T, N> {
 impl<T: ToBytes, const N: usize> ToBytes for StaticVec<T, N> {
     fn serialized_size(&self) -> usize {
         // Size needed: length (usize) + sum of element sizes
-        core::mem::size_of::<usize>() + self.iter().map(|item| item.serialized_size()).sum::<usize>()
+        core::mem::size_of::<usize>()
+            + self.iter().map(|item| item.serialized_size()).sum::<usize>()
     }
 
     fn to_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
@@ -1121,10 +1106,7 @@ impl<T, const N: usize> core::ops::Index<core::ops::Range<usize>> for StaticVec<
         assert!(range.start <= range.end, "range start must be <= end");
         assert!(range.end <= self.len, "range end out of bounds");
         unsafe {
-            core::slice::from_raw_parts(
-                self.data[range.start].as_ptr(),
-                range.end - range.start
-            )
+            core::slice::from_raw_parts(self.data[range.start].as_ptr(), range.end - range.start)
         }
     }
 }
@@ -1253,9 +1235,7 @@ impl<T, const N: usize> Iterator for StaticVecIntoIter<T, N> {
     fn next(&mut self) -> Option<Self::Item> {
         if self.index < self.vec.len() {
             // SAFETY: We know index is valid and element is initialized
-            let item = unsafe {
-                core::ptr::read(self.vec.data[self.index].as_ptr())
-            };
+            let item = unsafe { core::ptr::read(self.vec.data[self.index].as_ptr()) };
             self.index += 1;
             Some(item)
         } else {

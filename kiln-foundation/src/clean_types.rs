@@ -14,21 +14,13 @@ pub use types::*;
 #[cfg(any(feature = "std", feature = "alloc"))]
 mod types {
     #[cfg(all(not(feature = "std"), feature = "alloc"))]
-    use alloc::{
-        boxed::Box,
-        string::String,
-        vec::Vec,
-    };
+    use alloc::{boxed::Box, string::String, vec::Vec};
     #[cfg(not(feature = "std"))]
     use core::fmt;
     #[cfg(feature = "std")]
     use std::fmt;
     #[cfg(feature = "std")]
-    use std::{
-        boxed::Box,
-        string::String,
-        vec::Vec,
-    };
+    use std::{boxed::Box, string::String, vec::Vec};
 
     /// Clean component model value type without provider parameters
     #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -110,14 +102,14 @@ mod types {
         /// Field name
         pub name: String,
         /// Field type
-        pub ty:   ValType,
+        pub ty: ValType,
     }
 
     impl Default for Field {
         fn default() -> Self {
             Self {
                 name: String::new(),
-                ty:   ValType::default(),
+                ty: ValType::default(),
             }
         }
     }
@@ -152,9 +144,9 @@ mod types {
     #[derive(Debug, Clone, PartialEq, Eq, Hash)]
     pub struct Case {
         /// Case name
-        pub name:    String,
+        pub name: String,
         /// Case type (optional)
-        pub ty:      Option<ValType>,
+        pub ty: Option<ValType>,
         /// Refinement information
         pub refines: Option<u32>,
     }
@@ -162,8 +154,8 @@ mod types {
     impl Default for Case {
         fn default() -> Self {
             Self {
-                name:    String::new(),
-                ty:      None,
+                name: String::new(),
+                ty: None,
                 refines: None,
             }
         }
@@ -187,7 +179,7 @@ mod types {
     #[derive(Debug, Clone, PartialEq, Eq, Hash)]
     pub struct Result_ {
         /// Ok type (optional)
-        pub ok:  Option<Box<ValType>>,
+        pub ok: Option<Box<ValType>>,
         /// Error type (optional)
         pub err: Option<Box<ValType>>,
     }
@@ -195,7 +187,7 @@ mod types {
     impl Default for Result_ {
         fn default() -> Self {
             Self {
-                ok:  None,
+                ok: None,
                 err: None,
             }
         }
@@ -252,7 +244,7 @@ mod types {
         /// Variant value
         Variant {
             discriminant: u32,
-            value:        Option<Box<Value>>,
+            value: Option<Box<Value>>,
         },
         /// Enum value
         Enum(u32),
@@ -323,7 +315,7 @@ mod types {
                         .map(|v| Box::new(v.value_type()));
                     let err_type = result.as_ref().err().map(|v| Box::new(v.value_type()));
                     ValType::Result(Result_ {
-                        ok:  ok_type,
+                        ok: ok_type,
                         err: err_type,
                     })
                 },
@@ -338,7 +330,7 @@ mod types {
     #[derive(Debug, Clone, PartialEq, Eq, Hash)]
     pub struct FuncType {
         /// Function parameter types
-        pub params:  Vec<ValType>,
+        pub params: Vec<ValType>,
         /// Function result types
         pub results: Vec<ValType>,
     }
@@ -346,7 +338,7 @@ mod types {
     impl Default for FuncType {
         fn default() -> Self {
             Self {
-                params:  Vec::new(),
+                params: Vec::new(),
                 results: Vec::new(),
             }
         }
@@ -376,14 +368,14 @@ mod types {
         /// Element type
         pub element_type: RefType,
         /// Table limits
-        pub limits:       Limits,
+        pub limits: Limits,
     }
 
     impl Default for TableType {
         fn default() -> Self {
             Self {
                 element_type: RefType::FuncRef,
-                limits:       Limits::default(),
+                limits: Limits::default(),
             }
         }
     }
@@ -394,14 +386,14 @@ mod types {
         /// Value type
         pub value_type: ValType,
         /// Mutability
-        pub mutable:    bool,
+        pub mutable: bool,
     }
 
     impl Default for GlobalType {
         fn default() -> Self {
             Self {
                 value_type: ValType::Bool,
-                mutable:    false,
+                mutable: false,
             }
         }
     }
@@ -440,9 +432,9 @@ mod types {
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct ComponentType {
         /// Component imports
-        pub imports:   Vec<(String, String, ExternType)>,
+        pub imports: Vec<(String, String, ExternType)>,
         /// Component exports
-        pub exports:   Vec<(String, ExternType)>,
+        pub exports: Vec<(String, ExternType)>,
         /// Component instances
         pub instances: Vec<ComponentTypeDefinition>,
     }
@@ -450,8 +442,8 @@ mod types {
     impl Default for ComponentType {
         fn default() -> Self {
             Self {
-                imports:   Vec::new(),
-                exports:   Vec::new(),
+                imports: Vec::new(),
+                exports: Vec::new(),
                 instances: Vec::new(),
             }
         }
@@ -501,14 +493,14 @@ mod types {
         /// Type name
         pub name: String,
         /// Type definition
-        pub ty:   ExternType,
+        pub ty: ExternType,
     }
 
     impl Default for ComponentTypeDefinition {
         fn default() -> Self {
             Self {
                 name: String::new(),
-                ty:   ExternType::default(),
+                ty: ExternType::default(),
             }
         }
     }
@@ -529,11 +521,11 @@ mod types {
                 fields: vec![
                     Field {
                         name: "x".to_string(),
-                        ty:   ValType::S32,
+                        ty: ValType::S32,
                     },
                     Field {
                         name: "y".to_string(),
-                        ty:   ValType::F64,
+                        ty: ValType::F64,
                     },
                 ],
             };
@@ -555,7 +547,7 @@ mod types {
         #[test]
         fn test_func_type_creation() {
             let func_type = FuncType {
-                params:  vec![ValType::S32, ValType::S32],
+                params: vec![ValType::S32, ValType::S32],
                 results: vec![ValType::S32],
             };
             assert_eq!(func_type.params.len(), 2);

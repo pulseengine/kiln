@@ -13,10 +13,7 @@
 
 // Note: no_std is configured at the crate level
 
-use crate::{
-    capabilities::CapabilityMask,
-    CrateId,
-};
+use crate::{CrateId, capabilities::CapabilityMask};
 
 /// Safety monitor for runtime verification
 ///
@@ -25,11 +22,11 @@ use crate::{
 #[derive(Debug)]
 pub struct SafetyMonitor {
     /// Memory allocation tracking
-    allocation_monitor:  AllocationMonitor,
+    allocation_monitor: AllocationMonitor,
     /// Capability violation tracking
-    capability_monitor:  CapabilityMonitor,
+    capability_monitor: CapabilityMonitor,
     /// Error rate monitoring
-    error_monitor:       ErrorMonitor,
+    error_monitor: ErrorMonitor,
     /// Performance degradation detection
     performance_monitor: PerformanceMonitor,
 }
@@ -38,28 +35,28 @@ pub struct SafetyMonitor {
 #[derive(Debug, Default)]
 struct AllocationMonitor {
     /// Total allocations
-    total_allocations:  u64,
+    total_allocations: u64,
     /// Failed allocations
     failed_allocations: u64,
     /// Budget violations
-    budget_violations:  u64,
+    budget_violations: u64,
     /// Largest allocation
-    peak_allocation:    usize,
+    peak_allocation: usize,
     /// Current allocated bytes
-    current_allocated:  usize,
+    current_allocated: usize,
     /// Peak allocated bytes
-    peak_allocated:     usize,
+    peak_allocated: usize,
 }
 
 /// Monitors capability system violations
 #[derive(Debug, Default)]
 struct CapabilityMonitor {
     /// Unauthorized access attempts
-    access_violations:    u64,
+    access_violations: u64,
     /// Invalid capability uses
-    invalid_uses:         u64,
+    invalid_uses: u64,
     /// Capability exhaustion events
-    exhaustion_events:    u64,
+    exhaustion_events: u64,
     /// Double-free attempts
     double_free_attempts: u64,
 }
@@ -68,51 +65,51 @@ struct CapabilityMonitor {
 #[derive(Debug, Default)]
 struct ErrorMonitor {
     /// Errors by severity level [Critical, High, Medium, Low]
-    errors_by_level:    [u64; 4],
+    errors_by_level: [u64; 4],
     /// Recovery success rate
     recovery_successes: u64,
     /// Unrecoverable failures
-    fatal_errors:       u64,
+    fatal_errors: u64,
     /// Error rate window (errors in last 1000 operations)
     recent_error_count: u32,
     /// Operations counter for rate calculation
-    operation_count:    u64,
+    operation_count: u64,
 }
 
 /// Monitors performance degradation
 #[derive(Debug, Default)]
 struct PerformanceMonitor {
     /// Slow allocation events (>threshold)
-    slow_allocations:       u64,
+    slow_allocations: u64,
     /// Memory pressure events
     memory_pressure_events: u64,
     /// Throughput degradation
-    degradation_events:     u64,
+    degradation_events: u64,
     /// Allocation time threshold in microseconds
-    slow_threshold_us:      u64,
+    slow_threshold_us: u64,
 }
 
 /// Safety monitoring report
 #[derive(Debug, Clone)]
 pub struct SafetyReport {
     /// Total memory allocations attempted
-    pub total_allocations:     u64,
+    pub total_allocations: u64,
     /// Failed allocation attempts
-    pub failed_allocations:    u64,
+    pub failed_allocations: u64,
     /// Budget violation count
-    pub budget_violations:     u64,
+    pub budget_violations: u64,
     /// Capability violation count
     pub capability_violations: u64,
     /// Fatal error count
-    pub fatal_errors:          u64,
+    pub fatal_errors: u64,
     /// System health score (0-100)
-    pub health_score:          u8,
+    pub health_score: u8,
     /// Current memory usage
-    pub current_memory_bytes:  usize,
+    pub current_memory_bytes: usize,
     /// Peak memory usage
-    pub peak_memory_bytes:     usize,
+    pub peak_memory_bytes: usize,
     /// Recent error rate (per 1000 operations)
-    pub error_rate_per_1000:   u32,
+    pub error_rate_per_1000: u32,
 }
 
 /// Safety violation types for reporting
@@ -140,32 +137,32 @@ impl SafetyMonitor {
     /// Create a new safety monitor
     pub const fn new() -> Self {
         Self {
-            allocation_monitor:  AllocationMonitor {
-                total_allocations:  0,
+            allocation_monitor: AllocationMonitor {
+                total_allocations: 0,
                 failed_allocations: 0,
-                budget_violations:  0,
-                peak_allocation:    0,
-                current_allocated:  0,
-                peak_allocated:     0,
+                budget_violations: 0,
+                peak_allocation: 0,
+                current_allocated: 0,
+                peak_allocated: 0,
             },
-            capability_monitor:  CapabilityMonitor {
-                access_violations:    0,
-                invalid_uses:         0,
-                exhaustion_events:    0,
+            capability_monitor: CapabilityMonitor {
+                access_violations: 0,
+                invalid_uses: 0,
+                exhaustion_events: 0,
                 double_free_attempts: 0,
             },
-            error_monitor:       ErrorMonitor {
-                errors_by_level:    [0; 4],
+            error_monitor: ErrorMonitor {
+                errors_by_level: [0; 4],
                 recovery_successes: 0,
-                fatal_errors:       0,
+                fatal_errors: 0,
                 recent_error_count: 0,
-                operation_count:    0,
+                operation_count: 0,
             },
             performance_monitor: PerformanceMonitor {
-                slow_allocations:       0,
+                slow_allocations: 0,
                 memory_pressure_events: 0,
-                degradation_events:     0,
-                slow_threshold_us:      1000, // 1ms default
+                degradation_events: 0,
+                slow_threshold_us: 1000, // 1ms default
             },
         }
     }
@@ -258,15 +255,15 @@ impl SafetyMonitor {
     /// Get safety report
     pub fn get_safety_report(&self) -> SafetyReport {
         SafetyReport {
-            total_allocations:     self.allocation_monitor.total_allocations,
-            failed_allocations:    self.allocation_monitor.failed_allocations,
-            budget_violations:     self.allocation_monitor.budget_violations,
+            total_allocations: self.allocation_monitor.total_allocations,
+            failed_allocations: self.allocation_monitor.failed_allocations,
+            budget_violations: self.allocation_monitor.budget_violations,
             capability_violations: self.capability_monitor.access_violations,
-            fatal_errors:          self.error_monitor.fatal_errors,
-            health_score:          self.calculate_health_score(),
-            current_memory_bytes:  self.allocation_monitor.current_allocated,
-            peak_memory_bytes:     self.allocation_monitor.peak_allocated,
-            error_rate_per_1000:   self.error_monitor.recent_error_count,
+            fatal_errors: self.error_monitor.fatal_errors,
+            health_score: self.calculate_health_score(),
+            current_memory_bytes: self.allocation_monitor.current_allocated,
+            peak_memory_bytes: self.allocation_monitor.peak_allocated,
+            error_rate_per_1000: self.error_monitor.recent_error_count,
         }
     }
 

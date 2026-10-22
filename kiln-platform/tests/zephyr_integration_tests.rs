@@ -7,12 +7,8 @@
 #[cfg(feature = "platform-zephyr")]
 mod zephyr_tests {
     use kiln_platform::{
-        ZephyrAllocator,
-        ZephyrAllocatorBuilder,
-        ZephyrFutex,
-        ZephyrFutexBuilder,
-        ZephyrMemoryFlags,
-        ZephyrSemaphoreFutex,
+        ZephyrAllocator, ZephyrAllocatorBuilder, ZephyrFutex, ZephyrFutexBuilder,
+        ZephyrMemoryFlags, ZephyrSemaphoreFutex,
     };
 
     #[test]

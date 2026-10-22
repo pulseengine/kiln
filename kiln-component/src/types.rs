@@ -1176,8 +1176,7 @@ impl Default for Case {
             #[cfg(feature = "std")]
             name: String::new(),
             #[cfg(not(any(feature = "std",)))]
-            name: BoundedString::from_str_truncate("")
-                .expect("Failed to create default Case name"),
+            name: BoundedString::from_str_truncate("").expect("Failed to create default Case name"),
             ty: None,
             refines: None,
         }

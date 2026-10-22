@@ -34,19 +34,11 @@
 extern crate alloc;
 
 #[cfg(feature = "std")]
-use alloc::{
-    boxed::Box,
-    vec::Vec,
-};
+use alloc::{boxed::Box, vec::Vec};
 use core::{
     cell::UnsafeCell,
     ptr::NonNull,
-    sync::atomic::{
-        AtomicBool,
-        AtomicPtr,
-        AtomicUsize,
-        Ordering,
-    },
+    sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering},
 };
 
 use kiln_error::Error;
@@ -189,13 +181,13 @@ unsafe impl<T: Send> Sync for LockFreeMpscQueue<T> {}
 /// Suitable for real-time systems requiring bounded execution time.
 pub struct LockFreeAllocator {
     /// Free list head
-    free_list:    AtomicPtr<FreeBlock>,
+    free_list: AtomicPtr<FreeBlock>,
     /// Total blocks available
     total_blocks: usize,
     /// Block size in bytes
-    block_size:   usize,
+    block_size: usize,
     /// Memory pool base address
-    pool_base:    *mut u8,
+    pool_base: *mut u8,
 }
 
 #[repr(align(8))]
@@ -325,24 +317,24 @@ unsafe impl Sync for LockFreeAllocator {}
 /// tasks.
 pub struct PriorityInheritanceMutex<T> {
     /// Protected data
-    data:           UnsafeCell<T>,
+    data: UnsafeCell<T>,
     /// Current owner's priority
     owner_priority: AtomicUsize,
     /// Lock state (0 = unlocked, 1 = locked)
-    locked:         AtomicBool,
+    locked: AtomicBool,
     /// Waiting queue (simplified - real implementation would use priority
     /// queue)
-    waiters:        AtomicUsize,
+    waiters: AtomicUsize,
 }
 
 impl<T> PriorityInheritanceMutex<T> {
     /// Create a new priority inheritance mutex
     pub const fn new(data: T) -> Self {
         Self {
-            data:           UnsafeCell::new(data),
+            data: UnsafeCell::new(data),
             owner_priority: AtomicUsize::new(0),
-            locked:         AtomicBool::new(false),
-            waiters:        AtomicUsize::new(0),
+            locked: AtomicBool::new(false),
+            waiters: AtomicUsize::new(0),
         }
     }
 
@@ -370,7 +362,7 @@ impl<T> PriorityInheritanceMutex<T> {
                     self.waiters.fetch_sub(1, Ordering::AcqRel);
 
                     return PriorityGuard {
-                        mutex:             self,
+                        mutex: self,
                         original_priority: current_priority,
                     };
                 },
@@ -388,7 +380,7 @@ impl<T> PriorityInheritanceMutex<T> {
                                 Ordering::Relaxed,
                             )
                             .ok(); // Ignore failure - another high priority
-                                   // task may have boosted it
+                        // task may have boosted it
                     }
 
                     // Yield and retry (in real implementation, would use futex or similar)
@@ -404,7 +396,7 @@ impl<T> PriorityInheritanceMutex<T> {
             Ok(_) => {
                 self.owner_priority.store(current_priority as usize, Ordering::Release);
                 Some(PriorityGuard {
-                    mutex:             self,
+                    mutex: self,
                     original_priority: current_priority,
                 })
             },
@@ -428,7 +420,7 @@ unsafe impl<T: Send> Sync for PriorityInheritanceMutex<T> {}
 
 /// RAII guard for priority inheritance mutex
 pub struct PriorityGuard<'a, T> {
-    mutex:             &'a PriorityInheritanceMutex<T>,
+    mutex: &'a PriorityInheritanceMutex<T>,
     original_priority: Priority,
 }
 
@@ -460,9 +452,9 @@ impl<'a, T> Drop for PriorityGuard<'a, T> {
 /// Writers have priority to prevent writer starvation.
 pub struct AdvancedRwLock<T> {
     /// Protected data
-    data:           UnsafeCell<T>,
+    data: UnsafeCell<T>,
     /// Reader count (negative value indicates writer)
-    readers:        AtomicUsize,
+    readers: AtomicUsize,
     /// Writer waiting flag
     writer_waiting: AtomicBool,
 }
@@ -474,8 +466,8 @@ impl<T> AdvancedRwLock<T> {
     /// Create a new reader-writer lock
     pub const fn new(data: T) -> Self {
         Self {
-            data:           UnsafeCell::new(data),
-            readers:        AtomicUsize::new(0),
+            data: UnsafeCell::new(data),
+            readers: AtomicUsize::new(0),
             writer_waiting: AtomicBool::new(false),
         }
     }
@@ -660,15 +652,15 @@ impl<'a, T> Drop for WriteGuard<'a, T> {
 #[cfg(feature = "std")]
 pub struct WaitFreeSpscQueue<T> {
     /// Ring buffer storage
-    buffer:   Box<[UnsafeCell<Option<T>>]>,
+    buffer: Box<[UnsafeCell<Option<T>>]>,
     /// Capacity (power of 2)
     capacity: usize,
     /// Capacity mask for fast modulo
-    mask:     usize,
+    mask: usize,
     /// Head index (consumer)
-    head:     AtomicUsize,
+    head: AtomicUsize,
     /// Tail index (producer)  
-    tail:     AtomicUsize,
+    tail: AtomicUsize,
 }
 
 #[cfg(feature = "std")]

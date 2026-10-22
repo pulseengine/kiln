@@ -515,10 +515,7 @@ pub mod verification_harnesses {
     #[kani::proof]
     #[kani::unwind(5)]
     fn verify_concurrent_safety() {
-        use core::sync::atomic::{
-            AtomicU32,
-            Ordering,
-        };
+        use core::sync::atomic::{AtomicU32, Ordering};
 
         let shared_data = AtomicU32::new(0);
 

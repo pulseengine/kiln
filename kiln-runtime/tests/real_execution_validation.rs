@@ -7,21 +7,11 @@
 use std::sync::Arc;
 
 use kiln_decoder::decoder::decode_module;
-use kiln_error::{
-    Error,
-    Result,
-};
+use kiln_error::{Error, Result};
 use kiln_foundation::{
-    budget_aware_provider::CrateId,
-    safe_managed_alloc,
-    safe_memory::Provider,
-    values::Value,
+    budget_aware_provider::CrateId, safe_managed_alloc, safe_memory::Provider, values::Value,
 };
-use kiln_runtime::{
-    module::Module,
-    module_instance::ModuleInstance,
-    stackless::StacklessEngine,
-};
+use kiln_runtime::{module::Module, module_instance::ModuleInstance, stackless::StacklessEngine};
 
 /// Simple add function WebAssembly module
 /// Generated from: (module (func (export "add") (param i32 i32) (result i32)

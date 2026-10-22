@@ -10,14 +10,7 @@
 // import), which broke every kiln-format doctest run.
 #[cfg(kani)]
 pub mod kani_verification {
-    use crate::{
-        binary::*,
-        compression::*,
-        module::*,
-        section::*,
-        state::*,
-        *,
-    };
+    use crate::{binary::*, compression::*, module::*, section::*, state::*, *};
 
     /// Verify RLE compression round-trip
     #[cfg_attr(kani, kani::proof)]

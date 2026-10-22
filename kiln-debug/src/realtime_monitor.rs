@@ -261,7 +261,8 @@ impl RealtimeMonitor {
         // Collect shared pool utilization (using total system stats)
         let total_budget: usize = 0; // TODO: Get from capability context
         // A zero budget (not yet wired to the capability context) reports 0% utilization.
-        let shared_pool_utilization = (total_allocated * 100).checked_div(total_budget).unwrap_or(0);
+        let shared_pool_utilization =
+            (total_allocated * 100).checked_div(total_budget).unwrap_or(0);
 
         Ok(MemorySample {
             timestamp,

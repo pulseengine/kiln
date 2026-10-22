@@ -14,26 +14,14 @@ use std::fmt;
 #[cfg(feature = "std")]
 use std::vec::Vec;
 
-use kiln_error::{
-    codes,
-    Error as KilnError,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error as KilnError, ErrorCategory, Result, codes};
 
 use crate::{
+    MemoryProvider as RootMemoryProvider, VerificationLevel,
     prelude::*,
-    safe_memory::{
-        NoStdProvider,
-        SafeMemoryHandler,
-        Slice,
-        SliceMut,
-        Stats,
-    },
-    MemoryProvider as RootMemoryProvider,
-    VerificationLevel,
+    safe_memory::{NoStdProvider, SafeMemoryHandler, Slice, SliceMut, Stats},
 }; // Keep kiln_error::Result, Added RootMemoryProvider etc. // Added KilnError,
-   // ErrorCategory, codes
+// ErrorCategory, codes
 
 #[cfg(feature = "std")]
 extern crate alloc;
@@ -854,7 +842,11 @@ impl RootMemoryProvider for DefaultMemoryProvider {
         ))
     }
 
-    fn release_memory(&self, _ptr: *mut u8, _layout: core::alloc::Layout) -> kiln_error::Result<()> {
+    fn release_memory(
+        &self,
+        _ptr: *mut u8,
+        _layout: core::alloc::Layout,
+    ) -> kiln_error::Result<()> {
         // Binary std/no_std choice
         // Safety: This encapsulates unsafe operations internally
         Ok(())
@@ -878,7 +870,9 @@ impl RootMemoryProvider for DefaultMemoryProvider {
         #[cfg(feature = "std")]
         {
             if offset + len > self.heap_data.len() {
-                return Err(KilnError::memory_out_of_bounds("DefaultMemoryProvider: read out of bounds"));
+                return Err(KilnError::memory_out_of_bounds(
+                    "DefaultMemoryProvider: read out of bounds",
+                ));
             }
             Slice::new(&self.heap_data[offset..offset + len]).map_err(|_| {
                 KilnError::memory_error("DefaultMemoryProvider: failed to create slice")
@@ -924,16 +918,24 @@ impl RootMemoryProvider for DefaultMemoryProvider {
 
     fn size(&self) -> usize {
         #[cfg(feature = "std")]
-        { self.heap_data.len() }
+        {
+            self.heap_data.len()
+        }
         #[cfg(not(feature = "std"))]
-        { self.inner.size() }
+        {
+            self.inner.size()
+        }
     }
 
     fn capacity(&self) -> usize {
         #[cfg(feature = "std")]
-        { usize::MAX } // Heap-backed, effectively unlimited
+        {
+            usize::MAX
+        } // Heap-backed, effectively unlimited
         #[cfg(not(feature = "std"))]
-        { self.inner.capacity() }
+        {
+            self.inner.capacity()
+        }
     }
 
     fn verify_integrity(&self) -> kiln_error::Result<()> {
@@ -1012,7 +1014,7 @@ impl RootMemoryProvider for DefaultMemoryProvider {
 /// reading.
 #[derive(Debug)]
 pub struct ReadStream<'a> {
-    buffer:   Slice<'a>,
+    buffer: Slice<'a>,
     position: usize,
 }
 
@@ -1020,7 +1022,7 @@ impl<'a> ReadStream<'a> {
     /// Creates a new `ReadStream` from a byte slice.
     pub fn new(slice: Slice<'a>) -> Self {
         Self {
-            buffer:   slice,
+            buffer: slice,
             position: 0,
         }
     }
@@ -1110,7 +1112,9 @@ impl<'a> ReadStream<'a> {
             self.read_u64_le().map(|v| v as usize)
         } else {
             // Fallback or error for unsupported usize size
-            Err(KilnError::system_error("Unsupported usize size for LE read"))
+            Err(KilnError::system_error(
+                "Unsupported usize size for LE read",
+            ))
         }
     }
 
@@ -1120,7 +1124,9 @@ impl<'a> ReadStream<'a> {
         } else if core::mem::size_of::<isize>() == 8 {
             self.read_i64_le().map(|v| v as isize)
         } else {
-            Err(KilnError::system_error("Unsupported isize size for LE read"))
+            Err(KilnError::system_error(
+                "Unsupported isize size for LE read",
+            ))
         }
     }
 
@@ -1158,7 +1164,7 @@ impl<'a> ReadStream<'a> {
 /// It operates on a mutable slice, typically obtained from a `MemoryProvider`.
 #[derive(Debug)]
 pub struct WriteStream<'a> {
-    buffer:   SliceMut<'a>,
+    buffer: SliceMut<'a>,
     position: usize,
     // Provider is not stored directly to avoid lifetime complexities with SliceMut,
     // but can be passed to methods like to_bytes_with_provider if needed by nested types.
@@ -1168,7 +1174,7 @@ impl<'a> WriteStream<'a> {
     /// Creates a new `WriteStream` from a mutable byte slice.
     pub fn new(slice: SliceMut<'a>) -> Self {
         Self {
-            buffer:   slice,
+            buffer: slice,
             position: 0,
         }
     }
@@ -1383,9 +1389,8 @@ impl FromBytes for alloc::string::String {
         })?;
 
         // Convert to String
-        alloc::string::String::from_utf8(bytes).map_err(|_e| {
-            KilnError::runtime_execution_error("Invalid UTF-8 in string")
-        })
+        alloc::string::String::from_utf8(bytes)
+            .map_err(|_e| KilnError::runtime_execution_error("Invalid UTF-8 in string"))
     }
 }
 
@@ -1556,11 +1561,13 @@ impl SliceMemory {
 #[cfg(feature = "std")]
 impl MemoryAccessor for SliceMemory {
     fn read_bytes(&self, offset: u32, buffer: &mut [u8]) -> Result<()> {
-        let data = self.data.read().map_err(|_| {
-            crate::Error::memory_out_of_bounds("Failed to acquire read lock")
-        })?;
+        let data = self
+            .data
+            .read()
+            .map_err(|_| crate::Error::memory_out_of_bounds("Failed to acquire read lock"))?;
         let start = offset as usize;
-        let end = start.checked_add(buffer.len())
+        let end = start
+            .checked_add(buffer.len())
             .ok_or_else(|| crate::Error::memory_out_of_bounds("Read offset overflow"))?;
         if end > data.len() {
             return Err(crate::Error::memory_out_of_bounds("Read out of bounds"));
@@ -1570,11 +1577,13 @@ impl MemoryAccessor for SliceMemory {
     }
 
     fn write_bytes(&self, offset: u32, data: &[u8]) -> Result<()> {
-        let mut mem = self.data.write().map_err(|_| {
-            crate::Error::memory_out_of_bounds("Failed to acquire write lock")
-        })?;
+        let mut mem = self
+            .data
+            .write()
+            .map_err(|_| crate::Error::memory_out_of_bounds("Failed to acquire write lock"))?;
         let start = offset as usize;
-        let end = start.checked_add(data.len())
+        let end = start
+            .checked_add(data.len())
             .ok_or_else(|| crate::Error::memory_out_of_bounds("Write offset overflow"))?;
         if end > mem.len() {
             return Err(crate::Error::memory_out_of_bounds("Write out of bounds"));

@@ -19,14 +19,8 @@ pub mod kani_verification {
     use crate::component_value::ComponentValue;
     use crate::{
         atomic_memory::AtomicMemoryOps,
-        bounded::{
-            BoundedError,
-            BoundedVec,
-        },
-        safe_memory::{
-            DefaultNoStdProvider,
-            SafeMemoryHandler,
-        },
+        bounded::{BoundedError, BoundedVec},
+        safe_memory::{DefaultNoStdProvider, SafeMemoryHandler},
         types::ValueType,
     };
 

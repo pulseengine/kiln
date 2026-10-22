@@ -19,53 +19,26 @@
 //! - Comprehensive validation and access control
 //! - Thread-safe operations with proper memory ordering
 
-use std::{
-    boxed::Box,
-    collections::HashMap,
-    sync::Arc,
-    time::Duration,
-    vec::Vec,
-};
+use std::{boxed::Box, collections::HashMap, sync::Arc, time::Duration, vec::Vec};
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 use kiln_foundation::{
+    MemArg,
     shared_memory::{
-        MemoryType,
-        SharedMemoryAccess,
-        SharedMemoryManager,
-        SharedMemorySegment,
-        SharedMemoryStats,
+        MemoryType, SharedMemoryAccess, SharedMemoryManager, SharedMemorySegment, SharedMemoryStats,
     },
     traits::BoundedCapacity,
     values::Value,
-    MemArg,
 };
 use kiln_instructions::{
-    atomic_ops::{
-        AtomicWaitNotifyOp,
-        MemoryOrdering,
-    },
+    atomic_ops::{AtomicWaitNotifyOp, MemoryOrdering},
     memory_ops::MemoryOperations,
 };
 
 use crate::prelude::CoreMemoryType;
 
-use crate::thread_manager::{
-    ThreadId,
-    ThreadManager,
-};
-use kiln_sync::{
-    AsilLevel,
-    SafeAtomicCounter,
-    SafetyContext,
-    KilnMutex,
-    KilnRwLock,
-};
+use crate::thread_manager::{ThreadId, ThreadManager};
+use kiln_sync::{AsilLevel, KilnMutex, KilnRwLock, SafeAtomicCounter, SafetyContext};
 
 /// Maximum number of shared memory instances per module
 pub const MAX_SHARED_MEMORIES: usize = 16;
@@ -98,7 +71,7 @@ pub enum SharedMemoryOperation {
     /// Initialize shared memory instance
     Initialize {
         /// Memory type specification.
-        memory_type:  MemoryType,
+        memory_type: MemoryType,
         /// Optional initial data to populate the memory.
         initial_data: Option<Vec<u8>>,
     },
@@ -107,47 +80,47 @@ pub enum SharedMemoryOperation {
         /// Index of the memory to load from.
         memory_index: u32,
         /// Address to load from.
-        address:      u32,
+        address: u32,
         /// Memory ordering for the atomic load.
-        ordering:     MemoryOrdering,
+        ordering: MemoryOrdering,
     },
     /// Store to shared memory with atomic semantics
     AtomicStore {
         /// Index of the memory to store to.
         memory_index: u32,
         /// Address to store to.
-        address:      u32,
+        address: u32,
         /// Value to store.
-        value:        Value,
+        value: Value,
         /// Memory ordering for the atomic store.
-        ordering:     MemoryOrdering,
+        ordering: MemoryOrdering,
     },
     /// Wait on shared memory location
     AtomicWait {
         /// Index of the memory to wait on.
         memory_index: u32,
         /// Address to wait on.
-        address:      u32,
+        address: u32,
         /// Expected value at the address.
-        expected:     Value,
+        expected: Value,
         /// Optional timeout duration.
-        timeout:      Option<Duration>,
+        timeout: Option<Duration>,
     },
     /// Notify threads waiting on shared memory location
     AtomicNotify {
         /// Index of the memory.
         memory_index: u32,
         /// Address to notify on.
-        address:      u32,
+        address: u32,
         /// Number of threads to wake.
-        count:        u32,
+        count: u32,
     },
     /// Grow shared memory
     Grow {
         /// Index of the memory to grow.
         memory_index: u32,
         /// Number of pages to grow by.
-        delta_pages:  u32,
+        delta_pages: u32,
     },
 }
 
@@ -157,7 +130,7 @@ pub struct AtomicExecutionStats {
     /// Total number of atomic operations performed.
     pub total_operations: u64,
     /// Number of atomic wait operations performed.
-    pub wait_operations:  u64,
+    pub wait_operations: u64,
     /// Number of atomic notify operations performed.
     pub notify_operations: u64,
 }
@@ -206,7 +179,11 @@ impl SafeAtomicMemoryContext {
     }
 
     /// Executes an atomic operation on the memory.
-    pub fn execute_atomic(&mut self, thread_id: ThreadId, atomic_op: kiln_instructions::atomic_ops::AtomicOp) -> Result<Vec<u64>> {
+    pub fn execute_atomic(
+        &mut self,
+        thread_id: ThreadId,
+        atomic_op: kiln_instructions::atomic_ops::AtomicOp,
+    ) -> Result<Vec<u64>> {
         // Placeholder implementation - real implementation would execute the atomic operation
         self.stats.total_operations += 1;
         Ok(vec![0])
@@ -218,13 +195,13 @@ pub struct SharedMemoryInstance {
     /// Memory type specification.
     pub memory_type: MemoryType,
     /// Underlying memory implementation.
-    memory:          Arc<KilnRwLock<Box<dyn MemoryOperations + Send + Sync>>>,
+    memory: Arc<KilnRwLock<Box<dyn MemoryOperations + Send + Sync>>>,
     /// Shared memory manager for access control.
-    manager:         Arc<KilnMutex<SharedMemoryManager>>,
+    manager: Arc<KilnMutex<SharedMemoryManager>>,
     /// Atomic context for atomic operations.
-    atomic_context:  Arc<KilnMutex<SafeAtomicMemoryContext>>,
+    atomic_context: Arc<KilnMutex<SafeAtomicMemoryContext>>,
     /// Access statistics.
-    pub stats:       Arc<KilnMutex<SharedMemoryStats>>,
+    pub stats: Arc<KilnMutex<SharedMemoryStats>>,
 }
 
 impl SharedMemoryInstance {
@@ -460,8 +437,11 @@ impl SharedMemoryContext {
 
     /// Registers a shared memory instance.
     pub fn register_shared_memory(&mut self, memory: Arc<SharedMemoryInstance>) -> Result<u32> {
-        let memory_index = self.memory_counter.increment()
-            .map_err(|_| Error::memory_error("Failed to allocate memory index"))? as u32;
+        let memory_index = self
+            .memory_counter
+            .increment()
+            .map_err(|_| Error::memory_error("Failed to allocate memory index"))?
+            as u32;
 
         if self.memories.len() >= MAX_SHARED_MEMORIES {
             return Err(Error::memory_error(
@@ -580,7 +560,7 @@ pub fn create_shared_memory(
 
     let shared_memory = SharedMemoryInstance::new(
         memory_type,
-        memory_impl,  // Memory::new() already returns Box<Memory>
+        memory_impl, // Memory::new() already returns Box<Memory>
         thread_manager,
         capability_context,
     )?;

@@ -6,37 +6,18 @@
 
 use alloc::boxed::Box;
 
-use kiln_error::{
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result};
 use kiln_foundation::{
-    component::{
-        ComponentType,
-        ExternType,
-    },
+    component::{ComponentType, ExternType},
     prelude::*,
-    safe_memory::{
-        MemoryProvider,
-        NoStdProvider,
-    },
+    safe_memory::{MemoryProvider, NoStdProvider},
 };
 
 use crate::{
-    bounded_runtime_infra::{
-        create_runtime_provider,
-        DefaultRuntimeProvider,
-    },
+    bounded_runtime_infra::{DefaultRuntimeProvider, create_runtime_provider},
     unified_types::{
-        DefaultMediumVec,
-        DefaultRuntimeTypes,
-        ExportMap,
-        ImportMap,
-        MemoryBuffer,
-        PlatformMemoryAdapter,
-        RuntimeString,
-        UnifiedMemoryAdapter,
+        DefaultMediumVec, DefaultRuntimeTypes, ExportMap, ImportMap, MemoryBuffer,
+        PlatformMemoryAdapter, RuntimeString, UnifiedMemoryAdapter,
     },
 };
 
@@ -50,10 +31,7 @@ pub struct ComponentId(u32);
 impl ComponentId {
     /// Create a new unique component ID
     pub fn new() -> Self {
-        use core::sync::atomic::{
-            AtomicU32,
-            Ordering,
-        };
+        use core::sync::atomic::{AtomicU32, Ordering};
         static NEXT_ID: AtomicU32 = AtomicU32::new(1);
         Self(NEXT_ID.fetch_add(1, Ordering::Relaxed))
     }
@@ -274,9 +252,9 @@ where
     /// Get the component's memory usage statistics
     pub fn memory_stats(&self) -> MemoryStats {
         MemoryStats {
-            total:     self.memory_adapter.total_memory(),
+            total: self.memory_adapter.total_memory(),
             available: self.memory_adapter.available_memory(),
-            used:      self.memory_adapter.total_memory() - self.memory_adapter.available_memory(),
+            used: self.memory_adapter.total_memory() - self.memory_adapter.available_memory(),
         }
     }
 
@@ -516,10 +494,10 @@ impl ComponentMemoryBudget {
     /// Create a default memory budget for testing
     pub fn default() -> Self {
         Self {
-            total_memory:               64 * 1024 * 1024, // 64MB
-            wasm_linear_memory:         32 * 1024 * 1024, // 32MB
-            component_overhead:         16 * 1024 * 1024, // 16MB
-            debug_overhead:             4 * 1024 * 1024,  // 4MB
+            total_memory: 64 * 1024 * 1024,               // 64MB
+            wasm_linear_memory: 32 * 1024 * 1024,         // 32MB
+            component_overhead: 16 * 1024 * 1024,         // 16MB
+            debug_overhead: 4 * 1024 * 1024,              // 4MB
             available_component_memory: 12 * 1024 * 1024, // 12MB
         }
     }
@@ -543,11 +521,11 @@ impl ComponentMemoryBudget {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MemoryStats {
     /// Total memory capacity
-    pub total:     usize,
+    pub total: usize,
     /// Available memory
     pub available: usize,
     /// Used memory
-    pub used:      usize,
+    pub used: usize,
 }
 
 impl MemoryStats {
@@ -592,9 +570,9 @@ mod tests {
     #[test]
     fn test_memory_stats() {
         let stats = MemoryStats {
-            total:     1000,
+            total: 1000,
             available: 300,
-            used:      700,
+            used: 700,
         };
 
         assert_eq!(stats.usage_percentage(), 70.0);

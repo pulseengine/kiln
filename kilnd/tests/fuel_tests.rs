@@ -5,11 +5,7 @@
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        env,
-        path::PathBuf,
-        process::Command,
-    };
+    use std::{env, path::PathBuf, process::Command};
 
     // Helper function to run kilnd with specified arguments
     fn run_kilnd(wasm_file: &str, fuel: Option<u64>, call: Option<&str>) -> (bool, String) {

@@ -12,12 +12,7 @@ use std::vec::Vec;
 
 use kiln_error::Result;
 // Import types from kiln-foundation
-pub use kiln_foundation::{
-    BlockType,
-    FuncType,
-    RefType,
-    ValueType,
-};
+pub use kiln_foundation::{BlockType, FuncType, RefType, ValueType};
 
 /// WebAssembly memory index type (standard or 64-bit)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,13 +40,13 @@ pub enum MemoryIndexType {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Limits {
     /// Minimum size (pages for memory, elements for table)
-    pub min:      u64,
+    pub min: u64,
     /// Maximum size (optional, required for shared memories)
-    pub max:      Option<u64>,
+    pub max: Option<u64>,
     /// Shared memory flag, used for memory types
     /// When true, memory can be shared between threads and requires max to be
     /// set
-    pub shared:   bool,
+    pub shared: bool,
     /// Whether this limit is for a 64-bit memory
     pub memory64: bool,
 }
@@ -97,7 +92,7 @@ pub fn value_type_to_byte(value_type: ValueType) -> u8 {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct FormatGlobalType {
     pub value_type: ValueType, // This is kiln_foundation::ValueType re-exported in this file
-    pub mutable:    bool,
+    pub mutable: bool,
 }
 
 impl kiln_foundation::traits::Checksummable for FormatGlobalType {
@@ -136,7 +131,7 @@ impl kiln_foundation::traits::FromBytes for FormatGlobalType {
             _ => {
                 return Err(kiln_error::Error::runtime_execution_error(
                     "Invalid mutable byte value: expected 0 or 1",
-                ))
+                ));
             },
         };
         Ok(FormatGlobalType {
@@ -361,8 +356,8 @@ impl kiln_foundation::traits::FromBytes for Limits {
 impl kiln_foundation::traits::ToBytes for Limits {
     fn serialized_size(&self) -> usize {
         8 + if self.max.is_some() { 1 + 8 } else { 1 } + 2 // min + max_flag +
-                                                           // max + shared +
-                                                           // memory64
+        // max + shared +
+        // memory64
     }
 
     fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(

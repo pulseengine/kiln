@@ -61,40 +61,26 @@
 extern crate alloc;
 
 // Re-export core Kiln types for convenience
-pub use kiln_error::{
-    Error,
-    ErrorCategory,
-    Result,
-};
+pub use kiln_error::{Error, ErrorCategory, Result};
 // Safety configuration for WASI
 use kiln_foundation::safety_features::runtime;
-pub use kiln_foundation::{
-    resource::Resource,
-    MemoryProvider,
-};
+pub use kiln_foundation::{MemoryProvider, resource::Resource};
 
 // Re-export safety-aware allocation macros
-pub use kiln_foundation::{
-    safe_managed_alloc,
-    safety_aware_alloc,
-    CrateId,
-};
-pub use kiln_host::{
-    CallbackRegistry,
-    HostFunctionHandler,
-};
+pub use kiln_foundation::{CrateId, safe_managed_alloc, safety_aware_alloc};
+pub use kiln_host::{CallbackRegistry, HostFunctionHandler};
 
 /// WASI-specific crate ID for memory allocation tracking
 pub const WASI_CRATE_ID: CrateId = CrateId::Wasi;
 
 /// Get the current safety level for WASI operations
-#[must_use] 
+#[must_use]
 pub const fn wasi_safety_level() -> &'static str {
     runtime::current_safety_level()
 }
 
 /// Get maximum allocation size for WASI operations based on safety level
-#[must_use] 
+#[must_use]
 pub const fn wasi_max_allocation_size() -> usize {
     runtime::max_allocation_size()
 }
@@ -111,11 +97,7 @@ pub mod dispatcher;
 pub use dispatcher::WasiDispatcher;
 // Re-export global args/env functions for use by kilnd
 #[cfg(all(feature = "preview2", feature = "std"))]
-pub use dispatcher::{
-    set_global_wasi_args,
-    get_global_wasi_args,
-    set_global_wasi_env,
-};
+pub use dispatcher::{get_global_wasi_args, set_global_wasi_args, set_global_wasi_env};
 // Capability-aware value system
 pub mod value_capability_aware;
 
@@ -188,16 +170,9 @@ pub mod wit_bindings;
 // Re-export main types for convenience
 #[cfg(feature = "wasi-nn")]
 pub use capabilities::WasiNeuralNetworkCapabilities;
-pub use capabilities::{
-    WasiCapabilities,
-    WasiEnvironmentCapabilities,
-    WasiFileSystemCapabilities,
-};
+pub use capabilities::{WasiCapabilities, WasiEnvironmentCapabilities, WasiFileSystemCapabilities};
 #[cfg(feature = "preview2")]
-pub use host_provider::component_model_provider::{
-    ComponentModelProvider,
-    WasiProviderBuilder,
-};
+pub use host_provider::component_model_provider::{ComponentModelProvider, WasiProviderBuilder};
 #[cfg(feature = "preview2")]
 pub use host_provider::resource_manager::WasiResourceManager;
 
@@ -229,11 +204,12 @@ pub trait WasiHostProvider {
 pub struct HostFunction {
     /// Function name
     #[cfg(feature = "std")]
-    pub name:        String,
+    pub name: String,
     #[cfg(not(feature = "std"))]
-    pub name: kiln_foundation::BoundedString<256, kiln_foundation::safe_memory::NoStdProvider<1024>>,
+    pub name:
+        kiln_foundation::BoundedString<256, kiln_foundation::safe_memory::NoStdProvider<1024>>,
     /// Function handler
-    pub handler:     HostFunctionHandler,
+    pub handler: HostFunctionHandler,
     /// External type (for component model integration)
     #[cfg(feature = "std")]
     pub extern_type: kiln_format::component::ExternType,
@@ -253,7 +229,6 @@ impl core::fmt::Debug for HostFunction {
 
 /// Error types specific to WASI operations
 pub mod error {
-    
 
     /// WASI-specific error codes
     pub mod codes {
@@ -293,23 +268,12 @@ pub mod prelude {
     pub use kiln_foundation::Value;
     // Re-export commonly used Kiln foundation types
     pub use kiln_foundation::{
-        capability_context,
-        safe_capability_alloc,
-        BoundedMap,
-        BoundedString,
-        BoundedVec,
-        CrateId,
+        BoundedMap, BoundedString, BoundedVec, CrateId, capability_context, safe_capability_alloc,
     };
     // Re-export platform abstractions
-    pub use kiln_platform::{
-        memory::MemoryProvider as PlatformMemoryProvider,
-        time::PlatformTime,
-    };
+    pub use kiln_platform::{memory::MemoryProvider as PlatformMemoryProvider, time::PlatformTime};
 
-    pub use super::error::{
-        codes,
-        kinds,
-    };
+    pub use super::error::{codes, kinds};
     pub use super::{
         CallbackRegistry,
         Error,
@@ -325,10 +289,7 @@ pub mod prelude {
         WasiVersion,
     };
     #[cfg(feature = "preview2")]
-    pub use super::{
-        ComponentModelProvider,
-        WasiResourceManager,
-    };
+    pub use super::{ComponentModelProvider, WasiResourceManager};
 }
 
 #[cfg(test)]

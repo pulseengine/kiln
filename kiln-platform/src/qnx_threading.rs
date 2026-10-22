@@ -5,61 +5,27 @@
 //! isolation and priority inheritance.
 
 use core::{
-    fmt::{
-        self,
-        Debug,
-    },
-    sync::atomic::{
-        AtomicBool,
-        AtomicU64,
-        AtomicUsize,
-        Ordering,
-    },
+    fmt::{self, Debug},
+    sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     time::Duration,
 };
 use std::{
     boxed::Box,
     collections::BTreeMap,
-    string::{
-        String,
-        ToString,
-    },
+    string::{String, ToString},
     sync::Arc,
     vec::Vec,
 };
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
-use kiln_sync::{
-    KilnMutex,
-    KilnRwLock,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
+use kiln_sync::{KilnMutex, KilnRwLock};
 
 use crate::{
-    qnx_partition::{
-        QnxMemoryPartition,
-        QnxMemoryPartitionBuilder,
-        QnxPartitionFlags,
-    },
-    qnx_sync::{
-        QnxFutex,
-        QnxFutexBuilder,
-        QnxSyncPriority,
-    },
+    qnx_partition::{QnxMemoryPartition, QnxMemoryPartitionBuilder, QnxPartitionFlags},
+    qnx_sync::{QnxFutex, QnxFutexBuilder, QnxSyncPriority},
     threading::{
-        CpuSet,
-        PlatformThreadHandle,
-        PlatformThreadPool,
-        ThreadHandle,
-        ThreadPoolConfig,
-        ThreadPoolStats,
-        ThreadPriority,
-        ThreadStats,
-        WasmTask,
+        CpuSet, PlatformThreadHandle, PlatformThreadPool, ThreadHandle, ThreadPoolConfig,
+        ThreadPoolStats, ThreadPriority, ThreadStats, WasmTask,
     },
 };
 
@@ -68,13 +34,13 @@ use crate::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SchedPolicy {
     /// First-in-first-out (real-time)
-    Fifo       = 1,
+    Fifo = 1,
     /// Round-robin (real-time)
     RoundRobin = 2,
     /// Other (normal)
-    Other      = 4,
+    Other = 4,
     /// Sporadic (real-time with budget)
-    Sporadic   = 3,
+    Sporadic = 3,
 }
 
 /// Thread attributes for QNX
@@ -82,13 +48,13 @@ pub enum SchedPolicy {
 #[derive(Debug, Clone)]
 struct ThreadAttributes {
     /// Scheduling policy
-    policy:        SchedPolicy,
+    policy: SchedPolicy,
     /// Priority (1-255)
-    priority:      u8,
+    priority: u8,
     /// CPU runmask
-    runmask:       u64,
+    runmask: u64,
     /// Stack size
-    stack_size:    usize,
+    stack_size: usize,
     /// Inherit scheduling from parent
     inherit_sched: bool,
 }
@@ -103,9 +69,9 @@ mod ffi {
 
     #[repr(C)]
     pub struct sched_param {
-        pub sched_priority:    i32,
+        pub sched_priority: i32,
         pub sched_curpriority: i32,
-        pub reserved:          [i32; 6],
+        pub reserved: [i32; 6],
     }
 
     // SAFETY: Edition 2024 requires unsafe extern blocks
@@ -151,7 +117,7 @@ mod ffi {
 
     #[repr(C)]
     pub struct timespec {
-        pub tv_sec:  i64,
+        pub tv_sec: i64,
         pub tv_nsec: i64,
     }
 
@@ -166,15 +132,15 @@ mod ffi {
 /// QNX thread handle
 struct QnxThreadHandle {
     /// Thread ID
-    tid:     ffi::pthread_t,
+    tid: ffi::pthread_t,
     /// Task being executed
-    task:    Arc<KilnMutex<Option<WasmTask>>>,
+    task: Arc<KilnMutex<Option<WasmTask>>>,
     /// `Result` storage
-    result:  Arc<KilnMutex<Option<Result<Vec<u8>>>>>,
+    result: Arc<KilnMutex<Option<Result<Vec<u8>>>>>,
     /// Running flag
     running: Arc<AtomicBool>,
     /// Thread statistics
-    stats:   Arc<KilnMutex<ThreadStats>>,
+    stats: Arc<KilnMutex<ThreadStats>>,
 }
 
 impl PlatformThreadHandle for QnxThreadHandle {
@@ -208,13 +174,13 @@ impl PlatformThreadHandle for QnxThreadHandle {
 /// Thread context passed to pthread
 struct ThreadContext {
     /// Task to execute
-    task:     WasmTask,
+    task: WasmTask,
     /// `Result` storage
-    result:   Arc<KilnMutex<Option<Result<Vec<u8>>>>>,
+    result: Arc<KilnMutex<Option<Result<Vec<u8>>>>>,
     /// Running flag
-    running:  Arc<AtomicBool>,
+    running: Arc<AtomicBool>,
     /// Stats
-    stats:    Arc<KilnMutex<ThreadStats>>,
+    stats: Arc<KilnMutex<ThreadStats>>,
     /// Executor function
     executor: Arc<dyn Fn(WasmTask) -> Result<Vec<u8>> + Send + Sync>,
 }
@@ -222,19 +188,19 @@ struct ThreadContext {
 /// QNX thread pool implementation
 pub struct QnxThreadPool {
     /// Configuration
-    config:         ThreadPoolConfig,
+    config: ThreadPoolConfig,
     /// Memory partition for thread isolation
-    partition:      Option<QnxMemoryPartition>,
+    partition: Option<QnxMemoryPartition>,
     /// Active threads
     active_threads: Arc<KilnRwLock<BTreeMap<u64, Box<dyn PlatformThreadHandle>>>>,
     /// Thread statistics
-    stats:          Arc<KilnMutex<ThreadPoolStats>>,
+    stats: Arc<KilnMutex<ThreadPoolStats>>,
     /// Next thread ID
     next_thread_id: AtomicU64,
     /// Shutdown flag
-    shutdown:       AtomicBool,
+    shutdown: AtomicBool,
     /// Task executor
-    executor:       Arc<dyn Fn(WasmTask) -> Result<Vec<u8>> + Send + Sync>,
+    executor: Arc<dyn Fn(WasmTask) -> Result<Vec<u8>> + Send + Sync>,
 }
 
 impl QnxThreadPool {
@@ -326,9 +292,9 @@ impl QnxThreadPool {
         // Set priority
         let priority = self.map_priority(task.priority);
         let sched_param = ffi::sched_param {
-            sched_priority:    priority as i32,
+            sched_priority: priority as i32,
             sched_curpriority: priority as i32,
-            reserved:          [0; 6],
+            reserved: [0; 6],
         };
 
         if unsafe { ffi::pthread_attr_setschedparam(&mut attr, &sched_param) } != 0 {
@@ -485,7 +451,7 @@ impl PlatformThreadPool for QnxThreadPool {
         }
 
         Ok(ThreadHandle {
-            id:              thread_id,
+            id: thread_id,
             platform_handle: handle,
         })
     }
@@ -540,14 +506,14 @@ mod tests {
 
         // Spawn a thread
         let task = WasmTask {
-            id:           1,
-            function_id:  100,
-            args:         vec![1, 2, 3, 4],
-            priority:     ThreadPriority::Normal,
-            stack_size:   None,
+            id: 1,
+            function_id: 100,
+            args: vec![1, 2, 3, 4],
+            priority: ThreadPriority::Normal,
+            stack_size: None,
             memory_limit: None,
             cpu_affinity: None,
-            deadline:     None,
+            deadline: None,
         };
 
         let handle = pool.spawn_wasm_thread(task).unwrap();
@@ -575,14 +541,14 @@ mod tests {
         cpu_set.add(1);
 
         let task = WasmTask {
-            id:           2,
-            function_id:  200,
-            args:         vec![],
-            priority:     ThreadPriority::High,
-            stack_size:   Some(4 * 1024 * 1024), // 4MB stack
+            id: 2,
+            function_id: 200,
+            args: vec![],
+            priority: ThreadPriority::High,
+            stack_size: Some(4 * 1024 * 1024), // 4MB stack
             memory_limit: None,
             cpu_affinity: Some(cpu_set),
-            deadline:     None,
+            deadline: None,
         };
 
         let handle = pool.spawn_wasm_thread(task).unwrap();

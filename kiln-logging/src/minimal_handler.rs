@@ -13,7 +13,7 @@ use crate::level::LogLevel;
 #[derive(Debug, Clone, Copy)]
 pub struct MinimalLogMessage {
     /// Log level
-    pub level:   LogLevel,
+    pub level: LogLevel,
     /// Static log message
     pub message: &'static str,
 }

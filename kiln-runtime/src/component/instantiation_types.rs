@@ -5,19 +5,10 @@
 //! and runtime state management.
 
 use kiln_foundation::{
-    bounded::{
-        BoundedString,
-        BoundedVec,
-    },
-    traits::{
-        Checksummable,
-        FromBytes,
-        ReadStream,
-        ToBytes,
-        WriteStream,
-    },
-    verification::Checksum,
     MemoryProvider,
+    bounded::{BoundedString, BoundedVec},
+    traits::{Checksummable, FromBytes, ReadStream, ToBytes, WriteStream},
+    verification::Checksum,
 };
 
 use crate::prelude::*;
@@ -43,7 +34,7 @@ pub struct ComponentInstantiation {
 #[derive(Debug, Clone)]
 pub struct CoreModuleInstantiation {
     /// Module index to instantiate
-    pub module_idx:    u32,
+    pub module_idx: u32,
     /// Runtime instantiation arguments
     pub args: BoundedVec<RuntimeCoreInstantiateArg, MAX_INSTANTIATION_ARGS, InstantiationProvider>,
     /// Runtime state for the instantiation
@@ -54,9 +45,9 @@ pub struct CoreModuleInstantiation {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RuntimeInstantiateArg {
     /// Name of the argument
-    pub name:         BoundedString<256>,
+    pub name: BoundedString<256>,
     /// Runtime reference to the provided value
-    pub runtime_ref:  RuntimeReference,
+    pub runtime_ref: RuntimeReference,
     /// Validation state
     pub is_validated: bool,
 }
@@ -65,20 +56,20 @@ pub struct RuntimeInstantiateArg {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RuntimeCoreInstantiateArg {
     /// Name of the argument
-    pub name:                 BoundedString<256>,
+    pub name: BoundedString<256>,
     /// Runtime instance index that provides the value
     pub runtime_instance_idx: u32,
     /// Validation state
-    pub is_validated:         bool,
+    pub is_validated: bool,
 }
 
 /// Runtime reference to an instantiation argument
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RuntimeReference {
     /// Sort of the reference
-    pub sort:           RuntimeSort,
+    pub sort: RuntimeSort,
     /// Runtime index within the sort
-    pub runtime_idx:    u32,
+    pub runtime_idx: u32,
     /// Handle to the runtime object
     pub runtime_handle: u32,
 }
@@ -117,11 +108,11 @@ pub enum RuntimeSort {
 #[derive(Debug, Clone)]
 pub struct InstantiationState {
     /// Whether instantiation has started
-    pub is_started:          bool,
+    pub is_started: bool,
     /// Whether instantiation is complete
-    pub is_complete:         bool,
+    pub is_complete: bool,
     /// Runtime error if instantiation failed
-    pub error_state:         Option<InstantiationError>,
+    pub error_state: Option<InstantiationError>,
     /// Runtime resources allocated during instantiation
     pub allocated_resources: BoundedVec<u32, 64, InstantiationProvider>,
 }
@@ -130,9 +121,9 @@ pub struct InstantiationState {
 #[derive(Debug, Clone)]
 pub struct InstantiationError {
     /// Error message
-    pub message:        &'static str,
+    pub message: &'static str,
     /// Error code
-    pub code:           u16,
+    pub code: u16,
     /// Failed argument index (if applicable)
     pub failed_arg_idx: Option<u32>,
 }
@@ -258,9 +249,9 @@ impl Default for CoreModuleInstantiation {
 impl Default for InstantiationState {
     fn default() -> Self {
         Self {
-            is_started:          false,
-            is_complete:         false,
-            error_state:         None,
+            is_started: false,
+            is_complete: false,
+            error_state: None,
             allocated_resources: BoundedVec::new(InstantiationProvider::default())
                 .unwrap_or_default(),
         }

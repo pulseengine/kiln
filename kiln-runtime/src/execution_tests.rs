@@ -173,7 +173,7 @@ mod tests {
         // Should fail when exceeding limit
         assert!(stats.use_gas(200).is_err());
         assert_eq!(stats.gas_used, 1100); // Gas was consumed even though it
-                                          // exceeded limit
+        // exceeded limit
     }
 
     #[test]

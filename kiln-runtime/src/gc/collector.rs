@@ -6,9 +6,9 @@
 use kiln_error::{Error, Result};
 
 use super::{
+    GC_OBJECT_ALIGNMENT, GcRef,
     heap::GcHeap,
-    object::{ObjectKind, HEADER_SIZE},
-    GcRef, GC_OBJECT_ALIGNMENT,
+    object::{HEADER_SIZE, ObjectKind},
 };
 
 /// Maximum size of the mark stack (for no_std compatibility)
@@ -186,9 +186,8 @@ impl GcCollector {
         let (kind, payload_offset, payload_len) = {
             let obj = heap.get(gc_ref)?;
             let header = obj.header();
-            let offset = gc_ref
-                .offset()
-                .ok_or_else(|| Error::memory_error("Null GC reference"))? as usize
+            let offset = gc_ref.offset().ok_or_else(|| Error::memory_error("Null GC reference"))?
+                as usize
                 + HEADER_SIZE;
             (header.kind(), offset, obj.payload().len())
         };
@@ -197,17 +196,17 @@ impl GcCollector {
             ObjectKind::Struct => {
                 // Scan struct fields for references
                 self.scan_payload_for_refs(heap, payload_offset, payload_len)?;
-            }
+            },
             ObjectKind::Array => {
                 // Scan array elements for references
                 // Skip the length field (first 4 bytes)
                 if payload_len > 4 {
                     self.scan_payload_for_refs(heap, payload_offset + 4, payload_len - 4)?;
                 }
-            }
+            },
             ObjectKind::I31 => {
                 // i31 values don't contain references
-            }
+            },
         }
 
         Ok(())

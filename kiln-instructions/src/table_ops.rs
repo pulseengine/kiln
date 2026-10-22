@@ -56,19 +56,8 @@
 #![allow(clippy::cast_possible_truncation)]
 
 use crate::{
-    prelude::{
-        Debug,
-        Error,
-        PartialEq,
-        PureInstruction,
-        Result,
-        Value,
-        ValueType,
-    },
-    validation::{
-        Validate,
-        ValidationContext,
-    },
+    prelude::{Debug, Error, PartialEq, PureInstruction, Result, Value, ValueType},
+    validation::{Validate, ValidationContext},
 };
 
 /// Table operations trait defining the interface to table implementations
@@ -248,13 +237,16 @@ impl TableSet {
 
         // Validate that value is a reference type
         match value {
-            Value::FuncRef(_) | Value::ExternRef(_)
-            | Value::I31Ref(_) | Value::StructRef(_)
-            | Value::ArrayRef(_) | Value::Ref(_) => {},
+            Value::FuncRef(_)
+            | Value::ExternRef(_)
+            | Value::I31Ref(_)
+            | Value::StructRef(_)
+            | Value::ArrayRef(_)
+            | Value::Ref(_) => {},
             _ => {
                 return Err(Error::type_error(
                     "table.set value must be a reference type",
-                ))
+                ));
             },
         }
 
@@ -342,13 +334,16 @@ impl TableGrow {
 
         // Validate that init_value is a reference type
         match init_value {
-            Value::FuncRef(_) | Value::ExternRef(_)
-            | Value::I31Ref(_) | Value::StructRef(_)
-            | Value::ArrayRef(_) | Value::Ref(_) => {},
+            Value::FuncRef(_)
+            | Value::ExternRef(_)
+            | Value::I31Ref(_)
+            | Value::StructRef(_)
+            | Value::ArrayRef(_)
+            | Value::Ref(_) => {},
             _ => {
                 return Err(Error::type_error(
                     "table.grow init value must be a reference type",
-                ))
+                ));
             },
         }
 
@@ -418,13 +413,16 @@ impl TableFill {
 
         // Validate that value is a reference type
         match value {
-            Value::FuncRef(_) | Value::ExternRef(_)
-            | Value::I31Ref(_) | Value::StructRef(_)
-            | Value::ArrayRef(_) | Value::Ref(_) => {},
+            Value::FuncRef(_)
+            | Value::ExternRef(_)
+            | Value::I31Ref(_)
+            | Value::StructRef(_)
+            | Value::ArrayRef(_)
+            | Value::Ref(_) => {},
             _ => {
                 return Err(Error::type_error(
                     "table.fill value must be a reference type",
-                ))
+                ));
             },
         }
 
@@ -438,7 +436,7 @@ pub struct TableCopy {
     /// Destination table index
     pub dest_table_index: u32,
     /// Source table index  
-    pub src_table_index:  u32,
+    pub src_table_index: u32,
 }
 
 impl TableCopy {
@@ -524,7 +522,7 @@ pub struct TableInit {
     /// Table index to initialize
     pub table_index: u32,
     /// Element segment index to use
-    pub elem_index:  u32,
+    pub elem_index: u32,
 }
 
 impl TableInit {
@@ -829,8 +827,8 @@ impl Validate for TableGet {
         // table.get: [i32] -> [ref]
         if !ctx.is_unreachable() {
             ctx.pop_expect(ValueType::I32)?; // index
-                                             // Push appropriate reference type based on table type
-                                             // For simplicity, assume funcref for now
+            // Push appropriate reference type based on table type
+            // For simplicity, assume funcref for now
             ctx.push_type(ValueType::FuncRef)?;
         }
         Ok(())
@@ -932,15 +930,9 @@ impl Validate for TableOp {
 #[cfg(all(test, feature = "std"))]
 mod tests {
     // Import Vec based on feature flags
-    use std::{
-        vec,
-        vec::Vec,
-    };
+    use std::{vec, vec::Vec};
 
-    use kiln_foundation::values::{
-        ExternRef,
-        FuncRef,
-    };
+    use kiln_foundation::values::{ExternRef, FuncRef};
 
     use super::*;
 
@@ -955,7 +947,7 @@ mod tests {
             let mut elements = Vec::with_capacity(initial_size as usize);
             for _ in 0..initial_size {
                 elements.push(Value::FuncRef(None)); // Initialize with null
-                                                     // references
+                // references
             }
             Self { elements, max_size }
         }
@@ -1141,7 +1133,9 @@ mod tests {
             &self,
             elem_index: u32,
         ) -> Result<
-            Option<kiln_foundation::BoundedVec<Value, 65536, kiln_foundation::NoStdProvider<65536>>>,
+            Option<
+                kiln_foundation::BoundedVec<Value, 65536, kiln_foundation::NoStdProvider<65536>>,
+            >,
         > {
             if let Some(Some(seg)) = self.segments.get(elem_index as usize) {
                 let mut bounded = kiln_foundation::BoundedVec::new();
@@ -1170,16 +1164,16 @@ mod tests {
 
     /// Mock table context for testing unified operations
     struct MockTableContext {
-        stack:    Vec<Value>,
-        tables:   MockTableOperations,
+        stack: Vec<Value>,
+        tables: MockTableOperations,
         elements: MockElementSegments,
     }
 
     impl MockTableContext {
         fn new() -> Self {
             Self {
-                stack:    Vec::new(),
-                tables:   MockTableOperations::new(),
+                stack: Vec::new(),
+                tables: MockTableOperations::new(),
                 elements: MockElementSegments::new(),
             }
         }

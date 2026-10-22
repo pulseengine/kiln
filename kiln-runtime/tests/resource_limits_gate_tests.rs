@@ -16,10 +16,7 @@ use core::sync::atomic::Ordering;
 
 use kiln_foundation::values::Value;
 use kiln_runtime::engine::{
-    CapabilityAwareEngine,
-    CapabilityEngine,
-    EnginePreset,
-    EngineResourceLimits,
+    CapabilityAwareEngine, CapabilityEngine, EnginePreset, EngineResourceLimits,
 };
 
 const WASM_PAGE: u64 = 64 * 1024;
@@ -91,9 +88,7 @@ fn multi_memory_total_declared_min_gated() {
     let handle = engine
         .load_module(&wasm("(module (memory 1) (memory 1))"))
         .expect("total declared min at exactly the cap must load");
-    engine
-        .instantiate(handle)
-        .expect("within-cap module must instantiate");
+    engine.instantiate(handle).expect("within-cap module must instantiate");
 }
 
 /// SR-47 + SR-48: every instantiated memory AND table carries the runtime
@@ -127,9 +122,7 @@ fn runtime_caps_set_on_all_instantiated_memories_and_tables() {
     // memory index 1: grow within the cap succeeds, grow past it fails while
     // still below the declared max (40) — the runtime cap is what fires.
     let mem1 = inst.memory(1).expect("memory 1 must exist");
-    mem1.0
-        .grow_shared(3)
-        .expect("grow to 5 pages (cap 10) must succeed");
+    mem1.0.grow_shared(3).expect("grow to 5 pages (cap 10) must succeed");
     assert!(
         mem1.0.grow_shared(20).is_err(),
         "grow to 25 pages must fail against the 10-page runtime cap (declared max is 40)"

@@ -5,18 +5,9 @@
 //! different backends (Tract, ONNX Runtime, etc.) to be used interchangeably.
 
 use core::fmt::Debug;
-use std::sync::{
-    Mutex,
-    OnceLock,
-};
+use std::sync::{Mutex, OnceLock};
 
-use super::{
-    GraphEncoding,
-    NeuralNetworkCapability,
-    Tensor,
-    TensorDimensions,
-    TensorType,
-};
+use super::{GraphEncoding, NeuralNetworkCapability, Tensor, TensorDimensions, TensorType};
 use crate::prelude::*;
 
 /// Trait for model capabilities tied to specific backends

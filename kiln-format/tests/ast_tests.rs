@@ -75,8 +75,8 @@ fn test_type_expr() {
 
     let named = TypeExpr::Named(NamedType {
         package: None,
-        name:    ident.clone(),
-        span:    ident.span,
+        name: ident.clone(),
+        span: ident.span,
     });
 
     assert_eq!(named.span(), SourceSpan::new(0, 6, 0));

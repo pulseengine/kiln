@@ -10,12 +10,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use wast::{WastExecute, WastInvoke};
 use kiln_decoder::decoder::decode_module;
 use kiln_foundation::types::{GlobalType, Limits, MemoryType, RefType, TableType, ValueType};
 use kiln_foundation::values::Value;
 use kiln_runtime::module::{ExportKind, Module, RuntimeImportDesc};
 use kiln_runtime::stackless::StacklessEngine;
+use wast::{WastExecute, WastInvoke};
 
 // Re-export value conversion utilities from wast_values module
 pub use crate::wast_values::{
@@ -76,7 +76,9 @@ impl kiln_foundation::HostImportHandler for SpectestHandler {
     }
 
     fn call_import(
-        &mut self, _module: &str, _function: &str,
+        &mut self,
+        _module: &str,
+        _function: &str,
         _args: &[kiln_foundation::Value],
         _memory: Option<&dyn kiln_foundation::traits::MemoryAccessor>,
     ) -> kiln_error::Result<Vec<kiln_foundation::Value>> {
@@ -102,9 +104,7 @@ impl WastEngine {
     /// Load and instantiate a WebAssembly module from binary data
     pub fn load_module(&mut self, name: Option<&str>, wasm_binary: &[u8]) -> Result<()> {
         // Decode the WASM binary into a KilnModule
-        let kiln_module = decode_module(wasm_binary).map_err(|e| {
-            anyhow::anyhow!("{}", e)
-        })?;
+        let kiln_module = decode_module(wasm_binary).map_err(|e| anyhow::anyhow!("{}", e))?;
 
         // Extract precise type info from kiln_module and binary before
         // the lossy conversion to runtime Module
@@ -119,7 +119,8 @@ impl WastEngine {
         use kiln_runtime::module_instance::ModuleInstance;
 
         let module = Arc::new(
-            *Module::from_kiln_module(&kiln_module).context("Failed to convert to runtime module")?,
+            *Module::from_kiln_module(&kiln_module)
+                .context("Failed to convert to runtime module")?,
         );
 
         // Validate all imports against registered modules and spectest
@@ -426,10 +427,15 @@ impl WastEngine {
         // Look for memory imports from spectest
         for (i, (mod_name, field_name)) in module.import_order.iter().enumerate() {
             if let Some(RuntimeImportDesc::Memory(_)) = module.import_types.get(i) {
-                if mod_name == "spectest" && (field_name == "memory" || field_name == "shared_memory") {
+                if mod_name == "spectest"
+                    && (field_name == "memory" || field_name == "shared_memory")
+                {
                     let is_shared = field_name == "shared_memory";
                     let core_mem_type = CoreMemoryType {
-                        limits: Limits { min: 1, max: Some(2) },
+                        limits: Limits {
+                            min: 1,
+                            max: Some(2),
+                        },
                         shared: is_shared,
                         memory64: false,
                         page_size: None,
@@ -463,10 +469,10 @@ impl WastEngine {
         module: &Module,
         module_instance: &Arc<kiln_runtime::module_instance::ModuleInstance>,
     ) -> Result<()> {
-        use std::sync::{Arc as StdArc, RwLock};
         use kiln_foundation::values::{FloatBits32, FloatBits64};
         use kiln_runtime::global::Global;
         use kiln_runtime::module::GlobalWrapper;
+        use std::sync::{Arc as StdArc, RwLock};
 
         // The global_import_types stores global types in order of appearance
         // We need to match them with the corresponding import names
@@ -540,12 +546,14 @@ impl WastEngine {
                     let is_table64 = field_name == "table64";
                     let spectest_table_type = TableType {
                         element_type: RefType::Funcref,
-                        limits: Limits { min: 10, max: Some(20) },
+                        limits: Limits {
+                            min: 10,
+                            max: Some(20),
+                        },
                         table64: is_table64,
                     };
-                    let table = Table::new(spectest_table_type).map_err(|e| {
-                        anyhow::anyhow!("Failed to create spectest table: {:?}", e)
-                    })?;
+                    let table = Table::new(spectest_table_type)
+                        .map_err(|e| anyhow::anyhow!("Failed to create spectest table: {:?}", e))?;
 
                     let wrapper = TableWrapper::new(table);
 
@@ -598,8 +606,12 @@ impl WastEngine {
                             // Get the source module instance to access its table
                             if let Some(source_instance_id) = self.instance_ids.get(mod_name) {
                                 // Get the table from the source instance via the engine
-                                if let Some(source_instance) = self.engine.get_instance(*source_instance_id) {
-                                    if let Ok(table_wrapper) = source_instance.table(source_table_idx as u32) {
+                                if let Some(source_instance) =
+                                    self.engine.get_instance(*source_instance_id)
+                                {
+                                    if let Ok(table_wrapper) =
+                                        source_instance.table(source_table_idx as u32)
+                                    {
                                         // Share the table (clone the Arc, not the data)
                                         module_instance
                                             .set_table(table_import_idx, table_wrapper)
@@ -661,8 +673,12 @@ impl WastEngine {
 
                             // Get the source module instance to access its memory
                             if let Some(source_instance_id) = self.instance_ids.get(mod_name) {
-                                if let Some(source_instance) = self.engine.get_instance(*source_instance_id) {
-                                    if let Ok(memory_wrapper) = source_instance.memory(source_mem_idx as u32) {
+                                if let Some(source_instance) =
+                                    self.engine.get_instance(*source_instance_id)
+                                {
+                                    if let Ok(memory_wrapper) =
+                                        source_instance.memory(source_mem_idx as u32)
+                                    {
                                         // Share the memory (clone the Arc, not the data)
                                         module_instance
                                             .set_memory(memory_import_idx, memory_wrapper)
@@ -696,15 +712,17 @@ impl WastEngine {
         module: &Module,
         module_instance: &Arc<kiln_runtime::module_instance::ModuleInstance>,
     ) -> Result<()> {
-        use std::sync::{Arc as StdArc, RwLock};
         use kiln_runtime::global::Global;
         use kiln_runtime::module::GlobalWrapper;
+        use std::sync::{Arc as StdArc, RwLock};
 
         let mut global_import_idx = 0usize;
 
         for (i, (mod_name, field_name)) in module.import_order.iter().enumerate() {
             // Check if this is a global import using import_types
-            if let Some(kiln_runtime::module::RuntimeImportDesc::Global(_)) = module.import_types.get(i) {
+            if let Some(kiln_runtime::module::RuntimeImportDesc::Global(_)) =
+                module.import_types.get(i)
+            {
                 // Skip spectest imports (handled separately)
                 if mod_name == "spectest" {
                     global_import_idx += 1;
@@ -729,8 +747,12 @@ impl WastEngine {
                                 // Mutable globals: share the Arc from the source instance
                                 // so mutations are visible across modules
                                 if let Some(source_instance_id) = self.instance_ids.get(mod_name) {
-                                    if let Some(source_instance) = self.engine.get_instance(*source_instance_id) {
-                                        if let Ok(shared_wrapper) = source_instance.global(source_global_idx as u32) {
+                                    if let Some(source_instance) =
+                                        self.engine.get_instance(*source_instance_id)
+                                    {
+                                        if let Ok(shared_wrapper) =
+                                            source_instance.global(source_global_idx as u32)
+                                        {
                                             module_instance
                                                 .set_global(global_import_idx, shared_wrapper)
                                                 .map_err(|e| {
@@ -745,8 +767,12 @@ impl WastEngine {
                             } else {
                                 // Immutable globals: copy the current value
                                 if let Some(source_instance_id) = self.instance_ids.get(mod_name) {
-                                    if let Some(source_instance) = self.engine.get_instance(*source_instance_id) {
-                                        if let Ok(source_wrapper) = source_instance.global(source_global_idx as u32) {
+                                    if let Some(source_instance) =
+                                        self.engine.get_instance(*source_instance_id)
+                                    {
+                                        if let Ok(source_wrapper) =
+                                            source_instance.global(source_global_idx as u32)
+                                        {
                                             if let Ok(guard) = source_wrapper.0.read() {
                                                 let value = guard.get();
                                                 // Stamp FuncRef values with the source instance ID.
@@ -772,13 +798,18 @@ impl WastEngine {
                                                     value,
                                                 )
                                                 .map_err(|e| {
-                                                    anyhow::anyhow!("Failed to create imported global: {:?}", e)
+                                                    anyhow::anyhow!(
+                                                        "Failed to create imported global: {:?}",
+                                                        e
+                                                    )
                                                 })?;
 
                                                 module_instance
                                                     .set_global(
                                                         global_import_idx,
-                                                        GlobalWrapper(StdArc::new(RwLock::new(global))),
+                                                        GlobalWrapper(StdArc::new(RwLock::new(
+                                                            global,
+                                                        ))),
                                                     )
                                                     .map_err(|e| {
                                                         anyhow::anyhow!(
@@ -883,7 +914,12 @@ impl WastEngine {
             } else {
                 // Validate against registered modules
                 self.validate_registered_import(
-                    mod_name, field_name, import_desc, module, import_precise, i,
+                    mod_name,
+                    field_name,
+                    import_desc,
+                    module,
+                    import_precise,
+                    i,
                 )?;
             }
         }
@@ -908,8 +944,13 @@ impl WastEngine {
             RuntimeImportDesc::Function(type_idx) => {
                 // spectest exports these functions (all are valid print functions)
                 let known_functions = [
-                    "print", "print_i32", "print_i64", "print_f32", "print_f64",
-                    "print_i32_f32", "print_f64_f64",
+                    "print",
+                    "print_i32",
+                    "print_i64",
+                    "print_f32",
+                    "print_f64",
+                    "print_i32_f32",
+                    "print_f64_f64",
                 ];
                 if !known_functions.contains(&field_name) {
                     return Err(anyhow::anyhow!(
@@ -920,7 +961,7 @@ impl WastEngine {
                 // Validate function signature against spectest definitions
                 self.validate_spectest_function_type(field_name, *type_idx, module)?;
                 Ok(())
-            }
+            },
             RuntimeImportDesc::Global(global_type) => {
                 match field_name {
                     "global_i32" => {
@@ -929,37 +970,37 @@ impl WastEngine {
                                 "incompatible import type: spectest::global_i32 is (global i32)"
                             ));
                         }
-                    }
+                    },
                     "global_i64" => {
                         if global_type.value_type != ValueType::I64 || global_type.mutable {
                             return Err(anyhow::anyhow!(
                                 "incompatible import type: spectest::global_i64 is (global i64)"
                             ));
                         }
-                    }
+                    },
                     "global_f32" => {
                         if global_type.value_type != ValueType::F32 || global_type.mutable {
                             return Err(anyhow::anyhow!(
                                 "incompatible import type: spectest::global_f32 is (global f32)"
                             ));
                         }
-                    }
+                    },
                     "global_f64" => {
                         if global_type.value_type != ValueType::F64 || global_type.mutable {
                             return Err(anyhow::anyhow!(
                                 "incompatible import type: spectest::global_f64 is (global f64)"
                             ));
                         }
-                    }
+                    },
                     _ => {
                         return Err(anyhow::anyhow!(
                             "unknown import: spectest::{} is not a known spectest global",
                             field_name
                         ));
-                    }
+                    },
                 }
                 Ok(())
-            }
+            },
             RuntimeImportDesc::Table(table_type) => {
                 if field_name != "table" && field_name != "table64" {
                     return Err(anyhow::anyhow!(
@@ -971,56 +1012,63 @@ impl WastEngine {
                 // spectest table is (table 10 20 funcref) or (table i64 10 20 funcref)
                 let spectest_table = TableType {
                     element_type: RefType::Funcref,
-                    limits: Limits { min: 10, max: Some(20) },
+                    limits: Limits {
+                        min: 10,
+                        max: Some(20),
+                    },
                     table64: is_table64,
                 };
                 validate_table_import_compatibility(table_type, &spectest_table)?;
                 Ok(())
-            }
+            },
             RuntimeImportDesc::Memory(mem_type) => {
                 match field_name {
                     "memory" => {
                         // spectest memory is (memory 1 2)
                         let spectest_mem = MemoryType {
-                            limits: Limits { min: 1, max: Some(2) },
+                            limits: Limits {
+                                min: 1,
+                                max: Some(2),
+                            },
                             shared: false,
                             memory64: false,
                             page_size: None,
                         };
                         validate_memory_import_compatibility(mem_type, &spectest_mem)?;
-                    }
+                    },
                     "shared_memory" => {
                         // spectest shared_memory is (memory 1 2 shared)
                         let spectest_mem = MemoryType {
-                            limits: Limits { min: 1, max: Some(2) },
+                            limits: Limits {
+                                min: 1,
+                                max: Some(2),
+                            },
                             shared: true,
                             memory64: false,
                             page_size: None,
                         };
                         validate_memory_import_compatibility(mem_type, &spectest_mem)?;
-                    }
+                    },
                     _ => {
                         return Err(anyhow::anyhow!(
                             "unknown import: spectest::{} is not a known spectest memory",
                             field_name
                         ));
-                    }
+                    },
                 }
                 Ok(())
-            }
+            },
             RuntimeImportDesc::Tag(_tag_type) => {
                 // spectest does not export tags - any tag import from spectest is unknown
                 Err(anyhow::anyhow!(
                     "unknown import: spectest::{} is not a known spectest export",
                     field_name
                 ))
-            }
-            _ => {
-                Err(anyhow::anyhow!(
-                    "unknown import: spectest::{} has unsupported import kind",
-                    field_name
-                ))
-            }
+            },
+            _ => Err(anyhow::anyhow!(
+                "unknown import: spectest::{} has unsupported import kind",
+                field_name
+            )),
         }
     }
 
@@ -1032,7 +1080,10 @@ impl WastEngine {
         module: &Module,
     ) -> Result<()> {
         let func_type = module.types.get(type_idx as usize).ok_or_else(|| {
-            anyhow::anyhow!("incompatible import type: type index {} out of bounds", type_idx)
+            anyhow::anyhow!(
+                "incompatible import type: type index {} out of bounds",
+                type_idx
+            )
         })?;
 
         // Define expected signatures for spectest functions
@@ -1060,7 +1111,8 @@ impl WastEngine {
             if actual != expected {
                 return Err(anyhow::anyhow!(
                     "incompatible import type: spectest::{} param {} type mismatch",
-                    field_name, i
+                    field_name,
+                    i
                 ));
             }
         }
@@ -1069,7 +1121,8 @@ impl WastEngine {
             if actual != expected {
                 return Err(anyhow::anyhow!(
                     "incompatible import type: spectest::{} result {} type mismatch",
-                    field_name, i
+                    field_name,
+                    i
                 ));
             }
         }
@@ -1095,7 +1148,7 @@ impl WastEngine {
                     "unknown import: module '{}' is not registered",
                     mod_name
                 ));
-            }
+            },
         };
 
         // Get precise type info for the exporting module
@@ -1107,9 +1160,10 @@ impl WastEngine {
             None => {
                 return Err(anyhow::anyhow!(
                     "unknown import: {}::{} not found in registered module",
-                    mod_name, field_name
+                    mod_name,
+                    field_name
                 ));
-            }
+            },
         };
 
         // Validate kind and type compatibility
@@ -1118,69 +1172,105 @@ impl WastEngine {
                 if export.kind != ExportKind::Function {
                     return Err(anyhow::anyhow!(
                         "incompatible import type: {}::{} is {:?}, not a function",
-                        mod_name, field_name, export.kind
+                        mod_name,
+                        field_name,
+                        export.kind
                     ));
                 }
                 // Validate function type signature
                 self.validate_function_type_compatibility(
-                    mod_name, field_name, *type_idx, module, source_module, &export,
-                    import_precise, export_precise,
+                    mod_name,
+                    field_name,
+                    *type_idx,
+                    module,
+                    source_module,
+                    &export,
+                    import_precise,
+                    export_precise,
                 )?;
-            }
+            },
             RuntimeImportDesc::Global(import_global_type) => {
                 if export.kind != ExportKind::Global {
                     return Err(anyhow::anyhow!(
                         "incompatible import type: {}::{} is {:?}, not a global",
-                        mod_name, field_name, export.kind
+                        mod_name,
+                        field_name,
+                        export.kind
                     ));
                 }
                 // Validate global type compatibility using precise type info
                 self.validate_global_type_compatibility(
-                    mod_name, field_name, import_global_type, module,
-                    source_module, &export,
-                    import_precise, import_idx, export_precise,
+                    mod_name,
+                    field_name,
+                    import_global_type,
+                    module,
+                    source_module,
+                    &export,
+                    import_precise,
+                    import_idx,
+                    export_precise,
                 )?;
-            }
+            },
             RuntimeImportDesc::Table(import_table_type) => {
                 if export.kind != ExportKind::Table {
                     return Err(anyhow::anyhow!(
                         "incompatible import type: {}::{} is {:?}, not a table",
-                        mod_name, field_name, export.kind
+                        mod_name,
+                        field_name,
+                        export.kind
                     ));
                 }
                 // Validate table type compatibility
                 self.validate_table_type_compatibility(
-                    mod_name, field_name, import_table_type, source_module, &export,
+                    mod_name,
+                    field_name,
+                    import_table_type,
+                    source_module,
+                    &export,
                 )?;
-            }
+            },
             RuntimeImportDesc::Memory(import_mem_type) => {
                 if export.kind != ExportKind::Memory {
                     return Err(anyhow::anyhow!(
                         "incompatible import type: {}::{} is {:?}, not a memory",
-                        mod_name, field_name, export.kind
+                        mod_name,
+                        field_name,
+                        export.kind
                     ));
                 }
                 // Validate memory type compatibility
                 self.validate_memory_type_compatibility(
-                    mod_name, field_name, import_mem_type, source_module, &export,
+                    mod_name,
+                    field_name,
+                    import_mem_type,
+                    source_module,
+                    &export,
                 )?;
-            }
+            },
             RuntimeImportDesc::Tag(import_tag_type) => {
                 if export.kind != ExportKind::Tag {
                     return Err(anyhow::anyhow!(
                         "incompatible import type: {}::{} is {:?}, not a tag",
-                        mod_name, field_name, export.kind
+                        mod_name,
+                        field_name,
+                        export.kind
                     ));
                 }
                 // Validate tag type compatibility
                 self.validate_tag_type_compatibility(
-                    mod_name, field_name, import_tag_type, module, source_module, &export,
-                    import_precise, export_precise,
+                    mod_name,
+                    field_name,
+                    import_tag_type,
+                    module,
+                    source_module,
+                    &export,
+                    import_precise,
+                    export_precise,
                 )?;
-            }
+            },
             _ => {
                 // Extern, Resource, etc. - not yet handled
-            }
+            },
         }
 
         Ok(())
@@ -1199,30 +1289,35 @@ impl WastEngine {
         export_precise: Option<&PreciseTypeInfo>,
     ) -> Result<()> {
         // Get the importing module's expected function type
-        let import_func_type = importing_module.types.get(import_type_idx as usize).ok_or_else(|| {
-            anyhow::anyhow!(
-                "incompatible import type: type index {} out of bounds",
-                import_type_idx
-            )
-        })?;
+        let import_func_type =
+            importing_module.types.get(import_type_idx as usize).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "incompatible import type: type index {} out of bounds",
+                    import_type_idx
+                )
+            })?;
 
         // Get the exported function's type from the source module
         let export_func_idx = export.index as usize;
         let export_func = source_module.functions.get(export_func_idx).ok_or_else(|| {
             anyhow::anyhow!(
                 "incompatible import type: {}::{} references invalid function index {}",
-                mod_name, field_name, export_func_idx
+                mod_name,
+                field_name,
+                export_func_idx
             )
         })?;
 
         let export_type_idx = export_func.type_idx;
 
-        let export_func_type = source_module.types.get(export_type_idx as usize).ok_or_else(|| {
-            anyhow::anyhow!(
-                "incompatible import type: {}::{} has invalid type index",
-                mod_name, field_name
-            )
-        })?;
+        let export_func_type =
+            source_module.types.get(export_type_idx as usize).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "incompatible import type: {}::{} has invalid type index",
+                    mod_name,
+                    field_name
+                )
+            })?;
 
         // For function imports, use rec group-aware type matching.
         // The export type must be a subtype of the import type, where type
@@ -1230,15 +1325,22 @@ impl WastEngine {
         if let Some(ep) = export_precise {
             // Use the full rec-group-aware subtype check
             let is_match = is_type_idx_match_cross_module(
-                export_type_idx, source_module, ep,
-                import_type_idx, importing_module, import_precise,
+                export_type_idx,
+                source_module,
+                ep,
+                import_type_idx,
+                importing_module,
+                import_precise,
                 0,
             );
 
             if !is_match {
                 return Err(anyhow::anyhow!(
                     "incompatible import type: {}::{} type mismatch (export_idx={}, import_idx={})",
-                    mod_name, field_name, export_type_idx, import_type_idx
+                    mod_name,
+                    field_name,
+                    export_type_idx,
+                    import_type_idx
                 ));
             }
             return Ok(());
@@ -1250,40 +1352,53 @@ impl WastEngine {
         {
             return Err(anyhow::anyhow!(
                 "incompatible import type: {}::{} signature mismatch (params: {} vs {}, results: {} vs {})",
-                mod_name, field_name,
-                import_func_type.params.len(), export_func_type.params.len(),
-                import_func_type.results.len(), export_func_type.results.len()
+                mod_name,
+                field_name,
+                import_func_type.params.len(),
+                export_func_type.params.len(),
+                import_func_type.results.len(),
+                export_func_type.results.len()
             ));
         }
 
         // Parameters are contravariant: import's param type must be a subtype of export's param type
-        for (i, (import_param, export_param)) in import_func_type.params.iter()
-            .zip(export_func_type.params.iter())
-            .enumerate()
+        for (i, (import_param, export_param)) in
+            import_func_type.params.iter().zip(export_func_type.params.iter()).enumerate()
         {
             if !is_value_type_subtype_cross_module(
-                import_param, importing_module,
-                export_param, source_module,
+                import_param,
+                importing_module,
+                export_param,
+                source_module,
             ) {
                 return Err(anyhow::anyhow!(
                     "incompatible import type: {}::{} param {} type mismatch ({:?} vs {:?})",
-                    mod_name, field_name, i, import_param, export_param
+                    mod_name,
+                    field_name,
+                    i,
+                    import_param,
+                    export_param
                 ));
             }
         }
 
         // Results are covariant: export's result type must be a subtype of import's result type
-        for (i, (import_result, export_result)) in import_func_type.results.iter()
-            .zip(export_func_type.results.iter())
-            .enumerate()
+        for (i, (import_result, export_result)) in
+            import_func_type.results.iter().zip(export_func_type.results.iter()).enumerate()
         {
             if !is_value_type_subtype_cross_module(
-                export_result, source_module,
-                import_result, importing_module,
+                export_result,
+                source_module,
+                import_result,
+                importing_module,
             ) {
                 return Err(anyhow::anyhow!(
                     "incompatible import type: {}::{} result {} type mismatch ({:?} vs {:?})",
-                    mod_name, field_name, i, import_result, export_result
+                    mod_name,
+                    field_name,
+                    i,
+                    import_result,
+                    export_result
                 ));
             }
         }
@@ -1314,7 +1429,10 @@ impl WastEngine {
             if import_global_type.mutable != source_type.mutable {
                 return Err(anyhow::anyhow!(
                     "incompatible import type: {}::{} mutability mismatch (import: {}, export: {})",
-                    mod_name, field_name, import_global_type.mutable, source_type.mutable
+                    mod_name,
+                    field_name,
+                    import_global_type.mutable,
+                    source_type.mutable
                 ));
             }
 
@@ -1322,13 +1440,9 @@ impl WastEngine {
             // The import_idx is the position in the module's full import list.
             // The global_precise_ref vec is indexed by global index (imported + defined).
             // We need to find which global-import-index corresponds to import_idx.
-            let import_global_idx = count_global_imports_up_to(
-                &module.import_types, import_idx,
-            );
-            let import_ref = import_precise.global_precise_ref
-                .get(import_global_idx)
-                .copied()
-                .flatten();
+            let import_global_idx = count_global_imports_up_to(&module.import_types, import_idx);
+            let import_ref =
+                import_precise.global_precise_ref.get(import_global_idx).copied().flatten();
             let export_ref = export_precise
                 .and_then(|ep| ep.global_precise_ref.get(export_global_idx))
                 .copied()
@@ -1339,23 +1453,33 @@ impl WastEngine {
             if import_global_type.mutable {
                 // Mutable: exact type match required, including nullability
                 if !precise_ref_types_equal(
-                    &import_global_type.value_type, import_ref,
-                    &source_type.value_type, export_ref,
+                    &import_global_type.value_type,
+                    import_ref,
+                    &source_type.value_type,
+                    export_ref,
                 ) {
                     return Err(anyhow::anyhow!(
                         "incompatible import type: {}::{} value type mismatch ({:?} vs {:?})",
-                        mod_name, field_name, import_global_type.value_type, source_type.value_type
+                        mod_name,
+                        field_name,
+                        import_global_type.value_type,
+                        source_type.value_type
                     ));
                 }
             } else {
                 // Immutable: export type must be subtype of import type
                 if !precise_ref_type_is_subtype(
-                    &source_type.value_type, export_ref,
-                    &import_global_type.value_type, import_ref,
+                    &source_type.value_type,
+                    export_ref,
+                    &import_global_type.value_type,
+                    import_ref,
                 ) {
                     return Err(anyhow::anyhow!(
                         "incompatible import type: {}::{} value type mismatch ({:?} is not subtype of {:?})",
-                        mod_name, field_name, source_type.value_type, import_global_type.value_type
+                        mod_name,
+                        field_name,
+                        source_type.value_type,
+                        import_global_type.value_type
                     ));
                 }
             }
@@ -1367,7 +1491,11 @@ impl WastEngine {
 
     /// Get the GlobalType for a global by its index in a module
     /// (accounting for imported vs defined globals)
-    fn get_global_type_from_module(&self, module: &Module, global_idx: usize) -> Option<GlobalType> {
+    fn get_global_type_from_module(
+        &self,
+        module: &Module,
+        global_idx: usize,
+    ) -> Option<GlobalType> {
         let num_global_imports = module.global_import_types.len();
         if global_idx < num_global_imports {
             // It's an imported global
@@ -1375,9 +1503,7 @@ impl WastEngine {
         } else {
             // It's a defined global - get from deferred_global_inits
             let defined_idx = global_idx - num_global_imports;
-            module.deferred_global_inits
-                .get(defined_idx)
-                .map(|(gt, _)| *gt)
+            module.deferred_global_inits.get(defined_idx).map(|(gt, _)| *gt)
         }
     }
 
@@ -1419,7 +1545,9 @@ impl WastEngine {
     /// Get the TableType for a table by its index in a module
     fn get_table_type_from_module(&self, module: &Module, table_idx: usize) -> Option<TableType> {
         // Count table imports to determine if this is imported or defined
-        let num_table_imports = module.import_types.iter()
+        let num_table_imports = module
+            .import_types
+            .iter()
             .filter(|desc| matches!(desc, RuntimeImportDesc::Table(_)))
             .count();
 
@@ -1482,7 +1610,9 @@ impl WastEngine {
     /// Get the MemoryType for a memory by its index in a module
     fn get_memory_type_from_module(&self, module: &Module, mem_idx: usize) -> Option<MemoryType> {
         // Count memory imports
-        let num_mem_imports = module.import_types.iter()
+        let num_mem_imports = module
+            .import_types
+            .iter()
             .filter(|desc| matches!(desc, RuntimeImportDesc::Memory(_)))
             .count();
 
@@ -1559,13 +1689,17 @@ impl WastEngine {
             // are considered different types per the GC spec.
             if let Some(ep) = export_precise {
                 if !are_types_rec_group_compatible(
-                    import_tag_type.type_idx, import_precise,
-                    export_tt.type_idx, ep,
-                    importing_module, source_module,
+                    import_tag_type.type_idx,
+                    import_precise,
+                    export_tt.type_idx,
+                    ep,
+                    importing_module,
+                    source_module,
                 ) {
                     return Err(anyhow::anyhow!(
                         "incompatible import type: {}::{} tag type in different rec group structure",
-                        mod_name, field_name
+                        mod_name,
+                        field_name
                     ));
                 }
             }
@@ -1576,15 +1710,23 @@ impl WastEngine {
                 if import_ft.params.len() != export_ft.params.len() {
                     return Err(anyhow::anyhow!(
                         "incompatible import type: {}::{} tag param count mismatch ({} vs {})",
-                        mod_name, field_name,
-                        import_ft.params.len(), export_ft.params.len()
+                        mod_name,
+                        field_name,
+                        import_ft.params.len(),
+                        export_ft.params.len()
                     ));
                 }
-                for (i, (ip, ep)) in import_ft.params.iter().zip(export_ft.params.iter()).enumerate() {
+                for (i, (ip, ep)) in
+                    import_ft.params.iter().zip(export_ft.params.iter()).enumerate()
+                {
                     if ip != ep {
                         return Err(anyhow::anyhow!(
                             "incompatible import type: {}::{} tag param {} type mismatch ({:?} vs {:?})",
-                            mod_name, field_name, i, ip, ep
+                            mod_name,
+                            field_name,
+                            i,
+                            ip,
+                            ep
                         ));
                     }
                 }
@@ -1671,12 +1813,12 @@ fn extract_precise_global_ref_types(wasm_binary: &[u8]) -> Vec<Option<(bool, i64
             2 => {
                 // Import section - extract global import ref types
                 parse_import_section_global_refs(wasm_binary, offset, section_end, &mut result);
-            }
+            },
             6 => {
                 // Global section - extract defined global ref types
                 parse_global_section_refs(wasm_binary, offset, section_end, &mut result);
-            }
-            _ => {}
+            },
+            _ => {},
         }
 
         offset = section_end;
@@ -1687,7 +1829,9 @@ fn extract_precise_global_ref_types(wasm_binary: &[u8]) -> Vec<Option<(bool, i64
 
 /// Parse the import section to extract precise ref types for global imports.
 fn parse_import_section_global_refs(
-    data: &[u8], mut offset: usize, end: usize,
+    data: &[u8],
+    mut offset: usize,
+    end: usize,
     result: &mut Vec<Option<(bool, i64)>>,
 ) {
     let (count, br) = match read_leb128_u32_from_slice(data, offset) {
@@ -1697,7 +1841,9 @@ fn parse_import_section_global_refs(
     offset += br;
 
     for _ in 0..count {
-        if offset >= end { return; }
+        if offset >= end {
+            return;
+        }
         // Skip module name (length-prefixed string)
         let (name_len, br) = match read_leb128_u32_from_slice(data, offset) {
             Some(v) => v,
@@ -1712,7 +1858,9 @@ fn parse_import_section_global_refs(
         };
         offset += br + name_len as usize;
 
-        if offset >= end { return; }
+        if offset >= end {
+            return;
+        }
         let kind = data[offset];
         offset += 1;
 
@@ -1724,10 +1872,12 @@ fn parse_import_section_global_refs(
                     None => return,
                 };
                 offset += br;
-            }
+            },
             0x01 => {
                 // Table import: skip ref_type + limits
-                if offset >= end { return; }
+                if offset >= end {
+                    return;
+                }
                 let rt_byte = data[offset];
                 offset += 1;
                 if rt_byte == 0x63 || rt_byte == 0x64 {
@@ -1739,15 +1889,19 @@ fn parse_import_section_global_refs(
                     offset += br;
                 }
                 // Skip limits
-                if offset >= end { return; }
+                if offset >= end {
+                    return;
+                }
                 let flags = data[offset];
                 offset += 1;
                 let is_table64 = flags & 0x04 != 0;
                 offset = skip_leb128_limit(data, offset, flags & 0x01 != 0, is_table64);
-            }
+            },
             0x02 => {
                 // Memory import: skip limits
-                if offset >= end { return; }
+                if offset >= end {
+                    return;
+                }
                 let flags = data[offset];
                 offset += 1;
                 let is_mem64 = flags & 0x04 != 0;
@@ -1761,7 +1915,7 @@ fn parse_import_section_global_refs(
                     };
                     offset += br;
                 }
-            }
+            },
             0x03 => {
                 // Global import: THIS IS WHAT WE WANT
                 let ref_info = parse_precise_ref_type(data, &mut offset);
@@ -1770,7 +1924,7 @@ fn parse_import_section_global_refs(
                 if offset < end {
                     offset += 1;
                 }
-            }
+            },
             0x04 => {
                 // Tag import: skip attribute + type_idx
                 offset += 1; // attribute
@@ -1779,7 +1933,7 @@ fn parse_import_section_global_refs(
                     None => return,
                 };
                 offset += br;
-            }
+            },
             _ => return,
         }
     }
@@ -1787,7 +1941,9 @@ fn parse_import_section_global_refs(
 
 /// Parse the global section to extract precise ref types for defined globals.
 fn parse_global_section_refs(
-    data: &[u8], mut offset: usize, end: usize,
+    data: &[u8],
+    mut offset: usize,
+    end: usize,
     result: &mut Vec<Option<(bool, i64)>>,
 ) {
     let (count, br) = match read_leb128_u32_from_slice(data, offset) {
@@ -1797,7 +1953,9 @@ fn parse_global_section_refs(
     offset += br;
 
     for _ in 0..count {
-        if offset >= end { return; }
+        if offset >= end {
+            return;
+        }
         // Parse value type
         let ref_info = parse_precise_ref_type(data, &mut offset);
         result.push(ref_info);
@@ -1819,21 +1977,59 @@ fn parse_global_section_refs(
 /// Returns `Some((nullable, heap_type_s33))` for reference types, `None` otherwise.
 /// Advances `offset` past the value type bytes.
 fn parse_precise_ref_type(data: &[u8], offset: &mut usize) -> Option<(bool, i64)> {
-    if *offset >= data.len() { return None; }
+    if *offset >= data.len() {
+        return None;
+    }
     let byte = data[*offset];
     match byte {
-        0x70 => { *offset += 1; Some((true, -16)) }  // funcref = (ref null func)
-        0x6F => { *offset += 1; Some((true, -17)) }  // externref = (ref null extern)
-        0x6E => { *offset += 1; Some((true, -18)) }  // anyref
-        0x6D => { *offset += 1; Some((true, -19)) }  // eqref
-        0x6C => { *offset += 1; Some((true, -20)) }  // i31ref
-        0x6B => { *offset += 1; Some((true, -21)) }  // structref
-        0x6A => { *offset += 1; Some((true, -22)) }  // arrayref
-        0x69 => { *offset += 1; Some((true, -23)) }  // exnref
-        0x73 => { *offset += 1; Some((true, -13)) }  // nofunc
-        0x72 => { *offset += 1; Some((true, -14)) }  // noextern
-        0x71 => { *offset += 1; Some((true, -15)) }  // none
-        0x74 => { *offset += 1; Some((true, -12)) }  // noexn
+        0x70 => {
+            *offset += 1;
+            Some((true, -16))
+        }, // funcref = (ref null func)
+        0x6F => {
+            *offset += 1;
+            Some((true, -17))
+        }, // externref = (ref null extern)
+        0x6E => {
+            *offset += 1;
+            Some((true, -18))
+        }, // anyref
+        0x6D => {
+            *offset += 1;
+            Some((true, -19))
+        }, // eqref
+        0x6C => {
+            *offset += 1;
+            Some((true, -20))
+        }, // i31ref
+        0x6B => {
+            *offset += 1;
+            Some((true, -21))
+        }, // structref
+        0x6A => {
+            *offset += 1;
+            Some((true, -22))
+        }, // arrayref
+        0x69 => {
+            *offset += 1;
+            Some((true, -23))
+        }, // exnref
+        0x73 => {
+            *offset += 1;
+            Some((true, -13))
+        }, // nofunc
+        0x72 => {
+            *offset += 1;
+            Some((true, -14))
+        }, // noextern
+        0x71 => {
+            *offset += 1;
+            Some((true, -15))
+        }, // none
+        0x74 => {
+            *offset += 1;
+            Some((true, -12))
+        }, // noexn
         0x63 | 0x64 => {
             // ref null heaptype (0x63) or ref heaptype (0x64)
             let nullable = byte == 0x63;
@@ -1841,9 +2037,12 @@ fn parse_precise_ref_type(data: &[u8], offset: &mut usize) -> Option<(bool, i64)
             let (ht, br) = read_leb128_i64_from_slice(data, *offset)?;
             *offset += br;
             Some((nullable, ht))
-        }
+        },
         // Non-reference types
-        _ => { *offset += 1; None }
+        _ => {
+            *offset += 1;
+            None
+        },
     }
 }
 
@@ -1854,7 +2053,9 @@ fn read_leb128_u32_from_slice(data: &[u8], offset: usize) -> Option<(u32, usize)
     let mut shift = 0u32;
     let mut i = 0usize;
     loop {
-        if offset + i >= data.len() { return None; }
+        if offset + i >= data.len() {
+            return None;
+        }
         let byte = data[offset + i];
         i += 1;
         result |= ((byte & 0x7F) as u32) << shift;
@@ -1862,7 +2063,9 @@ fn read_leb128_u32_from_slice(data: &[u8], offset: usize) -> Option<(u32, usize)
             return Some((result, i));
         }
         shift += 7;
-        if shift >= 35 { return None; } // overflow protection
+        if shift >= 35 {
+            return None;
+        } // overflow protection
     }
 }
 
@@ -1874,7 +2077,9 @@ fn read_leb128_i64_from_slice(data: &[u8], offset: usize) -> Option<(i64, usize)
     let mut i = 0usize;
     let mut last_byte = 0u8;
     loop {
-        if offset + i >= data.len() { return None; }
+        if offset + i >= data.len() {
+            return None;
+        }
         last_byte = data[offset + i];
         i += 1;
         result |= ((last_byte & 0x7F) as i64) << shift;
@@ -1882,7 +2087,9 @@ fn read_leb128_i64_from_slice(data: &[u8], offset: usize) -> Option<(i64, usize)
         if last_byte & 0x80 == 0 {
             break;
         }
-        if shift >= 70 { return None; } // overflow protection
+        if shift >= 70 {
+            return None;
+        } // overflow protection
     }
     // Sign extend if the sign bit of the last byte is set
     if shift < 64 && (last_byte & 0x40) != 0 {
@@ -1894,14 +2101,22 @@ fn read_leb128_i64_from_slice(data: &[u8], offset: usize) -> Option<(i64, usize)
 /// Skip LEB128-encoded limits (min, optional max) at the given offset.
 fn skip_leb128_limit(data: &[u8], mut offset: usize, has_max: bool, is_64: bool) -> usize {
     if is_64 {
-        if let Some((_, br)) = read_leb128_i64_from_slice(data, offset) { offset += br; }
+        if let Some((_, br)) = read_leb128_i64_from_slice(data, offset) {
+            offset += br;
+        }
         if has_max {
-            if let Some((_, br)) = read_leb128_i64_from_slice(data, offset) { offset += br; }
+            if let Some((_, br)) = read_leb128_i64_from_slice(data, offset) {
+                offset += br;
+            }
         }
     } else {
-        if let Some((_, br)) = read_leb128_u32_from_slice(data, offset) { offset += br; }
+        if let Some((_, br)) = read_leb128_u32_from_slice(data, offset) {
+            offset += br;
+        }
         if has_max {
-            if let Some((_, br)) = read_leb128_u32_from_slice(data, offset) { offset += br; }
+            if let Some((_, br)) = read_leb128_u32_from_slice(data, offset) {
+                offset += br;
+            }
         }
     }
     offset
@@ -1914,14 +2129,16 @@ fn skip_leb128_limit(data: &[u8], mut offset: usize, has_max: bool, is_64: bool)
 /// rec group is different from a type in a multi-type rec group, even if
 /// structurally identical.
 fn are_types_rec_group_compatible(
-    type_a_idx: u32, precise_a: &PreciseTypeInfo,
-    type_b_idx: u32, precise_b: &PreciseTypeInfo,
-    module_a: &Module, module_b: &Module,
+    type_a_idx: u32,
+    precise_a: &PreciseTypeInfo,
+    type_b_idx: u32,
+    precise_b: &PreciseTypeInfo,
+    module_a: &Module,
+    module_b: &Module,
 ) -> bool {
     // Find which rec group each type belongs to
     let rg_a = find_rec_group(type_a_idx, &precise_a.rec_groups);
     let rg_b = find_rec_group(type_b_idx, &precise_b.rec_groups);
-
 
     let (rg_a_start, rg_a_count) = match rg_a {
         Some(rg) => rg,
@@ -1954,7 +2171,7 @@ fn are_types_rec_group_compatible(
         let super_a = module_a.type_supertypes.get(idx_a as usize).copied().flatten();
         let super_b = module_b.type_supertypes.get(idx_b as usize).copied().flatten();
         match (super_a, super_b) {
-            (None, None) => {}
+            (None, None) => {},
             (Some(sa), Some(sb)) => {
                 // Supertype indices must refer to the same relative position.
                 // Both must be either inside or outside their rec groups.
@@ -1962,7 +2179,6 @@ fn are_types_rec_group_compatible(
                 let sb_inside = sb >= rg_b_start && sb < rg_b_start + rg_b_count;
 
                 if sa_inside != sb_inside {
-
                     return false; // One inside, one outside -> mismatch
                 }
                 if sa_inside {
@@ -1978,11 +2194,10 @@ fn are_types_rec_group_compatible(
                     if !are_types_rec_group_compatible(
                         sa, precise_a, sb, precise_b, module_a, module_b,
                     ) {
-    
                         return false;
                     }
                 }
-            }
+            },
             _ => return false, // One has supertype, other doesn't
         }
 
@@ -1998,8 +2213,10 @@ fn are_types_rec_group_compatible(
         let gc_a = module_a.gc_types.get(idx_a as usize);
         let gc_b = module_b.gc_types.get(idx_b as usize);
         match (gc_a, gc_b) {
-            (Some(kiln_runtime::module::GcTypeInfo::Struct(fields_a)),
-             Some(kiln_runtime::module::GcTypeInfo::Struct(fields_b))) => {
+            (
+                Some(kiln_runtime::module::GcTypeInfo::Struct(fields_a)),
+                Some(kiln_runtime::module::GcTypeInfo::Struct(fields_b)),
+            ) => {
                 // Struct types: compare field counts and storage types.
                 // Field reference types that point to type indices must be
                 // resolved relative to rec groups (handled by the overall check).
@@ -2034,35 +2251,39 @@ fn are_types_rec_group_compatible(
                             } else {
                                 return false; // One inside, one outside
                             }
-                        }
-                        (a_stor, b_stor) if a_stor == b_stor => {} // Non-ref types: direct equality
-                        _ => return false, // Different storage kinds
+                        },
+                        (a_stor, b_stor) if a_stor == b_stor => {}, // Non-ref types: direct equality
+                        _ => return false,                          // Different storage kinds
                     }
                 }
-            }
-            (Some(kiln_runtime::module::GcTypeInfo::Array(elem_a)),
-             Some(kiln_runtime::module::GcTypeInfo::Array(elem_b))) => {
+            },
+            (
+                Some(kiln_runtime::module::GcTypeInfo::Array(elem_a)),
+                Some(kiln_runtime::module::GcTypeInfo::Array(elem_b)),
+            ) => {
                 if elem_a.storage != elem_b.storage || elem_a.mutable != elem_b.mutable {
                     return false;
                 }
-            }
-            (Some(kiln_runtime::module::GcTypeInfo::Func(..)),
-             Some(kiln_runtime::module::GcTypeInfo::Func(..))) => {
+            },
+            (
+                Some(kiln_runtime::module::GcTypeInfo::Func(..)),
+                Some(kiln_runtime::module::GcTypeInfo::Func(..)),
+            ) => {
                 // Func types: use structural comparison
                 if !are_func_types_structurally_compatible(idx_a, module_a, idx_b, module_b, 0) {
                     return false;
                 }
-            }
+            },
             (None, None) => {
                 // No GC info: fall back to func type comparison
                 if !are_func_types_structurally_compatible(idx_a, module_a, idx_b, module_b, 0) {
                     return false;
                 }
-            }
+            },
             _ => {
                 // Different GC type kinds (e.g., Func vs Struct)
                 return false;
-            }
+            },
         }
     }
 
@@ -2101,14 +2322,14 @@ fn count_global_imports_up_to(import_types: &[RuntimeImportDesc], import_idx: us
 /// nullable from non-nullable abstract heap types that the runtime ValueType
 /// conflates (e.g., both `(ref null func)` and `(ref func)` map to FuncRef).
 fn precise_ref_types_equal(
-    a_vt: &ValueType, a_precise: Option<(bool, i64)>,
-    b_vt: &ValueType, b_precise: Option<(bool, i64)>,
+    a_vt: &ValueType,
+    a_precise: Option<(bool, i64)>,
+    b_vt: &ValueType,
+    b_precise: Option<(bool, i64)>,
 ) -> bool {
     // If we have precise info for both, use it for definitive comparison
     match (a_precise, b_precise) {
-        (Some((a_null, a_ht)), Some((b_null, b_ht))) => {
-            a_null == b_null && a_ht == b_ht
-        }
+        (Some((a_null, a_ht)), Some((b_null, b_ht))) => a_null == b_null && a_ht == b_ht,
         (Some(precise), None) | (None, Some(precise)) => {
             // One has precise info, one doesn't. For abstract ref types that
             // lose info (FuncRef, ExternRef), the precise info is the authority.
@@ -2118,9 +2339,12 @@ fn precise_ref_types_equal(
             if a_vt == b_vt {
                 // Check if this is a potentially lossy type
                 match a_vt {
-                    ValueType::FuncRef | ValueType::ExternRef
-                    | ValueType::AnyRef | ValueType::EqRef
-                    | ValueType::I31Ref | ValueType::ExnRef => {
+                    ValueType::FuncRef
+                    | ValueType::ExternRef
+                    | ValueType::AnyRef
+                    | ValueType::EqRef
+                    | ValueType::I31Ref
+                    | ValueType::ExnRef => {
                         // These could be lossy - can't confirm equality without
                         // precise info on both sides. Be conservative: they match
                         // only if we have no evidence of mismatch.
@@ -2131,17 +2355,17 @@ fn precise_ref_types_equal(
                         // If the precise side says non-nullable but the other side
                         // decoded to a nullable shorthand, they're different.
                         precise_null // If nullable, they match; if non-nullable, mismatch
-                    }
+                    },
                     _ => true, // Non-ref or concrete ref types are not lossy
                 }
             } else {
                 false
             }
-        }
+        },
         (None, None) => {
             // No precise info - fall back to ValueType comparison
             a_vt == b_vt
-        }
+        },
     }
 }
 
@@ -2149,8 +2373,10 @@ fn precise_ref_types_equal(
 ///
 /// This extends `is_value_type_subtype` with precise nullability info from the binary.
 fn precise_ref_type_is_subtype(
-    sub_vt: &ValueType, sub_precise: Option<(bool, i64)>,
-    sup_vt: &ValueType, sup_precise: Option<(bool, i64)>,
+    sub_vt: &ValueType,
+    sub_precise: Option<(bool, i64)>,
+    sup_vt: &ValueType,
+    sup_precise: Option<(bool, i64)>,
 ) -> bool {
     // First check: if we have precise info, use it for definitive nullability
     if let (Some((sub_null, sub_ht)), Some((sup_null, sup_ht))) = (sub_precise, sup_precise) {
@@ -2174,11 +2400,13 @@ fn precise_ref_type_is_subtype(
                 // Sub has no precise info. If it's FuncRef (which is nullable),
                 // it's NOT a subtype of a non-nullable sup.
                 match sub_vt {
-                    ValueType::FuncRef | ValueType::ExternRef
-                    | ValueType::AnyRef | ValueType::EqRef => {
+                    ValueType::FuncRef
+                    | ValueType::ExternRef
+                    | ValueType::AnyRef
+                    | ValueType::EqRef => {
                         return false;
-                    }
-                    _ => {}
+                    },
+                    _ => {},
                 }
             }
         }
@@ -2222,26 +2450,26 @@ fn is_heap_type_subtype(sub_ht: i64, sup_ht: i64) -> bool {
     // -13 = nofunc, -14 = noextern, -15 = none, -12 = noexn
     match (sub_ht, sup_ht) {
         // nofunc is bottom of func hierarchy
-        (-13, -16) => true,           // nofunc <: func
+        (-13, -16) => true,              // nofunc <: func
         (-13, _) if sup_ht >= 0 => true, // nofunc <: any concrete func type
         // noextern is bottom of extern hierarchy
-        (-14, -17) => true,           // noextern <: extern
+        (-14, -17) => true, // noextern <: extern
         // none is bottom of any hierarchy
-        (-15, -18) => true,           // none <: any
-        (-15, -19) => true,           // none <: eq
-        (-15, -20) => true,           // none <: i31
-        (-15, -21) => true,           // none <: struct
-        (-15, -22) => true,           // none <: array
+        (-15, -18) => true, // none <: any
+        (-15, -19) => true, // none <: eq
+        (-15, -20) => true, // none <: i31
+        (-15, -21) => true, // none <: struct
+        (-15, -22) => true, // none <: array
         // any hierarchy
-        (-19, -18) => true,           // eq <: any
-        (-20, -18) => true,           // i31 <: any
-        (-20, -19) => true,           // i31 <: eq
-        (-21, -18) => true,           // struct <: any
-        (-21, -19) => true,           // struct <: eq
-        (-22, -18) => true,           // array <: any
-        (-22, -19) => true,           // array <: eq
+        (-19, -18) => true, // eq <: any
+        (-20, -18) => true, // i31 <: any
+        (-20, -19) => true, // i31 <: eq
+        (-21, -18) => true, // struct <: any
+        (-21, -19) => true, // struct <: eq
+        (-22, -18) => true, // array <: any
+        (-22, -19) => true, // array <: eq
         // noexn is bottom of exn hierarchy
-        (-12, -23) => true,           // noexn <: exn
+        (-12, -23) => true, // noexn <: exn
         // Concrete type index <: func (all concrete func types are subtypes of func)
         (idx, -16) if idx >= 0 => true,
         _ => false,
@@ -2272,7 +2500,10 @@ fn is_value_type_subtype(sub: &ValueType, sup: &ValueType) -> bool {
         (ValueType::TypedFuncRef(_, _), ValueType::FuncRef) => true,
         // Non-nullable typed func ref is subtype of nullable with same index
         (ValueType::TypedFuncRef(idx_a, false), ValueType::TypedFuncRef(idx_b, true))
-            if idx_a == idx_b => true,
+            if idx_a == idx_b =>
+        {
+            true
+        },
         // ExternRef subtyping
         (ValueType::ExternRef, ValueType::ExternRef) => true,
         // AnyRef hierarchy
@@ -2302,8 +2533,10 @@ fn is_value_type_subtype(sub: &ValueType, sup: &ValueType) -> bool {
 /// - TypedFuncRef(a, n) <: TypedFuncRef(b, n) if type a (in sub_module) is a subtype
 ///   of type b (in sup_module), checked structurally and via supertype chains
 fn is_value_type_subtype_cross_module(
-    sub: &ValueType, sub_module: &Module,
-    sup: &ValueType, sup_module: &Module,
+    sub: &ValueType,
+    sub_module: &Module,
+    sup: &ValueType,
+    sup_module: &Module,
 ) -> bool {
     if sub == sup {
         return true;
@@ -2314,18 +2547,19 @@ fn is_value_type_subtype_cross_module(
         (ValueType::TypedFuncRef(_, _), ValueType::FuncRef) => true,
 
         // TypedFuncRef subtyping with cross-module structural check
-        (ValueType::TypedFuncRef(sub_idx, sub_nullable), ValueType::TypedFuncRef(sup_idx, sup_nullable)) => {
+        (
+            ValueType::TypedFuncRef(sub_idx, sub_nullable),
+            ValueType::TypedFuncRef(sup_idx, sup_nullable),
+        ) => {
             // Nullable check: non-nullable is subtype of nullable, but not vice versa
             if *sub_nullable && !*sup_nullable {
                 return false;
             }
             // Check if type at sub_idx in sub_module is a subtype of type at sup_idx in sup_module
             is_type_idx_subtype_cross_module(
-                *sub_idx, sub_module,
-                *sup_idx, sup_module,
-                0, // recursion depth
+                *sub_idx, sub_module, *sup_idx, sup_module, 0, // recursion depth
             )
-        }
+        },
 
         // Fall back to single-module subtype check for all other cases
         _ => is_value_type_subtype(sub, sup),
@@ -2341,8 +2575,12 @@ fn is_value_type_subtype_cross_module(
 /// - Same position within the rec group
 /// - Structurally compatible composite types
 fn is_type_idx_match_cross_module(
-    sub_idx: u32, sub_module: &Module, sub_precise: &PreciseTypeInfo,
-    sup_idx: u32, sup_module: &Module, sup_precise: &PreciseTypeInfo,
+    sub_idx: u32,
+    sub_module: &Module,
+    sub_precise: &PreciseTypeInfo,
+    sup_idx: u32,
+    sup_module: &Module,
+    sup_precise: &PreciseTypeInfo,
     depth: u32,
 ) -> bool {
     if depth > MAX_SUBTYPE_RECURSION_DEPTH {
@@ -2351,8 +2589,12 @@ fn is_type_idx_match_cross_module(
 
     // Check type identity using rec group and finality awareness
     if are_types_identical_cross_module(
-        sub_idx, sub_module, sub_precise,
-        sup_idx, sup_module, sup_precise,
+        sub_idx,
+        sub_module,
+        sub_precise,
+        sup_idx,
+        sup_module,
+        sup_precise,
     ) {
         return true;
     }
@@ -2360,8 +2602,12 @@ fn is_type_idx_match_cross_module(
     // Walk the supertype chain of sub_idx
     if let Some(Some(parent_idx)) = sub_module.type_supertypes.get(sub_idx as usize) {
         return is_type_idx_match_cross_module(
-            *parent_idx, sub_module, sub_precise,
-            sup_idx, sup_module, sup_precise,
+            *parent_idx,
+            sub_module,
+            sub_precise,
+            sup_idx,
+            sup_module,
+            sup_precise,
             depth + 1,
         );
     }
@@ -2378,8 +2624,12 @@ fn is_type_idx_match_cross_module(
 /// 3. They occupy the same position within their rec groups
 /// 4. Their composite types (params, results) are structurally compatible
 fn are_types_identical_cross_module(
-    idx_a: u32, module_a: &Module, precise_a: &PreciseTypeInfo,
-    idx_b: u32, module_b: &Module, precise_b: &PreciseTypeInfo,
+    idx_a: u32,
+    module_a: &Module,
+    precise_a: &PreciseTypeInfo,
+    idx_b: u32,
+    module_b: &Module,
+    precise_b: &PreciseTypeInfo,
 ) -> bool {
     // Check finality matches
     let final_a = precise_a.type_finality.get(idx_a as usize).copied().unwrap_or(true);
@@ -2389,9 +2639,7 @@ fn are_types_identical_cross_module(
     }
 
     // Check rec group compatibility
-    if !are_types_rec_group_compatible(
-        idx_a, precise_a, idx_b, precise_b, module_a, module_b,
-    ) {
+    if !are_types_rec_group_compatible(idx_a, precise_a, idx_b, precise_b, module_a, module_b) {
         return false;
     }
 
@@ -2409,8 +2657,10 @@ fn are_types_identical_cross_module(
 const MAX_SUBTYPE_RECURSION_DEPTH: u32 = 16;
 
 fn is_type_idx_subtype_cross_module(
-    sub_idx: u32, sub_module: &Module,
-    sup_idx: u32, sup_module: &Module,
+    sub_idx: u32,
+    sub_module: &Module,
+    sup_idx: u32,
+    sup_module: &Module,
     depth: u32,
 ) -> bool {
     if depth > MAX_SUBTYPE_RECURSION_DEPTH {
@@ -2425,8 +2675,10 @@ fn is_type_idx_subtype_cross_module(
     // Walk the supertype chain of sub_idx in sub_module
     if let Some(Some(parent_idx)) = sub_module.type_supertypes.get(sub_idx as usize) {
         return is_type_idx_subtype_cross_module(
-            *parent_idx, sub_module,
-            sup_idx, sup_module,
+            *parent_idx,
+            sub_module,
+            sup_idx,
+            sup_module,
             depth + 1,
         );
     }
@@ -2439,8 +2691,10 @@ fn is_type_idx_subtype_cross_module(
 /// Structural compatibility means: same number of params and results, and each corresponding
 /// value type is compatible (using cross-module subtype checking for reference types).
 fn are_func_types_structurally_compatible(
-    idx_a: u32, module_a: &Module,
-    idx_b: u32, module_b: &Module,
+    idx_a: u32,
+    module_a: &Module,
+    idx_b: u32,
+    module_b: &Module,
     depth: u32,
 ) -> bool {
     let type_a = match module_a.types.get(idx_a as usize) {
@@ -2452,9 +2706,7 @@ fn are_func_types_structurally_compatible(
         None => return false,
     };
 
-    if type_a.params.len() != type_b.params.len()
-        || type_a.results.len() != type_b.results.len()
-    {
+    if type_a.params.len() != type_b.params.len() || type_a.results.len() != type_b.results.len() {
         return false;
     }
 
@@ -2480,8 +2732,10 @@ fn are_func_types_structurally_compatible(
 /// For non-reference types, this is exact equality. For typed references,
 /// this recursively checks structural compatibility of the referenced types.
 fn are_value_types_structurally_compatible(
-    a: &ValueType, module_a: &Module,
-    b: &ValueType, module_b: &Module,
+    a: &ValueType,
+    module_a: &Module,
+    b: &ValueType,
+    module_b: &Module,
     depth: u32,
 ) -> bool {
     if a == b {
@@ -2494,12 +2748,15 @@ fn are_value_types_structurally_compatible(
 
     match (a, b) {
         // TypedFuncRef: compare structurally by looking at the referenced func types
-        (ValueType::TypedFuncRef(idx_a, nullable_a), ValueType::TypedFuncRef(idx_b, nullable_b)) => {
+        (
+            ValueType::TypedFuncRef(idx_a, nullable_a),
+            ValueType::TypedFuncRef(idx_b, nullable_b),
+        ) => {
             if nullable_a != nullable_b {
                 return false;
             }
             are_func_types_structurally_compatible(*idx_a, module_a, *idx_b, module_b, depth + 1)
-        }
+        },
         // StructRef/ArrayRef with same index may differ across modules but we
         // only handle func types for now; exact match required for others
         _ => false,
@@ -2524,7 +2781,8 @@ fn validate_table_import_compatibility(import: &TableType, actual: &TableType) -
     if import.element_type != actual.element_type {
         return Err(anyhow::anyhow!(
             "incompatible import type: table element type mismatch ({:?} vs {:?})",
-            import.element_type, actual.element_type
+            import.element_type,
+            actual.element_type
         ));
     }
 
@@ -2577,7 +2835,9 @@ fn validate_limits_compatibility(import: &Limits, actual: &Limits, kind: &str) -
     if actual.min < import.min {
         return Err(anyhow::anyhow!(
             "incompatible import type: {} min {} < required {}",
-            kind, actual.min, import.min
+            kind,
+            actual.min,
+            import.min
         ));
     }
 
@@ -2588,17 +2848,20 @@ fn validate_limits_compatibility(import: &Limits, actual: &Limits, kind: &str) -
                 if actual_max > import_max {
                     return Err(anyhow::anyhow!(
                         "incompatible import type: {} max {} > allowed {}",
-                        kind, actual_max, import_max
+                        kind,
+                        actual_max,
+                        import_max
                     ));
                 }
-            }
+            },
             None => {
                 // Import requires a max but actual has no max
                 return Err(anyhow::anyhow!(
                     "incompatible import type: {} has no max but import requires max {}",
-                    kind, import_max
+                    kind,
+                    import_max
                 ));
-            }
+            },
         }
     }
 
@@ -2627,7 +2890,10 @@ pub fn execute_wast_invoke(engine: &mut WastEngine, invoke: &WastInvoke) -> Resu
 }
 
 /// Helper function to execute a WAST execute directive
-pub fn execute_wast_execute(engine: &mut WastEngine, execute: &mut WastExecute) -> Result<Vec<Value>> {
+pub fn execute_wast_execute(
+    engine: &mut WastEngine,
+    execute: &mut WastExecute,
+) -> Result<Vec<Value>> {
     match execute {
         WastExecute::Invoke(invoke) => execute_wast_invoke(engine, invoke),
         WastExecute::Wat(wat) => {
@@ -2708,7 +2974,9 @@ pub fn run_simple_wast_test(wast_content: &str) -> Result<()> {
                     ));
                 },
             },
-            WastDirective::AssertTrap { mut exec, message, .. } => {
+            WastDirective::AssertTrap {
+                mut exec, message, ..
+            } => {
                 // Test that execution traps with expected error
                 match execute_wast_execute(&mut engine, &mut exec) {
                     Err(_) => {
@@ -3034,7 +3302,10 @@ mod tests {
         };
 
         // Read the actual ref_null.wast file
-        let wast_path = concat!(env!("CARGO_MANIFEST_DIR"), "/../external/testsuite/ref_null.wast");
+        let wast_path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../external/testsuite/ref_null.wast"
+        );
         let wast_content = std::fs::read_to_string(wast_path)
             .unwrap_or_else(|e| panic!("Failed to read {}: {}", wast_path, e));
 
@@ -3076,8 +3347,9 @@ mod tests {
                                         println!("  VALIDATE OK");
 
                                         // Try to convert to runtime module
-                                        match kiln_runtime::module::Module::from_kiln_module(&module)
-                                        {
+                                        match kiln_runtime::module::Module::from_kiln_module(
+                                            &module,
+                                        ) {
                                             Ok(_runtime_module) => {
                                                 println!("  RUNTIME CONVERT OK");
                                             },

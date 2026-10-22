@@ -7,10 +7,7 @@
 use kiln_error::Result;
 use kiln_foundation::{
     budget_aware_provider::CrateId,
-    capabilities::{
-        verified::VerificationProofs,
-        MemoryCapabilityContext,
-    },
+    capabilities::{MemoryCapabilityContext, verified::VerificationProofs},
     verification::VerificationLevel,
 };
 

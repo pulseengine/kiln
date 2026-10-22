@@ -6,11 +6,7 @@
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        env,
-        path::PathBuf,
-        process::Command,
-    };
+    use std::{env, path::PathBuf, process::Command};
 
     /// Helper function to run kilnd with specified arguments
     fn run_kilnd_with_mode(

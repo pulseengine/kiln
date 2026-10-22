@@ -9,17 +9,7 @@ pub mod presets;
 
 pub use builder::EngineBuilder;
 pub use capability_engine::{
-    CapabilityAwareEngine,
-    CapabilityEngine,
-    EnginePreset,
-    EngineResourceLimits,
-    InstanceHandle,
+    CapabilityAwareEngine, CapabilityEngine, EnginePreset, EngineResourceLimits, InstanceHandle,
     ModuleHandle,
 };
-pub use presets::{
-    asil_a,
-    asil_b,
-    asil_c,
-    asil_d,
-    qm,
-};
+pub use presets::{asil_a, asil_b, asil_c, asil_d, qm};

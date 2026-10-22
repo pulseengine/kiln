@@ -10,18 +10,10 @@
 use core::{
     marker::PhantomData,
     mem::ManuallyDrop,
-    ops::{
-        Deref,
-        DerefMut,
-    },
+    ops::{Deref, DerefMut},
 };
 
-use crate::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
+use crate::{Error, ErrorCategory, Result, codes};
 
 /// Trait for memory providers that can be managed by the guard
 pub trait ManagedMemoryProvider: Sized {
@@ -63,19 +55,19 @@ where
     I: Copy,
 {
     /// The memory provider, wrapped for controlled cleanup
-    provider:      ManuallyDrop<P>,
+    provider: ManuallyDrop<P>,
     /// Reference to the coordinator
-    coordinator:   &'static C,
+    coordinator: &'static C,
     /// The crate that owns this allocation
-    crate_id:      I,
+    crate_id: I,
     /// Allocation identifier
     allocation_id: C::AllocationId,
     /// Size of the allocation (cached for cleanup)
-    size:          usize,
+    size: usize,
     /// Whether cleanup has been performed
-    cleaned_up:    bool,
+    cleaned_up: bool,
     /// Phantom data for lifetime management
-    _phantom:      PhantomData<(C, I)>,
+    _phantom: PhantomData<(C, I)>,
 }
 
 impl<P, C, I> GenericMemoryGuard<P, C, I>
@@ -194,10 +186,10 @@ pub struct MemoryGuardBuilder<P, C, I>
 where
     C: 'static,
 {
-    provider:    Option<P>,
+    provider: Option<P>,
     coordinator: Option<&'static C>,
-    crate_id:    Option<I>,
-    _phantom:    PhantomData<(P, C, I)>,
+    crate_id: Option<I>,
+    _phantom: PhantomData<(P, C, I)>,
 }
 
 impl<P, C, I> Default for MemoryGuardBuilder<P, C, I>
@@ -219,10 +211,10 @@ where
 {
     pub fn new() -> Self {
         Self {
-            provider:    None,
+            provider: None,
             coordinator: None,
-            crate_id:    None,
-            _phantom:    PhantomData,
+            crate_id: None,
+            _phantom: PhantomData,
         }
     }
 
@@ -261,4 +253,3 @@ where
 /// Convenience type alias for common use cases
 pub type MemoryGuard<P, I> =
     GenericMemoryGuard<P, crate::memory_coordinator::GenericMemoryCoordinator<I, 32>, I>;
-

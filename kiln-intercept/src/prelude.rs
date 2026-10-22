@@ -8,60 +8,29 @@
 // Binary std/no_std choice
 pub use core::{
     any::Any,
-    cmp::{
-        Eq,
-        Ord,
-        PartialEq,
-        PartialOrd,
-    },
-    convert::{
-        TryFrom,
-        TryInto,
-    },
+    cmp::{Eq, Ord, PartialEq, PartialOrd},
+    convert::{TryFrom, TryInto},
     fmt,
-    fmt::{
-        Debug,
-        Display,
-    },
+    fmt::{Debug, Display},
     marker::PhantomData,
     mem,
-    ops::{
-        Deref,
-        DerefMut,
-    },
-    slice,
-    str,
+    ops::{Deref, DerefMut},
+    slice, str,
 };
 // Re-export from std when the std feature is enabled
 #[cfg(feature = "std")]
 pub use std::{
     boxed::Box,
-    collections::{
-        HashMap,
-        HashSet,
-    },
+    collections::{HashMap, HashSet},
     format,
-    string::{
-        String,
-        ToString,
-    },
-    sync::{
-        Arc,
-        Mutex,
-        RwLock,
-    },
+    string::{String, ToString},
+    sync::{Arc, Mutex, RwLock},
     vec,
     vec::Vec,
 };
 
 // Re-export from kiln-error
-pub use kiln_error::{
-    codes,
-    kinds,
-    Error,
-    ErrorCategory,
-    Result,
-};
+pub use kiln_error::{Error, ErrorCategory, Result, codes, kinds};
 #[cfg(feature = "std")]
 pub use kiln_foundation::component_value::ComponentValue;
 // Re-export from kiln-foundation (for component model)
@@ -76,54 +45,35 @@ pub use kiln_foundation::{
     builtin::BuiltinType,
     resource::ResourceCanonicalOperation,
     // SafeMemory types
-    safe_memory::{
-        SafeMemoryHandler,
-        SafeSlice,
-        SafeStack,
-    },
+    safe_memory::{SafeMemoryHandler, SafeSlice, SafeStack},
     // Core types
     values::Value,
 };
 // no_std alternatives using bounded collections
 #[cfg(not(feature = "std"))]
-pub use kiln_foundation::{
-    BoundedCapacity,
-    BoundedString,
-    BoundedVec,
-};
+pub use kiln_foundation::{BoundedCapacity, BoundedString, BoundedVec};
 // Import synchronization primitives for no_std
 #[cfg(not(feature = "std"))]
-pub use kiln_sync::{
-    Mutex,
-    RwLock,
-};
+pub use kiln_sync::{Mutex, RwLock};
 
 // Export BeforeBuiltinResult for both std and no_std
 pub use crate::builtins::BeforeBuiltinResult;
 // Binary std/no_std choice
 #[cfg(feature = "std")]
-pub use crate::builtins::{
-    BuiltinInterceptor,
-    BuiltinSerialization,
-};
+pub use crate::builtins::{BuiltinInterceptor, BuiltinSerialization};
 // Conditional imports
 #[cfg(feature = "std")]
 pub use crate::strategies::StatisticsStrategy;
 // Re-export from this crate
 pub use crate::{
-    // Builtin interceptors
-    builtins::InterceptContext,
-    // Strategies
-    strategies::{
-        FirewallConfig,
-        FirewallRule,
-        FirewallStrategy,
-        LoggingStrategy,
-    },
     InterceptionResult,
 
     // Core interception types
     LinkInterceptor,
     LinkInterceptorStrategy,
     Modification,
+    // Builtin interceptors
+    builtins::InterceptContext,
+    // Strategies
+    strategies::{FirewallConfig, FirewallRule, FirewallStrategy, LoggingStrategy},
 };

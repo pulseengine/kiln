@@ -23,11 +23,11 @@ pub enum ASILExecutionMode {
 #[derive(Debug, Clone, Default)]
 pub struct ASILExecutionConfig {
     /// ASIL execution mode
-    pub mode:           ASILExecutionMode,
+    pub mode: ASILExecutionMode,
     /// Fuel limit for bounded execution
-    pub fuel_limit:     u64,
+    pub fuel_limit: u64,
     /// Memory limit in bytes
-    pub memory_limit:   usize,
+    pub memory_limit: usize,
     /// Maximum call stack depth
     pub max_call_depth: u32,
 }
@@ -71,17 +71,17 @@ impl ASILExecutionConfig {
 #[derive(Debug, Clone, Default)]
 pub struct ExecutionStats {
     /// Number of instructions executed
-    pub instructions_executed:  u64,
+    pub instructions_executed: u64,
     /// Amount of fuel consumed
-    pub fuel_consumed:          u64,
+    pub fuel_consumed: u64,
     /// Peak memory usage in bytes
-    pub peak_memory_usage:      usize,
+    pub peak_memory_usage: usize,
     /// Number of function calls made
-    pub function_calls:         u32,
+    pub function_calls: u32,
     /// Maximum call stack depth reached
     pub max_call_depth_reached: u32,
     /// Execution time in microseconds
-    pub execution_time_us:      u64,
+    pub execution_time_us: u64,
 }
 
 impl ExecutionStats {

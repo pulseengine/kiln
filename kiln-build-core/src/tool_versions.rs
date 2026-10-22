@@ -392,7 +392,6 @@ impl ToolVersionConfig {
             },
         );
 
-
         Self {
             tools,
             metadata: VersionConfigMetadata {

@@ -72,21 +72,11 @@
 //! let equivalent_dal = asil_c.convert_to(SafetyStandardType::Do178c);
 //! ```
 
-use core::sync::atomic::{
-    AtomicU8,
-    Ordering,
-};
+use core::sync::atomic::{AtomicU8, Ordering};
 #[cfg(feature = "std")]
-use std::time::{
-    SystemTime,
-    UNIX_EPOCH,
-};
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::{
-    codes,
-    Error,
-    ErrorCategory,
-};
+use crate::{Error, ErrorCategory, codes};
 
 /// Automotive Safety Integrity Level (ASIL) classification
 ///
@@ -102,7 +92,7 @@ use crate::{
 #[repr(u8)]
 pub enum AsilLevel {
     /// Quality Management - No safety requirements
-    QM    = 0,
+    QM = 0,
     /// ASIL A - Lowest safety integrity level
     AsilA = 1,
     /// ASIL B - Low safety integrity level  
@@ -596,7 +586,7 @@ impl SafetyStandardConversion for SafetyStandard {
                     // patient safety and cannot have "no safety" classification. Even non-critical
                     // medical software must be Class A (no injury or harm possible).
                     return None; // Medical devices must have some safety
-                                 // classification
+                    // classification
                 }
                 Some(SafetyStandard::Iec62304(match severity.value() {
                     1..=350 => MedicalClass::ClassA, // Non-life-threatening, no injury possible
@@ -619,7 +609,7 @@ impl SafetyStandardConversion for SafetyStandard {
                     // that can cause physical harm. Even low-risk systems must have AgPL-a
                     // classification (no risk of injury to persons).
                     return None; // Agricultural systems must have some safety
-                                 // level
+                    // level
                 }
                 Some(SafetyStandard::Iso25119(match severity.value() {
                     1..=300 => AgricultureLevel::AgPla, // No risk of injury to persons
@@ -671,20 +661,20 @@ pub struct SafetyContext {
     /// ASIL level determined at compile time
     pub compile_time_asil: AsilLevel,
     /// ASIL level that may be upgraded at runtime
-    runtime_asil:          AtomicU8,
+    runtime_asil: AtomicU8,
     /// Number of safety violations detected
-    violation_count:       AtomicU8,
+    violation_count: AtomicU8,
     /// Operation counter for periodic verification
-    operation_count:       AtomicU8,
+    operation_count: AtomicU8,
 }
 
 impl Clone for SafetyContext {
     fn clone(&self) -> Self {
         Self {
             compile_time_asil: self.compile_time_asil,
-            runtime_asil:      AtomicU8::new(self.runtime_asil.load(Ordering::SeqCst)),
-            violation_count:   AtomicU8::new(self.violation_count.load(Ordering::SeqCst)),
-            operation_count:   AtomicU8::new(self.operation_count.load(Ordering::SeqCst)),
+            runtime_asil: AtomicU8::new(self.runtime_asil.load(Ordering::SeqCst)),
+            violation_count: AtomicU8::new(self.violation_count.load(Ordering::SeqCst)),
+            operation_count: AtomicU8::new(self.operation_count.load(Ordering::SeqCst)),
         }
     }
 }
@@ -709,9 +699,9 @@ impl SafetyContext {
     pub const fn new(compile_time: AsilLevel) -> Self {
         Self {
             compile_time_asil: compile_time,
-            runtime_asil:      AtomicU8::new(compile_time as u8),
-            violation_count:   AtomicU8::new(0),
-            operation_count:   AtomicU8::new(0),
+            runtime_asil: AtomicU8::new(compile_time as u8),
+            violation_count: AtomicU8::new(0),
+            operation_count: AtomicU8::new(0),
         }
     }
 
@@ -936,27 +926,27 @@ impl Default for SafetyContext {
 #[derive(Debug)]
 pub struct UniversalSafetyContext {
     /// Primary safety standard (compile-time)
-    primary_standard:    SafetyStandard,
+    primary_standard: SafetyStandard,
     /// Secondary standards this context must satisfy
     secondary_standards: [Option<SafetyStandard>; 4],
     /// Runtime safety state (stores severity score)
-    runtime_state:       core::sync::atomic::AtomicU16,
+    runtime_state: core::sync::atomic::AtomicU16,
     /// Violation tracking
-    violation_count:     AtomicU8,
+    violation_count: AtomicU8,
     /// Operation counter
-    operation_count:     core::sync::atomic::AtomicU32,
+    operation_count: core::sync::atomic::AtomicU32,
 }
 
 impl Clone for UniversalSafetyContext {
     fn clone(&self) -> Self {
         Self {
-            primary_standard:    self.primary_standard,
+            primary_standard: self.primary_standard,
             secondary_standards: self.secondary_standards,
-            runtime_state:       core::sync::atomic::AtomicU16::new(
+            runtime_state: core::sync::atomic::AtomicU16::new(
                 self.runtime_state.load(Ordering::SeqCst),
             ),
-            violation_count:     AtomicU8::new(self.violation_count.load(Ordering::SeqCst)),
-            operation_count:     core::sync::atomic::AtomicU32::new(
+            violation_count: AtomicU8::new(self.violation_count.load(Ordering::SeqCst)),
+            operation_count: core::sync::atomic::AtomicU32::new(
                 self.operation_count.load(Ordering::SeqCst),
             ),
         }
@@ -982,13 +972,11 @@ impl UniversalSafetyContext {
     /// ```
     pub const fn new(primary: SafetyStandard) -> Self {
         Self {
-            primary_standard:    primary,
+            primary_standard: primary,
             secondary_standards: [None; 4],
-            runtime_state:       core::sync::atomic::AtomicU16::new(
-                primary.severity_score().value(),
-            ),
-            violation_count:     AtomicU8::new(0),
-            operation_count:     core::sync::atomic::AtomicU32::new(0),
+            runtime_state: core::sync::atomic::AtomicU16::new(primary.severity_score().value()),
+            violation_count: AtomicU8::new(0),
+            operation_count: core::sync::atomic::AtomicU32::new(0),
         }
     }
 
@@ -1218,10 +1206,10 @@ impl Default for UniversalSafetyContext {
 /// level and can prevent unsafe operations from proceeding.
 #[derive(Debug)]
 pub struct SafetyGuard<'a> {
-    context:        &'a SafetyContext,
+    context: &'a SafetyContext,
     operation_name: &'static str,
     #[cfg(feature = "std")]
-    start_time:     SystemTime,
+    start_time: SystemTime,
 }
 
 impl<'a> SafetyGuard<'a> {
@@ -1319,8 +1307,8 @@ impl<'a> Drop for SafetyGuard<'a> {
 /// the current ASIL requirements, including verification and protection.
 #[derive(Debug)]
 pub struct SafeMemoryAllocation<'a> {
-    data:     &'a mut [u8],
-    context:  &'a SafetyContext,
+    data: &'a mut [u8],
+    context: &'a SafetyContext,
     checksum: u32,
 }
 
@@ -1521,15 +1509,9 @@ macro_rules! assert_standard_compatibility {
 #[cfg(test)]
 mod tests {
     #[cfg(all(not(feature = "std"), feature = "alloc"))]
-    use alloc::{
-        format,
-        vec,
-    };
+    use alloc::{format, vec};
     #[cfg(feature = "std")]
-    use std::{
-        format,
-        vec,
-    };
+    use std::{format, vec};
 
     use super::*;
 
@@ -1581,7 +1563,7 @@ mod tests {
         // Should not be able to downgrade below compile-time level
         assert!(ctx.upgrade_runtime_asil(AsilLevel::AsilA).is_err());
         assert_eq!(ctx.effective_asil(), AsilLevel::AsilD); // Should remain
-                                                            // unchanged
+        // unchanged
     }
 
     #[test]
@@ -1877,7 +1859,7 @@ mod tests {
         let qm = SafetyStandard::Iso26262(AsilLevel::QM);
         let converted_to_medical = qm.convert_to(SafetyStandardType::Iec62304);
         assert!(converted_to_medical.is_none()); // Medical devices must have
-                                                 // some safety class
+        // some safety class
     }
 
     #[test]

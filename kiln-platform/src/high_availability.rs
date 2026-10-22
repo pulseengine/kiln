@@ -5,40 +5,19 @@
 
 use core::{
     fmt::Debug,
-    sync::atomic::{
-        AtomicBool,
-        AtomicU64,
-        Ordering,
-    },
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
     time::Duration,
 };
 
 extern crate alloc;
 
 #[cfg(not(feature = "std"))]
-use alloc::{
-    boxed::Box,
-    string::String,
-    sync::Arc,
-    vec::Vec,
-};
+use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 #[cfg(feature = "std")]
-use alloc::{
-    boxed::Box,
-    string::String,
-    sync::Arc,
-    vec::Vec,
-};
+use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 
-use kiln_error::{
-    Error,
-    ErrorCategory,
-    Result,
-};
-use kiln_sync::{
-    KilnMutex,
-    KilnRwLock,
-};
+use kiln_error::{Error, ErrorCategory, Result};
+use kiln_sync::{KilnMutex, KilnRwLock};
 // Temporarily use standard collections until bounded_platform is available
 // use crate::bounded_platform::{BoundedEntityVec, BoundedConditionVec,
 // new_entity_vec, new_condition_vec};
@@ -93,9 +72,9 @@ pub enum RecoveryAction {
         /// Maximum number of restarts allowed
         max_restarts: u32,
         /// Time window for restart counting
-        window:       Duration,
+        window: Duration,
         /// Action to take when max restarts exceeded
-        escalation:   Box<RecoveryAction>,
+        escalation: Box<RecoveryAction>,
     },
     /// Reboot the system (extreme action)
     Reboot,
@@ -115,8 +94,8 @@ impl Clone for RecoveryAction {
                 escalation,
             } => RecoveryAction::RestartWithEscalation {
                 max_restarts: *max_restarts,
-                window:       *window,
-                escalation:   escalation.clone(),
+                window: *window,
+                escalation: escalation.clone(),
             },
             RecoveryAction::Reboot => RecoveryAction::Reboot,
         }
@@ -129,7 +108,7 @@ pub enum MonitorCondition {
     /// Heartbeat monitoring
     Heartbeat {
         /// Heartbeat interval
-        interval:  Duration,
+        interval: Duration,
         /// Number of missed heartbeats before triggering
         tolerance: u32,
     },
@@ -138,7 +117,7 @@ pub enum MonitorCondition {
     /// Resource threshold
     ResourceThreshold {
         /// Type of resource to monitor
-        resource:  ResourceType,
+        resource: ResourceType,
         /// Threshold value that triggers action
         threshold: u64,
     },
@@ -151,7 +130,7 @@ impl Clone for MonitorCondition {
                 interval,
                 tolerance,
             } => MonitorCondition::Heartbeat {
-                interval:  *interval,
+                interval: *interval,
                 tolerance: *tolerance,
             },
             MonitorCondition::Death => MonitorCondition::Death,
@@ -159,7 +138,7 @@ impl Clone for MonitorCondition {
                 resource,
                 threshold,
             } => MonitorCondition::ResourceThreshold {
-                resource:  *resource,
+                resource: *resource,
                 threshold: *threshold,
             },
         }
@@ -214,21 +193,21 @@ pub struct EntityId(pub u64);
 
 /// Generic high availability monitor
 pub struct GenericHaMonitor {
-    entities:       KilnRwLock<BoundedEntityVec<MonitoredEntity>>,
-    next_id:        AtomicU64,
+    entities: KilnRwLock<BoundedEntityVec<MonitoredEntity>>,
+    next_id: AtomicU64,
     #[cfg(feature = "std")]
     monitor_thread: KilnMutex<Option<std::thread::JoinHandle<()>>>,
-    running:        Arc<AtomicBool>,
+    running: Arc<AtomicBool>,
 }
 
 struct MonitoredEntity {
-    id:             EntityId,
-    _name:          String,
-    conditions:     BoundedConditionVec<(MonitorCondition, BoundedConditionVec<RecoveryAction>)>,
+    id: EntityId,
+    _name: String,
+    conditions: BoundedConditionVec<(MonitorCondition, BoundedConditionVec<RecoveryAction>)>,
     last_heartbeat: KilnMutex<u64>, // Timestamp in milliseconds
-    status:         KilnMutex<HealthStatus>,
+    status: KilnMutex<HealthStatus>,
     _restart_count: AtomicU64,
-    monitoring:     AtomicBool,
+    monitoring: AtomicBool,
 }
 
 impl GenericHaMonitor {
@@ -395,10 +374,10 @@ pub fn create_ha_manager() -> Result<Box<dyn HighAvailabilityManager>> {
 
 /// Builder for high availability configuration
 pub struct HaBuilder {
-    entity_name:         String,
-    heartbeat_interval:  Option<Duration>,
+    entity_name: String,
+    heartbeat_interval: Option<Duration>,
     heartbeat_tolerance: Option<u32>,
-    restart_policy:      Option<RestartPolicy>,
+    restart_policy: Option<RestartPolicy>,
 }
 
 /// Restart policy configuration
@@ -407,9 +386,9 @@ pub struct RestartPolicy {
     /// Maximum number of restarts allowed
     pub max_restarts: u32,
     /// Time window for restart counting
-    pub window:       Duration,
+    pub window: Duration,
     /// Backoff strategy between restarts
-    pub backoff:      BackoffStrategy,
+    pub backoff: BackoffStrategy,
 }
 
 /// Backoff strategy for restarts
@@ -427,10 +406,10 @@ impl HaBuilder {
     /// Create new HA configuration builder
     pub fn new(entity_name: impl Into<String>) -> Self {
         Self {
-            entity_name:         entity_name.into(),
-            heartbeat_interval:  None,
+            entity_name: entity_name.into(),
+            heartbeat_interval: None,
             heartbeat_tolerance: None,
-            restart_policy:      None,
+            restart_policy: None,
         }
     }
 
@@ -493,8 +472,8 @@ mod tests {
             .with_heartbeat(Duration::from_secs(1), 3)
             .with_restart_policy(RestartPolicy {
                 max_restarts: 5,
-                window:       Duration::from_secs(300),
-                backoff:      BackoffStrategy::Exponential(Duration::from_secs(1)),
+                window: Duration::from_secs(300),
+                backoff: BackoffStrategy::Exponential(Duration::from_secs(1)),
             });
 
         assert_eq!(builder.entity_name, "test_entity");
@@ -513,7 +492,7 @@ mod tests {
             .add_condition(
                 entity_id,
                 MonitorCondition::Heartbeat {
-                    interval:  Duration::from_secs(1),
+                    interval: Duration::from_secs(1),
                     tolerance: 3,
                 },
                 vec![RecoveryAction::Restart],

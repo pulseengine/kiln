@@ -6,19 +6,10 @@
 // Import Arc from appropriate source based on feature flags
 // alloc is imported in lib.rs with proper feature gates
 
-use kiln_error::{
-    Error,
-    Result,
-};
-use kiln_foundation::{
-    safe_memory::SafeStack,
-    values::Value,
-};
+use kiln_error::{Error, Result};
+use kiln_foundation::{safe_memory::SafeStack, values::Value};
 
-use crate::{
-    prelude::*,
-    Memory,
-};
+use crate::{Memory, prelude::*};
 
 /// Extension trait for `Arc<Memory>` to simplify access to memory operations
 pub trait ArcMemoryExt {
@@ -133,7 +124,8 @@ pub trait ArcMemoryExt {
     fn check_alignment(&self, offset: u32, access_size: u32, align: u32) -> Result<()>;
 
     /// Read standard WebAssembly value
-    fn read_value(&self, addr: u32, value_type: kiln_foundation::types::ValueType) -> Result<Value>;
+    fn read_value(&self, addr: u32, value_type: kiln_foundation::types::ValueType)
+    -> Result<Value>;
 
     /// Write standard WebAssembly value
     fn write_value(&self, addr: u32, value: Value) -> Result<()>;
@@ -394,7 +386,11 @@ impl ArcMemoryExt for Arc<Memory> {
         self.as_ref().check_alignment(offset, access_size, align)
     }
 
-    fn read_value(&self, addr: u32, value_type: kiln_foundation::types::ValueType) -> Result<Value> {
+    fn read_value(
+        &self,
+        addr: u32,
+        value_type: kiln_foundation::types::ValueType,
+    ) -> Result<Value> {
         match value_type {
             kiln_foundation::types::ValueType::I32 => self.read_i32(addr).map(Value::I32),
             kiln_foundation::types::ValueType::I64 => self.read_i64(addr).map(Value::I64),
@@ -514,7 +510,7 @@ impl ArcMemoryExt for Arc<Memory> {
             _ => {
                 return Err(kiln_error::Error::runtime_execution_error(
                     "Unsupported value type",
-                ))
+                ));
             },
         };
 
@@ -573,4 +569,3 @@ impl ArcMemoryExt for Arc<Memory> {
         ))
     }
 }
-

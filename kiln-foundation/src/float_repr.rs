@@ -6,27 +6,13 @@
 //! Wrapper types for f32 and f64 ensuring bit-pattern based equality and
 //! hashing, suitable for use in WebAssembly type definitions.
 
-use core::hash::{
-    Hash,
-    Hasher,
-};
+use core::hash::{Hash, Hasher};
 
 // Use Result and Error types from this crate's prelude or error module
-use crate::prelude::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
+use crate::prelude::{Error, ErrorCategory, Result, codes};
 use crate::{
     traits::{
-        BytesWriter,
-        Checksummable,
-        FromBytes,
-        LittleEndian,
-        ReadStream,
-        ToBytes,
-        WriteStream,
+        BytesWriter, Checksummable, FromBytes, LittleEndian, ReadStream, ToBytes, WriteStream,
     },
     verification::Checksum,
 };

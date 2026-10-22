@@ -132,7 +132,11 @@ impl WasiInstanceProvider {
         }
 
         #[cfg(feature = "tracing")]
-        trace!(id = id, export_count = instance.exports.len(), "WASI instance created");
+        trace!(
+            id = id,
+            export_count = instance.exports.len(),
+            "WASI instance created"
+        );
 
         Ok(instance)
     }

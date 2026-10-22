@@ -8,10 +8,7 @@ use core::{
     fmt,
     marker::PhantomData,
     ptr::NonNull,
-    sync::atomic::{
-        AtomicPtr,
-        Ordering,
-    },
+    sync::atomic::{AtomicPtr, Ordering},
 };
 
 #[cfg(any(feature = "std", feature = "alloc"))]
@@ -23,20 +20,12 @@ use alloc::boxed::Box;
 use std::boxed::Box;
 
 use super::{
-    CapabilityMask,
-    MemoryCapability,
-    MemoryGuard,
-    MemoryOperation,
-    MemoryOperationType,
+    CapabilityMask, MemoryCapability, MemoryGuard, MemoryOperation, MemoryOperationType,
     MemoryRegion,
 };
 use crate::{
-    budget_aware_provider::CrateId,
-    codes,
+    Error, ErrorCategory, Result, budget_aware_provider::CrateId, codes,
     verification::VerificationLevel,
-    Error,
-    ErrorCategory,
-    Result,
 };
 
 /// Thread-safe wrapper for NonNull<u8> pointers
@@ -76,17 +65,17 @@ impl Clone for ThreadSafePtr {
 #[derive(Debug, Clone)]
 pub struct StaticMemoryCapability<const N: usize> {
     /// Fixed memory region size (compile-time constant)
-    region_size:        usize,
+    region_size: usize,
     /// Base address of the static region (if available)
-    region_base:        ThreadSafePtr,
+    region_base: ThreadSafePtr,
     /// Operations allowed by this capability
     allowed_operations: CapabilityMask,
     /// Verification level for memory operations
     verification_level: VerificationLevel,
     /// Crate that owns this capability
-    owner_crate:        CrateId,
+    owner_crate: CrateId,
     /// Static buffer for the memory region
-    _phantom:           PhantomData<[u8; N]>,
+    _phantom: PhantomData<[u8; N]>,
 }
 
 impl<const N: usize> StaticMemoryCapability<N> {
@@ -100,12 +89,12 @@ impl<const N: usize> StaticMemoryCapability<N> {
             region_size: N,
             region_base: ThreadSafePtr::new(None),
             allowed_operations: CapabilityMask {
-                read:       true,
-                write:      true,
-                allocate:   true, // Static "allocation" is just claiming the fixed region
+                read: true,
+                write: true,
+                allocate: true, // Static "allocation" is just claiming the fixed region
                 deallocate: true,
-                delegate:   true,
-                max_size:   N,
+                delegate: true,
+                max_size: N,
             },
             verification_level,
             owner_crate,
@@ -247,12 +236,12 @@ impl<const N: usize> MemoryCapability for StaticMemoryCapability<N> {
 
         // Create a delegated static capability with restricted permissions
         let delegated = StaticMemoryCapability::<N> {
-            region_size:        core::cmp::min(subset.max_size, N),
-            region_base:        self.region_base.clone(),
+            region_size: core::cmp::min(subset.max_size, N),
+            region_base: self.region_base.clone(),
             allowed_operations: self.allowed_operations.intersect(&subset),
             verification_level: self.verification_level,
-            owner_crate:        self.owner_crate,
-            _phantom:           PhantomData,
+            owner_crate: self.owner_crate,
+            _phantom: PhantomData,
         };
 
         Ok(Box::new(delegated))
@@ -280,8 +269,8 @@ impl<const N: usize> MemoryCapability for StaticMemoryCapability<N> {
 /// Static memory region with compile-time size verification
 #[derive(Debug)]
 pub struct StaticMemoryRegion<const N: usize> {
-    size:     usize,
-    buffer:   [u8; N],
+    size: usize,
+    buffer: [u8; N],
     base_ptr: ThreadSafePtr,
 }
 
@@ -329,7 +318,7 @@ impl<const N: usize> MemoryRegion for StaticMemoryRegion<N> {
 
 /// Static memory guard that protects access to static memory regions
 pub struct StaticMemoryGuard<const N: usize> {
-    region:     StaticMemoryRegion<N>,
+    region: StaticMemoryRegion<N>,
     capability: *const StaticMemoryCapability<N>, // Raw pointer to avoid lifetime issues
 }
 
@@ -443,13 +432,13 @@ mod tests {
 
         let valid_read = MemoryOperation::Read {
             offset: 0,
-            len:    500,
+            len: 500,
         };
         assert!(capability.verify_access(&valid_read).is_ok());
 
         let invalid_read = MemoryOperation::Read {
             offset: 500,
-            len:    600,
+            len: 600,
         };
         assert!(capability.verify_access(&invalid_read).is_err());
     }

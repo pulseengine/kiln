@@ -122,7 +122,8 @@ pub type ModuleCustomSections<P> = BoundedVec<crate::section::CustomSection, 64,
 
 // Type aliases for HashMap
 #[cfg(not(feature = "std"))]
-pub type HashMap<K, V> = kiln_foundation::BoundedMap<K, V, 256, kiln_foundation::NoStdProvider<1024>>; // Default capacity
+pub type HashMap<K, V> =
+    kiln_foundation::BoundedMap<K, V, 256, kiln_foundation::NoStdProvider<1024>>; // Default capacity
 
 #[cfg(feature = "std")]
 pub type HashMap<K, V> = std::collections::BTreeMap<K, V>;
@@ -293,10 +294,7 @@ mod ast_simple_tests;
 #[cfg(feature = "std")]
 pub use binary::with_alloc::{parse_data, parse_element_segment_pure};
 #[cfg(feature = "std")]
-pub use binary::with_alloc::{
-    read_name,
-    read_string,
-};
+pub use binary::with_alloc::{read_name, read_string};
 
 // Binary std/no_std choice
 #[cfg(feature = "std")]
@@ -332,8 +330,8 @@ pub use conversion::{
     kiln_limits_to_format_limits,
 };
 pub use error::{
-    parse_error, kiln_runtime_error as runtime_error, kiln_type_error as type_error,
-    kiln_validation_error as validation_error,
+    kiln_runtime_error as runtime_error, kiln_type_error as type_error,
+    kiln_validation_error as validation_error, parse_error,
 };
 // Note: Data, DataMode, ElementMode are deprecated - use pure_format_types instead
 #[allow(deprecated)]

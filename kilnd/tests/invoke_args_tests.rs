@@ -76,7 +76,10 @@ fn argument_arity_must_match_exactly() {
         "the error must state both counts\n{out}"
     );
 
-    let (ok, out) = run(&p, &["--invoke", "mul", "--arg", "1", "--arg", "2", "--arg", "3"]);
+    let (ok, out) = run(
+        &p,
+        &["--invoke", "mul", "--arg", "1", "--arg", "2", "--arg", "3"],
+    );
     assert!(!ok, "too many arguments must fail\n{out}");
 
     let _ = fs::remove_file(&p);
@@ -85,8 +88,14 @@ fn argument_arity_must_match_exactly() {
 #[test]
 fn unparseable_argument_fails_loud_naming_the_value_and_type() {
     let p = fixture("kilnd_sr59_badtype.wasm");
-    let (ok, out) = run(&p, &["--invoke", "mul", "--arg", "notanumber", "--arg", "2"]);
-    assert!(!ok, "a non-numeric argument for an i32 parameter must fail\n{out}");
+    let (ok, out) = run(
+        &p,
+        &["--invoke", "mul", "--arg", "notanumber", "--arg", "2"],
+    );
+    assert!(
+        !ok,
+        "a non-numeric argument for an i32 parameter must fail\n{out}"
+    );
     assert!(
         out.contains("notanumber") && out.contains("I32"),
         "the error must name the offending value and the expected type\n{out}"

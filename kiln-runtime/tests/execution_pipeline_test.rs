@@ -2,11 +2,7 @@
 
 use kiln_error::Result;
 use kiln_foundation::values::Value;
-use kiln_runtime::engine::{
-    CapabilityAwareEngine,
-    CapabilityEngine,
-    EnginePreset,
-};
+use kiln_runtime::engine::{CapabilityAwareEngine, CapabilityEngine, EnginePreset};
 
 /// Simple WebAssembly module that adds two numbers
 /// (module (func (export "add") (param i32 i32) (result i32) local.get 0

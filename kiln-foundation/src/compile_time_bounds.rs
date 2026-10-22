@@ -9,11 +9,7 @@
 
 use crate::{
     budget_aware_provider::CrateId,
-    budget_verification::{
-        calculate_total_budget,
-        CRATE_BUDGETS,
-        TOTAL_MEMORY_BUDGET,
-    },
+    budget_verification::{CRATE_BUDGETS, TOTAL_MEMORY_BUDGET, calculate_total_budget},
 };
 
 /// Maximum allocation size for any single allocation (16MB)
@@ -306,4 +302,3 @@ macro_rules! safe_managed_alloc_validated {
         $crate::safe_managed_alloc!($size, $crate_id)
     }};
 }
-

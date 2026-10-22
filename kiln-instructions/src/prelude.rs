@@ -12,57 +12,34 @@
 // Core imports for both std and no_std environments
 pub use core::{
     any::Any,
-    cmp::{
-        Eq,
-        Ord,
-        PartialEq,
-        PartialOrd,
-    },
-    convert::{
-        TryFrom,
-        TryInto,
-    },
+    cmp::{Eq, Ord, PartialEq, PartialOrd},
+    convert::{TryFrom, TryInto},
     fmt,
-    fmt::{
-        Debug,
-        Display,
-    },
+    fmt::{Debug, Display},
     marker::PhantomData,
     mem,
-    ops::{
-        Deref,
-        DerefMut,
-    },
-    slice,
-    str,
+    ops::{Deref, DerefMut},
+    slice, str,
 };
 // Re-export from std when the std feature is enabled
 #[cfg(feature = "std")]
 pub use std::{
     boxed::Box,
-    collections::{
-        HashMap,
-        HashSet,
-    },
+    collections::{HashMap, HashSet},
     format,
-    string::{
-        String,
-        ToString,
-    },
+    string::{String, ToString},
     sync::Arc,
     vec,
     vec::Vec,
 };
 
 // BoundedVec available for both std and no_std modes
-pub use kiln_foundation::bounded::{
-    BoundedString,
-    BoundedVec,
-};
+pub use kiln_foundation::bounded::{BoundedString, BoundedVec};
 
 // Type alias for Vec in no_std mode to match kiln-runtime behavior
 #[cfg(not(feature = "std"))]
-pub type Vec<T> = kiln_foundation::bounded::BoundedVec<T, 256, kiln_foundation::NoStdProvider<1024>>;
+pub type Vec<T> =
+    kiln_foundation::bounded::BoundedVec<T, 256, kiln_foundation::NoStdProvider<1024>>;
 
 // Binary std/no_std choice
 #[cfg(not(feature = "std"))]
@@ -106,61 +83,31 @@ macro_rules! vec {
 }
 
 // Re-export from kiln-error
-pub use kiln_error::{
-    codes,
-    kinds,
-    Error,
-    ErrorCategory,
-    Result,
-};
+pub use kiln_error::{Error, ErrorCategory, Result, codes, kinds};
 // Re-export from kiln-foundation
 pub use kiln_foundation::{
+    CrateId,
     bounded::BoundedStack,
     // Memory allocation macros
     safe_managed_alloc,
-    CrateId,
     // SafeMemory types
-    safe_memory::{
-        NoStdMemoryProvider,
-        SafeMemoryHandler,
-        SafeSlice,
-        SafeStack,
-    },
+    safe_memory::{NoStdMemoryProvider, SafeMemoryHandler, SafeSlice, SafeStack},
     // Traits
     traits::BoundedCapacity,
     // Common types
-    types::{
-        BlockType,
-        FuncType,
-        GlobalType,
-        MemoryType,
-        RefType,
-        TableType,
-        ValueType,
-    },
-    values::{
-        FloatBits32,
-        FloatBits64,
-        Value,
-    },
+    types::{BlockType, FuncType, GlobalType, MemoryType, RefType, TableType, ValueType},
+    values::{FloatBits32, FloatBits64, Value},
     // Verification types
     verification::VerificationLevel,
 };
 // Import synchronization primitives for both std and no_std
 pub use kiln_sync::{
-    KilnMutex as Mutex,
-    KilnMutexGuard as MutexGuard,
-    KilnRwLock as RwLock,
-    KilnRwLockReadGuard as RwLockReadGuard,
-    KilnRwLockWriteGuard as RwLockWriteGuard,
+    KilnMutex as Mutex, KilnMutexGuard as MutexGuard, KilnRwLock as RwLock,
+    KilnRwLockReadGuard as RwLockReadGuard, KilnRwLockWriteGuard as RwLockWriteGuard,
 };
 
 // Re-export constant expression types
-pub use crate::const_expr::{
-    ConstExpr,
-    ConstExprContext,
-    ConstExprSequence,
-};
+pub use crate::const_expr::{ConstExpr, ConstExprContext, ConstExprSequence};
 // Re-export instruction specific types
 pub use crate::{
     arithmetic_ops::ArithmeticOp,
@@ -169,49 +116,20 @@ pub use crate::{
     conversion_ops::ConversionOp,
     instruction_traits::PureInstruction,
     memory_ops::{
-        DataDrop,
-        DataSegmentOperations,
-        MemoryCopy,
-        MemoryFill,
-        MemoryInit,
-        MemoryLoad,
-        MemoryOperations,
-        MemoryStore,
+        DataDrop, DataSegmentOperations, MemoryCopy, MemoryFill, MemoryInit, MemoryLoad,
+        MemoryOperations, MemoryStore,
     },
     multi_memory::{
-        MultiMemoryBulk,
-        MultiMemoryCrossCopy,
-        MultiMemoryGrow,
-        MultiMemoryLoad,
-        MultiMemorySize,
-        MultiMemoryStore,
-        MultiMemoryValidation,
-        MAX_MEMORIES,
+        MAX_MEMORIES, MultiMemoryBulk, MultiMemoryCrossCopy, MultiMemoryGrow, MultiMemoryLoad,
+        MultiMemorySize, MultiMemoryStore, MultiMemoryValidation,
     },
-    reference_ops::{
-        RefAsNonNull,
-        RefFunc,
-        RefIsNull,
-        RefNull,
-        ReferenceOp,
-        ReferenceOperations,
-    },
+    reference_ops::{RefAsNonNull, RefFunc, RefIsNull, RefNull, ReferenceOp, ReferenceOperations},
     table_ops::TableOp,
     validation::{
-        validate_arithmetic_op,
-        validate_branch,
-        validate_call,
-        validate_comparison_op,
-        validate_control_op,
-        validate_conversion_op,
-        validate_global_op,
-        validate_local_op,
-        validate_memory_op,
+        ControlFrame, ControlKind, Validate, ValidationContext, validate_arithmetic_op,
+        validate_branch, validate_call, validate_comparison_op, validate_control_op,
+        validate_conversion_op, validate_global_op, validate_local_op, validate_memory_op,
         validate_ref_op,
-        ControlFrame,
-        ControlKind,
-        Validate,
-        ValidationContext,
     },
     variable_ops::VariableOp,
 };

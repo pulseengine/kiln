@@ -176,9 +176,7 @@ pub mod xtask_port {
 
         // Collect profraw files
         let profraw_files: Vec<PathBuf> = std::fs::read_dir(&coverage_dir)
-            .map_err(|e| {
-                BuildError::Build(format!("Failed to read coverage directory: {}", e))
-            })?
+            .map_err(|e| BuildError::Build(format!("Failed to read coverage directory: {}", e)))?
             .filter_map(|entry| {
                 let entry = entry.ok()?;
                 let path = entry.path();
@@ -211,8 +209,7 @@ pub mod xtask_port {
         }
         merge_cmd.arg("-o").arg(&profdata_path);
 
-        let merge_output =
-            super::execute_command(&mut merge_cmd, config, "Merging profile data")?;
+        let merge_output = super::execute_command(&mut merge_cmd, config, "Merging profile data")?;
 
         if !merge_output.status.success() {
             let stderr = String::from_utf8_lossy(&merge_output.stderr);
@@ -224,10 +221,7 @@ pub mod xtask_port {
 
         // Generate lcov report
         let lcov_path = coverage_dir.join("lcov.info");
-        println!(
-            "{} Generating lcov report...",
-            "📊".bright_blue()
-        );
+        println!("{} Generating lcov report...", "📊".bright_blue());
 
         let mut lcov_cmd = Command::new(&llvm_cov);
         lcov_cmd
@@ -243,8 +237,7 @@ pub mod xtask_port {
             }
         }
 
-        let lcov_output =
-            super::execute_command(&mut lcov_cmd, config, "Generating lcov report")?;
+        let lcov_output = super::execute_command(&mut lcov_cmd, config, "Generating lcov report")?;
 
         if !lcov_output.status.success() {
             let stderr = String::from_utf8_lossy(&lcov_output.stderr);
@@ -255,9 +248,8 @@ pub mod xtask_port {
         }
 
         // Write lcov data to file
-        std::fs::write(&lcov_path, &lcov_output.stdout).map_err(|e| {
-            BuildError::Build(format!("Failed to write lcov report: {}", e))
-        })?;
+        std::fs::write(&lcov_path, &lcov_output.stdout)
+            .map_err(|e| BuildError::Build(format!("Failed to write lcov report: {}", e)))?;
 
         println!(
             "{} lcov report written to {}",
@@ -272,10 +264,7 @@ pub mod xtask_port {
                 BuildError::Build(format!("Failed to create HTML output directory: {}", e))
             })?;
 
-            println!(
-                "{} Generating HTML coverage report...",
-                "📊".bright_blue()
-            );
+            println!("{} Generating HTML coverage report...", "📊".bright_blue());
 
             let mut html_cmd = Command::new(&llvm_cov);
             html_cmd
@@ -319,11 +308,10 @@ pub mod xtask_port {
     /// Find an LLVM tool binary from the Rust toolchain
     fn find_llvm_tool(tool_name: &str) -> BuildResult<PathBuf> {
         // Get the sysroot
-        let sysroot_output = Command::new("rustc")
-            .arg("--print")
-            .arg("sysroot")
-            .output()
-            .map_err(|e| BuildError::Tool(format!("Failed to run rustc --print sysroot: {}", e)))?;
+        let sysroot_output =
+            Command::new("rustc").arg("--print").arg("sysroot").output().map_err(|e| {
+                BuildError::Tool(format!("Failed to run rustc --print sysroot: {}", e))
+            })?;
 
         if !sysroot_output.status.success() {
             return Err(BuildError::Tool(
@@ -331,9 +319,7 @@ pub mod xtask_port {
             ));
         }
 
-        let sysroot = String::from_utf8_lossy(&sysroot_output.stdout)
-            .trim()
-            .to_string();
+        let sysroot = String::from_utf8_lossy(&sysroot_output.stdout).trim().to_string();
 
         // Get the host triple
         let version_output = Command::new("rustc")
@@ -367,9 +353,7 @@ pub mod xtask_port {
         }
 
         // Fallback: check if the tool is on PATH (e.g., installed via package manager)
-        let which_output = Command::new("which")
-            .arg(tool_name)
-            .output();
+        let which_output = Command::new("which").arg(tool_name).output();
 
         if let Ok(output) = which_output {
             if output.status.success() {

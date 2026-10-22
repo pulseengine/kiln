@@ -30,7 +30,7 @@ fn verify_mutex_new_lock_unlock() {
         let guard = m.lock();
         assert_eq!(*guard, 15);
     } // guard drops here
-      // Test Debug impl while unlocked
+    // Test Debug impl while unlocked
     println!("Unlocked Mutex: {:?}", m);
 }
 
@@ -77,7 +77,7 @@ fn verify_rwlock_new_write_read() {
         // Test Debug impl while read-locked
         println!("Read Locked RwLock: {:?}", lock);
     } // reader drops
-      // Test Debug impl while unlocked
+    // Test Debug impl while unlocked
     println!("Unlocked RwLock: {:?}", lock);
 }
 

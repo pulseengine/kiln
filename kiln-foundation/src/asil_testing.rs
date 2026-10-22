@@ -16,15 +16,9 @@
 
 // Import appropriate types based on environment
 #[cfg(not(feature = "std"))]
-use core::sync::atomic::{
-    AtomicBool,
-    Ordering,
-};
+use core::sync::atomic::{AtomicBool, Ordering};
 #[cfg(feature = "std")]
-use std::{
-    sync::Mutex,
-    vec::Vec,
-};
+use std::{sync::Mutex, vec::Vec};
 
 // For no_std mode, use bounded collections
 #[cfg(not(feature = "std"))]
@@ -54,13 +48,13 @@ use alloc::vec::Vec;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct AsilTestMetadata {
     /// ASIL level this test validates
-    pub asil_level:     AsilLevel,
+    pub asil_level: AsilLevel,
     /// Requirement ID this test verifies
     pub requirement_id: &'static str,
     /// Test category
-    pub category:       TestCategory,
+    pub category: TestCategory,
     /// Description of what this test validates
-    pub description:    &'static str,
+    pub description: &'static str,
 }
 
 impl crate::traits::Checksummable for AsilTestMetadata {
@@ -323,18 +317,18 @@ pub fn get_test_statistics() -> TestStatistics {
 /// Test statistics summary
 #[derive(Debug, Default)]
 pub struct TestStatistics {
-    pub total_count:       usize,
-    pub qm_count:          usize,
-    pub asil_a_count:      usize,
-    pub asil_b_count:      usize,
-    pub asil_c_count:      usize,
-    pub asil_d_count:      usize,
-    pub unit_count:        usize,
+    pub total_count: usize,
+    pub qm_count: usize,
+    pub asil_a_count: usize,
+    pub asil_b_count: usize,
+    pub asil_c_count: usize,
+    pub asil_d_count: usize,
+    pub unit_count: usize,
     pub integration_count: usize,
-    pub safety_count:      usize,
+    pub safety_count: usize,
     pub performance_count: usize,
-    pub memory_count:      usize,
-    pub resource_count:    usize,
+    pub memory_count: usize,
+    pub resource_count: usize,
 }
 
 /// Macro to create ASIL-tagged tests
@@ -353,10 +347,10 @@ macro_rules! asil_test {
         fn $test_name() {
             // Register this test in the ASIL registry
             $crate::asil_testing::register_asil_test($crate::asil_testing::AsilTestMetadata {
-                asil_level:     $asil_level,
+                asil_level: $asil_level,
                 requirement_id: $req_id,
-                category:       $category,
-                description:    $desc,
+                category: $category,
+                description: $desc,
             });
 
             // Run the actual test
@@ -452,4 +446,3 @@ macro_rules! resource_safety_test {
         }
     };
 }
-

@@ -14,14 +14,10 @@
 //! This module provides a `KilnOnce<T>` type that allows for safe, one-time
 //! initialization of a value, typically used for global statics.
 
-use core::{
-    cell::UnsafeCell,
-    fmt,
-    mem::MaybeUninit,
-};
+use core::{cell::UnsafeCell, fmt, mem::MaybeUninit};
 
 use crate::mutex::KilnMutex; // Using the KilnMutex from this crate. Removed KilnMutexGuard as
-                            // it's not used directly here.
+// it's not used directly here.
 
 /// A synchronization primitive which can be written to only once.
 ///
@@ -34,8 +30,8 @@ use crate::mutex::KilnMutex; // Using the KilnMutex from this crate. Removed Kil
 /// that the initialization logic runs at most once. After initialization, the
 /// data is considered immutable and references can be safely given out.
 pub struct KilnOnce<T> {
-    mutex:       KilnMutex<()>, // Used as a traditional lock for the initialization check
-    data:        UnsafeCell<MaybeUninit<T>>,
+    mutex: KilnMutex<()>, // Used as a traditional lock for the initialization check
+    data: UnsafeCell<MaybeUninit<T>>,
     initialized: AtomicBool, // Tracks if `data` is initialized
 }
 
@@ -66,8 +62,8 @@ impl<T> KilnOnce<T> {
     #[must_use]
     pub const fn new() -> Self {
         Self {
-            mutex:       KilnMutex::new(()),
-            data:        UnsafeCell::new(MaybeUninit::uninit()),
+            mutex: KilnMutex::new(()),
+            data: UnsafeCell::new(MaybeUninit::uninit()),
             initialized: AtomicBool::new(false),
         }
     }
@@ -223,7 +219,4 @@ impl<T> Drop for KilnOnce<T> {
 
 // Re-import core items used by the module that might not be in scope otherwise
 // in no_std
-use core::sync::atomic::{
-    AtomicBool,
-    Ordering,
-};
+use core::sync::atomic::{AtomicBool, Ordering};

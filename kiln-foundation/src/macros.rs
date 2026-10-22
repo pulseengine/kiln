@@ -157,9 +157,7 @@ macro_rules! hierarchical_budget {
 /// ```
 #[macro_export]
 macro_rules! memory_region {
-    (start: $start:expr,size: $size:expr) => {{
-        $crate::enforcement::MemoryRegion::<{ $start }, { $size }>::new()
-    }};
+    (start: $start:expr,size: $size:expr) => {{ $crate::enforcement::MemoryRegion::<{ $start }, { $size }>::new() }};
 }
 
 /// Capability-based allocation token macro
@@ -190,9 +188,7 @@ macro_rules! memory_region {
 /// ```
 #[macro_export]
 macro_rules! allocation_token {
-    (size: $size:expr,crate_id: $crate_id:expr) => {{
-        $crate::enforcement::AllocationToken::<{ $size }>::new($crate_id)
-    }};
+    (size: $size:expr,crate_id: $crate_id:expr) => {{ $crate::enforcement::AllocationToken::<{ $size }>::new($crate_id) }};
 }
 
 /// Auto-sizing provider creation macro
@@ -213,21 +209,11 @@ macro_rules! allocation_token {
 /// ```
 #[macro_export]
 macro_rules! auto_provider {
-    ($crate_id:expr,typical_usage: "bounded_collections") => {{
-        $crate::safe_managed_alloc!(4096, $crate_id)
-    }};
-    ($crate_id:expr,typical_usage: "string_processing") => {{
-        $crate::safe_managed_alloc!(8192, $crate_id)
-    }};
-    ($crate_id:expr,typical_usage: "temporary_buffers") => {{
-        $crate::safe_managed_alloc!(2048, $crate_id)
-    }};
-    ($crate_id:expr,typical_usage: "large_data") => {{
-        $crate::safe_managed_alloc!(16384, $crate_id)
-    }};
-    ($crate_id:expr) => {{
-        $crate::safe_managed_alloc!(4096, $crate_id)
-    }};
+    ($crate_id:expr,typical_usage: "bounded_collections") => {{ $crate::safe_managed_alloc!(4096, $crate_id) }};
+    ($crate_id:expr,typical_usage: "string_processing") => {{ $crate::safe_managed_alloc!(8192, $crate_id) }};
+    ($crate_id:expr,typical_usage: "temporary_buffers") => {{ $crate::safe_managed_alloc!(2048, $crate_id) }};
+    ($crate_id:expr,typical_usage: "large_data") => {{ $crate::safe_managed_alloc!(16384, $crate_id) }};
+    ($crate_id:expr) => {{ $crate::safe_managed_alloc!(4096, $crate_id) }};
 }
 
 /// Development/debug macro with enhanced monitoring
@@ -274,9 +260,7 @@ macro_rules! debug_alloc {
 #[cfg(not(debug_assertions))]
 #[macro_export]
 macro_rules! debug_alloc {
-    ($size:expr, $crate_id:expr, $purpose:literal) => {{
-        $crate::safe_managed_alloc!($size, $crate_id)
-    }};
+    ($size:expr, $crate_id:expr, $purpose:literal) => {{ $crate::safe_managed_alloc!($size, $crate_id) }};
 }
 
 /// Conditional debug printing macro

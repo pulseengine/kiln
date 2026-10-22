@@ -14,10 +14,7 @@
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 
-use std::sync::{
-    Mutex,
-    OnceLock,
-};
+use std::sync::{Mutex, OnceLock};
 
 use crate::prelude::*;
 
@@ -53,64 +50,28 @@ pub mod async_bridge;
 // Re-export key types
 #[cfg(feature = "nn-preview3")]
 pub use async_bridge::{
-    nn_compute_async,
-    nn_get_output_async,
-    nn_init_execution_context_async,
-    nn_load_async,
+    nn_compute_async, nn_get_output_async, nn_init_execution_context_async, nn_load_async,
     nn_set_input_async,
 };
 pub use backend::{
-    get_backend_registry,
-    initialize_backends,
-    BackendProvider,
-    ComputeCapable,
-    DynBackend,
-    ModelCapability,
-    NeuralNetworkBackend,
-    TensorCapability,
+    BackendProvider, ComputeCapable, DynBackend, ModelCapability, NeuralNetworkBackend,
+    TensorCapability, get_backend_registry, initialize_backends,
 };
 pub use capabilities::{
-    ModelFormat,
-    NNOperation,
-    NNResourceLimits,
-    NNVerificationLevel,
-    NeuralNetworkCapability,
-    ResourceUsageStats,
-    VerificationLevel,
+    ModelFormat, NNOperation, NNResourceLimits, NNVerificationLevel, NeuralNetworkCapability,
+    ResourceUsageStats, VerificationLevel,
 };
 pub use execution::{
-    execute_inference,
-    get_context_store,
-    initialize_context_store,
-    ComputeError,
-    ExecutionContext,
+    ComputeError, ExecutionContext, execute_inference, get_context_store, initialize_context_store,
 };
-pub use graph::{
-    get_graph_store,
-    initialize_graph_store,
-    ExecutionTarget,
-    Graph,
-    GraphEncoding,
-};
+pub use graph::{ExecutionTarget, Graph, GraphEncoding, get_graph_store, initialize_graph_store};
 // Preview-specific re-exports
 #[cfg(all(feature = "nn-preview2", feature = "std"))]
 pub use sync_bridge::{
-    nn_compute,
-    nn_get_output,
-    nn_init_execution_context,
-    nn_load,
-    nn_set_input,
+    nn_compute, nn_get_output, nn_init_execution_context, nn_load, nn_set_input,
 };
-pub use tensor::{
-    Tensor,
-    TensorBuilder,
-    TensorDimensions,
-    TensorType,
-};
-pub use wit_types::{
-    ErrorCode,
-    WitTypeConversion,
-};
+pub use tensor::{Tensor, TensorBuilder, TensorDimensions, TensorType};
+pub use wit_types::{ErrorCode, WitTypeConversion};
 
 // Test modules are defined inline below
 
@@ -156,8 +117,8 @@ pub fn initialize_nn(capability: Box<dyn NeuralNetworkCapability>) -> Result<()>
 
 /// Get the current neural network capability  
 /// Note: This returns a temporary guard that must be used carefully
-pub fn get_nn_capability(
-) -> Result<std::sync::MutexGuard<'static, Option<Box<dyn NeuralNetworkCapability>>>> {
+pub fn get_nn_capability()
+-> Result<std::sync::MutexGuard<'static, Option<Box<dyn NeuralNetworkCapability>>>> {
     NN_CAPABILITY
         .lock()
         .map_err(|_| Error::wasi_runtime_error("Failed to acquire capability lock"))

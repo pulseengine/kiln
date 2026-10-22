@@ -3,30 +3,19 @@
 //! This module provides bounded alternatives for runtime collections
 //! to ensure static memory allocation throughout the runtime execution.
 
-use kiln_error::{
-    Error,
-    ErrorCategory,
-};
+use kiln_error::{Error, ErrorCategory};
 use kiln_foundation::capabilities::factory::CapabilityGuardedProvider;
 // Box is re-exported by kiln_foundation
 use kiln_foundation::Box;
 use kiln_foundation::heap_provider::HeapProvider;
 use kiln_foundation::{
-    bounded::{
-        BoundedString,
-        BoundedVec,
-    },
+    bounded::{BoundedString, BoundedVec},
     bounded_collections::BoundedMap,
     budget_aware_provider::CrateId,
     capabilities::CapabilityAwareProvider,
-    capability_context,
-    safe_capability_alloc,
+    capability_context, safe_capability_alloc,
     safe_memory::NoStdProvider,
-    traits::{
-        Checksummable,
-        FromBytes,
-        ToBytes,
-    },
+    traits::{Checksummable, FromBytes, ToBytes},
 };
 
 /// Memory size for runtime provider.
@@ -55,10 +44,7 @@ pub fn create_runtime_provider_with_context(
     _context: &kiln_foundation::capabilities::MemoryCapabilityContext,
 ) -> kiln_error::Result<RuntimeProvider> {
     use kiln_foundation::{
-        capabilities::{
-            DynamicMemoryCapability,
-            MemoryCapability,
-        },
+        capabilities::{DynamicMemoryCapability, MemoryCapability},
         verification::VerificationLevel,
     };
 
@@ -84,10 +70,7 @@ pub fn create_runtime_provider() -> kiln_error::Result<RuntimeProvider> {
     #[cfg(feature = "tracing")]
     kiln_foundation::tracing::trace!("create_runtime_provider() called");
 
-    use kiln_foundation::{
-        capabilities::DynamicMemoryCapability,
-        verification::VerificationLevel,
-    };
+    use kiln_foundation::{capabilities::DynamicMemoryCapability, verification::VerificationLevel};
 
     let base_provider = HeapProvider::new(RUNTIME_MEMORY_SIZE)?;
     let capability = DynamicMemoryCapability::new(

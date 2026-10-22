@@ -43,20 +43,11 @@ pub mod traits;
 pub mod simd;
 
 // Re-export key types and potentially functions for easier access
-pub use float_bits::{
-    FloatBits32,
-    FloatBits64,
-};
+pub use float_bits::{FloatBits32, FloatBits64};
 // Re-export all operations from the ops module
 pub use ops::*; // Consider selectively exporting if API needs to be controlled
 // Re-export safety operations
-pub use safety::{
-    check_simd_bounds,
-    RoundingMode,
-    SafeArithmetic,
-    SafeFloat,
-    SafeRounding,
-};
+pub use safety::{RoundingMode, SafeArithmetic, SafeFloat, SafeRounding, check_simd_bounds};
 // Re-export SIMD operations when platform feature is enabled
 #[cfg(feature = "platform")]
 pub use simd::SimdOperations;

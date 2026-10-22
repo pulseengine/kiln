@@ -10,16 +10,8 @@
 //! - Bounded memory usage with compile-time guarantees
 //! - Comprehensive validation and error handling
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
-use kiln_foundation::values::{
-    Value,
-    V128,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
+use kiln_foundation::values::{V128, Value};
 use kiln_instructions::simd_ops::SimdOp;
 
 // Import additional SIMD operations
@@ -683,11 +675,7 @@ fn execute_i8x16_shuffle(inputs: &[Value], lanes: [u8; 16]) -> Result<Value> {
     // Lanes 0-15 select from a, lanes 16-31 select from b
     for i in 0..16 {
         let lane_idx = lanes[i];
-        result[i] = if lane_idx < 16 {
-            a[lane_idx as usize]
-        } else {
-            b[(lane_idx - 16) as usize]
-        };
+        result[i] = if lane_idx < 16 { a[lane_idx as usize] } else { b[(lane_idx - 16) as usize] };
     }
 
     Ok(Value::V128(V128::new(result)))
@@ -702,11 +690,7 @@ fn execute_i8x16_swizzle(inputs: &[Value]) -> Result<Value> {
     // If index >= 16, output 0 (per WebAssembly spec)
     for i in 0..16 {
         let idx = indices[i];
-        result[i] = if idx < 16 {
-            a[idx as usize]
-        } else {
-            0
-        };
+        result[i] = if idx < 16 { a[idx as usize] } else { 0 };
     }
 
     Ok(Value::V128(V128::new(result)))
@@ -1553,11 +1537,7 @@ fn execute_f32x4_pmin(inputs: &[Value]) -> Result<Value> {
         let res_val = if a_val.is_nan() || b_val.is_nan() {
             f32::NAN
         } else if a_val == 0.0 && b_val == 0.0 {
-            if a_val.is_sign_negative() {
-                a_val
-            } else {
-                b_val
-            }
+            if a_val.is_sign_negative() { a_val } else { b_val }
         } else {
             a_val.min(b_val)
         };
@@ -1580,11 +1560,7 @@ fn execute_f32x4_pmax(inputs: &[Value]) -> Result<Value> {
         let res_val = if a_val.is_nan() || b_val.is_nan() {
             f32::NAN
         } else if a_val == 0.0 && b_val == 0.0 {
-            if a_val.is_sign_positive() {
-                a_val
-            } else {
-                b_val
-            }
+            if a_val.is_sign_positive() { a_val } else { b_val }
         } else {
             a_val.max(b_val)
         };
@@ -1817,11 +1793,7 @@ fn execute_f64x2_pmin(inputs: &[Value]) -> Result<Value> {
         let res_val = if a_val.is_nan() || b_val.is_nan() {
             f64::NAN
         } else if a_val == 0.0 && b_val == 0.0 {
-            if a_val.is_sign_negative() {
-                a_val
-            } else {
-                b_val
-            }
+            if a_val.is_sign_negative() { a_val } else { b_val }
         } else {
             a_val.min(b_val)
         };
@@ -1852,11 +1824,7 @@ fn execute_f64x2_pmax(inputs: &[Value]) -> Result<Value> {
         let res_val = if a_val.is_nan() || b_val.is_nan() {
             f64::NAN
         } else if a_val == 0.0 && b_val == 0.0 {
-            if a_val.is_sign_positive() {
-                a_val
-            } else {
-                b_val
-            }
+            if a_val.is_sign_positive() { a_val } else { b_val }
         } else {
             a_val.max(b_val)
         };
@@ -2128,7 +2096,8 @@ fn execute_i64x2_extend_low_i32x4_s(inputs: &[Value]) -> Result<Value> {
 
     // Sign-extend the low 2 i32 values to 2 i64 values
     for i in 0..2 {
-        let i32_val = u32::from_le_bytes([a[i * 4], a[i * 4 + 1], a[i * 4 + 2], a[i * 4 + 3]]) as i32;
+        let i32_val =
+            u32::from_le_bytes([a[i * 4], a[i * 4 + 1], a[i * 4 + 2], a[i * 4 + 3]]) as i32;
         let i64_val = i32_val as i64;
         let bytes = i64_val.to_le_bytes();
         result[i * 8..i * 8 + 8].copy_from_slice(&bytes);
@@ -2144,7 +2113,8 @@ fn execute_i64x2_extend_high_i32x4_s(inputs: &[Value]) -> Result<Value> {
     // Sign-extend the high 2 i32 values to 2 i64 values
     for i in 0..2 {
         let offset = (i + 2) * 4;
-        let i32_val = u32::from_le_bytes([a[offset], a[offset + 1], a[offset + 2], a[offset + 3]]) as i32;
+        let i32_val =
+            u32::from_le_bytes([a[offset], a[offset + 1], a[offset + 2], a[offset + 3]]) as i32;
         let i64_val = i32_val as i64;
         let bytes = i64_val.to_le_bytes();
         result[i * 8..i * 8 + 8].copy_from_slice(&bytes);
@@ -2666,13 +2636,13 @@ fn execute_i64x2_eq(inputs: &[Value]) -> Result<Value> {
     for i in 0..2 {
         let a_bytes = &a[i * 8..i * 8 + 8];
         let a_val = u64::from_le_bytes([
-            a_bytes[0], a_bytes[1], a_bytes[2], a_bytes[3],
-            a_bytes[4], a_bytes[5], a_bytes[6], a_bytes[7],
+            a_bytes[0], a_bytes[1], a_bytes[2], a_bytes[3], a_bytes[4], a_bytes[5], a_bytes[6],
+            a_bytes[7],
         ]);
         let b_bytes = &b[i * 8..i * 8 + 8];
         let b_val = u64::from_le_bytes([
-            b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3],
-            b_bytes[4], b_bytes[5], b_bytes[6], b_bytes[7],
+            b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3], b_bytes[4], b_bytes[5], b_bytes[6],
+            b_bytes[7],
         ]);
         let res_val = if a_val == b_val { 0xFFFFFFFFFFFFFFFFu64 } else { 0x0000000000000000u64 };
         let res_bytes = res_val.to_le_bytes();
@@ -2690,13 +2660,13 @@ fn execute_i64x2_ne(inputs: &[Value]) -> Result<Value> {
     for i in 0..2 {
         let a_bytes = &a[i * 8..i * 8 + 8];
         let a_val = u64::from_le_bytes([
-            a_bytes[0], a_bytes[1], a_bytes[2], a_bytes[3],
-            a_bytes[4], a_bytes[5], a_bytes[6], a_bytes[7],
+            a_bytes[0], a_bytes[1], a_bytes[2], a_bytes[3], a_bytes[4], a_bytes[5], a_bytes[6],
+            a_bytes[7],
         ]);
         let b_bytes = &b[i * 8..i * 8 + 8];
         let b_val = u64::from_le_bytes([
-            b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3],
-            b_bytes[4], b_bytes[5], b_bytes[6], b_bytes[7],
+            b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3], b_bytes[4], b_bytes[5], b_bytes[6],
+            b_bytes[7],
         ]);
         let res_val = if a_val != b_val { 0xFFFFFFFFFFFFFFFFu64 } else { 0x0000000000000000u64 };
         let res_bytes = res_val.to_le_bytes();
@@ -2714,13 +2684,13 @@ fn execute_i64x2_lt_s(inputs: &[Value]) -> Result<Value> {
     for i in 0..2 {
         let a_bytes = &a[i * 8..i * 8 + 8];
         let a_val = u64::from_le_bytes([
-            a_bytes[0], a_bytes[1], a_bytes[2], a_bytes[3],
-            a_bytes[4], a_bytes[5], a_bytes[6], a_bytes[7],
+            a_bytes[0], a_bytes[1], a_bytes[2], a_bytes[3], a_bytes[4], a_bytes[5], a_bytes[6],
+            a_bytes[7],
         ]) as i64;
         let b_bytes = &b[i * 8..i * 8 + 8];
         let b_val = u64::from_le_bytes([
-            b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3],
-            b_bytes[4], b_bytes[5], b_bytes[6], b_bytes[7],
+            b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3], b_bytes[4], b_bytes[5], b_bytes[6],
+            b_bytes[7],
         ]) as i64;
         let res_val = if a_val < b_val { 0xFFFFFFFFFFFFFFFFu64 } else { 0x0000000000000000u64 };
         let res_bytes = res_val.to_le_bytes();
@@ -2738,13 +2708,13 @@ fn execute_i64x2_gt_s(inputs: &[Value]) -> Result<Value> {
     for i in 0..2 {
         let a_bytes = &a[i * 8..i * 8 + 8];
         let a_val = u64::from_le_bytes([
-            a_bytes[0], a_bytes[1], a_bytes[2], a_bytes[3],
-            a_bytes[4], a_bytes[5], a_bytes[6], a_bytes[7],
+            a_bytes[0], a_bytes[1], a_bytes[2], a_bytes[3], a_bytes[4], a_bytes[5], a_bytes[6],
+            a_bytes[7],
         ]) as i64;
         let b_bytes = &b[i * 8..i * 8 + 8];
         let b_val = u64::from_le_bytes([
-            b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3],
-            b_bytes[4], b_bytes[5], b_bytes[6], b_bytes[7],
+            b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3], b_bytes[4], b_bytes[5], b_bytes[6],
+            b_bytes[7],
         ]) as i64;
         let res_val = if a_val > b_val { 0xFFFFFFFFFFFFFFFFu64 } else { 0x0000000000000000u64 };
         let res_bytes = res_val.to_le_bytes();
@@ -2762,13 +2732,13 @@ fn execute_i64x2_le_s(inputs: &[Value]) -> Result<Value> {
     for i in 0..2 {
         let a_bytes = &a[i * 8..i * 8 + 8];
         let a_val = u64::from_le_bytes([
-            a_bytes[0], a_bytes[1], a_bytes[2], a_bytes[3],
-            a_bytes[4], a_bytes[5], a_bytes[6], a_bytes[7],
+            a_bytes[0], a_bytes[1], a_bytes[2], a_bytes[3], a_bytes[4], a_bytes[5], a_bytes[6],
+            a_bytes[7],
         ]) as i64;
         let b_bytes = &b[i * 8..i * 8 + 8];
         let b_val = u64::from_le_bytes([
-            b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3],
-            b_bytes[4], b_bytes[5], b_bytes[6], b_bytes[7],
+            b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3], b_bytes[4], b_bytes[5], b_bytes[6],
+            b_bytes[7],
         ]) as i64;
         let res_val = if a_val <= b_val { 0xFFFFFFFFFFFFFFFFu64 } else { 0x0000000000000000u64 };
         let res_bytes = res_val.to_le_bytes();
@@ -2786,13 +2756,13 @@ fn execute_i64x2_ge_s(inputs: &[Value]) -> Result<Value> {
     for i in 0..2 {
         let a_bytes = &a[i * 8..i * 8 + 8];
         let a_val = u64::from_le_bytes([
-            a_bytes[0], a_bytes[1], a_bytes[2], a_bytes[3],
-            a_bytes[4], a_bytes[5], a_bytes[6], a_bytes[7],
+            a_bytes[0], a_bytes[1], a_bytes[2], a_bytes[3], a_bytes[4], a_bytes[5], a_bytes[6],
+            a_bytes[7],
         ]) as i64;
         let b_bytes = &b[i * 8..i * 8 + 8];
         let b_val = u64::from_le_bytes([
-            b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3],
-            b_bytes[4], b_bytes[5], b_bytes[6], b_bytes[7],
+            b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3], b_bytes[4], b_bytes[5], b_bytes[6],
+            b_bytes[7],
         ]) as i64;
         let res_val = if a_val >= b_val { 0xFFFFFFFFFFFFFFFFu64 } else { 0x0000000000000000u64 };
         let res_bytes = res_val.to_le_bytes();
@@ -2914,13 +2884,13 @@ fn execute_f64x2_eq(inputs: &[Value]) -> Result<Value> {
     for i in 0..2 {
         let a_bytes = &a[i * 8..i * 8 + 8];
         let a_val = f64::from_le_bytes([
-            a_bytes[0], a_bytes[1], a_bytes[2], a_bytes[3],
-            a_bytes[4], a_bytes[5], a_bytes[6], a_bytes[7],
+            a_bytes[0], a_bytes[1], a_bytes[2], a_bytes[3], a_bytes[4], a_bytes[5], a_bytes[6],
+            a_bytes[7],
         ]);
         let b_bytes = &b[i * 8..i * 8 + 8];
         let b_val = f64::from_le_bytes([
-            b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3],
-            b_bytes[4], b_bytes[5], b_bytes[6], b_bytes[7],
+            b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3], b_bytes[4], b_bytes[5], b_bytes[6],
+            b_bytes[7],
         ]);
         let res_val = if a_val == b_val { 0xFFFFFFFFFFFFFFFFu64 } else { 0x0000000000000000u64 };
         let res_bytes = res_val.to_le_bytes();
@@ -2938,13 +2908,13 @@ fn execute_f64x2_ne(inputs: &[Value]) -> Result<Value> {
     for i in 0..2 {
         let a_bytes = &a[i * 8..i * 8 + 8];
         let a_val = f64::from_le_bytes([
-            a_bytes[0], a_bytes[1], a_bytes[2], a_bytes[3],
-            a_bytes[4], a_bytes[5], a_bytes[6], a_bytes[7],
+            a_bytes[0], a_bytes[1], a_bytes[2], a_bytes[3], a_bytes[4], a_bytes[5], a_bytes[6],
+            a_bytes[7],
         ]);
         let b_bytes = &b[i * 8..i * 8 + 8];
         let b_val = f64::from_le_bytes([
-            b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3],
-            b_bytes[4], b_bytes[5], b_bytes[6], b_bytes[7],
+            b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3], b_bytes[4], b_bytes[5], b_bytes[6],
+            b_bytes[7],
         ]);
         let res_val = if a_val != b_val { 0xFFFFFFFFFFFFFFFFu64 } else { 0x0000000000000000u64 };
         let res_bytes = res_val.to_le_bytes();
@@ -2962,13 +2932,13 @@ fn execute_f64x2_lt(inputs: &[Value]) -> Result<Value> {
     for i in 0..2 {
         let a_bytes = &a[i * 8..i * 8 + 8];
         let a_val = f64::from_le_bytes([
-            a_bytes[0], a_bytes[1], a_bytes[2], a_bytes[3],
-            a_bytes[4], a_bytes[5], a_bytes[6], a_bytes[7],
+            a_bytes[0], a_bytes[1], a_bytes[2], a_bytes[3], a_bytes[4], a_bytes[5], a_bytes[6],
+            a_bytes[7],
         ]);
         let b_bytes = &b[i * 8..i * 8 + 8];
         let b_val = f64::from_le_bytes([
-            b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3],
-            b_bytes[4], b_bytes[5], b_bytes[6], b_bytes[7],
+            b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3], b_bytes[4], b_bytes[5], b_bytes[6],
+            b_bytes[7],
         ]);
         let res_val = if a_val < b_val { 0xFFFFFFFFFFFFFFFFu64 } else { 0x0000000000000000u64 };
         let res_bytes = res_val.to_le_bytes();
@@ -2986,13 +2956,13 @@ fn execute_f64x2_gt(inputs: &[Value]) -> Result<Value> {
     for i in 0..2 {
         let a_bytes = &a[i * 8..i * 8 + 8];
         let a_val = f64::from_le_bytes([
-            a_bytes[0], a_bytes[1], a_bytes[2], a_bytes[3],
-            a_bytes[4], a_bytes[5], a_bytes[6], a_bytes[7],
+            a_bytes[0], a_bytes[1], a_bytes[2], a_bytes[3], a_bytes[4], a_bytes[5], a_bytes[6],
+            a_bytes[7],
         ]);
         let b_bytes = &b[i * 8..i * 8 + 8];
         let b_val = f64::from_le_bytes([
-            b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3],
-            b_bytes[4], b_bytes[5], b_bytes[6], b_bytes[7],
+            b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3], b_bytes[4], b_bytes[5], b_bytes[6],
+            b_bytes[7],
         ]);
         let res_val = if a_val > b_val { 0xFFFFFFFFFFFFFFFFu64 } else { 0x0000000000000000u64 };
         let res_bytes = res_val.to_le_bytes();
@@ -3010,13 +2980,13 @@ fn execute_f64x2_le(inputs: &[Value]) -> Result<Value> {
     for i in 0..2 {
         let a_bytes = &a[i * 8..i * 8 + 8];
         let a_val = f64::from_le_bytes([
-            a_bytes[0], a_bytes[1], a_bytes[2], a_bytes[3],
-            a_bytes[4], a_bytes[5], a_bytes[6], a_bytes[7],
+            a_bytes[0], a_bytes[1], a_bytes[2], a_bytes[3], a_bytes[4], a_bytes[5], a_bytes[6],
+            a_bytes[7],
         ]);
         let b_bytes = &b[i * 8..i * 8 + 8];
         let b_val = f64::from_le_bytes([
-            b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3],
-            b_bytes[4], b_bytes[5], b_bytes[6], b_bytes[7],
+            b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3], b_bytes[4], b_bytes[5], b_bytes[6],
+            b_bytes[7],
         ]);
         let res_val = if a_val <= b_val { 0xFFFFFFFFFFFFFFFFu64 } else { 0x0000000000000000u64 };
         let res_bytes = res_val.to_le_bytes();
@@ -3034,13 +3004,13 @@ fn execute_f64x2_ge(inputs: &[Value]) -> Result<Value> {
     for i in 0..2 {
         let a_bytes = &a[i * 8..i * 8 + 8];
         let a_val = f64::from_le_bytes([
-            a_bytes[0], a_bytes[1], a_bytes[2], a_bytes[3],
-            a_bytes[4], a_bytes[5], a_bytes[6], a_bytes[7],
+            a_bytes[0], a_bytes[1], a_bytes[2], a_bytes[3], a_bytes[4], a_bytes[5], a_bytes[6],
+            a_bytes[7],
         ]);
         let b_bytes = &b[i * 8..i * 8 + 8];
         let b_val = f64::from_le_bytes([
-            b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3],
-            b_bytes[4], b_bytes[5], b_bytes[6], b_bytes[7],
+            b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3], b_bytes[4], b_bytes[5], b_bytes[6],
+            b_bytes[7],
         ]);
         let res_val = if a_val >= b_val { 0xFFFFFFFFFFFFFFFFu64 } else { 0x0000000000000000u64 };
         let res_bytes = res_val.to_le_bytes();
@@ -3273,7 +3243,9 @@ fn execute_i8x16_extract_lane_s(inputs: &[Value], lane: u8) -> Result<Value> {
     let a = extract_v128(&inputs[0])?;
 
     if lane >= 16 {
-        return Err(Error::runtime_execution_error("Lane index out of bounds for i8x16"));
+        return Err(Error::runtime_execution_error(
+            "Lane index out of bounds for i8x16",
+        ));
     }
 
     let val = a[lane as usize] as i8;
@@ -3284,7 +3256,9 @@ fn execute_i8x16_extract_lane_u(inputs: &[Value], lane: u8) -> Result<Value> {
     let a = extract_v128(&inputs[0])?;
 
     if lane >= 16 {
-        return Err(Error::runtime_execution_error("Lane index out of bounds for i8x16"));
+        return Err(Error::runtime_execution_error(
+            "Lane index out of bounds for i8x16",
+        ));
     }
 
     let val = a[lane as usize];
@@ -3296,7 +3270,9 @@ fn execute_i8x16_replace_lane(inputs: &[Value], lane: u8) -> Result<Value> {
     let val = extract_i32(&inputs[1])?;
 
     if lane >= 16 {
-        return Err(Error::runtime_execution_error("Lane index out of bounds for i8x16"));
+        return Err(Error::runtime_execution_error(
+            "Lane index out of bounds for i8x16",
+        ));
     }
 
     a[lane as usize] = val as u8;
@@ -3307,7 +3283,9 @@ fn execute_i16x8_extract_lane_s(inputs: &[Value], lane: u8) -> Result<Value> {
     let a = extract_v128(&inputs[0])?;
 
     if lane >= 8 {
-        return Err(Error::runtime_execution_error("Lane index out of bounds for i16x8"));
+        return Err(Error::runtime_execution_error(
+            "Lane index out of bounds for i16x8",
+        ));
     }
 
     let lane_idx = lane as usize;
@@ -3319,7 +3297,9 @@ fn execute_i16x8_extract_lane_u(inputs: &[Value], lane: u8) -> Result<Value> {
     let a = extract_v128(&inputs[0])?;
 
     if lane >= 8 {
-        return Err(Error::runtime_execution_error("Lane index out of bounds for i16x8"));
+        return Err(Error::runtime_execution_error(
+            "Lane index out of bounds for i16x8",
+        ));
     }
 
     let lane_idx = lane as usize;
@@ -3332,7 +3312,9 @@ fn execute_i16x8_replace_lane(inputs: &[Value], lane: u8) -> Result<Value> {
     let val = extract_i32(&inputs[1])?;
 
     if lane >= 8 {
-        return Err(Error::runtime_execution_error("Lane index out of bounds for i16x8"));
+        return Err(Error::runtime_execution_error(
+            "Lane index out of bounds for i16x8",
+        ));
     }
 
     let lane_idx = lane as usize;
@@ -3346,7 +3328,9 @@ fn execute_i32x4_extract_lane(inputs: &[Value], lane: u8) -> Result<Value> {
     let a = extract_v128(&inputs[0])?;
 
     if lane >= 4 {
-        return Err(Error::runtime_execution_error("Lane index out of bounds for i32x4"));
+        return Err(Error::runtime_execution_error(
+            "Lane index out of bounds for i32x4",
+        ));
     }
 
     let lane_idx = lane as usize;
@@ -3364,7 +3348,9 @@ fn execute_i32x4_replace_lane(inputs: &[Value], lane: u8) -> Result<Value> {
     let val = extract_i32(&inputs[1])?;
 
     if lane >= 4 {
-        return Err(Error::runtime_execution_error("Lane index out of bounds for i32x4"));
+        return Err(Error::runtime_execution_error(
+            "Lane index out of bounds for i32x4",
+        ));
     }
 
     let lane_idx = lane as usize;
@@ -3377,7 +3363,9 @@ fn execute_i64x2_extract_lane(inputs: &[Value], lane: u8) -> Result<Value> {
     let a = extract_v128(&inputs[0])?;
 
     if lane >= 2 {
-        return Err(Error::runtime_execution_error("Lane index out of bounds for i64x2"));
+        return Err(Error::runtime_execution_error(
+            "Lane index out of bounds for i64x2",
+        ));
     }
 
     let lane_idx = lane as usize;
@@ -3400,7 +3388,9 @@ fn execute_i64x2_replace_lane(inputs: &[Value], lane: u8) -> Result<Value> {
     let val = extract_i64(&inputs[1])?;
 
     if lane >= 2 {
-        return Err(Error::runtime_execution_error("Lane index out of bounds for i64x2"));
+        return Err(Error::runtime_execution_error(
+            "Lane index out of bounds for i64x2",
+        ));
     }
 
     let lane_idx = lane as usize;
@@ -3413,7 +3403,9 @@ fn execute_f32x4_extract_lane(inputs: &[Value], lane: u8) -> Result<Value> {
     let a = extract_v128(&inputs[0])?;
 
     if lane >= 4 {
-        return Err(Error::runtime_execution_error("Lane index out of bounds for f32x4"));
+        return Err(Error::runtime_execution_error(
+            "Lane index out of bounds for f32x4",
+        ));
     }
 
     let lane_idx = lane as usize;
@@ -3431,7 +3423,9 @@ fn execute_f32x4_replace_lane(inputs: &[Value], lane: u8) -> Result<Value> {
     let val = extract_f32(&inputs[1])?;
 
     if lane >= 4 {
-        return Err(Error::runtime_execution_error("Lane index out of bounds for f32x4"));
+        return Err(Error::runtime_execution_error(
+            "Lane index out of bounds for f32x4",
+        ));
     }
 
     let lane_idx = lane as usize;
@@ -3444,7 +3438,9 @@ fn execute_f64x2_extract_lane(inputs: &[Value], lane: u8) -> Result<Value> {
     let a = extract_v128(&inputs[0])?;
 
     if lane >= 2 {
-        return Err(Error::runtime_execution_error("Lane index out of bounds for f64x2"));
+        return Err(Error::runtime_execution_error(
+            "Lane index out of bounds for f64x2",
+        ));
     }
 
     let lane_idx = lane as usize;
@@ -3467,7 +3463,9 @@ fn execute_f64x2_replace_lane(inputs: &[Value], lane: u8) -> Result<Value> {
     let val = extract_f64(&inputs[1])?;
 
     if lane >= 2 {
-        return Err(Error::runtime_execution_error("Lane index out of bounds for f64x2"));
+        return Err(Error::runtime_execution_error(
+            "Lane index out of bounds for f64x2",
+        ));
     }
 
     let lane_idx = lane as usize;

@@ -5,14 +5,11 @@
 
 use kiln_error::Result;
 use kiln_foundation::{
+    MemoryProvider,
     bounded::BoundedVec,
-    bounded_slice::{
-        BoundedSlice,
-        BoundedVecSliceExt,
-    },
+    bounded_slice::{BoundedSlice, BoundedVecSliceExt},
     traits::BoundedCapacity,
     values::Value,
-    MemoryProvider,
 };
 
 /// Adapter function to handle slice inputs in ASIL-compliant way
@@ -115,4 +112,3 @@ where
     }
     Ok(())
 }
-

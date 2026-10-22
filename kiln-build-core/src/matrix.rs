@@ -420,8 +420,8 @@ impl MatrixVerifier {
         {
             print!("  ASIL compliance check... ");
             std::io::stdout()
-            .flush()
-            .map_err(|e| BuildError::Tool(format!("Failed to flush stdout: {}", e)))?;
+                .flush()
+                .map_err(|e| BuildError::Tool(format!("Failed to flush stdout: {}", e)))?;
 
             let check_result = self.check_asil_compliance(&config.package, &config.features);
             match check_result {

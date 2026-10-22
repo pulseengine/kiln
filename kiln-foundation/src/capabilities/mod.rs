@@ -18,10 +18,7 @@
 // SW-REQ-ID: REQ_SAFETY_UNSAFE_JUSTIFICATION_001
 
 use core::{
-    fmt::{
-        self,
-        Debug,
-    },
+    fmt::{self, Debug},
     marker::PhantomData,
     ptr::NonNull,
 };
@@ -35,12 +32,8 @@ use alloc::boxed::Box;
 use std::boxed::Box;
 
 use crate::{
-    budget_aware_provider::CrateId,
-    codes,
+    Error, ErrorCategory, Result, budget_aware_provider::CrateId, codes,
     verification::VerificationLevel,
-    Error,
-    ErrorCategory,
-    Result,
 };
 
 pub mod atomic;
@@ -58,10 +51,7 @@ pub mod static_alloc;
 pub mod verified;
 
 // Re-export key types for convenience
-pub use context::{
-    AnyMemoryCapability,
-    MemoryCapabilityContext,
-};
+pub use context::{AnyMemoryCapability, MemoryCapabilityContext};
 pub use dynamic::DynamicMemoryCapability;
 // CapabilityGuardedProvider is only available with std/alloc features
 #[cfg(any(feature = "std", feature = "alloc"))]
@@ -69,16 +59,12 @@ pub use factory::CapabilityGuardedProvider;
 pub use memory_factory::MemoryFactory;
 #[cfg(any(feature = "std", feature = "alloc"))]
 pub use platform_bridge::{
-    PlatformAllocator,
-    PlatformCapabilityBuilder,
-    PlatformCapabilityProvider,
+    PlatformAllocator, PlatformCapabilityBuilder, PlatformCapabilityProvider,
     PlatformMemoryProvider,
 };
 #[cfg(any(feature = "std", feature = "alloc"))]
 pub use provider_bridge::{
-    CapabilityAwareProvider,
-    CapabilityProviderFactory,
-    ProviderCapabilityExt,
+    CapabilityAwareProvider, CapabilityProviderFactory, ProviderCapabilityExt,
 };
 
 // For no_std environments without alloc, we provide a simpler type alias
@@ -92,7 +78,7 @@ pub struct NoStdCapabilityContext {
     /// The crate ID
     pub crate_id: CrateId,
     /// The size
-    pub size:     usize,
+    pub size: usize,
 }
 
 #[cfg(not(any(feature = "std", feature = "alloc")))]
@@ -202,65 +188,65 @@ pub trait MemoryGuard: Send + Sync + Debug {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CapabilityMask {
     /// Can read from memory
-    pub read:       bool,
+    pub read: bool,
     /// Can write to memory
-    pub write:      bool,
+    pub write: bool,
     /// Can allocate new memory
-    pub allocate:   bool,
+    pub allocate: bool,
     /// Can deallocate memory
     pub deallocate: bool,
     /// Can delegate capabilities
-    pub delegate:   bool,
+    pub delegate: bool,
     /// Maximum allocation size (0 = no limit from this mask)
-    pub max_size:   usize,
+    pub max_size: usize,
 }
 
 impl CapabilityMask {
     /// Create a mask with all permissions
     pub const fn all() -> Self {
         Self {
-            read:       true,
-            write:      true,
-            allocate:   true,
+            read: true,
+            write: true,
+            allocate: true,
             deallocate: true,
-            delegate:   true,
-            max_size:   0,
+            delegate: true,
+            max_size: 0,
         }
     }
 
     /// Create a mask with read-only permissions
     pub const fn read_only() -> Self {
         Self {
-            read:       true,
-            write:      false,
-            allocate:   false,
+            read: true,
+            write: false,
+            allocate: false,
             deallocate: false,
-            delegate:   false,
-            max_size:   0,
+            delegate: false,
+            max_size: 0,
         }
     }
 
     /// Create a mask with no permissions
     pub const fn none() -> Self {
         Self {
-            read:       false,
-            write:      false,
-            allocate:   false,
+            read: false,
+            write: false,
+            allocate: false,
             deallocate: false,
-            delegate:   false,
-            max_size:   0,
+            delegate: false,
+            max_size: 0,
         }
     }
 
     /// Intersect this mask with another mask
     pub fn intersect(&self, other: &Self) -> Self {
         Self {
-            read:       self.read && other.read,
-            write:      self.write && other.write,
-            allocate:   self.allocate && other.allocate,
+            read: self.read && other.read,
+            write: self.write && other.write,
+            allocate: self.allocate && other.allocate,
             deallocate: self.deallocate && other.deallocate,
-            delegate:   self.delegate && other.delegate,
-            max_size:   if self.max_size == 0 {
+            delegate: self.delegate && other.delegate,
+            max_size: if self.max_size == 0 {
                 other.max_size
             } else if other.max_size == 0 {
                 self.max_size
@@ -368,7 +354,7 @@ mod tests {
     fn test_memory_operation_requires_capability() {
         let read_op = MemoryOperation::Read {
             offset: 0,
-            len:    100,
+            len: 100,
         };
         let read_only_mask = CapabilityMask::read_only();
         let no_perms_mask = CapabilityMask::none();

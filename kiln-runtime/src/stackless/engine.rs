@@ -7,28 +7,19 @@
 // Import tracing utilities
 #[cfg(feature = "tracing")]
 use kiln_foundation::tracing::{
-    ExecutionTrace, ImportTrace, ModuleTrace, MemoryTrace,
-    debug, trace, info, warn, error,
-    debug_span, info_span, trace_span, Span
+    ExecutionTrace, ImportTrace, MemoryTrace, ModuleTrace, Span, debug, debug_span, error, info,
+    info_span, trace, trace_span, warn,
 };
 
-use core::sync::atomic::{
-    AtomicU64,
-    Ordering,
-};
-use std::{
-    collections::HashMap,
-    string::String,
-    sync::Arc,
-    vec::Vec,
-};
+use core::sync::atomic::{AtomicU64, Ordering};
+use std::{collections::HashMap, string::String, sync::Arc, vec::Vec};
 
 // Debug support - only available with kiln-debug crate
 #[cfg(feature = "debugger")]
-use kiln_debug::runtime_traits::{RuntimeDebugger, RuntimeState, DebugAction};
+use kiln_debug::runtime_traits::{DebugAction, RuntimeDebugger, RuntimeState};
 
 // GC heap reference wrapper types for WebAssembly GC proposal
-use kiln_foundation::values::{GcStructRef, GcArrayRef};
+use kiln_foundation::values::{GcArrayRef, GcStructRef};
 
 // Side table for extern.convert_any / any.convert_extern round-trip.
 // Stores the original anyref value so it can be recovered when externalized
@@ -41,12 +32,7 @@ thread_local! {
 use kiln_error::Result;
 use kiln_foundation::{
     traits::BoundedCapacity,
-    values::{
-        FloatBits32,
-        FloatBits64,
-        V128,
-        Value,
-    },
+    values::{FloatBits32, FloatBits64, V128, Value},
 };
 
 use crate::module_instance::ModuleInstance;
@@ -65,7 +51,10 @@ fn strip_wasi_version(interface: &str) -> &str {
 /// Check if two function types match structurally.
 /// WebAssembly uses structural type equivalence: two function types are compatible
 /// if they have the same parameter and result types in the same order.
-fn func_types_match(expected: &kiln_foundation::types::FuncType, actual: &kiln_foundation::types::FuncType) -> bool {
+fn func_types_match(
+    expected: &kiln_foundation::types::FuncType,
+    actual: &kiln_foundation::types::FuncType,
+) -> bool {
     if expected.params.len() != actual.params.len() {
         return false;
     }
@@ -113,7 +102,10 @@ fn call_indirect_type_matches(
         );
     }
     // Fallback for modules without canonical IDs: structural comparison
-    match (module.types.get(expected_type_idx as usize), module.types.get(actual_type_idx as usize)) {
+    match (
+        module.types.get(expected_type_idx as usize),
+        module.types.get(actual_type_idx as usize),
+    ) {
         (Some(expected), Some(actual)) => func_types_match(expected, actual),
         _ => false,
     }
@@ -227,69 +219,69 @@ pub struct LoweredFunction {
 /// Simple stackless WebAssembly execution engine
 pub struct StacklessEngine {
     /// Currently loaded instances indexed by numeric ID
-    instances:             HashMap<usize, Arc<ModuleInstance>>,
+    instances: HashMap<usize, Arc<ModuleInstance>>,
     /// Next instance ID
-    next_instance_id:      AtomicU64,
+    next_instance_id: AtomicU64,
     /// Current active instance for execution
-    current_instance_id:   Option<usize>,
+    current_instance_id: Option<usize>,
     /// Operand stack for execution (needed by tail_call module)
-    pub operand_stack:     Vec<Value>,
+    pub operand_stack: Vec<Value>,
     /// Call frames count (needed by tail_call module)
     pub call_frames_count: usize,
     /// Execution statistics (needed by tail_call module)
-    pub stats:             ExecutionStats,
+    pub stats: ExecutionStats,
     /// Remaining fuel for execution
-    fuel:                  AtomicU64,
+    fuel: AtomicU64,
     /// Current instruction pointer
-    instruction_pointer:   AtomicU64,
+    instruction_pointer: AtomicU64,
     /// Host function registry for calling imported functions
-    host_registry:         Option<Arc<kiln_host::CallbackRegistry>>,
+    host_registry: Option<Arc<kiln_host::CallbackRegistry>>,
     /// Pre-allocated WASI stub memory for each instance
-    wasi_stubs:            HashMap<usize, WasiStubMemory>,
+    wasi_stubs: HashMap<usize, WasiStubMemory>,
     /// Dropped data segments per instance (for data.drop/memory.init)
     /// Maps instance_id -> Vec<bool> where true means segment was dropped
     dropped_data_segments: HashMap<usize, Vec<bool>>,
     /// Cross-instance import links: (instance_id, import_module, import_name) -> (target_instance_id, export_name)
-    import_links:          HashMap<(usize, String, String), (usize, String)>,
+    import_links: HashMap<(usize, String, String), (usize, String)>,
     /// Aliased function origins: (instance_id, func_idx) -> original_instance_id
     /// Tracks which instance an aliased function actually comes from
-    aliased_functions:     HashMap<(usize, usize), usize>,
+    aliased_functions: HashMap<(usize, usize), usize>,
     /// Generic host import handler for all host function calls
-    host_handler:          Option<Box<dyn kiln_foundation::HostImportHandler>>,
+    host_handler: Option<Box<dyn kiln_foundation::HostImportHandler>>,
     /// Optional runtime debugger for profiling and debugging
     #[cfg(feature = "debugger")]
-    debugger:              Option<Box<dyn RuntimeDebugger>>,
+    debugger: Option<Box<dyn RuntimeDebugger>>,
     /// Active exception state for exception propagation across calls
     /// Contains (instance_id, tag_idx, tag_identity, payload) when an exception is in flight
     /// tag_identity is Some((module, name)) for imported tags, None for local tags
-    active_exception:      Option<(usize, u32, Option<(String, String)>, Vec<Value>)>,
+    active_exception: Option<(usize, u32, Option<(String, String)>, Vec<Value>)>,
     /// Storage for caught exceptions (for throw_ref to re-throw)
     /// Maps exnref index to (tag_idx, payload)
     /// Exception storage: (tag_idx, tag_identity, payload)
     /// tag_identity is Some((module, name)) for imported tags, None for local tags
-    exception_storage:     Vec<(u32, Option<(String, String)>, Vec<Value>)>,
+    exception_storage: Vec<(u32, Option<(String, String)>, Vec<Value>)>,
     /// Lowered function registry: (instance_id, func_idx) -> LoweredFunction
     /// Used for canon.lower synthesized functions that dispatch to canonical executor
-    lowered_functions:     HashMap<(usize, usize), LoweredFunction>,
+    lowered_functions: HashMap<(usize, usize), LoweredFunction>,
     /// Instance name registry: instance_id -> registered module name
     /// Used for resolving tag identities in cross-module exception handling
-    instance_registry:     HashMap<usize, String>,
+    instance_registry: HashMap<usize, String>,
     /// Explicit call stack for trampolining (avoids Rust stack recursion)
     /// Not used directly as a field - the trampoline in execute() uses a local Vec instead.
     /// Kept for potential future use (e.g., stack inspection).
-    call_stack:            Vec<SuspendedFrame>,
+    call_stack: Vec<SuspendedFrame>,
     // ── P3 Async Task Protocol State ──────────────────────────────────
     // These fields implement the host-provided builtins that Meld-fused
     // P3 components import from the $root namespace.
     /// Per-(instance, context_index) context slot for [context-get-N]/[context-set-N].
     /// Used by wit-bindgen's async support to thread FutureState pointers.
-    p3_context_slots:      HashMap<(usize, u32), i32>,
+    p3_context_slots: HashMap<(usize, u32), i32>,
     /// Last [task-return] values per instance. The async-lift wrapper's
     /// implementation calls [task-return]N to signal completion with a result.
     /// We capture the values here for the caller to retrieve.
     p3_task_return_values: HashMap<usize, Vec<Value>>,
     /// Monotonic handle counter for waitable sets.
-    p3_next_waitable_set:  u32,
+    p3_next_waitable_set: u32,
 }
 
 /// Simple RuntimeState implementation for debugger callbacks
@@ -367,7 +359,9 @@ fn calculate_effective_address(base: i32, offset: u64, size: u32) -> kiln_error:
     // But we let the actual memory bounds check handle the memory size comparison
     // Just ensure the calculation doesn't overflow
     if end_addr > u64::from(u32::MAX) + 1 {
-        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+        return Err(kiln_error::Error::runtime_trap(
+            "out of bounds memory access",
+        ));
     }
 
     Ok(effective_addr)
@@ -387,7 +381,9 @@ fn calculate_effective_address_64(base: i64, offset: u64, size: u32) -> kiln_err
         .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
     // Memory is still bounded by u32 address space even with memory64 indexing
     if end_addr > u64::from(u32::MAX) + 1 {
-        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+        return Err(kiln_error::Error::runtime_trap(
+            "out of bounds memory access",
+        ));
     }
     Ok(effective_addr as u32)
 }
@@ -396,11 +392,19 @@ fn calculate_effective_address_64(base: i64, offset: u64, size: u32) -> kiln_err
 /// Calculates the effective address using the appropriate helper based on address type.
 /// Returns the effective address as u32 (memory is still u32-bounded even with memory64 indexing).
 #[inline]
-fn pop_memory_address(operand_stack: &mut Vec<Value>, mem_arg_offset: u64, size: u32) -> kiln_error::Result<u32> {
+fn pop_memory_address(
+    operand_stack: &mut Vec<Value>,
+    mem_arg_offset: u64,
+    size: u32,
+) -> kiln_error::Result<u32> {
     match operand_stack.pop() {
-        Some(Value::I32(addr)) => Ok(calculate_effective_address(addr, mem_arg_offset, size)? as u32),
+        Some(Value::I32(addr)) => {
+            Ok(calculate_effective_address(addr, mem_arg_offset, size)? as u32)
+        },
         Some(Value::I64(addr)) => calculate_effective_address_64(addr, mem_arg_offset, size),
-        _ => Err(kiln_error::Error::runtime_trap("out of bounds memory access")),
+        _ => Err(kiln_error::Error::runtime_trap(
+            "out of bounds memory access",
+        )),
     }
 }
 
@@ -408,23 +412,32 @@ fn pop_memory_address(operand_stack: &mut Vec<Value>, mem_arg_offset: u64, size:
 /// Accepts both I32 (memory32) and I64 (memory64) addresses.
 /// Returns the effective address as u32 using wrapping_add for offset (matching atomic semantics).
 #[inline]
-fn pop_atomic_address(operand_stack: &mut Vec<Value>, memarg_offset: u64) -> kiln_error::Result<u32> {
+fn pop_atomic_address(
+    operand_stack: &mut Vec<Value>,
+    memarg_offset: u64,
+) -> kiln_error::Result<u32> {
     match operand_stack.pop() {
         Some(Value::I32(addr)) => {
             let effective = (addr as u32 as u64).wrapping_add(memarg_offset);
             if effective > u64::from(u32::MAX) {
-                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+                return Err(kiln_error::Error::runtime_trap(
+                    "out of bounds memory access",
+                ));
             }
             Ok(effective as u32)
-        }
+        },
         Some(Value::I64(addr)) => {
             let effective = (addr as u64).wrapping_add(memarg_offset);
             if effective > u64::from(u32::MAX) {
-                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+                return Err(kiln_error::Error::runtime_trap(
+                    "out of bounds memory access",
+                ));
             }
             Ok(effective as u32)
-        }
-        _ => Err(kiln_error::Error::runtime_trap("out of bounds memory access")),
+        },
+        _ => Err(kiln_error::Error::runtime_trap(
+            "out of bounds memory access",
+        )),
     }
 }
 
@@ -496,31 +509,31 @@ impl StacklessEngine {
     /// Create a new stackless engine
     pub fn new() -> Self {
         Self {
-            instances:           HashMap::new(),
-            next_instance_id:    AtomicU64::new(1),
+            instances: HashMap::new(),
+            next_instance_id: AtomicU64::new(1),
             current_instance_id: None,
-            operand_stack:       Vec::new(),
-            call_frames_count:   0,
-            stats:               ExecutionStats::default(),
-            fuel:                AtomicU64::new(u64::MAX),
+            operand_stack: Vec::new(),
+            call_frames_count: 0,
+            stats: ExecutionStats::default(),
+            fuel: AtomicU64::new(u64::MAX),
             instruction_pointer: AtomicU64::new(0),
-            host_registry:       None,
-            wasi_stubs:          HashMap::new(),
+            host_registry: None,
+            wasi_stubs: HashMap::new(),
             dropped_data_segments: HashMap::new(),
-            import_links:        HashMap::new(),
-            aliased_functions:   HashMap::new(),
-            host_handler:        None,
+            import_links: HashMap::new(),
+            aliased_functions: HashMap::new(),
+            host_handler: None,
             #[cfg(feature = "debugger")]
-            debugger:            None,
-            active_exception:    None,
-            exception_storage:   Vec::new(),
-            lowered_functions:   HashMap::new(),
-            instance_registry:   HashMap::new(),
-            call_stack:          Vec::with_capacity(256),
+            debugger: None,
+            active_exception: None,
+            exception_storage: Vec::new(),
+            lowered_functions: HashMap::new(),
+            instance_registry: HashMap::new(),
+            call_stack: Vec::with_capacity(256),
             // P3 async protocol state
-            p3_context_slots:      HashMap::new(),
+            p3_context_slots: HashMap::new(),
             p3_task_return_values: HashMap::new(),
-            p3_next_waitable_set:  1, // 0 is reserved
+            p3_next_waitable_set: 1, // 0 is reserved
         }
     }
 
@@ -629,14 +642,18 @@ impl StacklessEngine {
                 current_module.get_tag_import_identity(current_tag_idx)
             {
                 // Resolve the source module name to an instance ID
-                if let Some(&source_instance_id) = self.instance_registry.iter()
+                if let Some(&source_instance_id) = self
+                    .instance_registry
+                    .iter()
                     .find(|(_, name)| **name == source_module_name)
                     .map(|(id, _)| id)
                 {
                     if let Some(source_instance) = self.instances.get(&source_instance_id) {
                         let source_mod = source_instance.module();
                         // Find which tag index corresponds to the exported field name
-                        if let Some(source_tag_idx) = source_mod.get_tag_index_by_export_name(&source_field_name) {
+                        if let Some(source_tag_idx) =
+                            source_mod.get_tag_index_by_export_name(&source_field_name)
+                        {
                             // Continue following the chain
                             current_instance_id = source_instance_id;
                             current_tag_idx = source_tag_idx;
@@ -651,11 +668,17 @@ impl StacklessEngine {
             // Tag is locally defined - this is the canonical identity
             // Use (instance_registered_name, tag_index) as the identity
             if let Some(registered_name) = self.get_instance_registered_name(current_instance_id) {
-                return Some((registered_name.clone(), format!("__tag_{}", current_tag_idx)));
+                return Some((
+                    registered_name.clone(),
+                    format!("__tag_{}", current_tag_idx),
+                ));
             }
 
             // Unregistered instance - use instance_id as identity
-            return Some((format!("__instance_{}", current_instance_id), format!("__tag_{}", current_tag_idx)));
+            return Some((
+                format!("__instance_{}", current_instance_id),
+                format!("__tag_{}", current_tag_idx),
+            ));
         }
 
         None
@@ -679,12 +702,9 @@ impl StacklessEngine {
             // ── [context-get-N] ──────────────────────────────────────
             // () -> i32 — return the value stored in context slot N
             P3Builtin::ContextGet(slot) => {
-                let val = self.p3_context_slots
-                    .get(&(instance_id, slot))
-                    .copied()
-                    .unwrap_or(0);
+                let val = self.p3_context_slots.get(&(instance_id, slot)).copied().unwrap_or(0);
                 Some(Ok(vec![Value::I32(val)]))
-            }
+            },
 
             // ── [context-set-N] ──────────────────────────────────────
             // (i32) -> () — store value in context slot N
@@ -695,16 +715,15 @@ impl StacklessEngine {
                 };
                 self.p3_context_slots.insert((instance_id, slot), val);
                 Some(Ok(vec![]))
-            }
+            },
 
             // ── [task-return]N ───────────────────────────────────────
             // Variadic signature — captures ALL args as the task result.
             // The async-lift wrapper calls this to signal completion.
             P3Builtin::TaskReturn => {
-                self.p3_task_return_values
-                    .insert(instance_id, args.to_vec());
+                self.p3_task_return_values.insert(instance_id, args.to_vec());
                 Some(Ok(vec![]))
-            }
+            },
 
             // ── [waitable-set-new] ───────────────────────────────────
             // () -> i32 — allocate a new waitable set handle
@@ -712,32 +731,24 @@ impl StacklessEngine {
                 let handle = self.p3_next_waitable_set;
                 self.p3_next_waitable_set += 1;
                 Some(Ok(vec![Value::I32(handle as i32)]))
-            }
+            },
 
             // ── [waitable-set-poll] ──────────────────────────────────
             // (i32, i32) -> i32  — poll set; synchronous mode: return 0
             // (no pending async work in single-threaded interpreter)
-            P3Builtin::WaitableSetPoll => {
-                Some(Ok(vec![Value::I32(0)]))
-            }
+            P3Builtin::WaitableSetPoll => Some(Ok(vec![Value::I32(0)])),
 
             // ── [waitable-set-drop] ──────────────────────────────────
             // (i32) -> () — destroy waitable set (no-op)
-            P3Builtin::WaitableSetDrop => {
-                Some(Ok(vec![]))
-            }
+            P3Builtin::WaitableSetDrop => Some(Ok(vec![])),
 
             // ── [waitable-join] ──────────────────────────────────────
             // (i32, i32) -> () — join waitable to set (no-op for sync)
-            P3Builtin::WaitableJoin => {
-                Some(Ok(vec![]))
-            }
+            P3Builtin::WaitableJoin => Some(Ok(vec![])),
 
             // ── [task-cancel] ────────────────────────────────────────
             // () -> () or (i32) -> i32 — cancel task (no-op for sync)
-            P3Builtin::TaskCancel => {
-                Some(Ok(vec![]))
-            }
+            P3Builtin::TaskCancel => Some(Ok(vec![])),
         }
     }
 
@@ -811,11 +822,13 @@ impl StacklessEngine {
                     || function.contains("input-stream.blocking-read"))
             {
                 // input-stream read: size to the requested len (args = [self, len, ...]).
-                args.get(1).and_then(|v| match v {
-                    Value::I64(n) => Some(*n as u32),
-                    Value::I32(n) => Some(*n as u32),
-                    _ => None,
-                }).unwrap_or(0)
+                args.get(1)
+                    .and_then(|v| match v {
+                        Value::I64(n) => Some(*n as u32),
+                        Value::I32(n) => Some(*n as u32),
+                        _ => None,
+                    })
+                    .unwrap_or(0)
             } else if interface.contains("wasi:filesystem/types")
                 && function.contains("read-directory-entry")
             {
@@ -847,17 +860,22 @@ impl StacklessEngine {
             }
         };
 
-        let instance = self.instances.get(&instance_id)
-            .ok_or_else(|| kiln_error::Error::runtime_error("Instance not found for canon-lowered dispatch"))?
+        let instance = self
+            .instances
+            .get(&instance_id)
+            .ok_or_else(|| {
+                kiln_error::Error::runtime_error("Instance not found for canon-lowered dispatch")
+            })?
             .clone();
         let mem_wrapper = instance.memory(0).ok();
-        let memory: Option<&dyn kiln_foundation::MemoryAccessor> = mem_wrapper.as_ref()
+        let memory: Option<&dyn kiln_foundation::MemoryAccessor> = mem_wrapper
+            .as_ref()
             .map(|m| m.0.as_ref() as &dyn kiln_foundation::MemoryAccessor);
 
         let handler = self.host_handler.as_mut().ok_or_else(|| {
             kiln_error::Error::runtime_error(
                 "Canon-lowered function called but no host_handler configured. \
-                 Use engine.set_host_handler() with a WasiDispatcher to enable WASI support."
+                 Use engine.set_host_handler() with a WasiDispatcher to enable WASI support.",
             )
         })?;
         if let Some((ptr, size)) = read_alloc {
@@ -881,7 +899,10 @@ impl StacklessEngine {
             if let (Some(mem), Some(sig)) = (memory, &sig) {
                 let mut offset = retptr;
                 crate::wasip2_host::lower_results_to_retptr(
-                    &sig.results, &results, mem, &mut offset,
+                    &sig.results,
+                    &results,
+                    mem,
+                    &mut offset,
                 )?;
             }
             // retptr-based results consumed — return empty
@@ -904,7 +925,9 @@ impl StacklessEngine {
         func_idx: usize,
         args: Vec<Value>,
     ) -> Result<Vec<Value>> {
-        let lowered = self.lowered_functions.get(&(instance_id, func_idx))
+        let lowered = self
+            .lowered_functions
+            .get(&(instance_id, func_idx))
             .cloned()
             .ok_or_else(|| kiln_error::Error::runtime_error("Lowered function not found"))?;
 
@@ -941,13 +964,17 @@ impl StacklessEngine {
         // Early depth check to prevent native stack overflow from recursive calls
         if self.call_frames_count >= MAX_CALL_DEPTH {
             #[cfg(feature = "tracing")]
-            trace!("[CROSS_CALL] call stack exhausted at depth {} (target_instance={}, export='{}')",
-                     self.call_frames_count, target_instance_id, export_name);
+            trace!(
+                "[CROSS_CALL] call stack exhausted at depth {} (target_instance={}, export='{}')",
+                self.call_frames_count, target_instance_id, export_name
+            );
             return Err(kiln_error::Error::runtime_trap("call stack exhausted"));
         }
 
         // Get the target instance
-        let target_instance = self.instances.get(&target_instance_id)
+        let target_instance = self
+            .instances
+            .get(&target_instance_id)
             .ok_or_else(|| kiln_error::Error::resource_not_found("Target instance not found"))?
             .clone();
 
@@ -956,7 +983,10 @@ impl StacklessEngine {
 
         #[cfg(feature = "tracing")]
         {
-            trace!(exports_len = module.exports.len(), "[CROSS_CALL] Target module exports");
+            trace!(
+                exports_len = module.exports.len(),
+                "[CROSS_CALL] Target module exports"
+            );
             debug!("Module has {} memories", module.memories.len());
             if module.memories.is_empty() {
                 warn!("Module has no memories! This will cause memory access errors.");
@@ -1004,7 +1034,9 @@ impl StacklessEngine {
         target_instance_id: usize,
         export_name: &str,
     ) -> Result<usize> {
-        let target_instance = self.instances.get(&target_instance_id)
+        let target_instance = self
+            .instances
+            .get(&target_instance_id)
             .ok_or_else(|| kiln_error::Error::resource_not_found("Target instance not found"))?;
         let module = target_instance.module();
 
@@ -1021,9 +1053,7 @@ impl StacklessEngine {
             }
         }
 
-        func_idx.ok_or_else(|| {
-            kiln_error::Error::resource_not_found("Export not found")
-        })
+        func_idx.ok_or_else(|| kiln_error::Error::resource_not_found("Export not found"))
     }
 
     /// Search for a try_table exception handler in a suspended frame's block_stack.
@@ -1039,7 +1069,9 @@ impl StacklessEngine {
 
         // Get the active exception (including tag identity for imported tags)
         let (ex_tag_idx, ex_identity, ex_payload) = match &self.active_exception {
-            Some((_inst_id, tag_idx, identity, payload)) => (*tag_idx, identity.clone(), payload.clone()),
+            Some((_inst_id, tag_idx, identity, payload)) => {
+                (*tag_idx, identity.clone(), payload.clone())
+            },
             None => return false,
         };
 
@@ -1050,7 +1082,9 @@ impl StacklessEngine {
         };
 
         // Check if function is aliased - get the correct module
-        let actual_module = if let Some(&original_instance_id) = self.aliased_functions.get(&(frame.instance_id, frame.func_idx)) {
+        let actual_module = if let Some(&original_instance_id) =
+            self.aliased_functions.get(&(frame.instance_id, frame.func_idx))
+        {
             match self.instances.get(&original_instance_id) {
                 Some(inst) => inst.module().clone(),
                 None => return false,
@@ -1081,9 +1115,16 @@ impl StacklessEngine {
                             if let Ok(handler) = handlers.get(i) {
                                 let handler_val = handler.clone();
                                 let (matches, lbl, is_ref, is_catch_all) = match handler_val {
-                                    kiln_foundation::types::CatchHandler::Catch { tag_idx: htag, label: hlbl } => {
+                                    kiln_foundation::types::CatchHandler::Catch {
+                                        tag_idx: htag,
+                                        label: hlbl,
+                                    } => {
                                         // Get the handler tag's effective identity
-                                        let handler_identity = self.get_effective_tag_identity(frame.instance_id, &actual_module, htag);
+                                        let handler_identity = self.get_effective_tag_identity(
+                                            frame.instance_id,
+                                            &actual_module,
+                                            htag,
+                                        );
                                         // Match by identity if both have identity, by index if both local-only
                                         let tag_matches = match (&ex_identity, &handler_identity) {
                                             (Some(ex_id), Some(h_id)) => ex_id == h_id,
@@ -1091,10 +1132,17 @@ impl StacklessEngine {
                                             _ => false,
                                         };
                                         (tag_matches, hlbl, false, false)
-                                    }
-                                    kiln_foundation::types::CatchHandler::CatchRef { tag_idx: htag, label: hlbl } => {
+                                    },
+                                    kiln_foundation::types::CatchHandler::CatchRef {
+                                        tag_idx: htag,
+                                        label: hlbl,
+                                    } => {
                                         // Get the handler tag's effective identity
-                                        let handler_identity = self.get_effective_tag_identity(frame.instance_id, &actual_module, htag);
+                                        let handler_identity = self.get_effective_tag_identity(
+                                            frame.instance_id,
+                                            &actual_module,
+                                            htag,
+                                        );
                                         // Match by identity if both have identity, by index if both local-only
                                         let tag_matches = match (&ex_identity, &handler_identity) {
                                             (Some(ex_id), Some(h_id)) => ex_id == h_id,
@@ -1102,13 +1150,13 @@ impl StacklessEngine {
                                             _ => false,
                                         };
                                         (tag_matches, hlbl, true, false)
-                                    }
+                                    },
                                     kiln_foundation::types::CatchHandler::CatchAll { label } => {
                                         (true, label, false, true)
-                                    }
+                                    },
                                     kiln_foundation::types::CatchHandler::CatchAllRef { label } => {
                                         (true, label, true, true)
-                                    }
+                                    },
                                 };
                                 if matches {
                                     handler_label = lbl;
@@ -1218,9 +1266,13 @@ impl StacklessEngine {
             #[cfg(feature = "tracing")]
             trace!(pc = new_pc, depth = depth, instr = ?core::mem::discriminant(&instructions[new_pc]), "exception handler scan");
             match &instructions[new_pc] {
-                Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::TryTable { .. } | Instruction::Try { .. } => {
+                Instruction::Block { .. }
+                | Instruction::Loop { .. }
+                | Instruction::If { .. }
+                | Instruction::TryTable { .. }
+                | Instruction::Try { .. } => {
                     depth += 1;
-                }
+                },
                 Instruction::End => {
                     if depth == 0 {
                         #[cfg(feature = "tracing")]
@@ -1228,8 +1280,8 @@ impl StacklessEngine {
                         break;
                     }
                     depth -= 1;
-                }
-                _ => {}
+                },
+                _ => {},
             }
             new_pc += 1;
         }
@@ -1256,7 +1308,7 @@ impl StacklessEngine {
     ) {
         self.import_links.insert(
             (instance_id, import_module.clone(), import_name.clone()),
-            (target_instance_id, export_name.clone())
+            (target_instance_id, export_name.clone()),
         );
     }
 
@@ -1416,18 +1468,24 @@ impl StacklessEngine {
 
         // Initialize WASI stub memory for this instance
         #[cfg(feature = "tracing")]
-        debug!("Attempting to initialize WASI stubs for instance {}", instance_id);
+        debug!(
+            "Attempting to initialize WASI stubs for instance {}",
+            instance_id
+        );
         let module = instance.module();
         match self.initialize_wasi_stubs(instance_id, module) {
             Ok(_) => {
                 #[cfg(feature = "tracing")]
-                info!("✓ Successfully initialized WASI stubs for instance {}", instance_id);
+                info!(
+                    "✓ Successfully initialized WASI stubs for instance {}",
+                    instance_id
+                );
             },
             Err(e) => {
                 #[cfg(feature = "tracing")]
                 warn!("Failed to initialize WASI stubs: {:?}", e);
                 // Continue anyway - not all modules need WASI
-            }
+            },
         }
 
         self.current_instance_id = Some(instance_id);
@@ -1518,13 +1576,16 @@ impl StacklessEngine {
                         self.call_frames_count = self.call_frames_count.saturating_sub(1);
                         return Ok(results);
                     }
-                }
-                Ok(ExecutionOutcome::TailCall { func_idx: next_func, args: next_args }) => {
+                },
+                Ok(ExecutionOutcome::TailCall {
+                    func_idx: next_func,
+                    args: next_args,
+                }) => {
                     // Tail call - reuse current frame slot, no stack growth
                     current_func_idx = next_func;
                     current_args = next_args;
                     resume_state = None;
-                }
+                },
                 Ok(ExecutionOutcome::Call {
                     instance_id: target_id,
                     func_idx: target_func,
@@ -1546,7 +1607,7 @@ impl StacklessEngine {
                     current_func_idx = target_func;
                     current_args = call_args;
                     resume_state = None;
-                }
+                },
                 Err(e) => {
                     // Handle exception unwinding through pending frames
                     if self.active_exception.is_some() {
@@ -1576,7 +1637,7 @@ impl StacklessEngine {
                     let depth = pending_frames.len() + 1;
                     self.call_frames_count = self.call_frames_count.saturating_sub(depth);
                     return Err(e);
-                }
+                },
             }
         }
     }
@@ -1612,13 +1673,13 @@ impl StacklessEngine {
                 Err(kiln_error::Error::runtime_error(
                     "leaf function attempted tail call (cabi_realloc contract violation)",
                 ))
-            }
+            },
             Ok(ExecutionOutcome::Call { .. }) => {
                 // Leaf functions must not call other functions
                 Err(kiln_error::Error::runtime_error(
                     "leaf function attempted call (cabi_realloc contract violation)",
                 ))
-            }
+            },
             Err(e) => Err(e),
         }
     }
@@ -1643,7 +1704,9 @@ impl StacklessEngine {
                 None => {
                     #[cfg(feature = "tracing")]
                     trace!(instance_id = instance_id, "[INNER_EXEC] Instance not found");
-                    return Err(kiln_error::Error::runtime_execution_error("Instance not found"));
+                    return Err(kiln_error::Error::runtime_execution_error(
+                        "Instance not found",
+                    ));
                 },
             }
         };
@@ -1651,7 +1714,9 @@ impl StacklessEngine {
         // Check if this function is aliased and get the correct module
         // Clone the Arc<Module> so we own it and don't hold a borrow
         let module: Arc<crate::module::Module> = {
-            if let Some(&original_instance_id) = self.aliased_functions.get(&(instance_id, func_idx)) {
+            if let Some(&original_instance_id) =
+                self.aliased_functions.get(&(instance_id, func_idx))
+            {
                 #[cfg(feature = "tracing")]
                 debug!(
                     "Function {} in instance {} is aliased from instance {}",
@@ -1659,10 +1724,10 @@ impl StacklessEngine {
                 );
 
                 // Get the original instance that actually contains the function
-                let original_instance = self
-                    .instances
-                    .get(&original_instance_id)
-                    .ok_or_else(|| kiln_error::Error::runtime_execution_error("Original instance not found"))?;
+                let original_instance =
+                    self.instances.get(&original_instance_id).ok_or_else(|| {
+                        kiln_error::Error::runtime_execution_error("Original instance not found")
+                    })?;
                 original_instance.module().clone()
             } else {
                 // Not aliased, use the current instance's module
@@ -1673,11 +1738,7 @@ impl StacklessEngine {
         {
             let elem_count = module.elements.len();
             let first_elem_items = if elem_count > 0 {
-                if let Some(elem) = module.elements.get(0) {
-                    elem.items.len()
-                } else {
-                    0
-                }
+                if let Some(elem) = module.elements.get(0) { elem.items.len() } else { 0 }
             } else {
                 0
             };
@@ -1696,12 +1757,12 @@ impl StacklessEngine {
         if func_idx < num_imports {
             {
                 // This is an imported function - need to call via import link
-                if let Ok((module_name, field_name)) = self.find_import_by_index(&module, func_idx) {
+                if let Ok((module_name, field_name)) = self.find_import_by_index(&module, func_idx)
+                {
                     let import_key = (instance_id, module_name.clone(), field_name.clone());
-                    let linked = self.import_links.get(&import_key)
-                        .map(|(ti, en)| (*ti, en.clone()));
-                    if let Some((target_instance_id, export_name)) = linked
-                    {
+                    let linked =
+                        self.import_links.get(&import_key).map(|(ti, en)| (*ti, en.clone()));
+                    if let Some((target_instance_id, export_name)) = linked {
                         // Check if this is a canon-lowered function
                         #[cfg(feature = "wasi")]
                         if let Some(canon_suffix) = export_name.strip_prefix("__canon_lower_") {
@@ -1709,7 +1770,10 @@ impl StacklessEngine {
                                 let interface = &canon_suffix[..sep_pos];
                                 let function = &canon_suffix[sep_pos + 2..];
                                 let results = self.dispatch_canon_lowered(
-                                    instance_id, interface, function, args,
+                                    instance_id,
+                                    interface,
+                                    function,
+                                    args,
                                 )?;
                                 return Ok(ExecutionOutcome::Complete(results));
                             }
@@ -1724,7 +1788,9 @@ impl StacklessEngine {
                         match self.resolve_export_func_idx(target_instance_id, &export_name) {
                             Ok(target_func) => {
                                 if target_instance_id == instance_id && target_func == func_idx {
-                                    return Err(kiln_error::Error::runtime_trap("circular import link detected"));
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "circular import link detected",
+                                    ));
                                 }
                                 return Ok(ExecutionOutcome::Call {
                                     instance_id: target_instance_id,
@@ -1740,22 +1806,24 @@ impl StacklessEngine {
                     }
                     // Try P3 async builtin dispatch before falling through to defaults.
                     // Fused P3 modules import builtins from "$root" and "[export]$root".
-                    if let Some(result) = self.try_dispatch_p3_builtin(
-                        instance_id, &module_name, &field_name, &args,
-                    ) {
+                    if let Some(result) =
+                        self.try_dispatch_p3_builtin(instance_id, &module_name, &field_name, &args)
+                    {
                         return result.map(ExecutionOutcome::Complete);
                     }
 
                     // Try host handler for unlinked WASI imports
                     #[cfg(feature = "wasi")]
                     if let Some(ref mut handler) = self.host_handler {
-                        let instance = self.instances.get(&instance_id)
-                            .cloned();
+                        let instance = self.instances.get(&instance_id).cloned();
                         if let Some(inst) = instance {
                             let mem_wrapper = inst.memory(0).ok();
-                            let memory: Option<&dyn kiln_foundation::MemoryAccessor> = mem_wrapper.as_ref()
+                            let memory: Option<&dyn kiln_foundation::MemoryAccessor> = mem_wrapper
+                                .as_ref()
                                 .map(|m| m.0.as_ref() as &dyn kiln_foundation::MemoryAccessor);
-                            if let Ok(results) = handler.call_import(&module_name, &field_name, &args, memory) {
+                            if let Ok(results) =
+                                handler.call_import(&module_name, &field_name, &args, memory)
+                            {
                                 return Ok(ExecutionOutcome::Complete(results));
                             }
                         }
@@ -1796,13 +1864,16 @@ impl StacklessEngine {
 
         // Get function type to determine return values
         // Note: module.functions includes both import stubs and local functions
-        let func = module
-            .functions
-            .get(func_idx)
-            .ok_or_else(|| kiln_error::Error::runtime_function_not_found("Failed to get function"))?;
+        let func = module.functions.get(func_idx).ok_or_else(|| {
+            kiln_error::Error::runtime_function_not_found("Failed to get function")
+        })?;
 
         #[cfg(feature = "tracing")]
-        debug!("StacklessEngine: func.type_idx={}, module.types.len()={}", func.type_idx, module.types.len());
+        debug!(
+            "StacklessEngine: func.type_idx={}, module.types.len()={}",
+            func.type_idx,
+            module.types.len()
+        );
 
         let func_type = module
             .types
@@ -1819,13 +1890,21 @@ impl StacklessEngine {
             debug!("Accessing func.body for func_idx={}", func_idx);
             #[cfg(feature = "tracing")]
 
-            debug!("func.type_idx={}, func.locals.len()={}", func.type_idx, func.locals.len());
+            debug!(
+                "func.type_idx={}, func.locals.len()={}",
+                func.type_idx,
+                func.locals.len()
+            );
 
             // Get the function type to see how many parameters it expects
             if let Some(func_type) = module.types.get(func.type_idx as usize) {
                 #[cfg(feature = "tracing")]
 
-                debug!("Function type: params.len()={}, results.len()={}",                          func_type.params.len(), func_type.results.len());
+                debug!(
+                    "Function type: params.len()={}, results.len()={}",
+                    func_type.params.len(),
+                    func_type.results.len()
+                );
             }
             #[cfg(feature = "tracing")]
 
@@ -1878,14 +1957,17 @@ impl StacklessEngine {
                 // Initialize parameters as locals
                 // Need to match the function type signature, not just provided args
                 #[cfg(feature = "tracing")]
-                trace!("Initializing locals: args.len()={}, func.locals.len()={}", args.len(), func.locals.len());
+                trace!(
+                    "Initializing locals: args.len()={}, func.locals.len()={}",
+                    args.len(),
+                    func.locals.len()
+                );
 
                 // Get expected parameter count from function type
                 // Per CLAUDE.md: FAIL LOUD AND EARLY - don't silently substitute defaults
-                let func_type = module.types.get(func.type_idx as usize)
-                    .ok_or_else(|| kiln_error::Error::runtime_error(
-                        "Function type not found - module corrupted"
-                    ))?;
+                let func_type = module.types.get(func.type_idx as usize).ok_or_else(|| {
+                    kiln_error::Error::runtime_error("Function type not found - module corrupted")
+                })?;
                 let expected_param_count = func_type.params.len();
 
                 #[cfg(feature = "tracing")]
@@ -1920,13 +2002,18 @@ impl StacklessEngine {
                 for i in 0..func.locals.len() {
                     if let Ok(local_decl) = func.locals.get(i) {
                         #[cfg(feature = "tracing")]
-                        trace!("LocalEntry[{}]: type={:?}, count={}", i, local_decl.value_type, local_decl.count);
+                        trace!(
+                            "LocalEntry[{}]: type={:?}, count={}",
+                            i, local_decl.value_type, local_decl.count
+                        );
                         let zero_value = match local_decl.value_type {
                             kiln_foundation::ValueType::I32 => Value::I32(0),
                             kiln_foundation::ValueType::I64 => Value::I64(0),
                             kiln_foundation::ValueType::F32 => Value::F32(FloatBits32(0)),
                             kiln_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
-                            kiln_foundation::ValueType::V128 => Value::V128(V128 { bytes: [0u8; 16] }),
+                            kiln_foundation::ValueType::V128 => {
+                                Value::V128(V128 { bytes: [0u8; 16] })
+                            },
                             kiln_foundation::ValueType::FuncRef => Value::FuncRef(None),
                             kiln_foundation::ValueType::NullFuncRef => Value::FuncRef(None),
                             kiln_foundation::ValueType::TypedFuncRef(_, _) => Value::FuncRef(None),
@@ -1965,8 +2052,9 @@ impl StacklessEngine {
                 }
                 self.fuel.fetch_sub(1, Ordering::Relaxed);
 
-                let instruction = instructions.get(pc)
-                    .ok_or_else(|| kiln_error::Error::runtime_error("Instruction index out of bounds"))?;
+                let instruction = instructions.get(pc).ok_or_else(|| {
+                    kiln_error::Error::runtime_error("Instruction index out of bounds")
+                })?;
 
                 instruction_count += 1;
                 #[cfg(feature = "tracing")]
@@ -1983,7 +2071,9 @@ impl StacklessEngine {
                     };
                     let action = debugger.on_instruction(pc as u32, &state);
                     if action == DebugAction::Break {
-                        return Err(kiln_error::Error::runtime_execution_error("Debugger break requested"));
+                        return Err(kiln_error::Error::runtime_execution_error(
+                            "Debugger break requested",
+                        ));
                     }
                 }
 
@@ -1996,7 +2086,11 @@ impl StacklessEngine {
                         #[cfg(feature = "tracing")]
                         {
                             // Print some context about what led to unreachable
-                            let prev_str = if pc > 0 { format!("{:?}", instructions.get(pc - 1)) } else { "N/A".to_string() };
+                            let prev_str = if pc > 0 {
+                                format!("{:?}", instructions.get(pc - 1))
+                            } else {
+                                "N/A".to_string()
+                            };
                             error!(
                                 func_idx = func_idx,
                                 pc = pc,
@@ -2004,16 +2098,14 @@ impl StacklessEngine {
                                 "[TRAP] Unreachable instruction executed"
                             );
                         }
-                        return Err(kiln_error::Error::runtime_trap(
-                            "unreachable",
-                        ));
-                    }
+                        return Err(kiln_error::Error::runtime_trap("unreachable"));
+                    },
                     Instruction::Nop => {
                         // No operation - do nothing
                         #[cfg(feature = "tracing")]
 
                         trace!("Nop");
-                    }
+                    },
                     Instruction::Drop => {
                         // Pop and discard top value from stack
                         if let Some(value) = operand_stack.pop() {
@@ -2026,13 +2118,16 @@ impl StacklessEngine {
                             trace!("Drop: stack underflow");
                             return Err(kiln_error::Error::runtime_trap("Drop: stack underflow"));
                         }
-                    }
+                    },
                     Instruction::Select => {
                         // Pop condition, then two values, push selected value
                         // Stack: [val1, val2, condition] -> [selected]
                         // WebAssembly spec: if condition != 0, select val1 (deeper), else select val2 (higher)
                         #[cfg(feature = "tracing")]
-                        trace!(stack_len = operand_stack.len(), "[Select] Processing select instruction");
+                        trace!(
+                            stack_len = operand_stack.len(),
+                            "[Select] Processing select instruction"
+                        );
 
                         // WebAssembly select expects: val1, val2, i32
                         // The condition should be the top of stack
@@ -2049,9 +2144,15 @@ impl StacklessEngine {
                             Some(other) => {
                                 #[cfg(feature = "tracing")]
                                 error!(condition = ?other, "[Select] ERROR: condition is not i32");
-                                return Err(kiln_error::Error::runtime_trap("Select: condition must be i32"));
-                            }
-                            None => return Err(kiln_error::Error::runtime_trap("Select: stack underflow (no condition)")),
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "Select: condition must be i32",
+                                ));
+                            },
+                            None => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "Select: stack underflow (no condition)",
+                                ));
+                            },
                         };
 
                         if let (Some(v2), Some(v1)) = (val2, val1) {
@@ -2078,15 +2179,20 @@ impl StacklessEngine {
                             #[cfg(feature = "tracing")]
 
                             trace!("Select: insufficient operands on stack");
-                            return Err(kiln_error::Error::runtime_trap("Select: stack underflow (missing values)"));
+                            return Err(kiln_error::Error::runtime_trap(
+                                "Select: stack underflow (missing values)",
+                            ));
                         }
-                    }
+                    },
                     Instruction::SelectWithType(ref _types) => {
                         // Typed select - semantically identical to untyped select at runtime
                         // The type annotation is for validation purposes only
                         // Stack: [val1, val2, condition] -> [selected]
                         #[cfg(feature = "tracing")]
-                        trace!(stack_len = operand_stack.len(), "[SelectWithType] Processing typed select instruction");
+                        trace!(
+                            stack_len = operand_stack.len(),
+                            "[SelectWithType] Processing typed select instruction"
+                        );
 
                         let cond_val = operand_stack.pop();
                         let val2 = operand_stack.pop();
@@ -2101,23 +2207,34 @@ impl StacklessEngine {
                             Some(other) => {
                                 #[cfg(feature = "tracing")]
                                 error!(condition = ?other, "[SelectWithType] ERROR: condition is not i32");
-                                return Err(kiln_error::Error::runtime_trap("SelectWithType: condition must be i32"));
-                            }
-                            None => return Err(kiln_error::Error::runtime_trap("SelectWithType: stack underflow (no condition)")),
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "SelectWithType: condition must be i32",
+                                ));
+                            },
+                            None => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "SelectWithType: stack underflow (no condition)",
+                                ));
+                            },
                         };
 
                         if let (Some(v2), Some(v1)) = (val2, val1) {
                             // WebAssembly spec: if cond != 0, select val1 (pushed first)
                             let selected = if condition != 0 { v1 } else { v2 };
                             #[cfg(feature = "tracing")]
-                            trace!("SelectWithType: condition={}, selected={:?}", condition, selected);
+                            trace!(
+                                "SelectWithType: condition={}, selected={:?}",
+                                condition, selected
+                            );
                             operand_stack.push(selected);
                         } else {
                             #[cfg(feature = "tracing")]
                             trace!("SelectWithType: insufficient operands on stack");
-                            return Err(kiln_error::Error::runtime_trap("SelectWithType: stack underflow (missing values)"));
+                            return Err(kiln_error::Error::runtime_trap(
+                                "SelectWithType: stack underflow (missing values)",
+                            ));
                         }
-                    }
+                    },
                     Instruction::Call(func_idx) => {
                         // Count total number of imports across all modules
                         let num_imports = self.count_total_imports(&module);
@@ -2133,7 +2250,10 @@ impl StacklessEngine {
                         if (func_idx as usize) < num_imports {
                             // This is a host function call
                             #[cfg(feature = "tracing")]
-                            trace!("[CALL_IMPORT] instance={}, func_idx={}, num_imports={}", instance_id, func_idx, num_imports);
+                            trace!(
+                                "[CALL_IMPORT] instance={}, func_idx={}, num_imports={}",
+                                instance_id, func_idx, num_imports
+                            );
 
                             // CHECK FOR LOWERED FUNCTION: If this import was created by canon.lower,
                             // dispatch to the canonical executor instead of using import_links.
@@ -2141,34 +2261,44 @@ impl StacklessEngine {
                             // functions that are backed by InlineExports with no real module.
                             #[cfg(feature = "wasi")]
                             {
-                            let is_lowered = self.is_lowered_function(instance_id, func_idx as usize);
-                            if is_lowered {
-                                #[cfg(feature = "tracing")]
-                                trace!(
-                                    instance_id = instance_id,
-                                    func_idx = func_idx,
-                                    "[CALL] Import is a canon.lower synthesized function - dispatching to WASI"
-                                );
+                                let is_lowered =
+                                    self.is_lowered_function(instance_id, func_idx as usize);
+                                if is_lowered {
+                                    #[cfg(feature = "tracing")]
+                                    trace!(
+                                        instance_id = instance_id,
+                                        func_idx = func_idx,
+                                        "[CALL] Import is a canon.lower synthesized function - dispatching to WASI"
+                                    );
 
-                                // Collect args from operand stack based on function signature
-                                let args = Self::collect_function_args(&module, func_idx as usize, &mut operand_stack);
+                                    // Collect args from operand stack based on function signature
+                                    let args = Self::collect_function_args(
+                                        &module,
+                                        func_idx as usize,
+                                        &mut operand_stack,
+                                    );
 
-                                // Execute the lowered function via WASI dispatcher
-                                let results = self.execute_lowered_function(instance_id, func_idx as usize, args)?;
+                                    // Execute the lowered function via WASI dispatcher
+                                    let results = self.execute_lowered_function(
+                                        instance_id,
+                                        func_idx as usize,
+                                        args,
+                                    )?;
 
-                                // Push results back onto stack
-                                for result in results {
-                                    operand_stack.push(result);
+                                    // Push results back onto stack
+                                    for result in results {
+                                        operand_stack.push(result);
+                                    }
+
+                                    // Skip the normal import handling
+                                    pc += 1;
+                                    continue;
                                 }
-
-                                // Skip the normal import handling
-                                pc += 1;
-                                continue;
-                            }
                             } // end #[cfg(feature = "wasi")]
 
                             // Find the import by index
-                            let import_result = self.find_import_by_index(&module, func_idx as usize);
+                            let import_result =
+                                self.find_import_by_index(&module, func_idx as usize);
                             #[cfg(feature = "tracing")]
                             trace!(result = ?import_result, "[HOST_CALL] find_import_by_index result");
 
@@ -2185,8 +2315,11 @@ impl StacklessEngine {
                                 // ALL imports (including WASI) should use cross-instance linking when linked.
                                 {
                                     // Clone the values to avoid holding a borrow during call_exported_function
-                                    let import_key = (instance_id, module_name.clone(), field_name.clone());
-                                    let linked = self.import_links.get(&import_key)
+                                    let import_key =
+                                        (instance_id, module_name.clone(), field_name.clone());
+                                    let linked = self
+                                        .import_links
+                                        .get(&import_key)
                                         .map(|(ti, en)| (*ti, en.clone()));
 
                                     #[cfg(feature = "tracing")]
@@ -2202,15 +2335,24 @@ impl StacklessEngine {
                                         // that should be dispatched via the canonical ABI executor,
                                         // not as cross-instance calls.
                                         #[cfg(feature = "wasi")]
-                                        if let Some(canon_suffix) = export_name.strip_prefix("__canon_lower_") {
+                                        if let Some(canon_suffix) =
+                                            export_name.strip_prefix("__canon_lower_")
+                                        {
                                             // Parse interface::function from __canon_lower_{interface}::{function}
                                             if let Some(sep_pos) = canon_suffix.rfind("::") {
                                                 let interface = &canon_suffix[..sep_pos];
                                                 let function = &canon_suffix[sep_pos + 2..];
                                                 // Collect args and dispatch to WASI
-                                                let args = Self::collect_function_args(&module, func_idx as usize, &mut operand_stack);
+                                                let args = Self::collect_function_args(
+                                                    &module,
+                                                    func_idx as usize,
+                                                    &mut operand_stack,
+                                                );
                                                 let results = self.dispatch_canon_lowered(
-                                                    instance_id, interface, function, args,
+                                                    instance_id,
+                                                    interface,
+                                                    function,
+                                                    args,
                                                 )?;
                                                 for result in results {
                                                     operand_stack.push(result);
@@ -2224,7 +2366,11 @@ impl StacklessEngine {
                                         // is managed by the host, not the core module)
                                         if export_name.starts_with("[resource-drop]") {
                                             // Pop the resource handle argument
-                                            let _args = Self::collect_function_args(&module, func_idx as usize, &mut operand_stack);
+                                            let _args = Self::collect_function_args(
+                                                &module,
+                                                func_idx as usize,
+                                                &mut operand_stack,
+                                            );
                                             // Resource drops return nothing
                                             pc += 1;
                                             continue;
@@ -2234,10 +2380,16 @@ impl StacklessEngine {
                                         // If resolution fails (e.g., numeric export from InlineExports
                                         // that doesn't exist as a real module export), fall through
                                         // to WASI dispatch instead of returning an error.
-                                        match self.resolve_export_func_idx(target_instance, &export_name) {
+                                        match self
+                                            .resolve_export_func_idx(target_instance, &export_name)
+                                        {
                                             Ok(target_func) => {
                                                 // Collect args from operand stack based on function signature
-                                                let call_args = Self::collect_function_args(&module, func_idx as usize, &mut operand_stack);
+                                                let call_args = Self::collect_function_args(
+                                                    &module,
+                                                    func_idx as usize,
+                                                    &mut operand_stack,
+                                                );
 
                                                 // Save current execution state for resumption after callee returns
                                                 let saved_state = SuspendedFrame {
@@ -2268,9 +2420,16 @@ impl StacklessEngine {
 
                                 // Try P3 async builtins first (fused modules import from $root)
                                 {
-                                    let p3_args = Self::collect_function_args(&module, func_idx as usize, &mut operand_stack);
+                                    let p3_args = Self::collect_function_args(
+                                        &module,
+                                        func_idx as usize,
+                                        &mut operand_stack,
+                                    );
                                     if let Some(result) = self.try_dispatch_p3_builtin(
-                                        instance_id, &module_name, &field_name, &p3_args,
+                                        instance_id,
+                                        &module_name,
+                                        &field_name,
+                                        &p3_args,
                                     ) {
                                         match result {
                                             Ok(results) => {
@@ -2279,7 +2438,7 @@ impl StacklessEngine {
                                                 }
                                                 pc += 1;
                                                 continue;
-                                            }
+                                            },
                                             Err(e) => return Err(e),
                                         }
                                     }
@@ -2348,7 +2507,9 @@ impl StacklessEngine {
                                 #[cfg(feature = "tracing")]
 
                                 trace!("Function index {} out of bounds", func_idx);
-                                return Err(kiln_error::Error::runtime_error("Function index out of bounds"));
+                                return Err(kiln_error::Error::runtime_error(
+                                    "Function index out of bounds",
+                                ));
                             }
 
                             let func = &module.functions[local_func_idx];
@@ -2358,8 +2519,10 @@ impl StacklessEngine {
                                 types_len = module.types.len(),
                                 "[CALL] Function type info"
                             );
-                            let func_type = module.types.get(func.type_idx as usize)
-                                .ok_or_else(|| kiln_error::Error::runtime_error("Invalid function type"))?;
+                            let func_type =
+                                module.types.get(func.type_idx as usize).ok_or_else(|| {
+                                    kiln_error::Error::runtime_error("Invalid function type")
+                                })?;
 
                             // Pop the required number of arguments from the stack
                             let param_count = func_type.params.len();
@@ -2370,7 +2533,11 @@ impl StacklessEngine {
                                 "[CALL] Parameter and stack info"
                             );
                             #[cfg(feature = "tracing")]
-                            if func_idx == 94 || func_idx == 223 || func_idx == 232 || func_idx == 233 {
+                            if func_idx == 94
+                                || func_idx == 223
+                                || func_idx == 232
+                                || func_idx == 233
+                            {
                                 trace!(
                                     func_idx = func_idx,
                                     stack_top = ?operand_stack.iter().rev().take(4).collect::<Vec<_>>(),
@@ -2396,7 +2563,12 @@ impl StacklessEngine {
                             }
 
                             #[cfg(feature = "tracing")]
-                            trace!("Call({}): needs {} params, stack has {} values", func_idx, param_count, operand_stack.len());
+                            trace!(
+                                "Call({}): needs {} params, stack has {} values",
+                                func_idx,
+                                param_count,
+                                operand_stack.len()
+                            );
 
                             let mut call_args = Vec::new();
                             for _ in 0..param_count {
@@ -2406,7 +2578,9 @@ impl StacklessEngine {
                                     #[cfg(feature = "tracing")]
 
                                     trace!("Not enough arguments on stack for function call");
-                                    return Err(kiln_error::Error::runtime_error("Stack underflow on function call"));
+                                    return Err(kiln_error::Error::runtime_error(
+                                        "Stack underflow on function call",
+                                    ));
                                 }
                             }
                             // Arguments were popped in reverse order, so reverse them
@@ -2414,8 +2588,11 @@ impl StacklessEngine {
 
                             #[cfg(feature = "tracing")]
 
-
-                            trace!("Stack before call: {} values, after popping args: {} values",                                 operand_stack.len() + call_args.len(), operand_stack.len());
+                            trace!(
+                                "Stack before call: {} values, after popping args: {} values",
+                                operand_stack.len() + call_args.len(),
+                                operand_stack.len()
+                            );
 
                             // Trampoline: save caller state and return to the trampoline loop.
                             // The trampoline will execute the callee, and when it completes,
@@ -2442,12 +2619,14 @@ impl StacklessEngine {
                                 }),
                             });
                         }
-                    }
+                    },
                     Instruction::CallIndirect(type_idx, table_idx) => {
                         // CallIndirect: call a function through an indirect table reference
                         // Pop the function index from the stack (i32 or i64 for table64)
                         let popped = operand_stack.pop().ok_or_else(|| {
-                            kiln_error::Error::runtime_trap("CallIndirect: expected function index on stack")
+                            kiln_error::Error::runtime_trap(
+                                "CallIndirect: expected function index on stack",
+                            )
                         })?;
                         let table_func_idx: u32 = match popped {
                             Value::I32(idx) => idx as u32,
@@ -2455,8 +2634,10 @@ impl StacklessEngine {
                                 kiln_error::Error::runtime_trap("undefined element")
                             })?,
                             _ => {
-                                return Err(kiln_error::Error::runtime_trap("CallIndirect: expected i32 or i64 function index on stack"));
-                            }
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "CallIndirect: expected i32 or i64 function index on stack",
+                                ));
+                            },
                         };
 
                         #[cfg(feature = "tracing")]
@@ -2469,7 +2650,9 @@ impl StacklessEngine {
 
                         // Look up the function in the table, extracting both func_idx and
                         // optional cross-instance target (for shared tables in Component Model)
-                        let (func_idx, target_instance_id) = if let Some(inst) = self.instances.get(&instance_id) {
+                        let (func_idx, target_instance_id) = if let Some(inst) =
+                            self.instances.get(&instance_id)
+                        {
                             // Get the table
                             if let Ok(table) = inst.table(table_idx) {
                                 // Get the function reference from the table
@@ -2481,21 +2664,36 @@ impl StacklessEngine {
                                             let target = fref.instance_id.map(|id| id as usize);
                                             (fref.index as usize, target)
                                         },
-                                        Value::FuncRef(None) => return Err(kiln_error::Error::runtime_trap("uninitialized element")),
+                                        Value::FuncRef(None) => {
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "uninitialized element",
+                                            ));
+                                        },
                                         Value::I32(idx) => (idx as usize, None), // Legacy fallback
                                         Value::I64(idx) => (idx as usize, None), // Legacy fallback
-                                        _ => return Err(kiln_error::Error::runtime_trap("uninitialized element")),
+                                        _ => {
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "uninitialized element",
+                                            ));
+                                        },
                                     }
                                 } else if let Ok(None) = table.0.get(table_func_idx) {
-                                    return Err(kiln_error::Error::runtime_trap("uninitialized element"));
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "uninitialized element",
+                                    ));
                                 } else {
-                                    return Err(kiln_error::Error::runtime_trap("undefined element"));
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "undefined element",
+                                    ));
                                 }
                             } else {
                                 // Fall back: use the element segment if tables aren't properly initialized
                                 // Look through element segments to find the function
                                 #[cfg(feature = "tracing")]
-                                trace!(table_idx = table_idx, "[CALL_INDIRECT] Table not found, checking element segments");
+                                trace!(
+                                    table_idx = table_idx,
+                                    "[CALL_INDIRECT] Table not found, checking element segments"
+                                );
 
                                 let mut resolved_func_idx: Option<usize> = None;
 
@@ -2503,7 +2701,10 @@ impl StacklessEngine {
                                 // Element segments have format: (elem (i32.const offset) func f1 f2 f3 ...)
                                 // We need to find which element contains table_func_idx
                                 #[cfg(feature = "tracing")]
-                                trace!(elements_len = module.elements.len(), "[CALL_INDIRECT] Searching element segments");
+                                trace!(
+                                    elements_len = module.elements.len(),
+                                    "[CALL_INDIRECT] Searching element segments"
+                                );
                                 for elem_idx in 0..module.elements.len() {
                                     let elem_opt = module.elements.get(elem_idx);
 
@@ -2511,11 +2712,16 @@ impl StacklessEngine {
                                         // The offset is where this element starts in the table
                                         // First check mode for offset, then fall back to offset_expr
                                         let elem_offset = match &elem.mode {
-                                            kiln_foundation::types::ElementMode::Active { offset, .. } => *offset,
+                                            kiln_foundation::types::ElementMode::Active {
+                                                offset,
+                                                ..
+                                            } => *offset,
                                             _ => {
                                                 // Try offset_expr
                                                 if let Some(ref offset_expr) = elem.offset_expr {
-                                                    if let Some(Instruction::I32Const(off)) = offset_expr.instructions.first() {
+                                                    if let Some(Instruction::I32Const(off)) =
+                                                        offset_expr.instructions.first()
+                                                    {
                                                         *off as u32
                                                     } else {
                                                         0
@@ -2523,7 +2729,7 @@ impl StacklessEngine {
                                                 } else {
                                                     0
                                                 }
-                                            }
+                                            },
                                         };
 
                                         let items_len = elem.items.len();
@@ -2537,8 +2743,11 @@ impl StacklessEngine {
                                         );
 
                                         // Check if table_func_idx falls within this element's range
-                                        if table_func_idx >= elem_offset && (table_func_idx - elem_offset) < items_len as u32 {
-                                            let elem_local_idx = (table_func_idx - elem_offset) as usize;
+                                        if table_func_idx >= elem_offset
+                                            && (table_func_idx - elem_offset) < items_len as u32
+                                        {
+                                            let elem_local_idx =
+                                                (table_func_idx - elem_offset) as usize;
                                             // items is BoundedVec<u32>, get() returns Result<u32>
                                             if let Ok(func_ref) = elem.items.get(elem_local_idx) {
                                                 resolved_func_idx = Some(func_ref as usize);
@@ -2563,7 +2772,9 @@ impl StacklessEngine {
                                 (fidx, None) // Element segment fallback has no cross-instance info
                             }
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("CallIndirect: instance not found"));
+                            return Err(kiln_error::Error::runtime_trap(
+                                "CallIndirect: instance not found",
+                            ));
                         };
 
                         // Cross-instance dispatch via shared table:
@@ -2573,35 +2784,58 @@ impl StacklessEngine {
                         // different numbering scheme than the engine's instance_id. We must translate.
                         if let Some(mod_target_id) = target_instance_id {
                             // Translate ModuleInstance.instance_id -> engine instance_id
-                            let target_id = self.instances.iter()
+                            let target_id = self
+                                .instances
+                                .iter()
                                 .find(|(_, inst)| inst.instance_id() == mod_target_id)
                                 .map(|(engine_id, _)| *engine_id)
-                                .ok_or_else(|| kiln_error::Error::runtime_trap(
-                                    "cross-instance call_indirect: target instance not found"
-                                ))?;
+                                .ok_or_else(|| {
+                                    kiln_error::Error::runtime_trap(
+                                        "cross-instance call_indirect: target instance not found",
+                                    )
+                                })?;
 
                             if target_id != instance_id {
                                 // Get the target module to look up function type for arg count
-                                let target_module = self.instances.get(&target_id)
-                                    .ok_or_else(|| kiln_error::Error::runtime_trap("cross-instance target not found"))?
-                                    .module().clone();
+                                let target_module = self
+                                    .instances
+                                    .get(&target_id)
+                                    .ok_or_else(|| {
+                                        kiln_error::Error::runtime_trap(
+                                            "cross-instance target not found",
+                                        )
+                                    })?
+                                    .module()
+                                    .clone();
 
                                 // Validate function index
                                 if func_idx >= target_module.functions.len() {
                                     return Err(kiln_error::Error::runtime_trap(
-                                        "cross-instance call_indirect: function index out of bounds in target"
+                                        "cross-instance call_indirect: function index out of bounds in target",
                                     ));
                                 }
 
                                 // Type check: validate function signature matches expected type
-                                let expected_type = module.types.get(type_idx as usize)
-                                    .ok_or_else(|| kiln_error::Error::runtime_error("Invalid expected function type"))?;
+                                let expected_type =
+                                    module.types.get(type_idx as usize).ok_or_else(|| {
+                                        kiln_error::Error::runtime_error(
+                                            "Invalid expected function type",
+                                        )
+                                    })?;
                                 let target_func = &target_module.functions[func_idx];
-                                let actual_type = target_module.types.get(target_func.type_idx as usize)
-                                    .ok_or_else(|| kiln_error::Error::runtime_error("Invalid function type in target"))?;
+                                let actual_type = target_module
+                                    .types
+                                    .get(target_func.type_idx as usize)
+                                    .ok_or_else(|| {
+                                        kiln_error::Error::runtime_error(
+                                            "Invalid function type in target",
+                                        )
+                                    })?;
 
                                 if !func_types_match(expected_type, actual_type) {
-                                    return Err(kiln_error::Error::runtime_trap("indirect call type mismatch"));
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "indirect call type mismatch",
+                                    ));
                                 }
 
                                 // Check if this is a lowered function in the target instance
@@ -2613,11 +2847,14 @@ impl StacklessEngine {
                                         if let Some(arg) = operand_stack.pop() {
                                             call_args.push(arg);
                                         } else {
-                                            return Err(kiln_error::Error::runtime_error("Stack underflow on cross-instance lowered call"));
+                                            return Err(kiln_error::Error::runtime_error(
+                                                "Stack underflow on cross-instance lowered call",
+                                            ));
                                         }
                                     }
                                     call_args.reverse();
-                                    let results = self.execute_lowered_function(target_id, func_idx, call_args)?;
+                                    let results = self
+                                        .execute_lowered_function(target_id, func_idx, call_args)?;
                                     for result in results {
                                         operand_stack.push(result);
                                     }
@@ -2632,7 +2869,9 @@ impl StacklessEngine {
                                     if let Some(arg) = operand_stack.pop() {
                                         call_args.push(arg);
                                     } else {
-                                        return Err(kiln_error::Error::runtime_error("Stack underflow on cross-instance call_indirect"));
+                                        return Err(kiln_error::Error::runtime_error(
+                                            "Stack underflow on cross-instance call_indirect",
+                                        ));
                                     }
                                 }
                                 call_args.reverse();
@@ -2658,7 +2897,10 @@ impl StacklessEngine {
                         }
 
                         #[cfg(feature = "tracing")]
-                        trace!(func_idx = func_idx, "[CALL_INDIRECT] Resolved to function index");
+                        trace!(
+                            func_idx = func_idx,
+                            "[CALL_INDIRECT] Resolved to function index"
+                        );
 
                         // CHECK FOR LOWERED FUNCTION: If this function was created by canon.lower,
                         // dispatch to the canonical executor instead of executing bytecode.
@@ -2674,8 +2916,10 @@ impl StacklessEngine {
 
                             // Get function type to determine parameter count
                             let func = &module.functions[func_idx];
-                            let func_type = module.types.get(func.type_idx as usize)
-                                .ok_or_else(|| kiln_error::Error::runtime_error("Invalid function type"))?;
+                            let func_type =
+                                module.types.get(func.type_idx as usize).ok_or_else(|| {
+                                    kiln_error::Error::runtime_error("Invalid function type")
+                                })?;
 
                             // Pop the required number of arguments from the stack
                             let param_count = func_type.params.len();
@@ -2684,13 +2928,16 @@ impl StacklessEngine {
                                 if let Some(arg) = operand_stack.pop() {
                                     call_args.push(arg);
                                 } else {
-                                    return Err(kiln_error::Error::runtime_error("Stack underflow on lowered function call"));
+                                    return Err(kiln_error::Error::runtime_error(
+                                        "Stack underflow on lowered function call",
+                                    ));
                                 }
                             }
                             call_args.reverse();
 
                             // Execute the lowered function via WASI dispatcher
-                            let results = self.execute_lowered_function(instance_id, func_idx, call_args)?;
+                            let results =
+                                self.execute_lowered_function(instance_id, func_idx, call_args)?;
 
                             // Push results back onto stack
                             for result in results {
@@ -2703,10 +2950,12 @@ impl StacklessEngine {
                         }
 
                         // Track call_indirect to func 138 (iterator next)
-                        static CALL_138_COUNT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+                        static CALL_138_COUNT: std::sync::atomic::AtomicU32 =
+                            std::sync::atomic::AtomicU32::new(0);
                         #[cfg(feature = "tracing")]
                         if func_idx == 138 {
-                            let call_num = CALL_138_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            let call_num =
+                                CALL_138_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                             trace!(
                                 call_num = call_num,
                                 stack_len = operand_stack.len(),
@@ -2720,14 +2969,16 @@ impl StacklessEngine {
                         // Validate function index
                         if func_idx >= module.functions.len() {
                             return Err(kiln_error::Error::runtime_trap(
-                                "call_indirect: function index out of bounds"
+                                "call_indirect: function index out of bounds",
                             ));
                         }
 
                         // Get function type to determine parameter count
                         let func = &module.functions[func_idx];
-                        let func_type = module.types.get(func.type_idx as usize)
-                            .ok_or_else(|| kiln_error::Error::runtime_error("Invalid function type"))?;
+                        let func_type =
+                            module.types.get(func.type_idx as usize).ok_or_else(|| {
+                                kiln_error::Error::runtime_error("Invalid function type")
+                            })?;
 
                         // Validate type matches expected type using canonical IDs when available
                         if !call_indirect_type_matches(type_idx, func.type_idx, &module) {
@@ -2735,14 +2986,18 @@ impl StacklessEngine {
                             {
                                 let expected_type = module.types.get(type_idx as usize);
                                 warn!(
-                                    expected_params = expected_type.map(|t| t.params.len()).unwrap_or(0),
-                                    expected_results = expected_type.map(|t| t.results.len()).unwrap_or(0),
+                                    expected_params =
+                                        expected_type.map(|t| t.params.len()).unwrap_or(0),
+                                    expected_results =
+                                        expected_type.map(|t| t.results.len()).unwrap_or(0),
                                     got_params = func_type.params.len(),
                                     got_results = func_type.results.len(),
                                     "[CALL_INDIRECT] Type mismatch"
                                 );
                             }
-                            return Err(kiln_error::Error::runtime_trap("indirect call type mismatch"));
+                            return Err(kiln_error::Error::runtime_trap(
+                                "indirect call type mismatch",
+                            ));
                         }
 
                         // Pop the required number of arguments from the stack
@@ -2752,7 +3007,9 @@ impl StacklessEngine {
                             if let Some(arg) = operand_stack.pop() {
                                 call_args.push(arg);
                             } else {
-                                return Err(kiln_error::Error::runtime_error("Stack underflow on call_indirect"));
+                                return Err(kiln_error::Error::runtime_error(
+                                    "Stack underflow on call_indirect",
+                                ));
                             }
                         }
                         call_args.reverse();
@@ -2769,7 +3026,9 @@ impl StacklessEngine {
                             );
 
                             // Try to find the import's module/field name
-                            if let Ok((module_name, field_name)) = self.find_import_by_index(&module, func_idx) {
+                            if let Ok((module_name, field_name)) =
+                                self.find_import_by_index(&module, func_idx)
+                            {
                                 #[cfg(feature = "tracing")]
                                 trace!(
                                     module_name = %module_name,
@@ -2779,8 +3038,11 @@ impl StacklessEngine {
 
                                 // Check if this import is linked to another instance
                                 {
-                                    let import_key = (instance_id, module_name.clone(), field_name.clone());
-                                    let linked = self.import_links.get(&import_key)
+                                    let import_key =
+                                        (instance_id, module_name.clone(), field_name.clone());
+                                    let linked = self
+                                        .import_links
+                                        .get(&import_key)
                                         .map(|(ti, en)| (*ti, en.clone()));
 
                                     if let Some((target_instance, export_name)) = linked {
@@ -2792,7 +3054,10 @@ impl StacklessEngine {
                                         );
 
                                         // NON-RECURSIVE: resolve target and redirect via trampoline
-                                        let target_func = self.resolve_export_func_idx(target_instance, &export_name)?;
+                                        let target_func = self.resolve_export_func_idx(
+                                            target_instance,
+                                            &export_name,
+                                        )?;
                                         let saved_state = SuspendedFrame {
                                             instance_id,
                                             func_idx: caller_func_idx,
@@ -2812,7 +3077,10 @@ impl StacklessEngine {
                                     } else {
                                         // Not linked — try P3 builtins first, then WASI
                                         if let Some(result) = self.try_dispatch_p3_builtin(
-                                            instance_id, &module_name, &field_name, &call_args,
+                                            instance_id,
+                                            &module_name,
+                                            &field_name,
+                                            &call_args,
                                         ) {
                                             match result {
                                                 Ok(results) => {
@@ -2821,7 +3089,7 @@ impl StacklessEngine {
                                                     }
                                                     pc += 1;
                                                     continue;
-                                                }
+                                                },
                                                 Err(e) => return Err(e),
                                             }
                                         }
@@ -2835,7 +3103,12 @@ impl StacklessEngine {
                                                     let mem_wrapper = inst_arc.memory(0).ok();
                                                     let memory: Option<&dyn kiln_foundation::MemoryAccessor> = mem_wrapper.as_ref()
                                                         .map(|m| m.0.as_ref() as &dyn kiln_foundation::MemoryAccessor);
-                                                    if let Ok(results) = handler.call_import(&module_name, &field_name, &call_args, memory) {
+                                                    if let Ok(results) = handler.call_import(
+                                                        &module_name,
+                                                        &field_name,
+                                                        &call_args,
+                                                        memory,
+                                                    ) {
                                                         for r in results {
                                                             operand_stack.push(r);
                                                         }
@@ -2862,7 +3135,6 @@ impl StacklessEngine {
                                         }
                                     }
                                 }
-
                             } else {
                                 // Couldn't resolve import - redirect via trampoline
                                 #[cfg(feature = "tracing")]
@@ -2906,35 +3178,47 @@ impl StacklessEngine {
                                 return_state: Some(saved_state),
                             });
                         }
-                    }
+                    },
                     Instruction::CallRef(_type_idx) => {
                         // call_ref: call function via typed function reference
                         // Pop funcref from stack, trap if null, then call
-                        let func_ref_val = operand_stack.pop()
-                            .ok_or_else(|| kiln_error::Error::runtime_error("call_ref: stack underflow"))?;
+                        let func_ref_val = operand_stack.pop().ok_or_else(|| {
+                            kiln_error::Error::runtime_error("call_ref: stack underflow")
+                        })?;
 
                         let func_idx = match &func_ref_val {
                             Value::FuncRef(Some(fref)) => fref.index as usize,
                             Value::FuncRef(None) => {
-                                return Err(kiln_error::Error::runtime_trap("null function reference"));
-                            }
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "null function reference",
+                                ));
+                            },
                             _ => {
-                                return Err(kiln_error::Error::runtime_trap("call_ref: expected funcref on stack"));
-                            }
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "call_ref: expected funcref on stack",
+                                ));
+                            },
                         };
 
                         #[cfg(feature = "tracing")]
-                        trace!("call_ref: type_idx={}, resolved func_idx={}", _type_idx, func_idx);
+                        trace!(
+                            "call_ref: type_idx={}, resolved func_idx={}",
+                            _type_idx, func_idx
+                        );
 
                         // Validate function index
                         if func_idx >= module.functions.len() {
-                            return Err(kiln_error::Error::runtime_trap("call_ref: function index out of bounds"));
+                            return Err(kiln_error::Error::runtime_trap(
+                                "call_ref: function index out of bounds",
+                            ));
                         }
 
                         // Get function type to determine parameter count
                         let func = &module.functions[func_idx];
-                        let func_type = module.types.get(func.type_idx as usize)
-                            .ok_or_else(|| kiln_error::Error::runtime_error("call_ref: invalid function type"))?;
+                        let func_type =
+                            module.types.get(func.type_idx as usize).ok_or_else(|| {
+                                kiln_error::Error::runtime_error("call_ref: invalid function type")
+                            })?;
                         let param_count = func_type.params.len();
 
                         // Pop arguments from the stack
@@ -2943,7 +3227,9 @@ impl StacklessEngine {
                             if let Some(arg) = operand_stack.pop() {
                                 call_args.push(arg);
                             } else {
-                                return Err(kiln_error::Error::runtime_error("call_ref: stack underflow for args"));
+                                return Err(kiln_error::Error::runtime_error(
+                                    "call_ref: stack underflow for args",
+                                ));
                             }
                         }
                         call_args.reverse();
@@ -2965,34 +3251,48 @@ impl StacklessEngine {
                             args: call_args,
                             return_state: Some(saved_state),
                         });
-                    }
+                    },
                     Instruction::ReturnCallRef(_type_idx) => {
                         // return_call_ref: tail call function via typed function reference
-                        let func_ref_val = operand_stack.pop()
-                            .ok_or_else(|| kiln_error::Error::runtime_error("return_call_ref: stack underflow"))?;
+                        let func_ref_val = operand_stack.pop().ok_or_else(|| {
+                            kiln_error::Error::runtime_error("return_call_ref: stack underflow")
+                        })?;
 
                         let func_idx = match &func_ref_val {
                             Value::FuncRef(Some(fref)) => fref.index as usize,
                             Value::FuncRef(None) => {
-                                return Err(kiln_error::Error::runtime_trap("null function reference"));
-                            }
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "null function reference",
+                                ));
+                            },
                             _ => {
-                                return Err(kiln_error::Error::runtime_trap("return_call_ref: expected funcref on stack"));
-                            }
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "return_call_ref: expected funcref on stack",
+                                ));
+                            },
                         };
 
                         #[cfg(feature = "tracing")]
-                        trace!("return_call_ref: type_idx={}, resolved func_idx={}", _type_idx, func_idx);
+                        trace!(
+                            "return_call_ref: type_idx={}, resolved func_idx={}",
+                            _type_idx, func_idx
+                        );
 
                         // Validate function index
                         if func_idx >= module.functions.len() {
-                            return Err(kiln_error::Error::runtime_trap("return_call_ref: function index out of bounds"));
+                            return Err(kiln_error::Error::runtime_trap(
+                                "return_call_ref: function index out of bounds",
+                            ));
                         }
 
                         // Get function type to determine parameter count
                         let func = &module.functions[func_idx];
-                        let func_type = module.types.get(func.type_idx as usize)
-                            .ok_or_else(|| kiln_error::Error::runtime_error("return_call_ref: invalid function type"))?;
+                        let func_type =
+                            module.types.get(func.type_idx as usize).ok_or_else(|| {
+                                kiln_error::Error::runtime_error(
+                                    "return_call_ref: invalid function type",
+                                )
+                            })?;
                         let param_count = func_type.params.len();
 
                         // Pop arguments from the stack
@@ -3001,7 +3301,9 @@ impl StacklessEngine {
                             if let Some(arg) = operand_stack.pop() {
                                 call_args.push(arg);
                             } else {
-                                return Err(kiln_error::Error::runtime_error("return_call_ref: stack underflow for args"));
+                                return Err(kiln_error::Error::runtime_error(
+                                    "return_call_ref: stack underflow for args",
+                                ));
                             }
                         }
                         call_args.reverse();
@@ -3016,7 +3318,7 @@ impl StacklessEngine {
                             func_idx,
                             args: call_args,
                         });
-                    }
+                    },
                     Instruction::ReturnCall(func_idx) => {
                         // ReturnCall: tail call to another function
                         // Similar to Call, but the results become the current function's return value
@@ -3025,11 +3327,15 @@ impl StacklessEngine {
 
                         // Get function type to determine parameter count
                         if (func_idx as usize) >= module.functions.len() {
-                            return Err(kiln_error::Error::runtime_trap("return_call: function index out of bounds"));
+                            return Err(kiln_error::Error::runtime_trap(
+                                "return_call: function index out of bounds",
+                            ));
                         }
                         let func = &module.functions[func_idx as usize];
-                        let func_type = module.types.get(func.type_idx as usize)
-                            .ok_or_else(|| kiln_error::Error::runtime_error("Invalid function type"))?;
+                        let func_type =
+                            module.types.get(func.type_idx as usize).ok_or_else(|| {
+                                kiln_error::Error::runtime_error("Invalid function type")
+                            })?;
 
                         // Pop the required number of arguments from the stack
                         let param_count = func_type.params.len();
@@ -3038,7 +3344,9 @@ impl StacklessEngine {
                             if let Some(arg) = operand_stack.pop() {
                                 call_args.push(arg);
                             } else {
-                                return Err(kiln_error::Error::runtime_error("Stack underflow on return_call"));
+                                return Err(kiln_error::Error::runtime_error(
+                                    "Stack underflow on return_call",
+                                ));
                             }
                         }
                         call_args.reverse();
@@ -3055,12 +3363,14 @@ impl StacklessEngine {
                             func_idx: func_idx as usize,
                             args: call_args,
                         });
-                    }
+                    },
                     Instruction::ReturnCallIndirect(type_idx, table_idx) => {
                         // ReturnCallIndirect: tail call through indirect table reference
                         // Pop the function index from the stack (i32 or i64 for table64)
                         let popped = operand_stack.pop().ok_or_else(|| {
-                            kiln_error::Error::runtime_trap("return_call_indirect: expected function index on stack")
+                            kiln_error::Error::runtime_trap(
+                                "return_call_indirect: expected function index on stack",
+                            )
                         })?;
                         let table_func_idx: u32 = match popped {
                             Value::I32(idx) => idx as u32,
@@ -3068,8 +3378,10 @@ impl StacklessEngine {
                                 kiln_error::Error::runtime_trap("undefined element")
                             })?,
                             _ => {
-                                return Err(kiln_error::Error::runtime_trap("return_call_indirect: expected i32 or i64 function index on stack"));
-                            }
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "return_call_indirect: expected i32 or i64 function index on stack",
+                                ));
+                            },
                         };
 
                         #[cfg(feature = "tracing")]
@@ -3086,35 +3398,57 @@ impl StacklessEngine {
                                 if let Ok(Some(func_ref)) = table.0.get(table_func_idx) {
                                     match func_ref {
                                         Value::FuncRef(Some(fref)) => fref.index as usize,
-                                        Value::FuncRef(None) => return Err(kiln_error::Error::runtime_trap("uninitialized element")),
+                                        Value::FuncRef(None) => {
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "uninitialized element",
+                                            ));
+                                        },
                                         Value::I32(idx) => idx as usize,
                                         Value::I64(idx) => idx as usize,
-                                        _ => return Err(kiln_error::Error::runtime_trap("uninitialized element")),
+                                        _ => {
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "uninitialized element",
+                                            ));
+                                        },
                                     }
                                 } else if let Ok(None) = table.0.get(table_func_idx) {
-                                    return Err(kiln_error::Error::runtime_trap("uninitialized element"));
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "uninitialized element",
+                                    ));
                                 } else {
-                                    return Err(kiln_error::Error::runtime_trap("undefined element"));
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "undefined element",
+                                    ));
                                 }
                             } else {
-                                return Err(kiln_error::Error::runtime_trap("return_call_indirect: table not found"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "return_call_indirect: table not found",
+                                ));
                             }
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("return_call_indirect: instance not found"));
+                            return Err(kiln_error::Error::runtime_trap(
+                                "return_call_indirect: instance not found",
+                            ));
                         };
 
                         // Validate function index
                         if func_idx >= module.functions.len() {
-                            return Err(kiln_error::Error::runtime_trap("return_call_indirect: function index out of bounds"));
+                            return Err(kiln_error::Error::runtime_trap(
+                                "return_call_indirect: function index out of bounds",
+                            ));
                         }
 
                         // Get function type and validate using canonical IDs when available
                         let func = &module.functions[func_idx];
-                        let func_type = module.types.get(func.type_idx as usize)
-                            .ok_or_else(|| kiln_error::Error::runtime_error("Invalid function type"))?;
+                        let func_type =
+                            module.types.get(func.type_idx as usize).ok_or_else(|| {
+                                kiln_error::Error::runtime_error("Invalid function type")
+                            })?;
 
                         if !call_indirect_type_matches(type_idx, func.type_idx, &module) {
-                            return Err(kiln_error::Error::runtime_trap("indirect call type mismatch"));
+                            return Err(kiln_error::Error::runtime_trap(
+                                "indirect call type mismatch",
+                            ));
                         }
 
                         // Pop the required number of arguments from the stack
@@ -3124,7 +3458,9 @@ impl StacklessEngine {
                             if let Some(arg) = operand_stack.pop() {
                                 call_args.push(arg);
                             } else {
-                                return Err(kiln_error::Error::runtime_error("Stack underflow on return_call_indirect"));
+                                return Err(kiln_error::Error::runtime_error(
+                                    "Stack underflow on return_call_indirect",
+                                ));
                             }
                         }
                         call_args.reverse();
@@ -3141,7 +3477,7 @@ impl StacklessEngine {
                             func_idx,
                             args: call_args,
                         });
-                    }
+                    },
                     Instruction::I32Const(value) => {
                         #[cfg(feature = "tracing")]
                         trace!("I32Const: pushing value {}", value);
@@ -3158,18 +3494,18 @@ impl StacklessEngine {
                         operand_stack.push(Value::I32(value));
                         #[cfg(feature = "tracing")]
                         trace!("Operand stack now has {} values", operand_stack.len());
-                    }
+                    },
                     Instruction::I64Const(value) => {
                         #[cfg(feature = "tracing")]
 
                         trace!("I64Const: pushing value {}", value);
                         operand_stack.push(Value::I64(value));
-                    }
+                    },
                     Instruction::F32Const(bits) => {
                         #[cfg(feature = "tracing")]
                         trace!("F32Const: pushing {}", f32::from_bits(bits));
                         operand_stack.push(Value::F32(FloatBits32(bits)));
-                    }
+                    },
                     Instruction::LocalGet(local_idx) => {
                         if (local_idx as usize) < locals.len() {
                             // Use copy_value() for efficient copying of Copy-like variants
@@ -3205,9 +3541,13 @@ impl StacklessEngine {
                             trace!("Operand stack now has {} values", operand_stack.len());
                         } else {
                             #[cfg(feature = "tracing")]
-                            trace!("LocalGet: local[{}] out of bounds (locals.len()={})", local_idx, locals.len());
+                            trace!(
+                                "LocalGet: local[{}] out of bounds (locals.len()={})",
+                                local_idx,
+                                locals.len()
+                            );
                         }
-                    }
+                    },
                     Instruction::LocalSet(local_idx) => {
                         if let Some(value) = operand_stack.pop() {
                             #[cfg(feature = "tracing")]
@@ -3227,21 +3567,28 @@ impl StacklessEngine {
                             } else {
                                 #[cfg(feature = "tracing")]
 
-                                trace!("LocalSet: local[{}] out of bounds (locals.len()={})", local_idx, locals.len());
+                                trace!(
+                                    "LocalSet: local[{}] out of bounds (locals.len()={})",
+                                    local_idx,
+                                    locals.len()
+                                );
                             }
                         } else {
                             #[cfg(feature = "tracing")]
 
                             trace!("LocalSet: operand stack empty");
                         }
-                    }
+                    },
                     Instruction::LocalTee(local_idx) => {
                         // Like LocalSet but keeps value on stack
                         // Use copy_value() for efficient copying of Copy-like variants
                         if let Some(value) = operand_stack.last().map(|v| v.copy_value()) {
                             #[cfg(feature = "tracing")]
 
-                            trace!("LocalTee: setting local[{}] = {:?} (keeping on stack)", local_idx, value);
+                            trace!(
+                                "LocalTee: setting local[{}] = {:?} (keeping on stack)",
+                                local_idx, value
+                            );
                             // Debug: trace LocalTee in function 222 (core::fmt::write)
                             #[cfg(feature = "tracing")]
                             if func_idx == 222 {
@@ -3257,14 +3604,18 @@ impl StacklessEngine {
                             } else {
                                 #[cfg(feature = "tracing")]
 
-                                trace!("LocalTee: local[{}] out of bounds (locals.len()={})", local_idx, locals.len());
+                                trace!(
+                                    "LocalTee: local[{}] out of bounds (locals.len()={})",
+                                    local_idx,
+                                    locals.len()
+                                );
                             }
                         } else {
                             #[cfg(feature = "tracing")]
 
                             trace!("LocalTee: operand stack empty");
                         }
-                    }
+                    },
                     Instruction::GlobalGet(global_idx) => {
                         #[cfg(feature = "tracing")]
                         trace!("GlobalGet: reading global[{}] from instance", global_idx);
@@ -3274,11 +3625,14 @@ impl StacklessEngine {
                                 // GlobalWrapper now uses Arc<RwLock<Global>>, use get() method
                                 let value = global_wrapper.get().map_err(|_| {
                                     kiln_error::Error::runtime_execution_error(
-                                        "Failed to read global value"
+                                        "Failed to read global value",
                                     )
                                 })?;
                                 #[cfg(feature = "tracing")]
-                                trace!("GlobalGet: global[{}] = {:?} (from instance)", global_idx, value);
+                                trace!(
+                                    "GlobalGet: global[{}] = {:?} (from instance)",
+                                    global_idx, value
+                                );
                                 #[cfg(feature = "tracing")]
                                 {
                                     // Debug all global reads to trace suspicious values
@@ -3297,19 +3651,18 @@ impl StacklessEngine {
                                     }
                                 }
                                 operand_stack.push(value);
-                            }
+                            },
                             Err(e) => {
                                 #[cfg(feature = "tracing")]
                                 error!("GlobalGet: failed to get global[{}]: {:?}", global_idx, e);
                                 // NO FALLBACKS - fail properly as per user directive
                                 return Err(kiln_error::Error::runtime_execution_error(
-                                    "Failed to get global from instance"
+                                    "Failed to get global from instance",
                                 ));
-                            }
+                            },
                         }
-                    }
+                    },
                     Instruction::GlobalSet(global_idx) => {
-
                         if let Some(value) = operand_stack.pop() {
                             #[cfg(feature = "tracing")]
                             trace!("GlobalSet: setting global[{}] to {:?}", global_idx, value);
@@ -3335,27 +3688,29 @@ impl StacklessEngine {
                                 Ok(global_wrapper) => {
                                     global_wrapper.set(value).map_err(|e| {
                                         kiln_error::Error::runtime_execution_error(
-                                            "GlobalSet: failed to set global value"
+                                            "GlobalSet: failed to set global value",
                                         )
                                     })?;
                                     #[cfg(feature = "tracing")]
                                     trace!("GlobalSet: successfully set global[{}]", global_idx);
-                                }
+                                },
                                 Err(_e) => {
                                     return Err(kiln_error::Error::runtime_execution_error(
-                                        "GlobalSet: global index out of bounds"
+                                        "GlobalSet: global index out of bounds",
                                     ));
-                                }
+                                },
                             }
                         } else {
                             return Err(kiln_error::Error::runtime_execution_error(
-                                "GlobalSet requires a value on the operand stack"
+                                "GlobalSet requires a value on the operand stack",
                             ));
                         }
-                    }
+                    },
                     // Arithmetic operations
                     Instruction::I32Add => {
-                        if let (Some(Value::I32(b)), Some(Value::I32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I32(b)), Some(Value::I32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = a.wrapping_add(b);
                             #[cfg(feature = "tracing")]
                             trace!("I32Add: {} + {} = {}", a, b, result);
@@ -3373,9 +3728,11 @@ impl StacklessEngine {
                             }
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I32Sub => {
-                        if let (Some(Value::I32(b)), Some(Value::I32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I32(b)), Some(Value::I32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = a.wrapping_sub(b);
                             #[cfg(feature = "tracing")]
                             trace!("I32Sub: {} - {} = {}", a, b, result);
@@ -3393,9 +3750,11 @@ impl StacklessEngine {
                             }
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I32Mul => {
-                        if let (Some(Value::I32(b)), Some(Value::I32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I32(b)), Some(Value::I32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = a.wrapping_mul(b);
                             #[cfg(feature = "tracing")]
                             trace!("I32Mul: {} * {} = {}", a, b, result);
@@ -3413,11 +3772,15 @@ impl StacklessEngine {
                             }
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I32DivS => {
-                        if let (Some(Value::I32(b)), Some(Value::I32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I32(b)), Some(Value::I32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             if b == 0 {
-                                return Err(kiln_error::Error::runtime_trap("integer divide by zero"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "integer divide by zero",
+                                ));
                             }
                             // Check for integer overflow: INT_MIN / -1 would overflow
                             if a == i32::MIN && b == -1 {
@@ -3428,22 +3791,30 @@ impl StacklessEngine {
                             trace!("I32DivS: {} / {} = {}", a, b, result);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I32DivU => {
-                        if let (Some(Value::I32(b)), Some(Value::I32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I32(b)), Some(Value::I32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             if b == 0 {
-                                return Err(kiln_error::Error::runtime_trap("integer divide by zero"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "integer divide by zero",
+                                ));
                             }
                             let result = (a as u32).wrapping_div(b as u32) as i32;
                             #[cfg(feature = "tracing")]
                             trace!("I32DivU: {} / {} = {}", a as u32, b as u32, result as u32);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I32RemS => {
-                        if let (Some(Value::I32(b)), Some(Value::I32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I32(b)), Some(Value::I32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             if b == 0 {
-                                return Err(kiln_error::Error::runtime_trap("integer divide by zero"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "integer divide by zero",
+                                ));
                             }
                             // Note: INT_MIN % -1 = 0 (no overflow for remainder)
                             let result = a.wrapping_rem(b);
@@ -3451,51 +3822,65 @@ impl StacklessEngine {
                             trace!("I32RemS: {} % {} = {}", a, b, result);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I32RemU => {
-                        if let (Some(Value::I32(b)), Some(Value::I32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I32(b)), Some(Value::I32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             if b == 0 {
-                                return Err(kiln_error::Error::runtime_trap("integer divide by zero"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "integer divide by zero",
+                                ));
                             }
                             let result = (a as u32).wrapping_rem(b as u32) as i32;
                             #[cfg(feature = "tracing")]
                             trace!("I32RemU: {} % {} = {}", a as u32, b as u32, result as u32);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     // I64 arithmetic operations
                     Instruction::I64Add => {
-                        if let (Some(Value::I64(b)), Some(Value::I64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I64(b)), Some(Value::I64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = a.wrapping_add(b);
                             #[cfg(feature = "tracing")]
 
                             trace!("I64Add: {} + {} = {}", a, b, result);
                             operand_stack.push(Value::I64(result));
                         }
-                    }
+                    },
                     Instruction::I64Sub => {
-                        if let (Some(Value::I64(b)), Some(Value::I64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I64(b)), Some(Value::I64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = a.wrapping_sub(b);
                             #[cfg(feature = "tracing")]
 
                             trace!("I64Sub: {} - {} = {}", a, b, result);
                             operand_stack.push(Value::I64(result));
                         }
-                    }
+                    },
                     Instruction::I64Mul => {
-                        if let (Some(Value::I64(b)), Some(Value::I64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I64(b)), Some(Value::I64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = a.wrapping_mul(b);
                             #[cfg(feature = "tracing")]
 
                             trace!("I64Mul: {} * {} = {}", a, b, result);
                             operand_stack.push(Value::I64(result));
                         }
-                    }
+                    },
                     // I64 division and remainder operations
                     Instruction::I64DivS => {
-                        if let (Some(Value::I64(b)), Some(Value::I64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I64(b)), Some(Value::I64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             if b == 0 {
-                                return Err(kiln_error::Error::runtime_trap("integer divide by zero"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "integer divide by zero",
+                                ));
                             }
                             // Check for integer overflow: INT_MIN / -1 would overflow
                             if a == i64::MIN && b == -1 {
@@ -3506,22 +3891,30 @@ impl StacklessEngine {
                             trace!("I64DivS: {} / {} = {}", a, b, result);
                             operand_stack.push(Value::I64(result));
                         }
-                    }
+                    },
                     Instruction::I64DivU => {
-                        if let (Some(Value::I64(b)), Some(Value::I64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I64(b)), Some(Value::I64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             if b == 0 {
-                                return Err(kiln_error::Error::runtime_trap("integer divide by zero"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "integer divide by zero",
+                                ));
                             }
                             let result = (a as u64).wrapping_div(b as u64) as i64;
                             #[cfg(feature = "tracing")]
                             trace!("I64DivU: {} / {} = {}", a as u64, b as u64, result as u64);
                             operand_stack.push(Value::I64(result));
                         }
-                    }
+                    },
                     Instruction::I64RemS => {
-                        if let (Some(Value::I64(b)), Some(Value::I64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I64(b)), Some(Value::I64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             if b == 0 {
-                                return Err(kiln_error::Error::runtime_trap("integer divide by zero"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "integer divide by zero",
+                                ));
                             }
                             // Note: INT_MIN % -1 = 0 (no overflow for remainder)
                             let result = a.wrapping_rem(b);
@@ -3529,59 +3922,73 @@ impl StacklessEngine {
                             trace!("I64RemS: {} % {} = {}", a, b, result);
                             operand_stack.push(Value::I64(result));
                         }
-                    }
+                    },
                     Instruction::I64RemU => {
-                        if let (Some(Value::I64(b)), Some(Value::I64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I64(b)), Some(Value::I64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             if b == 0 {
-                                return Err(kiln_error::Error::runtime_trap("integer divide by zero"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "integer divide by zero",
+                                ));
                             }
                             let result = (a as u64).wrapping_rem(b as u64) as i64;
                             #[cfg(feature = "tracing")]
                             trace!("I64RemU: {} % {} = {}", a as u64, b as u64, result as u64);
                             operand_stack.push(Value::I64(result));
                         }
-                    }
+                    },
                     // I64 shift and rotate operations
                     Instruction::I64Shl => {
-                        if let (Some(Value::I64(b)), Some(Value::I64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I64(b)), Some(Value::I64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = a.wrapping_shl((b as u64 % 64) as u32);
                             #[cfg(feature = "tracing")]
                             trace!("I64Shl: {} << {} = {}", a, b, result);
                             operand_stack.push(Value::I64(result));
                         }
-                    }
+                    },
                     Instruction::I64ShrS => {
-                        if let (Some(Value::I64(b)), Some(Value::I64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I64(b)), Some(Value::I64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = a.wrapping_shr((b as u64 % 64) as u32);
                             #[cfg(feature = "tracing")]
                             trace!("I64ShrS: {} >> {} = {}", a, b, result);
                             operand_stack.push(Value::I64(result));
                         }
-                    }
+                    },
                     Instruction::I64ShrU => {
-                        if let (Some(Value::I64(b)), Some(Value::I64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I64(b)), Some(Value::I64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = (a as u64).wrapping_shr((b as u64 % 64) as u32) as i64;
                             #[cfg(feature = "tracing")]
                             trace!("I64ShrU: {} >> {} = {}", a as u64, b as u64, result as u64);
                             operand_stack.push(Value::I64(result));
                         }
-                    }
+                    },
                     Instruction::I64Rotl => {
-                        if let (Some(Value::I64(b)), Some(Value::I64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I64(b)), Some(Value::I64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = a.rotate_left((b as u64 % 64) as u32);
                             #[cfg(feature = "tracing")]
                             trace!("I64Rotl: {} rotl {} = {}", a, b, result);
                             operand_stack.push(Value::I64(result));
                         }
-                    }
+                    },
                     Instruction::I64Rotr => {
-                        if let (Some(Value::I64(b)), Some(Value::I64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I64(b)), Some(Value::I64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = a.rotate_right((b as u64 % 64) as u32);
                             #[cfg(feature = "tracing")]
                             trace!("I64Rotr: {} rotr {} = {}", a, b, result);
                             operand_stack.push(Value::I64(result));
                         }
-                    }
+                    },
                     // Conversion operations
                     Instruction::I32WrapI64 => {
                         if let Some(Value::I64(value)) = operand_stack.pop() {
@@ -3602,7 +4009,7 @@ impl StacklessEngine {
                             }
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
 
                     // Trapping truncation operations - trap on NaN or overflow
                     // Per WebAssembly spec: NaN -> "invalid conversion to integer"
@@ -3625,7 +4032,7 @@ impl StacklessEngine {
                             }
                             operand_stack.push(Value::I32(f_trunc as i32));
                         }
-                    }
+                    },
                     Instruction::I32TruncF32U => {
                         if let Some(Value::F32(bits)) = operand_stack.pop() {
                             let f = f32::from_bits(bits.0);
@@ -3644,7 +4051,7 @@ impl StacklessEngine {
                             }
                             operand_stack.push(Value::I32(f_trunc as u32 as i32));
                         }
-                    }
+                    },
                     Instruction::I32TruncF64S => {
                         if let Some(Value::F64(bits)) = operand_stack.pop() {
                             let f = f64::from_bits(bits.0);
@@ -3663,7 +4070,7 @@ impl StacklessEngine {
                             }
                             operand_stack.push(Value::I32(f_trunc as i32));
                         }
-                    }
+                    },
                     Instruction::I32TruncF64U => {
                         if let Some(Value::F64(bits)) = operand_stack.pop() {
                             let f = f64::from_bits(bits.0);
@@ -3682,7 +4089,7 @@ impl StacklessEngine {
                             }
                             operand_stack.push(Value::I32(f_trunc as u32 as i32));
                         }
-                    }
+                    },
                     Instruction::I64TruncF32S => {
                         if let Some(Value::F32(bits)) = operand_stack.pop() {
                             let f = f32::from_bits(bits.0);
@@ -3703,7 +4110,7 @@ impl StacklessEngine {
                             }
                             operand_stack.push(Value::I64(f_trunc as i64));
                         }
-                    }
+                    },
                     Instruction::I64TruncF32U => {
                         if let Some(Value::F32(bits)) = operand_stack.pop() {
                             let f = f32::from_bits(bits.0);
@@ -3722,7 +4129,7 @@ impl StacklessEngine {
                             }
                             operand_stack.push(Value::I64(f_trunc as u64 as i64));
                         }
-                    }
+                    },
                     Instruction::I64TruncF64S => {
                         if let Some(Value::F64(bits)) = operand_stack.pop() {
                             let f = f64::from_bits(bits.0);
@@ -3743,7 +4150,7 @@ impl StacklessEngine {
                             }
                             operand_stack.push(Value::I64(f_trunc as i64));
                         }
-                    }
+                    },
                     Instruction::I64TruncF64U => {
                         if let Some(Value::F64(bits)) = operand_stack.pop() {
                             let f = f64::from_bits(bits.0);
@@ -3762,7 +4169,7 @@ impl StacklessEngine {
                             }
                             operand_stack.push(Value::I64(f_trunc as u64 as i64));
                         }
-                    }
+                    },
 
                     // Saturating truncation operations - clamp instead of trap on overflow
                     Instruction::I32TruncSatF32S => {
@@ -3779,17 +4186,17 @@ impl StacklessEngine {
                                     } else {
                                         f as i32
                                     }
-                                }
+                                },
                                 _ => {
                                     #[cfg(feature = "tracing")]
 
                                     trace!("I32TruncSatF32S: type error");
                                     0i32
-                                }
+                                },
                             };
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I32TruncSatF32U => {
                         if let Some(value) = operand_stack.pop() {
                             let result = match value {
@@ -3802,17 +4209,17 @@ impl StacklessEngine {
                                     } else {
                                         f as u32
                                     }
-                                }
+                                },
                                 _ => {
                                     #[cfg(feature = "tracing")]
 
                                     trace!("I32TruncSatF32U: type error");
                                     0u32
-                                }
+                                },
                             };
                             operand_stack.push(Value::I32(result as i32));
                         }
-                    }
+                    },
                     Instruction::I32TruncSatF64S => {
                         if let Some(value) = operand_stack.pop() {
                             let result = match value {
@@ -3827,17 +4234,17 @@ impl StacklessEngine {
                                     } else {
                                         f as i32
                                     }
-                                }
+                                },
                                 _ => {
                                     #[cfg(feature = "tracing")]
 
                                     trace!("I32TruncSatF64S: type error");
                                     0i32
-                                }
+                                },
                             };
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I32TruncSatF64U => {
                         if let Some(value) = operand_stack.pop() {
                             let result = match value {
@@ -3850,17 +4257,17 @@ impl StacklessEngine {
                                     } else {
                                         f as u32
                                     }
-                                }
+                                },
                                 _ => {
                                     #[cfg(feature = "tracing")]
 
                                     trace!("I32TruncSatF64U: type error");
                                     0u32
-                                }
+                                },
                             };
                             operand_stack.push(Value::I32(result as i32));
                         }
-                    }
+                    },
                     Instruction::I64TruncSatF32S => {
                         if let Some(value) = operand_stack.pop() {
                             let result = match value {
@@ -3875,17 +4282,17 @@ impl StacklessEngine {
                                     } else {
                                         f as i64
                                     }
-                                }
+                                },
                                 _ => {
                                     #[cfg(feature = "tracing")]
 
                                     trace!("I64TruncSatF32S: type error");
                                     0i64
-                                }
+                                },
                             };
                             operand_stack.push(Value::I64(result));
                         }
-                    }
+                    },
                     Instruction::I64TruncSatF32U => {
                         if let Some(value) = operand_stack.pop() {
                             let result = match value {
@@ -3898,17 +4305,17 @@ impl StacklessEngine {
                                     } else {
                                         f as u64
                                     }
-                                }
+                                },
                                 _ => {
                                     #[cfg(feature = "tracing")]
 
                                     trace!("I64TruncSatF32U: type error");
                                     0u64
-                                }
+                                },
                             };
                             operand_stack.push(Value::I64(result as i64));
                         }
-                    }
+                    },
                     Instruction::I64TruncSatF64S => {
                         if let Some(value) = operand_stack.pop() {
                             let result = match value {
@@ -3923,17 +4330,17 @@ impl StacklessEngine {
                                     } else {
                                         f as i64
                                     }
-                                }
+                                },
                                 _ => {
                                     #[cfg(feature = "tracing")]
 
                                     trace!("I64TruncSatF64S: type error");
                                     0i64
-                                }
+                                },
                             };
                             operand_stack.push(Value::I64(result));
                         }
-                    }
+                    },
                     Instruction::I64TruncSatF64U => {
                         if let Some(value) = operand_stack.pop() {
                             let result = match value {
@@ -3946,63 +4353,149 @@ impl StacklessEngine {
                                     } else {
                                         f as u64
                                     }
-                                }
+                                },
                                 _ => {
                                     #[cfg(feature = "tracing")]
 
                                     trace!("I64TruncSatF64U: type error");
                                     0u64
-                                }
+                                },
                             };
                             operand_stack.push(Value::I64(result as i64));
                         }
-                    }
+                    },
 
                     // Wide-arithmetic operations (0xFC prefix, sub-opcodes 0x13-0x16)
                     Instruction::I64Add128 => {
                         // [a_lo, a_hi, b_lo, b_hi] -> [result_lo, result_hi]
-                        let b_hi = match operand_stack.pop() { Some(Value::I64(v)) => v, _ => return Err(kiln_error::Error::runtime_execution_error("i64.add128: expected i64")) };
-                        let b_lo = match operand_stack.pop() { Some(Value::I64(v)) => v, _ => return Err(kiln_error::Error::runtime_execution_error("i64.add128: expected i64")) };
-                        let a_hi = match operand_stack.pop() { Some(Value::I64(v)) => v, _ => return Err(kiln_error::Error::runtime_execution_error("i64.add128: expected i64")) };
-                        let a_lo = match operand_stack.pop() { Some(Value::I64(v)) => v, _ => return Err(kiln_error::Error::runtime_execution_error("i64.add128: expected i64")) };
+                        let b_hi = match operand_stack.pop() {
+                            Some(Value::I64(v)) => v,
+                            _ => {
+                                return Err(kiln_error::Error::runtime_execution_error(
+                                    "i64.add128: expected i64",
+                                ));
+                            },
+                        };
+                        let b_lo = match operand_stack.pop() {
+                            Some(Value::I64(v)) => v,
+                            _ => {
+                                return Err(kiln_error::Error::runtime_execution_error(
+                                    "i64.add128: expected i64",
+                                ));
+                            },
+                        };
+                        let a_hi = match operand_stack.pop() {
+                            Some(Value::I64(v)) => v,
+                            _ => {
+                                return Err(kiln_error::Error::runtime_execution_error(
+                                    "i64.add128: expected i64",
+                                ));
+                            },
+                        };
+                        let a_lo = match operand_stack.pop() {
+                            Some(Value::I64(v)) => v,
+                            _ => {
+                                return Err(kiln_error::Error::runtime_execution_error(
+                                    "i64.add128: expected i64",
+                                ));
+                            },
+                        };
                         let a = ((a_hi as u64 as u128) << 64) | (a_lo as u64 as u128);
                         let b = ((b_hi as u64 as u128) << 64) | (b_lo as u64 as u128);
                         let result = a.wrapping_add(b);
                         operand_stack.push(Value::I64(result as u64 as i64));
                         operand_stack.push(Value::I64((result >> 64) as u64 as i64));
-                    }
+                    },
                     Instruction::I64Sub128 => {
                         // [a_lo, a_hi, b_lo, b_hi] -> [result_lo, result_hi]
-                        let b_hi = match operand_stack.pop() { Some(Value::I64(v)) => v, _ => return Err(kiln_error::Error::runtime_execution_error("i64.sub128: expected i64")) };
-                        let b_lo = match operand_stack.pop() { Some(Value::I64(v)) => v, _ => return Err(kiln_error::Error::runtime_execution_error("i64.sub128: expected i64")) };
-                        let a_hi = match operand_stack.pop() { Some(Value::I64(v)) => v, _ => return Err(kiln_error::Error::runtime_execution_error("i64.sub128: expected i64")) };
-                        let a_lo = match operand_stack.pop() { Some(Value::I64(v)) => v, _ => return Err(kiln_error::Error::runtime_execution_error("i64.sub128: expected i64")) };
+                        let b_hi = match operand_stack.pop() {
+                            Some(Value::I64(v)) => v,
+                            _ => {
+                                return Err(kiln_error::Error::runtime_execution_error(
+                                    "i64.sub128: expected i64",
+                                ));
+                            },
+                        };
+                        let b_lo = match operand_stack.pop() {
+                            Some(Value::I64(v)) => v,
+                            _ => {
+                                return Err(kiln_error::Error::runtime_execution_error(
+                                    "i64.sub128: expected i64",
+                                ));
+                            },
+                        };
+                        let a_hi = match operand_stack.pop() {
+                            Some(Value::I64(v)) => v,
+                            _ => {
+                                return Err(kiln_error::Error::runtime_execution_error(
+                                    "i64.sub128: expected i64",
+                                ));
+                            },
+                        };
+                        let a_lo = match operand_stack.pop() {
+                            Some(Value::I64(v)) => v,
+                            _ => {
+                                return Err(kiln_error::Error::runtime_execution_error(
+                                    "i64.sub128: expected i64",
+                                ));
+                            },
+                        };
                         let a = ((a_hi as u64 as u128) << 64) | (a_lo as u64 as u128);
                         let b = ((b_hi as u64 as u128) << 64) | (b_lo as u64 as u128);
                         let result = a.wrapping_sub(b);
                         operand_stack.push(Value::I64(result as u64 as i64));
                         operand_stack.push(Value::I64((result >> 64) as u64 as i64));
-                    }
+                    },
                     Instruction::I64MulWideS => {
                         // [a, b] -> [result_lo, result_hi] (signed 64x64->128)
-                        let b = match operand_stack.pop() { Some(Value::I64(v)) => v, _ => return Err(kiln_error::Error::runtime_execution_error("i64.mul_wide_s: expected i64")) };
-                        let a = match operand_stack.pop() { Some(Value::I64(v)) => v, _ => return Err(kiln_error::Error::runtime_execution_error("i64.mul_wide_s: expected i64")) };
+                        let b = match operand_stack.pop() {
+                            Some(Value::I64(v)) => v,
+                            _ => {
+                                return Err(kiln_error::Error::runtime_execution_error(
+                                    "i64.mul_wide_s: expected i64",
+                                ));
+                            },
+                        };
+                        let a = match operand_stack.pop() {
+                            Some(Value::I64(v)) => v,
+                            _ => {
+                                return Err(kiln_error::Error::runtime_execution_error(
+                                    "i64.mul_wide_s: expected i64",
+                                ));
+                            },
+                        };
                         let result = (a as i128).wrapping_mul(b as i128);
                         operand_stack.push(Value::I64(result as u64 as i64));
                         operand_stack.push(Value::I64((result >> 64) as u64 as i64));
-                    }
+                    },
                     Instruction::I64MulWideU => {
                         // [a, b] -> [result_lo, result_hi] (unsigned 64x64->128)
-                        let b = match operand_stack.pop() { Some(Value::I64(v)) => v, _ => return Err(kiln_error::Error::runtime_execution_error("i64.mul_wide_u: expected i64")) };
-                        let a = match operand_stack.pop() { Some(Value::I64(v)) => v, _ => return Err(kiln_error::Error::runtime_execution_error("i64.mul_wide_u: expected i64")) };
+                        let b = match operand_stack.pop() {
+                            Some(Value::I64(v)) => v,
+                            _ => {
+                                return Err(kiln_error::Error::runtime_execution_error(
+                                    "i64.mul_wide_u: expected i64",
+                                ));
+                            },
+                        };
+                        let a = match operand_stack.pop() {
+                            Some(Value::I64(v)) => v,
+                            _ => {
+                                return Err(kiln_error::Error::runtime_execution_error(
+                                    "i64.mul_wide_u: expected i64",
+                                ));
+                            },
+                        };
                         let result = (a as u64 as u128).wrapping_mul(b as u64 as u128);
                         operand_stack.push(Value::I64(result as u64 as i64));
                         operand_stack.push(Value::I64((result >> 64) as u64 as i64));
-                    }
+                    },
 
                     // Comparison operations
                     Instruction::I32Eq => {
-                        if let (Some(Value::I32(b)), Some(Value::I32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I32(b)), Some(Value::I32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = if a == b { 1 } else { 0 };
                             #[cfg(feature = "tracing")]
                             trace!("I32Eq: {} == {} = {}", a, b, result != 0);
@@ -4020,169 +4513,207 @@ impl StacklessEngine {
                             }
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I32Ne => {
-                        if let (Some(Value::I32(b)), Some(Value::I32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I32(b)), Some(Value::I32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = if a != b { 1 } else { 0 };
                             #[cfg(feature = "tracing")]
 
                             trace!("I32Ne: {} != {} = {}", a, b, result != 0);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I32LtS => {
-                        if let (Some(Value::I32(b)), Some(Value::I32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I32(b)), Some(Value::I32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = if a < b { 1 } else { 0 };
                             #[cfg(feature = "tracing")]
 
                             trace!("I32LtS: {} < {} = {}", a, b, result != 0);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I32LtU => {
-                        if let (Some(Value::I32(b)), Some(Value::I32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I32(b)), Some(Value::I32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = if (a as u32) < (b as u32) { 1 } else { 0 };
                             #[cfg(feature = "tracing")]
 
                             trace!("I32LtU: {} < {} = {}", a as u32, b as u32, result != 0);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I32GtS => {
-                        if let (Some(Value::I32(b)), Some(Value::I32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I32(b)), Some(Value::I32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = if a > b { 1 } else { 0 };
                             #[cfg(feature = "tracing")]
 
                             trace!("I32GtS: {} > {} = {}", a, b, result != 0);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I32GtU => {
-                        if let (Some(Value::I32(b)), Some(Value::I32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I32(b)), Some(Value::I32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = if (a as u32) > (b as u32) { 1 } else { 0 };
                             #[cfg(feature = "tracing")]
 
                             trace!("I32GtU: {} > {} = {}", a as u32, b as u32, result != 0);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I32LeS => {
-                        if let (Some(Value::I32(b)), Some(Value::I32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I32(b)), Some(Value::I32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = if a <= b { 1 } else { 0 };
                             #[cfg(feature = "tracing")]
 
                             trace!("I32LeS: {} <= {} = {}", a, b, result != 0);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I32LeU => {
-                        if let (Some(Value::I32(b)), Some(Value::I32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I32(b)), Some(Value::I32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = if (a as u32) <= (b as u32) { 1 } else { 0 };
                             #[cfg(feature = "tracing")]
 
                             trace!("I32LeU: {} <= {} = {}", a as u32, b as u32, result != 0);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I32GeS => {
-                        if let (Some(Value::I32(b)), Some(Value::I32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I32(b)), Some(Value::I32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = if a >= b { 1 } else { 0 };
                             #[cfg(feature = "tracing")]
 
                             trace!("I32GeS: {} >= {} = {}", a, b, result != 0);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I32GeU => {
-                        if let (Some(Value::I32(b)), Some(Value::I32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I32(b)), Some(Value::I32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = if (a as u32) >= (b as u32) { 1 } else { 0 };
                             #[cfg(feature = "tracing")]
 
                             trace!("I32GeU: {} >= {} = {}", a as u32, b as u32, result != 0);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     // I64 comparison operations - all produce i32 result
                     Instruction::I64Eq => {
-                        if let (Some(Value::I64(b)), Some(Value::I64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I64(b)), Some(Value::I64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = if a == b { 1i32 } else { 0i32 };
                             #[cfg(feature = "tracing")]
                             trace!("I64Eq: {} == {} = {}", a, b, result != 0);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I64Ne => {
-                        if let (Some(Value::I64(b)), Some(Value::I64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I64(b)), Some(Value::I64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = if a != b { 1i32 } else { 0i32 };
                             #[cfg(feature = "tracing")]
                             trace!("I64Ne: {} != {} = {}", a, b, result != 0);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I64LtS => {
-                        if let (Some(Value::I64(b)), Some(Value::I64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I64(b)), Some(Value::I64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = if a < b { 1i32 } else { 0i32 };
                             #[cfg(feature = "tracing")]
                             trace!("I64LtS: {} < {} = {}", a, b, result != 0);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I64LtU => {
-                        if let (Some(Value::I64(b)), Some(Value::I64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I64(b)), Some(Value::I64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = if (a as u64) < (b as u64) { 1i32 } else { 0i32 };
                             #[cfg(feature = "tracing")]
                             trace!("I64LtU: {} < {} = {}", a as u64, b as u64, result != 0);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I64GtS => {
-                        if let (Some(Value::I64(b)), Some(Value::I64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I64(b)), Some(Value::I64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = if a > b { 1i32 } else { 0i32 };
                             #[cfg(feature = "tracing")]
                             trace!("I64GtS: {} > {} = {}", a, b, result != 0);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I64GtU => {
-                        if let (Some(Value::I64(b)), Some(Value::I64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I64(b)), Some(Value::I64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = if (a as u64) > (b as u64) { 1i32 } else { 0i32 };
                             #[cfg(feature = "tracing")]
                             trace!("I64GtU: {} > {} = {}", a as u64, b as u64, result != 0);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I64LeS => {
-                        if let (Some(Value::I64(b)), Some(Value::I64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I64(b)), Some(Value::I64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = if a <= b { 1i32 } else { 0i32 };
                             #[cfg(feature = "tracing")]
                             trace!("I64LeS: {} <= {} = {}", a, b, result != 0);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I64LeU => {
-                        if let (Some(Value::I64(b)), Some(Value::I64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I64(b)), Some(Value::I64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = if (a as u64) <= (b as u64) { 1i32 } else { 0i32 };
                             #[cfg(feature = "tracing")]
                             trace!("I64LeU: {} <= {} = {}", a as u64, b as u64, result != 0);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I64GeS => {
-                        if let (Some(Value::I64(b)), Some(Value::I64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I64(b)), Some(Value::I64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = if a >= b { 1i32 } else { 0i32 };
                             #[cfg(feature = "tracing")]
                             trace!("I64GeS: {} >= {} = {}", a, b, result != 0);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I64GeU => {
-                        if let (Some(Value::I64(b)), Some(Value::I64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I64(b)), Some(Value::I64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = if (a as u64) >= (b as u64) { 1i32 } else { 0i32 };
                             #[cfg(feature = "tracing")]
                             trace!("I64GeU: {} >= {} = {}", a as u64, b as u64, result != 0);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I64Eqz => {
                         if let Some(Value::I64(a)) = operand_stack.pop() {
                             let result = if a == 0 { 1i32 } else { 0i32 };
@@ -4190,110 +4721,136 @@ impl StacklessEngine {
                             trace!("I64Eqz: {} == 0 = {}", a, result != 0);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     // F32 comparison operations - all produce i32 result
                     Instruction::F32Eq => {
-                        if let (Some(Value::F32(b)), Some(Value::F32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::F32(b)), Some(Value::F32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = if a.value() == b.value() { 1i32 } else { 0i32 };
                             #[cfg(feature = "tracing")]
                             trace!("F32Eq: {} == {} = {}", a.value(), b.value(), result != 0);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::F32Ne => {
-                        if let (Some(Value::F32(b)), Some(Value::F32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::F32(b)), Some(Value::F32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = if a.value() != b.value() { 1i32 } else { 0i32 };
                             #[cfg(feature = "tracing")]
                             trace!("F32Ne: {} != {} = {}", a.value(), b.value(), result != 0);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::F32Lt => {
-                        if let (Some(Value::F32(b)), Some(Value::F32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::F32(b)), Some(Value::F32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = if a.value() < b.value() { 1i32 } else { 0i32 };
                             #[cfg(feature = "tracing")]
                             trace!("F32Lt: {} < {} = {}", a.value(), b.value(), result != 0);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::F32Gt => {
-                        if let (Some(Value::F32(b)), Some(Value::F32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::F32(b)), Some(Value::F32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = if a.value() > b.value() { 1i32 } else { 0i32 };
                             #[cfg(feature = "tracing")]
                             trace!("F32Gt: {} > {} = {}", a.value(), b.value(), result != 0);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::F32Le => {
-                        if let (Some(Value::F32(b)), Some(Value::F32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::F32(b)), Some(Value::F32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = if a.value() <= b.value() { 1i32 } else { 0i32 };
                             #[cfg(feature = "tracing")]
                             trace!("F32Le: {} <= {} = {}", a.value(), b.value(), result != 0);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::F32Ge => {
-                        if let (Some(Value::F32(b)), Some(Value::F32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::F32(b)), Some(Value::F32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = if a.value() >= b.value() { 1i32 } else { 0i32 };
                             #[cfg(feature = "tracing")]
                             trace!("F32Ge: {} >= {} = {}", a.value(), b.value(), result != 0);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     // Bitwise operations
                     Instruction::I32And => {
-                        if let (Some(Value::I32(b)), Some(Value::I32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I32(b)), Some(Value::I32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = a & b;
                             #[cfg(feature = "tracing")]
 
                             trace!("I32And: {} & {} = {}", a, b, result);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I32Or => {
-                        if let (Some(Value::I32(b)), Some(Value::I32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I32(b)), Some(Value::I32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = a | b;
                             #[cfg(feature = "tracing")]
 
                             trace!("I32Or: {} | {} = {}", a, b, result);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I32Xor => {
-                        if let (Some(Value::I32(b)), Some(Value::I32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I32(b)), Some(Value::I32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = a ^ b;
                             #[cfg(feature = "tracing")]
                             trace!("I32Xor: {} ^ {} = {}", a, b, result);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     // I64 bitwise operations
                     Instruction::I64And => {
-                        if let (Some(Value::I64(b)), Some(Value::I64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I64(b)), Some(Value::I64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = a & b;
                             #[cfg(feature = "tracing")]
                             trace!("I64And: {} & {} = {}", a, b, result);
                             operand_stack.push(Value::I64(result));
                         }
-                    }
+                    },
                     Instruction::I64Or => {
-                        if let (Some(Value::I64(b)), Some(Value::I64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I64(b)), Some(Value::I64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = a | b;
                             #[cfg(feature = "tracing")]
                             trace!("I64Or: {} | {} = {}", a, b, result);
                             operand_stack.push(Value::I64(result));
                         }
-                    }
+                    },
                     Instruction::I64Xor => {
-                        if let (Some(Value::I64(b)), Some(Value::I64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I64(b)), Some(Value::I64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = a ^ b;
                             #[cfg(feature = "tracing")]
                             trace!("I64Xor: {} ^ {} = {}", a, b, result);
                             operand_stack.push(Value::I64(result));
                         }
-                    }
+                    },
                     Instruction::I32Shl => {
-                        if let (Some(Value::I32(b)), Some(Value::I32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I32(b)), Some(Value::I32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = a.wrapping_shl((b as u32) % 32);
                             #[cfg(feature = "tracing")]
                             trace!("I32Shl: {} << {} = {}", a, b, result);
@@ -4311,43 +4868,51 @@ impl StacklessEngine {
                             }
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I32ShrS => {
-                        if let (Some(Value::I32(b)), Some(Value::I32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I32(b)), Some(Value::I32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = a.wrapping_shr((b as u32) % 32);
                             #[cfg(feature = "tracing")]
 
                             trace!("I32ShrS: {} >> {} = {}", a, b, result);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I32ShrU => {
-                        if let (Some(Value::I32(b)), Some(Value::I32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I32(b)), Some(Value::I32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = (a as u32).wrapping_shr((b as u32) % 32) as i32;
                             #[cfg(feature = "tracing")]
 
                             trace!("I32ShrU: {} >> {} = {}", a as u32, b as u32, result as u32);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I32Rotl => {
-                        if let (Some(Value::I32(b)), Some(Value::I32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I32(b)), Some(Value::I32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = a.rotate_left((b as u32) % 32);
                             #[cfg(feature = "tracing")]
 
                             trace!("I32Rotl: {} rotl {} = {}", a, b, result);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I32Rotr => {
-                        if let (Some(Value::I32(b)), Some(Value::I32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::I32(b)), Some(Value::I32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = a.rotate_right((b as u32) % 32);
                             #[cfg(feature = "tracing")]
 
                             trace!("I32Rotr: {} rotr {} = {}", a, b, result);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     // Unary operations
                     Instruction::I32Clz => {
                         if let Some(Value::I32(a)) = operand_stack.pop() {
@@ -4357,7 +4922,7 @@ impl StacklessEngine {
                             trace!("I32Clz: clz({}) = {}", a, result);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I32Ctz => {
                         if let Some(Value::I32(a)) = operand_stack.pop() {
                             let result = a.trailing_zeros() as i32;
@@ -4366,7 +4931,7 @@ impl StacklessEngine {
                             trace!("I32Ctz: ctz({}) = {}", a, result);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I32Popcnt => {
                         if let Some(Value::I32(a)) = operand_stack.pop() {
                             let result = a.count_ones() as i32;
@@ -4374,7 +4939,7 @@ impl StacklessEngine {
                             trace!("I32Popcnt: popcnt({}) = {}", a, result);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     // I64 unary bit operations
                     Instruction::I64Clz => {
                         if let Some(Value::I64(a)) = operand_stack.pop() {
@@ -4383,7 +4948,7 @@ impl StacklessEngine {
                             trace!("I64Clz: clz({}) = {}", a, result);
                             operand_stack.push(Value::I64(result));
                         }
-                    }
+                    },
                     Instruction::I64Ctz => {
                         if let Some(Value::I64(a)) = operand_stack.pop() {
                             let result = (a as u64).trailing_zeros() as i64;
@@ -4391,7 +4956,7 @@ impl StacklessEngine {
                             trace!("I64Ctz: ctz({}) = {}", a, result);
                             operand_stack.push(Value::I64(result));
                         }
-                    }
+                    },
                     Instruction::I64Popcnt => {
                         if let Some(Value::I64(a)) = operand_stack.pop() {
                             let result = (a as u64).count_ones() as i64;
@@ -4399,7 +4964,7 @@ impl StacklessEngine {
                             trace!("I64Popcnt: popcnt({}) = {}", a, result);
                             operand_stack.push(Value::I64(result));
                         }
-                    }
+                    },
                     Instruction::I32Eqz => {
                         if let Some(Value::I32(a)) = operand_stack.pop() {
                             let result = if a == 0 { 1 } else { 0 };
@@ -4408,27 +4973,27 @@ impl StacklessEngine {
                             trace!("I32Eqz: {} == 0 = {}", a, result != 0);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I64ExtendI32S => {
                         // Extend i32 to i64 with sign extension
                         if let Some(Value::I32(a)) = operand_stack.pop() {
-                            let result = a as i64;  // Sign-extends automatically
+                            let result = a as i64; // Sign-extends automatically
                             #[cfg(feature = "tracing")]
 
                             trace!("I64ExtendI32S: {} -> {}", a, result);
                             operand_stack.push(Value::I64(result));
                         }
-                    }
+                    },
                     Instruction::I64ExtendI32U => {
                         // Extend i32 to i64 with zero extension
                         if let Some(Value::I32(a)) = operand_stack.pop() {
-                            let result = (a as u32) as i64;  // Zero-extends
+                            let result = (a as u32) as i64; // Zero-extends
                             #[cfg(feature = "tracing")]
 
                             trace!("I64ExtendI32U: {} -> {}", a, result);
                             operand_stack.push(Value::I64(result));
                         }
-                    }
+                    },
                     // Sign-extension operators (WebAssembly 2.0)
                     Instruction::I32Extend8S => {
                         // Sign-extend 8-bit value to 32 bits
@@ -4438,7 +5003,7 @@ impl StacklessEngine {
                             trace!("I32Extend8S: {} -> {}", a, result);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I32Extend16S => {
                         // Sign-extend 16-bit value to 32 bits
                         if let Some(Value::I32(a)) = operand_stack.pop() {
@@ -4447,7 +5012,7 @@ impl StacklessEngine {
                             trace!("I32Extend16S: {} -> {}", a, result);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::I64Extend8S => {
                         // Sign-extend 8-bit value to 64 bits
                         if let Some(Value::I64(a)) = operand_stack.pop() {
@@ -4456,7 +5021,7 @@ impl StacklessEngine {
                             trace!("I64Extend8S: {} -> {}", a, result);
                             operand_stack.push(Value::I64(result));
                         }
-                    }
+                    },
                     Instruction::I64Extend16S => {
                         // Sign-extend 16-bit value to 64 bits
                         if let Some(Value::I64(a)) = operand_stack.pop() {
@@ -4465,7 +5030,7 @@ impl StacklessEngine {
                             trace!("I64Extend16S: {} -> {}", a, result);
                             operand_stack.push(Value::I64(result));
                         }
-                    }
+                    },
                     Instruction::I64Extend32S => {
                         // Sign-extend 32-bit value to 64 bits
                         if let Some(Value::I64(a)) = operand_stack.pop() {
@@ -4474,14 +5039,17 @@ impl StacklessEngine {
                             trace!("I64Extend32S: {} -> {}", a, result);
                             operand_stack.push(Value::I64(result));
                         }
-                    }
+                    },
                     // Memory operations
                     // IMPORTANT: Use instance.memory() for initialized memory, not module.get_memory()
                     // The instance has data segments applied, the module is just a template
                     Instruction::I32Load(mem_arg) => {
                         let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 4)?;
                         #[cfg(feature = "tracing")]
-                        trace!("I32Load: reading from address {} (offset={})", eff_addr, mem_arg.offset);
+                        trace!(
+                            "I32Load: reading from address {} (offset={})",
+                            eff_addr, mem_arg.offset
+                        );
                         match instance.memory(mem_arg.memory_index as u32) {
                             Ok(memory_wrapper) => {
                                 let memory = &memory_wrapper.0;
@@ -4490,9 +5058,12 @@ impl StacklessEngine {
                                     Ok(()) => {
                                         let value = i32::from_le_bytes(buffer);
                                         #[cfg(feature = "tracing")]
-                                        trace!("I32Load: read value {} from address {}", value, eff_addr);
+                                        trace!(
+                                            "I32Load: read value {} from address {}",
+                                            value, eff_addr
+                                        );
                                         operand_stack.push(Value::I32(value));
-                                    }
+                                    },
                                     Err(e) => {
                                         #[cfg(feature = "tracing")]
                                         trace!("I32Load: memory read failed: {:?}", e);
@@ -4504,22 +5075,33 @@ impl StacklessEngine {
                                             pc = pc,
                                             "[MEM-OOB] I32Load failed"
                                         );
-                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                    }
+                                        return Err(kiln_error::Error::runtime_trap(
+                                            "out of bounds memory access",
+                                        ));
+                                    },
                                 }
-                            }
+                            },
                             Err(e) => {
                                 #[cfg(feature = "tracing")]
-                                trace!("I32Load: failed to get memory at index {}: {:?}", mem_arg.memory_index, e);
-                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                            }
+                                trace!(
+                                    "I32Load: failed to get memory at index {}: {:?}",
+                                    mem_arg.memory_index, e
+                                );
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "out of bounds memory access",
+                                ));
+                            },
                         }
-                    }
+                    },
                     Instruction::I32Store(mem_arg) => {
                         if let Some(Value::I32(value)) = operand_stack.pop() {
-                            let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 4)?;
+                            let eff_addr =
+                                pop_memory_address(&mut operand_stack, mem_arg.offset, 4)?;
                             #[cfg(feature = "tracing")]
-                            trace!("I32Store: writing value {} to address {} (offset={})", value, eff_addr, mem_arg.offset);
+                            trace!(
+                                "I32Store: writing value {} to address {} (offset={})",
+                                value, eff_addr, mem_arg.offset
+                            );
 
                             match instance.memory(mem_arg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -4528,19 +5110,26 @@ impl StacklessEngine {
                                     match memory.write_shared(eff_addr, &bytes) {
                                         Ok(()) => {
                                             #[cfg(feature = "tracing")]
-                                            trace!("I32Store: successfully wrote value {} to address {}", value, eff_addr);
-                                        }
+                                            trace!(
+                                                "I32Store: successfully wrote value {} to address {}",
+                                                value, eff_addr
+                                            );
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "out of bounds memory access",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "out of bounds memory access",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
                     Instruction::I32Load8S(mem_arg) => {
                         let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 1)?;
                         #[cfg(feature = "tracing")]
@@ -4553,19 +5142,26 @@ impl StacklessEngine {
                                     Ok(()) => {
                                         let value = buffer[0] as i8 as i32; // Sign extend
                                         #[cfg(feature = "tracing")]
-                                        trace!("I32Load8S: read value {} from address {}", value, eff_addr);
+                                        trace!(
+                                            "I32Load8S: read value {} from address {}",
+                                            value, eff_addr
+                                        );
                                         operand_stack.push(Value::I32(value));
-                                    }
+                                    },
                                     Err(_) => {
-                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                    }
+                                        return Err(kiln_error::Error::runtime_trap(
+                                            "out of bounds memory access",
+                                        ));
+                                    },
                                 }
-                            }
+                            },
                             Err(_) => {
-                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                            }
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "out of bounds memory access",
+                                ));
+                            },
                         }
-                    }
+                    },
                     Instruction::I32Load8U(mem_arg) => {
                         let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 1)?;
                         match instance.memory(mem_arg.memory_index as u32) {
@@ -4576,19 +5172,26 @@ impl StacklessEngine {
                                     Ok(()) => {
                                         let value = buffer[0] as i32; // Zero extend
                                         #[cfg(feature = "tracing")]
-                                        trace!("I32Load8U: read value {} from address {}", value, eff_addr);
+                                        trace!(
+                                            "I32Load8U: read value {} from address {}",
+                                            value, eff_addr
+                                        );
                                         operand_stack.push(Value::I32(value));
-                                    }
+                                    },
                                     Err(_) => {
-                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                    }
+                                        return Err(kiln_error::Error::runtime_trap(
+                                            "out of bounds memory access",
+                                        ));
+                                    },
                                 }
-                            }
+                            },
                             Err(_) => {
-                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                            }
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "out of bounds memory access",
+                                ));
+                            },
                         }
-                    }
+                    },
                     Instruction::I32Load16S(mem_arg) => {
                         let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 2)?;
                         match instance.memory(mem_arg.memory_index as u32) {
@@ -4599,19 +5202,26 @@ impl StacklessEngine {
                                     Ok(()) => {
                                         let value = i16::from_le_bytes(buffer) as i32; // Sign extend
                                         #[cfg(feature = "tracing")]
-                                        trace!("I32Load16S: read value {} from address {}", value, eff_addr);
+                                        trace!(
+                                            "I32Load16S: read value {} from address {}",
+                                            value, eff_addr
+                                        );
                                         operand_stack.push(Value::I32(value));
-                                    }
+                                    },
                                     Err(_) => {
-                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                    }
+                                        return Err(kiln_error::Error::runtime_trap(
+                                            "out of bounds memory access",
+                                        ));
+                                    },
                                 }
-                            }
+                            },
                             Err(_) => {
-                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                            }
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "out of bounds memory access",
+                                ));
+                            },
                         }
-                    }
+                    },
                     Instruction::I32Load16U(mem_arg) => {
                         let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 2)?;
                         match instance.memory(mem_arg.memory_index as u32) {
@@ -4622,46 +5232,63 @@ impl StacklessEngine {
                                     Ok(()) => {
                                         let value = u16::from_le_bytes(buffer) as i32; // Zero extend
                                         #[cfg(feature = "tracing")]
-                                        trace!("I32Load16U: read value {} from address {}", value, eff_addr);
+                                        trace!(
+                                            "I32Load16U: read value {} from address {}",
+                                            value, eff_addr
+                                        );
                                         operand_stack.push(Value::I32(value));
-                                    }
+                                    },
                                     Err(_) => {
-                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                    }
+                                        return Err(kiln_error::Error::runtime_trap(
+                                            "out of bounds memory access",
+                                        ));
+                                    },
                                 }
-                            }
+                            },
                             Err(_) => {
-                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                            }
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "out of bounds memory access",
+                                ));
+                            },
                         }
-                    }
+                    },
                     Instruction::I32Store8(mem_arg) => {
                         if let Some(Value::I32(value)) = operand_stack.pop() {
-                            let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 1)?;
+                            let eff_addr =
+                                pop_memory_address(&mut operand_stack, mem_arg.offset, 1)?;
 
                             #[cfg(feature = "tracing")]
-                            trace!("I32Store8: writing byte {} to address {}", value & 0xFF, eff_addr);
+                            trace!(
+                                "I32Store8: writing byte {} to address {}",
+                                value & 0xFF,
+                                eff_addr
+                            );
 
                             match instance.memory(mem_arg.memory_index) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
                                     let bytes = [(value & 0xFF) as u8];
                                     match memory.write_shared(eff_addr, &bytes) {
-                                        Ok(()) => {}
+                                        Ok(()) => {},
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "out of bounds memory access",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "out of bounds memory access",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
                     Instruction::I32Store16(mem_arg) => {
                         if let Some(Value::I32(value)) = operand_stack.pop() {
-                            let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 2)?;
+                            let eff_addr =
+                                pop_memory_address(&mut operand_stack, mem_arg.offset, 2)?;
                             match instance.memory(mem_arg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -4669,19 +5296,26 @@ impl StacklessEngine {
                                     match memory.write_shared(eff_addr, &bytes) {
                                         Ok(()) => {
                                             #[cfg(feature = "tracing")]
-                                            trace!("I32Store16: successfully wrote value {} to address {}", value as u16, eff_addr);
-                                        }
+                                            trace!(
+                                                "I32Store16: successfully wrote value {} to address {}",
+                                                value as u16, eff_addr
+                                            );
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "out of bounds memory access",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "out of bounds memory access",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
                     Instruction::I64Load(mem_arg) => {
                         let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 8)?;
                         match instance.memory(mem_arg.memory_index as u32) {
@@ -4692,7 +5326,10 @@ impl StacklessEngine {
                                     Ok(()) => {
                                         let value = i64::from_le_bytes(buffer);
                                         #[cfg(feature = "tracing")]
-                                        trace!("I64Load: read value {} from address {}", value, eff_addr);
+                                        trace!(
+                                            "I64Load: read value {} from address {}",
+                                            value, eff_addr
+                                        );
                                         #[cfg(feature = "tracing")]
                                         {
                                             trace!(
@@ -4713,20 +5350,25 @@ impl StacklessEngine {
                                             }
                                         }
                                         operand_stack.push(Value::I64(value));
-                                    }
+                                    },
                                     Err(_) => {
-                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                    }
+                                        return Err(kiln_error::Error::runtime_trap(
+                                            "out of bounds memory access",
+                                        ));
+                                    },
                                 }
-                            }
+                            },
                             Err(_) => {
-                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                            }
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "out of bounds memory access",
+                                ));
+                            },
                         }
-                    }
+                    },
                     Instruction::I64Store(mem_arg) => {
                         if let Some(Value::I64(value)) = operand_stack.pop() {
-                            let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 8)?;
+                            let eff_addr =
+                                pop_memory_address(&mut operand_stack, mem_arg.offset, 8)?;
                             match instance.memory(mem_arg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -4734,21 +5376,31 @@ impl StacklessEngine {
                                     match memory.write_shared(eff_addr, &bytes) {
                                         Ok(()) => {
                                             #[cfg(feature = "tracing")]
-                                            trace!("I64Store: successfully wrote value {} to address {}", value, eff_addr);
-                                        }
+                                            trace!(
+                                                "I64Store: successfully wrote value {} to address {}",
+                                                value, eff_addr
+                                            );
+                                        },
                                         Err(_e) => {
-                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "out of bounds memory access",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_e) => {
                                     #[cfg(feature = "tracing")]
-                                    trace!("I64Store: failed to get memory at index {}", mem_arg.memory_index);
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                                    trace!(
+                                        "I64Store: failed to get memory at index {}",
+                                        mem_arg.memory_index
+                                    );
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "out of bounds memory access",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
                     // ========================================
                     // I64 Partial Load Instructions (load narrower value, extend to i64)
                     // ========================================
@@ -4768,17 +5420,21 @@ impl StacklessEngine {
                                     Ok(()) => {
                                         let value = buffer[0] as i8 as i64; // Sign extend
                                         operand_stack.push(Value::I64(value));
-                                    }
+                                    },
                                     Err(_) => {
-                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                    }
+                                        return Err(kiln_error::Error::runtime_trap(
+                                            "out of bounds memory access",
+                                        ));
+                                    },
                                 }
-                            }
+                            },
                             Err(_) => {
-                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                            }
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "out of bounds memory access",
+                                ));
+                            },
                         }
-                    }
+                    },
                     Instruction::I64Load8U(mem_arg) => {
                         let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 1)?;
                         #[cfg(feature = "tracing")]
@@ -4795,17 +5451,21 @@ impl StacklessEngine {
                                     Ok(()) => {
                                         let value = buffer[0] as i64; // Zero extend
                                         operand_stack.push(Value::I64(value));
-                                    }
+                                    },
                                     Err(_) => {
-                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                    }
+                                        return Err(kiln_error::Error::runtime_trap(
+                                            "out of bounds memory access",
+                                        ));
+                                    },
                                 }
-                            }
+                            },
                             Err(_) => {
-                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                            }
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "out of bounds memory access",
+                                ));
+                            },
                         }
-                    }
+                    },
                     Instruction::I64Load16S(mem_arg) => {
                         let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 2)?;
                         #[cfg(feature = "tracing")]
@@ -4822,17 +5482,21 @@ impl StacklessEngine {
                                     Ok(()) => {
                                         let value = i16::from_le_bytes(buffer) as i64; // Sign extend
                                         operand_stack.push(Value::I64(value));
-                                    }
+                                    },
                                     Err(_) => {
-                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                    }
+                                        return Err(kiln_error::Error::runtime_trap(
+                                            "out of bounds memory access",
+                                        ));
+                                    },
                                 }
-                            }
+                            },
                             Err(_) => {
-                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                            }
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "out of bounds memory access",
+                                ));
+                            },
                         }
-                    }
+                    },
                     Instruction::I64Load16U(mem_arg) => {
                         let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 2)?;
                         #[cfg(feature = "tracing")]
@@ -4849,17 +5513,21 @@ impl StacklessEngine {
                                     Ok(()) => {
                                         let value = u16::from_le_bytes(buffer) as i64; // Zero extend
                                         operand_stack.push(Value::I64(value));
-                                    }
+                                    },
                                     Err(_) => {
-                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                    }
+                                        return Err(kiln_error::Error::runtime_trap(
+                                            "out of bounds memory access",
+                                        ));
+                                    },
                                 }
-                            }
+                            },
                             Err(_) => {
-                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                            }
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "out of bounds memory access",
+                                ));
+                            },
                         }
-                    }
+                    },
                     Instruction::I64Load32S(mem_arg) => {
                         let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 4)?;
                         #[cfg(feature = "tracing")]
@@ -4876,17 +5544,21 @@ impl StacklessEngine {
                                     Ok(()) => {
                                         let value = i32::from_le_bytes(buffer) as i64; // Sign extend
                                         operand_stack.push(Value::I64(value));
-                                    }
+                                    },
                                     Err(_) => {
-                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                    }
+                                        return Err(kiln_error::Error::runtime_trap(
+                                            "out of bounds memory access",
+                                        ));
+                                    },
                                 }
-                            }
+                            },
                             Err(_) => {
-                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                            }
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "out of bounds memory access",
+                                ));
+                            },
                         }
-                    }
+                    },
                     Instruction::I64Load32U(mem_arg) => {
                         let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 4)?;
                         #[cfg(feature = "tracing")]
@@ -4903,17 +5575,21 @@ impl StacklessEngine {
                                     Ok(()) => {
                                         let value = u32::from_le_bytes(buffer) as i64; // Zero extend
                                         operand_stack.push(Value::I64(value));
-                                    }
+                                    },
                                     Err(_) => {
-                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                    }
+                                        return Err(kiln_error::Error::runtime_trap(
+                                            "out of bounds memory access",
+                                        ));
+                                    },
                                 }
-                            }
+                            },
                             Err(_) => {
-                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                            }
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "out of bounds memory access",
+                                ));
+                            },
                         }
-                    }
+                    },
                     // ========================================
                     // I64 Partial Store Instructions (store lower bits of i64)
                     // ========================================
@@ -4935,21 +5611,32 @@ impl StacklessEngine {
                                     match memory.write_shared(offset, &bytes) {
                                         Ok(()) => {
                                             #[cfg(feature = "tracing")]
-                                            trace!("I64Store8: successfully wrote value {} to address {}", value & 0xFF, offset);
-                                        }
+                                            trace!(
+                                                "I64Store8: successfully wrote value {} to address {}",
+                                                value & 0xFF,
+                                                offset
+                                            );
+                                        },
                                         Err(_e) => {
-                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "out of bounds memory access",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_e) => {
                                     #[cfg(feature = "tracing")]
-                                    trace!("I64Store8: failed to get memory at index {}", mem_arg.memory_index);
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                                    trace!(
+                                        "I64Store8: failed to get memory at index {}",
+                                        mem_arg.memory_index
+                                    );
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "out of bounds memory access",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
                     Instruction::I64Store16(mem_arg) => {
                         if let Some(Value::I64(value)) = operand_stack.pop() {
                             let offset = pop_memory_address(&mut operand_stack, mem_arg.offset, 2)?;
@@ -4968,21 +5655,32 @@ impl StacklessEngine {
                                     match memory.write_shared(offset, &bytes) {
                                         Ok(()) => {
                                             #[cfg(feature = "tracing")]
-                                            trace!("I64Store16: successfully wrote value {} to address {}", value & 0xFFFF, offset);
-                                        }
+                                            trace!(
+                                                "I64Store16: successfully wrote value {} to address {}",
+                                                value & 0xFFFF,
+                                                offset
+                                            );
+                                        },
                                         Err(_e) => {
-                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "out of bounds memory access",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_e) => {
                                     #[cfg(feature = "tracing")]
-                                    trace!("I64Store16: failed to get memory at index {}", mem_arg.memory_index);
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                                    trace!(
+                                        "I64Store16: failed to get memory at index {}",
+                                        mem_arg.memory_index
+                                    );
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "out of bounds memory access",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
                     Instruction::I64Store32(mem_arg) => {
                         if let Some(Value::I64(value)) = operand_stack.pop() {
                             let offset = pop_memory_address(&mut operand_stack, mem_arg.offset, 4)?;
@@ -5001,21 +5699,32 @@ impl StacklessEngine {
                                     match memory.write_shared(offset, &bytes) {
                                         Ok(()) => {
                                             #[cfg(feature = "tracing")]
-                                            trace!("I64Store32: successfully wrote value {} to address {}", value & 0xFFFFFFFF, offset);
-                                        }
+                                            trace!(
+                                                "I64Store32: successfully wrote value {} to address {}",
+                                                value & 0xFFFFFFFF,
+                                                offset
+                                            );
+                                        },
                                         Err(_e) => {
-                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "out of bounds memory access",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_e) => {
                                     #[cfg(feature = "tracing")]
-                                    trace!("I64Store32: failed to get memory at index {}", mem_arg.memory_index);
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                                    trace!(
+                                        "I64Store32: failed to get memory at index {}",
+                                        mem_arg.memory_index
+                                    );
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "out of bounds memory access",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
                     // ========================================
                     // F64 Instructions (64-bit floating point)
                     // ========================================
@@ -5023,11 +5732,14 @@ impl StacklessEngine {
                         #[cfg(feature = "tracing")]
                         trace!("F64Const: pushing {}", f64::from_bits(bits));
                         operand_stack.push(Value::F64(FloatBits64(bits)));
-                    }
+                    },
                     Instruction::F32Load(mem_arg) => {
                         let offset = pop_memory_address(&mut operand_stack, mem_arg.offset, 4)?;
                         #[cfg(feature = "tracing")]
-                        trace!("F32Load: offset={}, mem_idx={}", offset, mem_arg.memory_index);
+                        trace!(
+                            "F32Load: offset={}, mem_idx={}",
+                            offset, mem_arg.memory_index
+                        );
                         match instance.memory(mem_arg.memory_index as u32) {
                             Ok(memory_wrapper) => {
                                 let memory = &memory_wrapper.0;
@@ -5036,17 +5748,21 @@ impl StacklessEngine {
                                     Ok(()) => {
                                         let bits = u32::from_le_bytes(buffer);
                                         operand_stack.push(Value::F32(FloatBits32(bits)));
-                                    }
+                                    },
                                     Err(_e) => {
-                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                    }
+                                        return Err(kiln_error::Error::runtime_trap(
+                                            "out of bounds memory access",
+                                        ));
+                                    },
                                 }
-                            }
+                            },
                             Err(_e) => {
-                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                            }
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "out of bounds memory access",
+                                ));
+                            },
                         }
-                    }
+                    },
                     Instruction::F32Store(mem_arg) => {
                         if let Some(Value::F32(bits)) = operand_stack.pop() {
                             let offset = pop_memory_address(&mut operand_stack, mem_arg.offset, 4)?;
@@ -5055,38 +5771,44 @@ impl StacklessEngine {
                                     let memory = &memory_wrapper.0;
                                     let bytes = bits.0.to_le_bytes();
                                     if memory.write_shared(offset, &bytes).is_err() {
-                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+                                        return Err(kiln_error::Error::runtime_trap(
+                                            "out of bounds memory access",
+                                        ));
                                     }
-                                }
+                                },
                                 Err(_e) => {
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "out of bounds memory access",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
                     Instruction::F64Load(mem_arg) => {
-                        {
-                            let offset = pop_memory_address(&mut operand_stack, mem_arg.offset, 8)?;
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 8];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let bits = u64::from_le_bytes(buffer);
-                                            operand_stack.push(Value::F64(FloatBits64(bits)));
-                                        }
-                                        Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
-                                    }
+                        let offset = pop_memory_address(&mut operand_stack, mem_arg.offset, 8)?;
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 8];
+                                match memory.read(offset, &mut buffer) {
+                                    Ok(()) => {
+                                        let bits = u64::from_le_bytes(buffer);
+                                        operand_stack.push(Value::F64(FloatBits64(bits)));
+                                    },
+                                    Err(_) => {
+                                        return Err(kiln_error::Error::runtime_trap(
+                                            "out of bounds memory access",
+                                        ));
+                                    },
                                 }
-                                Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                }
-                            }
+                            },
+                            Err(_) => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "out of bounds memory access",
+                                ));
+                            },
                         }
-                    }
+                    },
                     Instruction::F64Store(mem_arg) => {
                         if let Some(Value::F64(bits)) = operand_stack.pop() {
                             let offset = pop_memory_address(&mut operand_stack, mem_arg.offset, 8)?;
@@ -5095,71 +5817,83 @@ impl StacklessEngine {
                                     let memory = &memory_wrapper.0;
                                     let bytes = bits.0.to_le_bytes();
                                     if memory.write_shared(offset, &bytes).is_err() {
-                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+                                        return Err(kiln_error::Error::runtime_trap(
+                                            "out of bounds memory access",
+                                        ));
                                     }
-                                }
+                                },
                                 Err(_e) => {
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "out of bounds memory access",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
                     // F32 Arithmetic operations
                     Instruction::F32Add => {
-                        if let (Some(Value::F32(b)), Some(Value::F32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::F32(b)), Some(Value::F32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = a.value() + b.value();
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F32Sub => {
-                        if let (Some(Value::F32(b)), Some(Value::F32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::F32(b)), Some(Value::F32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = a.value() - b.value();
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F32Mul => {
-                        if let (Some(Value::F32(b)), Some(Value::F32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::F32(b)), Some(Value::F32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = a.value() * b.value();
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F32Div => {
-                        if let (Some(Value::F32(b)), Some(Value::F32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::F32(b)), Some(Value::F32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = a.value() / b.value();
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
-                    }
+                    },
                     // F32 Unary operations
                     Instruction::F32Abs => {
                         if let Some(Value::F32(a)) = operand_stack.pop() {
                             let result = a.value().abs();
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F32Neg => {
                         if let Some(Value::F32(a)) = operand_stack.pop() {
                             let result = -a.value();
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F32Ceil => {
                         if let Some(Value::F32(a)) = operand_stack.pop() {
                             let result = a.value().ceil();
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F32Floor => {
                         if let Some(Value::F32(a)) = operand_stack.pop() {
                             let result = a.value().floor();
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F32Trunc => {
                         if let Some(Value::F32(a)) = operand_stack.pop() {
                             let result = a.value().trunc();
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F32Nearest => {
                         if let Some(Value::F32(a)) = operand_stack.pop() {
                             let f = a.value();
@@ -5172,15 +5906,17 @@ impl StacklessEngine {
                             };
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F32Sqrt => {
                         if let Some(Value::F32(a)) = operand_stack.pop() {
                             let result = a.value().sqrt();
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F32Min => {
-                        if let (Some(Value::F32(b)), Some(Value::F32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::F32(b)), Some(Value::F32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let fa = a.value();
                             let fb = b.value();
                             // WebAssembly spec: If either operand is NaN, return NaN
@@ -5188,15 +5924,21 @@ impl StacklessEngine {
                             let result = if fa.is_nan() || fb.is_nan() {
                                 f32::NAN
                             } else if fa == 0.0 && fb == 0.0 {
-                                if fa.is_sign_negative() || fb.is_sign_negative() { -0.0 } else { 0.0 }
+                                if fa.is_sign_negative() || fb.is_sign_negative() {
+                                    -0.0
+                                } else {
+                                    0.0
+                                }
                             } else {
                                 fa.min(fb)
                             };
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F32Max => {
-                        if let (Some(Value::F32(b)), Some(Value::F32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::F32(b)), Some(Value::F32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let fa = a.value();
                             let fb = b.value();
                             // WebAssembly spec: If either operand is NaN, return NaN
@@ -5204,112 +5946,156 @@ impl StacklessEngine {
                             let result = if fa.is_nan() || fb.is_nan() {
                                 f32::NAN
                             } else if fa == 0.0 && fb == 0.0 {
-                                if fa.is_sign_positive() || fb.is_sign_positive() { 0.0 } else { -0.0 }
+                                if fa.is_sign_positive() || fb.is_sign_positive() {
+                                    0.0
+                                } else {
+                                    -0.0
+                                }
                             } else {
                                 fa.max(fb)
                             };
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F32Copysign => {
-                        if let (Some(Value::F32(b)), Some(Value::F32(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::F32(b)), Some(Value::F32(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = a.value().copysign(b.value());
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
-                    }
+                    },
                     // F64 Arithmetic operations
                     Instruction::F64Add => {
-                        if let (Some(Value::F64(b)), Some(Value::F64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::F64(b)), Some(Value::F64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = f64::from_bits(a.0) + f64::from_bits(b.0);
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F64Sub => {
-                        if let (Some(Value::F64(b)), Some(Value::F64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::F64(b)), Some(Value::F64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = f64::from_bits(a.0) - f64::from_bits(b.0);
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F64Mul => {
-                        if let (Some(Value::F64(b)), Some(Value::F64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::F64(b)), Some(Value::F64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = f64::from_bits(a.0) * f64::from_bits(b.0);
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F64Div => {
-                        if let (Some(Value::F64(b)), Some(Value::F64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::F64(b)), Some(Value::F64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = f64::from_bits(a.0) / f64::from_bits(b.0);
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
-                    }
+                    },
                     // F64 Comparison operations
                     Instruction::F64Eq => {
-                        if let (Some(Value::F64(b)), Some(Value::F64(a))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let result = if f64::from_bits(a.0) == f64::from_bits(b.0) { 1i32 } else { 0i32 };
+                        if let (Some(Value::F64(b)), Some(Value::F64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let result = if f64::from_bits(a.0) == f64::from_bits(b.0) {
+                                1i32
+                            } else {
+                                0i32
+                            };
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::F64Ne => {
-                        if let (Some(Value::F64(b)), Some(Value::F64(a))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let result = if f64::from_bits(a.0) != f64::from_bits(b.0) { 1i32 } else { 0i32 };
+                        if let (Some(Value::F64(b)), Some(Value::F64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let result = if f64::from_bits(a.0) != f64::from_bits(b.0) {
+                                1i32
+                            } else {
+                                0i32
+                            };
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::F64Lt => {
-                        if let (Some(Value::F64(b)), Some(Value::F64(a))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let result = if f64::from_bits(a.0) < f64::from_bits(b.0) { 1i32 } else { 0i32 };
+                        if let (Some(Value::F64(b)), Some(Value::F64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let result =
+                                if f64::from_bits(a.0) < f64::from_bits(b.0) { 1i32 } else { 0i32 };
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::F64Gt => {
-                        if let (Some(Value::F64(b)), Some(Value::F64(a))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let result = if f64::from_bits(a.0) > f64::from_bits(b.0) { 1i32 } else { 0i32 };
+                        if let (Some(Value::F64(b)), Some(Value::F64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let result =
+                                if f64::from_bits(a.0) > f64::from_bits(b.0) { 1i32 } else { 0i32 };
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::F64Le => {
-                        if let (Some(Value::F64(b)), Some(Value::F64(a))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let result = if f64::from_bits(a.0) <= f64::from_bits(b.0) { 1i32 } else { 0i32 };
+                        if let (Some(Value::F64(b)), Some(Value::F64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let result = if f64::from_bits(a.0) <= f64::from_bits(b.0) {
+                                1i32
+                            } else {
+                                0i32
+                            };
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::F64Ge => {
-                        if let (Some(Value::F64(b)), Some(Value::F64(a))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let result = if f64::from_bits(a.0) >= f64::from_bits(b.0) { 1i32 } else { 0i32 };
+                        if let (Some(Value::F64(b)), Some(Value::F64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let result = if f64::from_bits(a.0) >= f64::from_bits(b.0) {
+                                1i32
+                            } else {
+                                0i32
+                            };
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     // F64 Unary operations
                     Instruction::F64Abs => {
                         if let Some(Value::F64(a)) = operand_stack.pop() {
                             let result = f64::from_bits(a.0).abs();
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F64Neg => {
                         if let Some(Value::F64(a)) = operand_stack.pop() {
                             let result = -f64::from_bits(a.0);
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F64Ceil => {
                         if let Some(Value::F64(a)) = operand_stack.pop() {
                             let result = f64::from_bits(a.0).ceil();
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F64Floor => {
                         if let Some(Value::F64(a)) = operand_stack.pop() {
                             let result = f64::from_bits(a.0).floor();
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F64Trunc => {
                         if let Some(Value::F64(a)) = operand_stack.pop() {
                             let result = f64::from_bits(a.0).trunc();
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F64Nearest => {
                         if let Some(Value::F64(a)) = operand_stack.pop() {
                             let f = f64::from_bits(a.0);
@@ -5321,137 +6107,160 @@ impl StacklessEngine {
                             };
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F64Sqrt => {
                         if let Some(Value::F64(a)) = operand_stack.pop() {
                             let result = f64::from_bits(a.0).sqrt();
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F64Min => {
-                        if let (Some(Value::F64(b)), Some(Value::F64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::F64(b)), Some(Value::F64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let fa = f64::from_bits(a.0);
                             let fb = f64::from_bits(b.0);
                             let result = if fa.is_nan() || fb.is_nan() {
                                 f64::NAN
                             } else if fa == 0.0 && fb == 0.0 {
-                                if fa.is_sign_negative() || fb.is_sign_negative() { -0.0 } else { 0.0 }
+                                if fa.is_sign_negative() || fb.is_sign_negative() {
+                                    -0.0
+                                } else {
+                                    0.0
+                                }
                             } else {
                                 fa.min(fb)
                             };
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F64Max => {
-                        if let (Some(Value::F64(b)), Some(Value::F64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::F64(b)), Some(Value::F64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let fa = f64::from_bits(a.0);
                             let fb = f64::from_bits(b.0);
                             let result = if fa.is_nan() || fb.is_nan() {
                                 f64::NAN
                             } else if fa == 0.0 && fb == 0.0 {
-                                if fa.is_sign_positive() || fb.is_sign_positive() { 0.0 } else { -0.0 }
+                                if fa.is_sign_positive() || fb.is_sign_positive() {
+                                    0.0
+                                } else {
+                                    -0.0
+                                }
                             } else {
                                 fa.max(fb)
                             };
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F64Copysign => {
-                        if let (Some(Value::F64(b)), Some(Value::F64(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(Value::F64(b)), Some(Value::F64(a))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = f64::from_bits(a.0).copysign(f64::from_bits(b.0));
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
-                    }
+                    },
                     // F32 Conversion operations
                     Instruction::F32ConvertI32S => {
                         if let Some(Value::I32(a)) = operand_stack.pop() {
                             let result = a as f32;
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F32ConvertI32U => {
                         if let Some(Value::I32(a)) = operand_stack.pop() {
                             let result = (a as u32) as f32;
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F32ConvertI64S => {
                         if let Some(Value::I64(a)) = operand_stack.pop() {
                             let result = a as f32;
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F32ConvertI64U => {
                         if let Some(Value::I64(a)) = operand_stack.pop() {
                             let result = (a as u64) as f32;
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
-                    }
+                    },
                     // F64 Conversion operations
                     Instruction::F64ConvertI32S => {
                         if let Some(Value::I32(a)) = operand_stack.pop() {
                             let result = a as f64;
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F64ConvertI32U => {
                         if let Some(Value::I32(a)) = operand_stack.pop() {
                             let result = (a as u32) as f64;
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F64ConvertI64S => {
                         if let Some(Value::I64(a)) = operand_stack.pop() {
                             let result = a as f64;
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F64ConvertI64U => {
                         if let Some(Value::I64(a)) = operand_stack.pop() {
                             let result = (a as u64) as f64;
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F64PromoteF32 => {
                         if let Some(Value::F32(a)) = operand_stack.pop() {
                             let result = f32::from_bits(a.0) as f64;
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F32DemoteF64 => {
                         if let Some(Value::F64(a)) = operand_stack.pop() {
                             let result = f64::from_bits(a.0) as f32;
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
-                    }
+                    },
                     Instruction::F64ReinterpretI64 => {
                         if let Some(Value::I64(a)) = operand_stack.pop() {
                             operand_stack.push(Value::F64(FloatBits64(a as u64)));
                         }
-                    }
+                    },
                     Instruction::I64ReinterpretF64 => {
                         if let Some(Value::F64(a)) = operand_stack.pop() {
                             operand_stack.push(Value::I64(a.0 as i64));
                         }
-                    }
+                    },
                     Instruction::I32ReinterpretF32 => {
                         if let Some(Value::F32(a)) = operand_stack.pop() {
                             operand_stack.push(Value::I32(a.0 as i32));
                         }
-                    }
+                    },
                     Instruction::F32ReinterpretI32 => {
                         if let Some(Value::I32(a)) = operand_stack.pop() {
                             operand_stack.push(Value::F32(FloatBits32(a as u32)));
                         }
-                    }
+                    },
                     Instruction::If { block_type_idx } => {
                         block_depth += 1;
                         // Record stack height as what it will be AFTER condition is consumed
                         // The condition is still on stack, so entry height = len() - 1
-                        block_stack.push(("if", pc, block_type_idx, operand_stack.len().saturating_sub(1)));
+                        block_stack.push((
+                            "if",
+                            pc,
+                            block_type_idx,
+                            operand_stack.len().saturating_sub(1),
+                        ));
                         #[cfg(feature = "tracing")]
-                        trace!("If: block_type_idx={}, depth now {}, stack_height={}",
-                               block_type_idx, block_depth, operand_stack.len().saturating_sub(1));
+                        trace!(
+                            "If: block_type_idx={}, depth now {}, stack_height={}",
+                            block_type_idx,
+                            block_depth,
+                            operand_stack.len().saturating_sub(1)
+                        );
                         // Pop condition
                         let condition_val = operand_stack.pop();
                         if let Some(Value::I32(condition)) = condition_val {
@@ -5469,35 +6278,47 @@ impl StacklessEngine {
                                 while new_pc < instructions.len() && depth > 0 {
                                     if let Some(instr) = instructions.get(new_pc) {
                                         match instr {
-                                            kiln_foundation::types::Instruction::If { .. } |
-                                            kiln_foundation::types::Instruction::Block { .. } |
-                                            kiln_foundation::types::Instruction::Loop { .. } |
-                                            kiln_foundation::types::Instruction::Try { .. } |
-                                            kiln_foundation::types::Instruction::TryTable { .. } => {
-                                                depth += 1;
+                                            kiln_foundation::types::Instruction::If { .. }
+                                            | kiln_foundation::types::Instruction::Block {
+                                                ..
                                             }
+                                            | kiln_foundation::types::Instruction::Loop {
+                                                ..
+                                            }
+                                            | kiln_foundation::types::Instruction::Try { .. }
+                                            | kiln_foundation::types::Instruction::TryTable {
+                                                ..
+                                            } => {
+                                                depth += 1;
+                                            },
                                             kiln_foundation::types::Instruction::End => {
                                                 depth -= 1;
                                                 if depth == 0 {
                                                     // Found matching end - jump just before it so we execute the End
                                                     #[cfg(feature = "tracing")]
 
-                                                    trace!("If: found matching end at pc={}", new_pc);
+                                                    trace!(
+                                                        "If: found matching end at pc={}",
+                                                        new_pc
+                                                    );
                                                     pc = new_pc - 1; // -1 because we'll +1 at end of loop
                                                     break;
                                                 }
-                                            }
+                                            },
                                             kiln_foundation::types::Instruction::Else => {
                                                 if depth == 1 {
                                                     // Found else at same level - execute else block
                                                     #[cfg(feature = "tracing")]
 
-                                                    trace!("If: found else at pc={}, will execute else block", new_pc);
+                                                    trace!(
+                                                        "If: found else at pc={}, will execute else block",
+                                                        new_pc
+                                                    );
                                                     pc = new_pc; // Jump to else, will +1 to start after else
                                                     break;
                                                 }
-                                            }
-                                            _ => {}
+                                            },
+                                            _ => {},
                                         }
                                     }
                                     new_pc += 1;
@@ -5508,7 +6329,7 @@ impl StacklessEngine {
                                 trace!("If: executing then block");
                             }
                         }
-                    }
+                    },
                     Instruction::Else => {
                         #[cfg(feature = "tracing")]
 
@@ -5521,13 +6342,13 @@ impl StacklessEngine {
                         while new_pc < instructions.len() && depth > 0 {
                             if let Some(instr) = instructions.get(new_pc) {
                                 match instr {
-                                    kiln_foundation::types::Instruction::If { .. } |
-                                    kiln_foundation::types::Instruction::Block { .. } |
-                                    kiln_foundation::types::Instruction::Loop { .. } |
-                                    kiln_foundation::types::Instruction::Try { .. } |
-                                    kiln_foundation::types::Instruction::TryTable { .. } => {
+                                    kiln_foundation::types::Instruction::If { .. }
+                                    | kiln_foundation::types::Instruction::Block { .. }
+                                    | kiln_foundation::types::Instruction::Loop { .. }
+                                    | kiln_foundation::types::Instruction::Try { .. }
+                                    | kiln_foundation::types::Instruction::TryTable { .. } => {
                                         depth += 1;
-                                    }
+                                    },
                                     kiln_foundation::types::Instruction::End => {
                                         depth -= 1;
                                         if depth == 0 {
@@ -5538,39 +6359,62 @@ impl StacklessEngine {
                                             pc = new_pc - 1; // -1 because we'll +1 at end of loop
                                             break;
                                         }
-                                    }
-                                    _ => {}
+                                    },
+                                    _ => {},
                                 }
                             }
                             new_pc += 1;
                         }
-                    }
+                    },
                     Instruction::Block { block_type_idx } => {
                         block_depth += 1;
                         block_stack.push(("block", pc, block_type_idx, operand_stack.len()));
                         #[cfg(feature = "tracing")]
-                        trace!("Block: block_type_idx={}, depth now {}, stack_height={}", block_type_idx, block_depth, operand_stack.len());
+                        trace!(
+                            "Block: block_type_idx={}, depth now {}, stack_height={}",
+                            block_type_idx,
+                            block_depth,
+                            operand_stack.len()
+                        );
                         // Trace block entry in func 76
                         #[cfg(feature = "tracing")]
                         if func_idx == 76 {
-                            trace!(pc = pc, block_depth = block_depth, "[BLOCK] func_idx=76 block entry");
+                            trace!(
+                                pc = pc,
+                                block_depth = block_depth,
+                                "[BLOCK] func_idx=76 block entry"
+                            );
                         }
                         // Trace block entry in func 222
                         #[cfg(feature = "tracing")]
                         if func_idx == 222 {
-                            trace!(pc = pc, block_depth = block_depth, "[BLOCK-222] Block entry");
+                            trace!(
+                                pc = pc,
+                                block_depth = block_depth,
+                                "[BLOCK-222] Block entry"
+                            );
                         }
                         // Just execute through the block - End will decrement depth
-                    }
+                    },
                     Instruction::Loop { block_type_idx } => {
                         block_depth += 1;
                         block_stack.push(("loop", pc, block_type_idx, operand_stack.len()));
                         #[cfg(feature = "tracing")]
-                        trace!("Loop: block_type_idx={}, depth now {}, start_pc={}, stack_height={}", block_type_idx, block_depth, pc, operand_stack.len());
+                        trace!(
+                            "Loop: block_type_idx={}, depth now {}, start_pc={}, stack_height={}",
+                            block_type_idx,
+                            block_depth,
+                            pc,
+                            operand_stack.len()
+                        );
                         // Trace loop entry in func 76
                         #[cfg(feature = "tracing")]
                         if func_idx == 76 {
-                            trace!(pc = pc, block_depth = block_depth, "[LOOP] func_idx=76 loop entry");
+                            trace!(
+                                pc = pc,
+                                block_depth = block_depth,
+                                "[LOOP] func_idx=76 loop entry"
+                            );
                         }
                         // Trace loop entry in func 222
                         #[cfg(feature = "tracing")]
@@ -5578,7 +6422,7 @@ impl StacklessEngine {
                             trace!(pc = pc, block_depth = block_depth, "[LOOP-222] Loop entry");
                         }
                         // Just execute through - Br will handle jumping back to start
-                    }
+                    },
                     Instruction::Br(label_idx) => {
                         #[cfg(feature = "tracing")]
                         trace!("Br: label_idx={} (unconditional branch)", label_idx);
@@ -5593,7 +6437,12 @@ impl StacklessEngine {
                                 "[BR-222] Branch instruction"
                             );
                             for (i, (btype, bpc, _, _)) in block_stack.iter().enumerate() {
-                                trace!(index = i, block_type = btype, block_pc = bpc, "[BR-222] Block stack entry");
+                                trace!(
+                                    index = i,
+                                    block_type = btype,
+                                    block_pc = bpc,
+                                    "[BR-222] Block stack entry"
+                                );
                             }
                         }
                         // Trace Br in func 76 (extend_desugared)
@@ -5606,7 +6455,13 @@ impl StacklessEngine {
                                 "[BR] func_idx=76 branch"
                             );
                             for (i, (btype, bpc, _, height)) in block_stack.iter().enumerate() {
-                                trace!(index = i, block_type = btype, block_pc = bpc, height = height, "[BR] Block stack entry");
+                                trace!(
+                                    index = i,
+                                    block_type = btype,
+                                    block_pc = bpc,
+                                    height = height,
+                                    "[BR] Block stack entry"
+                                );
                             }
                         }
 
@@ -5614,7 +6469,8 @@ impl StacklessEngine {
                         // label_idx=0 means innermost block, 1 means next outer, etc.
                         if (label_idx as usize) < block_stack.len() {
                             let stack_idx = block_stack.len() - 1 - (label_idx as usize);
-                            let (block_type, start_pc, block_type_idx, entry_stack_height) = block_stack[stack_idx];
+                            let (block_type, start_pc, block_type_idx, entry_stack_height) =
+                                block_stack[stack_idx];
 
                             // Determine how many values to preserve based on block type
                             // For loops: branch to beginning preserves values matching PARAMETER count
@@ -5622,31 +6478,35 @@ impl StacklessEngine {
                             let values_to_preserve = if block_type == "loop" {
                                 // Loop branches preserve parameter count (input arity)
                                 match block_type_idx {
-                                    0x40 => 0, // empty type - no params
+                                    0x40 => 0,                             // empty type - no params
                                     0x7F | 0x7E | 0x7D | 0x7C | 0x7B => 0, // inline value types: 0 params
                                     0x70 | 0x6F => 0, // funcref, externref: 0 params
                                     _ => {
                                         // Type index - look up actual param count from module types
-                                        if let Some(func_type) = module.types.get(block_type_idx as usize) {
+                                        if let Some(func_type) =
+                                            module.types.get(block_type_idx as usize)
+                                        {
                                             func_type.params.len()
                                         } else {
                                             0
                                         }
-                                    }
+                                    },
                                 }
                             } else {
                                 match block_type_idx {
-                                    0x40 => 0, // empty type - no return
+                                    0x40 => 0,                             // empty type - no return
                                     0x7F | 0x7E | 0x7D | 0x7C | 0x7B => 1, // i32, i64, f32, f64, v128
-                                    0x70 | 0x6F => 1, // funcref, externref
+                                    0x70 | 0x6F => 1,                      // funcref, externref
                                     _ => {
                                         // Type index - look up actual result count from module types
-                                        if let Some(func_type) = module.types.get(block_type_idx as usize) {
+                                        if let Some(func_type) =
+                                            module.types.get(block_type_idx as usize)
+                                        {
                                             func_type.results.len()
                                         } else {
                                             1 // Fallback if type not found
                                         }
-                                    }
+                                    },
                                 }
                             };
 
@@ -5688,8 +6548,11 @@ impl StacklessEngine {
                                     }
                                 }
                                 #[cfg(feature = "tracing")]
-                                trace!("Br: jumping backward to loop start at pc={}, popped {} inner blocks", start_pc, blocks_to_pop);
-                                pc = start_pc;  // Will +1 at end of iteration, so we execute the Loop instruction again
+                                trace!(
+                                    "Br: jumping backward to loop start at pc={}, popped {} inner blocks",
+                                    start_pc, blocks_to_pop
+                                );
+                                pc = start_pc; // Will +1 at end of iteration, so we execute the Loop instruction again
                             } else {
                                 // For Block/If: jump forward to the End
                                 // IMPORTANT: Pop all inner blocks from the stack since we're
@@ -5714,36 +6577,61 @@ impl StacklessEngine {
 
                                 #[cfg(feature = "tracing")]
                                 if func_idx == 76 {
-                                    trace!(new_pc = new_pc, target_depth = target_depth, "[BR-FWD] Starting scan");
+                                    trace!(
+                                        new_pc = new_pc,
+                                        target_depth = target_depth,
+                                        "[BR-FWD] Starting scan"
+                                    );
                                 }
 
                                 while new_pc < instructions.len() && target_depth > 0 {
                                     if let Some(instr) = instructions.get(new_pc) {
                                         match instr {
-                                            kiln_foundation::types::Instruction::Block { .. } |
-                                            kiln_foundation::types::Instruction::Loop { .. } |
-                                            kiln_foundation::types::Instruction::If { .. } |
-                                            kiln_foundation::types::Instruction::Try { .. } |
-                                            kiln_foundation::types::Instruction::TryTable { .. } => {
+                                            kiln_foundation::types::Instruction::Block {
+                                                ..
+                                            }
+                                            | kiln_foundation::types::Instruction::Loop {
+                                                ..
+                                            }
+                                            | kiln_foundation::types::Instruction::If { .. }
+                                            | kiln_foundation::types::Instruction::Try { .. }
+                                            | kiln_foundation::types::Instruction::TryTable {
+                                                ..
+                                            } => {
                                                 depth += 1;
                                                 #[cfg(feature = "tracing")]
                                                 if func_idx == 76 {
-                                                    trace!(pc = new_pc, depth = depth, "[BR-FWD] Block/Loop/If/Try");
+                                                    trace!(
+                                                        pc = new_pc,
+                                                        depth = depth,
+                                                        "[BR-FWD] Block/Loop/If/Try"
+                                                    );
                                                 }
-                                            }
+                                            },
                                             kiln_foundation::types::Instruction::End => {
                                                 #[cfg(feature = "tracing")]
                                                 if func_idx == 76 {
-                                                    trace!(pc = new_pc, depth = depth, target_depth = target_depth, "[BR-FWD] End");
+                                                    trace!(
+                                                        pc = new_pc,
+                                                        depth = depth,
+                                                        target_depth = target_depth,
+                                                        "[BR-FWD] End"
+                                                    );
                                                 }
                                                 if depth == 0 {
                                                     target_depth -= 1;
                                                     if target_depth == 0 {
                                                         #[cfg(feature = "tracing")]
-                                                        trace!("Br: jumping forward to pc={} (end of {} block)", new_pc, block_type);
+                                                        trace!(
+                                                            "Br: jumping forward to pc={} (end of {} block)",
+                                                            new_pc, block_type
+                                                        );
                                                         #[cfg(feature = "tracing")]
                                                         if func_idx == 76 {
-                                                            trace!(pc = new_pc, "[BR-FWD] Jumping to");
+                                                            trace!(
+                                                                pc = new_pc,
+                                                                "[BR-FWD] Jumping to"
+                                                            );
                                                         }
                                                         pc = new_pc - 1;
                                                         break;
@@ -5751,8 +6639,8 @@ impl StacklessEngine {
                                                 } else {
                                                     depth -= 1;
                                                 }
-                                            }
-                                            _ => {}
+                                            },
+                                            _ => {},
                                         }
                                     }
                                     new_pc += 1;
@@ -5761,7 +6649,10 @@ impl StacklessEngine {
 
                             // Restore preserved values back to stack (in reverse order)
                             #[cfg(feature = "tracing")]
-                            trace!(count = preserved_values.len(), "[BR-VALUE] Restoring values");
+                            trace!(
+                                count = preserved_values.len(),
+                                "[BR-VALUE] Restoring values"
+                            );
                             for v in preserved_values.into_iter().rev() {
                                 #[cfg(feature = "tracing")]
                                 trace!(value = ?v, "[BR-VALUE] Restoring value");
@@ -5773,14 +6664,18 @@ impl StacklessEngine {
                             // Branch targets the function level (return from function)
                             // This happens when label_idx >= block_stack.len()
                             #[cfg(feature = "tracing")]
-                            trace!("Br: label_idx {} targeting function level (return)", label_idx);
+                            trace!(
+                                "Br: label_idx {} targeting function level (return)",
+                                label_idx
+                            );
 
                             // Determine how many values to preserve based on function's return type
-                            let values_to_preserve = if let Some(func_type) = module.types.get(func.type_idx as usize) {
-                                func_type.results.len()
-                            } else {
-                                0
-                            };
+                            let values_to_preserve =
+                                if let Some(func_type) = module.types.get(func.type_idx as usize) {
+                                    func_type.results.len()
+                                } else {
+                                    0
+                                };
 
                             // Save the values to preserve from top of stack
                             let mut preserved_values = Vec::new();
@@ -5801,11 +6696,15 @@ impl StacklessEngine {
                             // Return from function
                             break;
                         }
-                    }
+                    },
                     Instruction::BrIf(label_idx) => {
                         if let Some(Value::I32(condition)) = operand_stack.pop() {
                             #[cfg(feature = "tracing")]
-                            trace!("BrIf: label_idx={}, condition={}", label_idx, condition != 0);
+                            trace!(
+                                "BrIf: label_idx={}, condition={}",
+                                label_idx,
+                                condition != 0
+                            );
                             // Trace BrIf in specific functions for debugging
                             #[cfg(feature = "tracing")]
                             if func_idx == 76 || func_idx == 211 || func_idx == 222 {
@@ -5822,38 +6721,43 @@ impl StacklessEngine {
                                 // Branch conditionally - same logic as Br
                                 if (label_idx as usize) < block_stack.len() {
                                     let stack_idx = block_stack.len() - 1 - (label_idx as usize);
-                                    let (block_type, start_pc, block_type_idx, entry_stack_height) = block_stack[stack_idx];
+                                    let (block_type, start_pc, block_type_idx, entry_stack_height) =
+                                        block_stack[stack_idx];
 
                                     // Determine how many values to preserve based on block type
                                     // For loops: preserve PARAMETER count; for blocks: preserve RESULT count
                                     let values_to_preserve = if block_type == "loop" {
                                         // Loop branches preserve parameter count (input arity)
                                         match block_type_idx {
-                                            0x40 => 0, // empty type - no params
+                                            0x40 => 0,                             // empty type - no params
                                             0x7F | 0x7E | 0x7D | 0x7C | 0x7B => 0, // inline value types: 0 params
                                             0x70 | 0x6F => 0, // funcref, externref: 0 params
                                             _ => {
                                                 // Type index - look up actual param count from module types
-                                                if let Some(func_type) = module.types.get(block_type_idx as usize) {
+                                                if let Some(func_type) =
+                                                    module.types.get(block_type_idx as usize)
+                                                {
                                                     func_type.params.len()
                                                 } else {
                                                     0
                                                 }
-                                            }
+                                            },
                                         }
                                     } else {
                                         match block_type_idx {
-                                            0x40 => 0, // empty type - no return
+                                            0x40 => 0,                             // empty type - no return
                                             0x7F | 0x7E | 0x7D | 0x7C | 0x7B => 1, // i32, i64, f32, f64, v128
                                             0x70 | 0x6F => 1, // funcref, externref
                                             _ => {
                                                 // Type index - look up actual result count
-                                                if let Some(func_type) = module.types.get(block_type_idx as usize) {
+                                                if let Some(func_type) =
+                                                    module.types.get(block_type_idx as usize)
+                                                {
                                                     func_type.results.len()
                                                 } else {
                                                     1
                                                 }
-                                            }
+                                            },
                                         }
                                     };
 
@@ -5882,7 +6786,10 @@ impl StacklessEngine {
                                             }
                                         }
                                         #[cfg(feature = "tracing")]
-                                        trace!("BrIf: jumping backward to loop start at pc={}, popped {} inner blocks", start_pc, blocks_to_pop);
+                                        trace!(
+                                            "BrIf: jumping backward to loop start at pc={}, popped {} inner blocks",
+                                            start_pc, blocks_to_pop
+                                        );
                                         pc = start_pc;
                                     } else {
                                         // For Block/If: jump forward to the End
@@ -5937,10 +6844,15 @@ impl StacklessEngine {
                                     // Branch targets the function level (return from function)
                                     // This happens when label_idx >= block_stack.len()
                                     #[cfg(feature = "tracing")]
-                                    trace!("BrIf: label_idx {} targeting function level (return)", label_idx);
+                                    trace!(
+                                        "BrIf: label_idx {} targeting function level (return)",
+                                        label_idx
+                                    );
 
                                     // Determine how many values to preserve based on function's return type
-                                    let values_to_preserve = if let Some(func_type) = module.types.get(func.type_idx as usize) {
+                                    let values_to_preserve = if let Some(func_type) =
+                                        module.types.get(func.type_idx as usize)
+                                    {
                                         func_type.results.len()
                                     } else {
                                         0
@@ -5971,7 +6883,7 @@ impl StacklessEngine {
                                 trace!("BrIf: condition false, not branching");
                             }
                         }
-                    }
+                    },
                     Instruction::MemorySize(memory_idx) => {
                         // Get the memory size in pages (1 page = 64KB = 65536 bytes)
                         // Use INSTANCE memory (initialized with data segments), not module memory
@@ -5992,14 +6904,17 @@ impl StacklessEngine {
                                 } else {
                                     operand_stack.push(Value::I32(size_in_pages as i32));
                                 }
-                            }
+                            },
                             Err(e) => {
                                 #[cfg(feature = "tracing")]
-                                trace!("MemorySize: memory[{}] not found: {:?}, pushing 0", memory_idx, e);
+                                trace!(
+                                    "MemorySize: memory[{}] not found: {:?}, pushing 0",
+                                    memory_idx, e
+                                );
                                 operand_stack.push(Value::I32(0));
-                            }
+                            },
                         }
-                    }
+                    },
                     Instruction::MemoryGrow(memory_idx) => {
                         // Pop the number of pages to grow (accepts both I32 and I64)
                         let delta = match operand_stack.pop() {
@@ -6009,10 +6924,11 @@ impl StacklessEngine {
                                 #[cfg(feature = "tracing")]
                                 trace!("MemoryGrow: insufficient values on stack");
                                 continue;
-                            }
+                            },
                         };
                         // Determine memory64 from the memory type, not the stack value
-                        let is_memory64 = instance.memory(memory_idx as u32)
+                        let is_memory64 = instance
+                            .memory(memory_idx as u32)
                             .map(|mw| mw.0.ty.memory64)
                             .unwrap_or(false);
                         if delta < 0 {
@@ -6049,7 +6965,7 @@ impl StacklessEngine {
                                             } else {
                                                 operand_stack.push(Value::I32(prev_pages as i32));
                                             }
-                                        }
+                                        },
                                         Err(e) => {
                                             #[cfg(feature = "tracing")]
                                             warn!(
@@ -6062,9 +6978,9 @@ impl StacklessEngine {
                                             } else {
                                                 operand_stack.push(Value::I32(-1));
                                             }
-                                        }
+                                        },
                                     }
-                                }
+                                },
                                 Err(e) => {
                                     #[cfg(feature = "tracing")]
                                     trace!("MemoryGrow: memory[{}] not found: {:?}", memory_idx, e);
@@ -6073,10 +6989,10 @@ impl StacklessEngine {
                                     } else {
                                         operand_stack.push(Value::I32(-1));
                                     }
-                                }
+                                },
                             }
                         }
-                    }
+                    },
                     Instruction::MemoryCopy(dst_mem_idx, src_mem_idx) => {
                         // Pop size, src, dest from stack (in that order per wasm spec)
                         // For memory64, these may be I64 values
@@ -6086,17 +7002,32 @@ impl StacklessEngine {
                         let size = match size_val {
                             Some(Value::I32(v)) => v as u32 as u64,
                             Some(Value::I64(v)) => v as u64,
-                            _ => { #[cfg(feature = "tracing")] trace!("MemoryCopy: insufficient values on stack"); pc += 1; continue; }
+                            _ => {
+                                #[cfg(feature = "tracing")]
+                                trace!("MemoryCopy: insufficient values on stack");
+                                pc += 1;
+                                continue;
+                            },
                         };
                         let src = match src_val {
                             Some(Value::I32(v)) => v as u32 as u64,
                             Some(Value::I64(v)) => v as u64,
-                            _ => { #[cfg(feature = "tracing")] trace!("MemoryCopy: insufficient values on stack"); pc += 1; continue; }
+                            _ => {
+                                #[cfg(feature = "tracing")]
+                                trace!("MemoryCopy: insufficient values on stack");
+                                pc += 1;
+                                continue;
+                            },
                         };
                         let dest = match dest_val {
                             Some(Value::I32(v)) => v as u32 as u64,
                             Some(Value::I64(v)) => v as u64,
-                            _ => { #[cfg(feature = "tracing")] trace!("MemoryCopy: insufficient values on stack"); pc += 1; continue; }
+                            _ => {
+                                #[cfg(feature = "tracing")]
+                                trace!("MemoryCopy: insufficient values on stack");
+                                pc += 1;
+                                continue;
+                            },
                         };
                         {
                             #[cfg(feature = "tracing")]
@@ -6121,19 +7052,25 @@ impl StacklessEngine {
 
                                 if size == 0 {
                                     if dest > dst_memory_size || src > src_memory_size {
-                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+                                        return Err(kiln_error::Error::runtime_trap(
+                                            "out of bounds memory access",
+                                        ));
                                     }
                                     pc += 1;
                                     continue;
                                 }
 
-                                let dest_end = dest.checked_add(size)
-                                    .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
-                                let src_end = src.checked_add(size)
-                                    .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+                                let dest_end = dest.checked_add(size).ok_or_else(|| {
+                                    kiln_error::Error::runtime_trap("out of bounds memory access")
+                                })?;
+                                let src_end = src.checked_add(size).ok_or_else(|| {
+                                    kiln_error::Error::runtime_trap("out of bounds memory access")
+                                })?;
 
                                 if dest_end > dst_memory_size || src_end > src_memory_size {
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "out of bounds memory access",
+                                    ));
                                 }
 
                                 let size_usize = size as usize;
@@ -6161,7 +7098,9 @@ impl StacklessEngine {
                                         dest = format_args!("{:#x}", dest),
                                         "[MemoryCopy] SUCCESS"
                                     );
-                                    if size <= 50 && buffer.iter().all(|&b| b >= 0x20 && b <= 0x7e || b == 0) {
+                                    if size <= 50
+                                        && buffer.iter().all(|&b| b >= 0x20 && b <= 0x7e || b == 0)
+                                    {
                                         if let Ok(s) = core::str::from_utf8(&buffer) {
                                             trace!(data = %s, "[MemoryCopy] Copied ASCII data");
                                         }
@@ -6169,7 +7108,7 @@ impl StacklessEngine {
                                 }
                             }
                         }
-                    }
+                    },
                     Instruction::MemoryFill(mem_idx) => {
                         // Pop size, value, dest from stack (in that order per wasm spec)
                         // For memory64, size and dest may be I64
@@ -6179,16 +7118,31 @@ impl StacklessEngine {
                         let size = match size_val {
                             Some(Value::I32(v)) => v as u32 as u64,
                             Some(Value::I64(v)) => v as u64,
-                            _ => { #[cfg(feature = "tracing")] trace!("MemoryFill: insufficient values on stack"); pc += 1; continue; }
+                            _ => {
+                                #[cfg(feature = "tracing")]
+                                trace!("MemoryFill: insufficient values on stack");
+                                pc += 1;
+                                continue;
+                            },
                         };
                         let value = match value_val {
                             Some(Value::I32(v)) => v,
-                            _ => { #[cfg(feature = "tracing")] trace!("MemoryFill: insufficient values on stack"); pc += 1; continue; }
+                            _ => {
+                                #[cfg(feature = "tracing")]
+                                trace!("MemoryFill: insufficient values on stack");
+                                pc += 1;
+                                continue;
+                            },
                         };
                         let dest = match dest_val {
                             Some(Value::I32(v)) => v as u32 as u64,
                             Some(Value::I64(v)) => v as u64,
-                            _ => { #[cfg(feature = "tracing")] trace!("MemoryFill: insufficient values on stack"); pc += 1; continue; }
+                            _ => {
+                                #[cfg(feature = "tracing")]
+                                trace!("MemoryFill: insufficient values on stack");
+                                pc += 1;
+                                continue;
+                            },
                         };
                         {
                             #[cfg(feature = "tracing")]
@@ -6206,17 +7160,22 @@ impl StacklessEngine {
 
                             if size == 0 {
                                 if dest > memory_size {
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "out of bounds memory access",
+                                    ));
                                 }
                                 pc += 1;
                                 continue;
                             }
 
-                            let dest_end = dest.checked_add(size)
-                                .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+                            let dest_end = dest.checked_add(size).ok_or_else(|| {
+                                kiln_error::Error::runtime_trap("out of bounds memory access")
+                            })?;
 
                             if dest_end > memory_size {
-                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "out of bounds memory access",
+                                ));
                             }
 
                             let size_usize = size as usize;
@@ -6238,7 +7197,7 @@ impl StacklessEngine {
                                 "[MemoryFill] SUCCESS"
                             );
                         }
-                    }
+                    },
                     Instruction::MemoryInit(data_idx, mem_idx) => {
                         // Pop n (length), s (source offset in data), d (dest offset in memory)
                         // For memory64, d and n may be I64; s is always I32 (data segment offset)
@@ -6248,16 +7207,31 @@ impl StacklessEngine {
                         let n = match n_val {
                             Some(Value::I32(v)) => v as u32 as u64,
                             Some(Value::I64(v)) => v as u64,
-                            _ => { #[cfg(feature = "tracing")] trace!("MemoryInit: insufficient values on stack"); pc += 1; continue; }
+                            _ => {
+                                #[cfg(feature = "tracing")]
+                                trace!("MemoryInit: insufficient values on stack");
+                                pc += 1;
+                                continue;
+                            },
                         };
                         let s = match s_val {
                             Some(Value::I32(v)) => v as u32 as u64,
-                            _ => { #[cfg(feature = "tracing")] trace!("MemoryInit: insufficient values on stack"); pc += 1; continue; }
+                            _ => {
+                                #[cfg(feature = "tracing")]
+                                trace!("MemoryInit: insufficient values on stack");
+                                pc += 1;
+                                continue;
+                            },
                         };
                         let d = match d_val {
                             Some(Value::I32(v)) => v as u32 as u64,
                             Some(Value::I64(v)) => v as u64,
-                            _ => { #[cfg(feature = "tracing")] trace!("MemoryInit: insufficient values on stack"); pc += 1; continue; }
+                            _ => {
+                                #[cfg(feature = "tracing")]
+                                trace!("MemoryInit: insufficient values on stack");
+                                pc += 1;
+                                continue;
+                            },
                         };
                         {
                             #[cfg(feature = "tracing")]
@@ -6270,16 +7244,20 @@ impl StacklessEngine {
                                 "[MemoryInit] Starting memory init operation"
                             );
 
-                            let is_dropped = self.dropped_data_segments
+                            let is_dropped = self
+                                .dropped_data_segments
                                 .get(&instance_id)
                                 .and_then(|v| v.get(data_idx as usize))
                                 .copied()
                                 .unwrap_or(false);
 
-                            let data_segment = module.data.get(data_idx as usize)
-                                .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+                            let data_segment =
+                                module.data.get(data_idx as usize).ok_or_else(|| {
+                                    kiln_error::Error::runtime_trap("out of bounds memory access")
+                                })?;
 
-                            let data_len = if is_dropped { 0u64 } else { data_segment.init.len() as u64 };
+                            let data_len =
+                                if is_dropped { 0u64 } else { data_segment.init.len() as u64 };
 
                             let memory_wrapper = instance.memory(mem_idx)?;
                             let memory = &memory_wrapper.0;
@@ -6287,22 +7265,30 @@ impl StacklessEngine {
 
                             if n == 0 {
                                 if s > data_len || d > memory_size {
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "out of bounds memory access",
+                                    ));
                                 }
                                 pc += 1;
                                 continue;
                             }
 
-                            let src_end = s.checked_add(n)
-                                .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
-                            let dest_end = d.checked_add(n)
-                                .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+                            let src_end = s.checked_add(n).ok_or_else(|| {
+                                kiln_error::Error::runtime_trap("out of bounds memory access")
+                            })?;
+                            let dest_end = d.checked_add(n).ok_or_else(|| {
+                                kiln_error::Error::runtime_trap("out of bounds memory access")
+                            })?;
 
                             if src_end > data_len {
-                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "out of bounds memory access",
+                                ));
                             }
                             if dest_end > memory_size {
-                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "out of bounds memory access",
+                                ));
                             }
 
                             {
@@ -6322,18 +7308,21 @@ impl StacklessEngine {
                                 "[MemoryInit] SUCCESS"
                             );
                         }
-                    }
+                    },
                     Instruction::DataDrop(data_idx) => {
                         #[cfg(feature = "tracing")]
                         trace!(data_idx = data_idx, "[DataDrop] Dropping data segment");
 
                         // Validate data segment index
                         if data_idx as usize >= module.data.len() {
-                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+                            return Err(kiln_error::Error::runtime_trap(
+                                "out of bounds memory access",
+                            ));
                         }
 
                         // Initialize dropped_data_segments for this instance if not already done
-                        let dropped_vec = self.dropped_data_segments
+                        let dropped_vec = self
+                            .dropped_data_segments
                             .entry(instance_id)
                             .or_insert_with(|| vec![false; module.data.len()]);
 
@@ -6344,13 +7333,21 @@ impl StacklessEngine {
 
                         #[cfg(feature = "tracing")]
                         trace!(data_idx = data_idx, "[DataDrop] SUCCESS");
-                    }
-                    Instruction::BrTable { ref targets, default_target } => {
+                    },
+                    Instruction::BrTable {
+                        ref targets,
+                        default_target,
+                    } => {
                         // Pop the index from the stack
                         if let Some(Value::I32(index)) = operand_stack.pop() {
                             #[cfg(feature = "tracing")]
 
-                            trace!("BrTable: index={}, targets.len()={}, default={}",                                      index, targets.len(), default_target);
+                            trace!(
+                                "BrTable: index={}, targets.len()={}, default={}",
+                                index,
+                                targets.len(),
+                                default_target
+                            );
 
                             // Select the target based on the index
                             let label_idx = if index >= 0 && (index as usize) < targets.len() {
@@ -6361,26 +7358,36 @@ impl StacklessEngine {
 
                                         trace!("BrTable: using target[{}] = {}", index, target);
                                         target
-                                    }
+                                    },
                                     Err(_) => {
                                         #[cfg(feature = "tracing")]
 
-                                        trace!("BrTable: error getting target[{}], using default {}", index, default_target);
+                                        trace!(
+                                            "BrTable: error getting target[{}], using default {}",
+                                            index, default_target
+                                        );
                                         default_target
-                                    }
+                                    },
                                 }
                             } else {
                                 // Index out of range, use default
                                 #[cfg(feature = "tracing")]
 
-                                trace!("BrTable: index {} out of range, using default {}", index, default_target);
+                                trace!(
+                                    "BrTable: index {} out of range, using default {}",
+                                    index, default_target
+                                );
                                 default_target
                             };
 
                             // Branch to the selected target (same logic as Br)
                             #[cfg(feature = "tracing")]
 
-                            trace!("BrTable: label_idx={}, block_stack.len()={}", label_idx, block_stack.len());
+                            trace!(
+                                "BrTable: label_idx={}, block_stack.len()={}",
+                                label_idx,
+                                block_stack.len()
+                            );
                             #[cfg(feature = "tracing")]
 
                             trace!("BrTable: block_stack contents:");
@@ -6391,41 +7398,49 @@ impl StacklessEngine {
                             }
                             if (label_idx as usize) < block_stack.len() {
                                 let stack_idx = block_stack.len() - 1 - (label_idx as usize);
-                                let (block_type, start_pc, block_type_idx, entry_stack_height) = block_stack[stack_idx];
+                                let (block_type, start_pc, block_type_idx, entry_stack_height) =
+                                    block_stack[stack_idx];
                                 #[cfg(feature = "tracing")]
 
-                                trace!("BrTable: accessing block_stack[{}], target block is {} at pc={}", stack_idx, block_type, start_pc);
+                                trace!(
+                                    "BrTable: accessing block_stack[{}], target block is {} at pc={}",
+                                    stack_idx, block_type, start_pc
+                                );
 
                                 // Determine how many values to preserve based on block type
                                 // For loops: preserve PARAMETER count; for blocks: preserve RESULT count
                                 let values_to_preserve = if block_type == "loop" {
                                     // Loop branches preserve parameter count (input arity)
                                     match block_type_idx {
-                                        0x40 => 0, // empty type - no params
+                                        0x40 => 0,                             // empty type - no params
                                         0x7F | 0x7E | 0x7D | 0x7C | 0x7B => 0, // inline value types: 0 params
                                         0x70 | 0x6F => 0, // funcref, externref: 0 params
                                         _ => {
                                             // Type index - look up actual param count from module types
-                                            if let Some(func_type) = module.types.get(block_type_idx as usize) {
+                                            if let Some(func_type) =
+                                                module.types.get(block_type_idx as usize)
+                                            {
                                                 func_type.params.len()
                                             } else {
                                                 0
                                             }
-                                        }
+                                        },
                                     }
                                 } else {
                                     match block_type_idx {
-                                        0x40 => 0, // empty type - no return
+                                        0x40 => 0,                             // empty type - no return
                                         0x7F | 0x7E | 0x7D | 0x7C | 0x7B => 1, // i32, i64, f32, f64, v128
-                                        0x70 | 0x6F => 1, // funcref, externref
+                                        0x70 | 0x6F => 1,                      // funcref, externref
                                         _ => {
                                             // Type index - look up actual result count
-                                            if let Some(func_type) = module.types.get(block_type_idx as usize) {
+                                            if let Some(func_type) =
+                                                module.types.get(block_type_idx as usize)
+                                            {
                                                 func_type.results.len()
                                             } else {
                                                 1
                                             }
-                                        }
+                                        },
                                     }
                                 };
 
@@ -6456,7 +7471,10 @@ impl StacklessEngine {
                                     // For Loop: jump backward to the loop start
                                     #[cfg(feature = "tracing")]
 
-                                    trace!("BrTable: jumping backward to loop start at pc={}", start_pc);
+                                    trace!(
+                                        "BrTable: jumping backward to loop start at pc={}",
+                                        start_pc
+                                    );
                                     pc = start_pc;
                                 } else {
                                     // For Block/If: jump forward to the End
@@ -6467,28 +7485,41 @@ impl StacklessEngine {
                                     while new_pc < instructions.len() && target_depth > 0 {
                                         if let Some(instr) = instructions.get(new_pc) {
                                             match instr {
-                                                kiln_foundation::types::Instruction::Block { .. } |
-                                                kiln_foundation::types::Instruction::Loop { .. } |
-                                                kiln_foundation::types::Instruction::If { .. } |
-                                                kiln_foundation::types::Instruction::Try { .. } |
-                                                kiln_foundation::types::Instruction::TryTable { .. } => {
-                                                    depth += 1;
+                                                kiln_foundation::types::Instruction::Block {
+                                                    ..
                                                 }
+                                                | kiln_foundation::types::Instruction::Loop {
+                                                    ..
+                                                }
+                                                | kiln_foundation::types::Instruction::If {
+                                                    ..
+                                                }
+                                                | kiln_foundation::types::Instruction::Try {
+                                                    ..
+                                                }
+                                                | kiln_foundation::types::Instruction::TryTable {
+                                                    ..
+                                                } => {
+                                                    depth += 1;
+                                                },
                                                 kiln_foundation::types::Instruction::End => {
                                                     if depth == 0 {
                                                         target_depth -= 1;
                                                         if target_depth == 0 {
                                                             #[cfg(feature = "tracing")]
 
-                                                            trace!("BrTable: jumping forward to pc={} (end of {} block)", new_pc, block_type);
+                                                            trace!(
+                                                                "BrTable: jumping forward to pc={} (end of {} block)",
+                                                                new_pc, block_type
+                                                            );
                                                             pc = new_pc - 1;
                                                             break;
                                                         }
                                                     } else {
                                                         depth -= 1;
                                                     }
-                                                }
-                                                _ => {}
+                                                },
+                                                _ => {},
                                             }
                                         }
                                         new_pc += 1;
@@ -6503,10 +7534,15 @@ impl StacklessEngine {
                                 // Branch targets the function level (return from function)
                                 // This happens when label_idx >= block_stack.len()
                                 #[cfg(feature = "tracing")]
-                                trace!("BrTable: label_idx {} targeting function level (return)", label_idx);
+                                trace!(
+                                    "BrTable: label_idx {} targeting function level (return)",
+                                    label_idx
+                                );
 
                                 // Determine how many values to preserve based on function's return type
-                                let values_to_preserve = if let Some(func_type) = module.types.get(func.type_idx as usize) {
+                                let values_to_preserve = if let Some(func_type) =
+                                    module.types.get(func.type_idx as usize)
+                                {
                                     func_type.results.len()
                                 } else {
                                     0
@@ -6536,7 +7572,7 @@ impl StacklessEngine {
 
                             trace!("BrTable: no index on stack");
                         }
-                    }
+                    },
                     Instruction::Return => {
                         #[cfg(feature = "tracing")]
                         trace!("🔙 Return at pc={}", pc);
@@ -6555,7 +7591,7 @@ impl StacklessEngine {
                             );
                         }
                         break; // Exit function
-                    }
+                    },
                     Instruction::End => {
                         // Decrement block depth first
                         block_depth -= 1;
@@ -6580,27 +7616,34 @@ impl StacklessEngine {
                             // Per WebAssembly spec: save result values, pop stack to
                             // entry height, push result values back.
                             if !block_stack.is_empty() {
-                                let (block_type, start_pc, block_type_idx, entry_stack_height) = block_stack
-                                    .pop()
-                                    .ok_or_else(|| kiln_error::Error::runtime_execution_error("Block stack empty at block end"))?;
+                                let (block_type, start_pc, block_type_idx, entry_stack_height) =
+                                    block_stack.pop().ok_or_else(|| {
+                                        kiln_error::Error::runtime_execution_error(
+                                            "Block stack empty at block end",
+                                        )
+                                    })?;
                                 #[cfg(feature = "tracing")]
-                                trace!("End at pc={} (closes {} from pc={}, depth now {}, entry_height={})", pc, block_type, start_pc, block_depth, entry_stack_height);
+                                trace!(
+                                    "End at pc={} (closes {} from pc={}, depth now {}, entry_height={})",
+                                    pc, block_type, start_pc, block_depth, entry_stack_height
+                                );
 
                                 // Determine number of result values for this block
                                 let result_count = match block_type_idx {
-                                    0x40 => 0, // empty type - no results
+                                    0x40 => 0,                             // empty type - no results
                                     0x7F | 0x7E | 0x7D | 0x7C | 0x7B => 1, // i32, i64, f32, f64, v128
-                                    0x70 | 0x6F => 1, // funcref, externref
+                                    0x70 | 0x6F => 1,                      // funcref, externref
                                     // GC and exception reference types (single result)
                                     0x69 | 0x6E | 0x6D | 0x6C | 0x6B | 0x6A | 0x73 => 1,
                                     _ => {
                                         // Type index - look up actual result count
-                                        if let Some(ft) = module.types.get(block_type_idx as usize) {
+                                        if let Some(ft) = module.types.get(block_type_idx as usize)
+                                        {
                                             ft.results.len()
                                         } else {
                                             0
                                         }
-                                    }
+                                    },
                                 };
 
                                 // Save result values from top of stack
@@ -6625,10 +7668,13 @@ impl StacklessEngine {
                                 trace!("End: stack after cleanup: len={}", operand_stack.len());
                             } else {
                                 #[cfg(feature = "tracing")]
-                                trace!("End at pc={} (closes block, depth now {})", pc, block_depth);
+                                trace!(
+                                    "End at pc={} (closes block, depth now {})",
+                                    pc, block_depth
+                                );
                             }
                         }
-                    }
+                    },
 
                     // ========================================
                     // Reference Type Operations
@@ -6645,8 +7691,8 @@ impl StacklessEngine {
                             ValueType::TypedFuncRef(_, _) => Value::FuncRef(None),
                             ValueType::ExternRef => Value::ExternRef(None),
                             // GC abstract heap types (using their Value representations)
-                            ValueType::AnyRef => Value::ExternRef(None),   // anyref uses externref repr
-                            ValueType::EqRef => Value::I31Ref(None),       // eqref uses i31ref repr
+                            ValueType::AnyRef => Value::ExternRef(None), // anyref uses externref repr
+                            ValueType::EqRef => Value::I31Ref(None),     // eqref uses i31ref repr
                             ValueType::I31Ref => Value::I31Ref(None),
                             ValueType::StructRef(_) => Value::StructRef(None),
                             ValueType::ArrayRef(_) => Value::ArrayRef(None),
@@ -6655,13 +7701,15 @@ impl StacklessEngine {
                             _ => Value::ExternRef(None),
                         };
                         operand_stack.push(null_value);
-                    }
+                    },
                     Instruction::RefFunc(func_idx_arg) => {
                         // Push a reference to the function at func_idx
                         #[cfg(feature = "tracing")]
                         trace!("RefFunc: func_idx={}", func_idx_arg);
-                        operand_stack.push(Value::FuncRef(Some(kiln_foundation::values::FuncRef::from_index(func_idx_arg))));
-                    }
+                        operand_stack.push(Value::FuncRef(Some(
+                            kiln_foundation::values::FuncRef::from_index(func_idx_arg),
+                        )));
+                    },
                     Instruction::RefIsNull => {
                         // Pop reference, push 1 if null, 0 if not null
                         if let Some(ref_val) = operand_stack.pop() {
@@ -6685,43 +7733,51 @@ impl StacklessEngine {
                                     return Err(kiln_error::Error::runtime_type_mismatch(
                                         "ref.is_null expects a reference type",
                                     ));
-                                }
+                                },
                             };
                             #[cfg(feature = "tracing")]
                             trace!("RefIsNull: result={}", is_null);
                             operand_stack.push(Value::I32(is_null));
                         }
-                    }
+                    },
                     Instruction::RefAsNonNull => {
                         // Pop reference, trap if null, push back if not null
                         if let Some(ref_val) = operand_stack.pop() {
                             match &ref_val {
-                                Value::FuncRef(None) | Value::ExternRef(None)
-                                | Value::ExnRef(None) | Value::I31Ref(None)
-                                | Value::StructRef(None) | Value::ArrayRef(None) => {
-                                    return Err(kiln_error::Error::runtime_trap(
-                                        "null reference",
-                                    ));
-                                }
-                                Value::FuncRef(Some(_)) | Value::ExternRef(Some(_))
-                                | Value::ExnRef(Some(_)) | Value::I31Ref(Some(_))
-                                | Value::StructRef(Some(_)) | Value::ArrayRef(Some(_))
+                                Value::FuncRef(None)
+                                | Value::ExternRef(None)
+                                | Value::ExnRef(None)
+                                | Value::I31Ref(None)
+                                | Value::StructRef(None)
+                                | Value::ArrayRef(None) => {
+                                    return Err(kiln_error::Error::runtime_trap("null reference"));
+                                },
+                                Value::FuncRef(Some(_))
+                                | Value::ExternRef(Some(_))
+                                | Value::ExnRef(Some(_))
+                                | Value::I31Ref(Some(_))
+                                | Value::StructRef(Some(_))
+                                | Value::ArrayRef(Some(_))
                                 | Value::Ref(_) => {
                                     operand_stack.push(ref_val);
-                                }
+                                },
                                 _ => {
                                     #[cfg(feature = "tracing")]
-                                    error!("RefAsNonNull: expected reference type, got {:?}", ref_val);
+                                    error!(
+                                        "RefAsNonNull: expected reference type, got {:?}",
+                                        ref_val
+                                    );
                                     return Err(kiln_error::Error::runtime_type_mismatch(
                                         "ref.as_non_null expects a reference type",
                                     ));
-                                }
+                                },
                             }
                         }
-                    }
+                    },
                     Instruction::RefEq => {
                         // ref.eq: compare two eqref values for equality
-                        if let (Some(ref2), Some(ref1)) = (operand_stack.pop(), operand_stack.pop()) {
+                        if let (Some(ref2), Some(ref1)) = (operand_stack.pop(), operand_stack.pop())
+                        {
                             let result = match (&ref1, &ref2) {
                                 // Any two null references are equal (regardless of type variant)
                                 (r1, r2) if is_null_ref(r1) && is_null_ref(r2) => 1i32,
@@ -6730,19 +7786,23 @@ impl StacklessEngine {
                                 (_, r2) if is_null_ref(r2) => 0i32,
                                 // i31ref: equal if values are equal
                                 (Value::I31Ref(Some(a)), Value::I31Ref(Some(b))) => {
-                                    if a == b { 1i32 } else { 0i32 }
-                                }
+                                    if a == b {
+                                        1i32
+                                    } else {
+                                        0i32
+                                    }
+                                },
                                 // funcref: equal if same function index
                                 (Value::FuncRef(Some(f1)), Value::FuncRef(Some(f2))) => {
                                     if f1.index == f2.index { 1i32 } else { 0i32 }
-                                }
+                                },
                                 // struct/array refs: identity comparison (Arc pointer equality)
                                 (Value::StructRef(Some(s1)), Value::StructRef(Some(s2))) => {
                                     if s1.arc_ptr_eq(s2) { 1i32 } else { 0i32 }
-                                }
+                                },
                                 (Value::ArrayRef(Some(a1)), Value::ArrayRef(Some(a2))) => {
                                     if a1.arc_ptr_eq(a2) { 1i32 } else { 0i32 }
-                                }
+                                },
                                 // Different types are not equal
                                 _ => 0i32,
                             };
@@ -6750,7 +7810,7 @@ impl StacklessEngine {
                             trace!("RefEq: {:?} == {:?} => {}", ref1, ref2, result);
                             operand_stack.push(Value::I32(result));
                         }
-                    }
+                    },
                     Instruction::BrOnNull(br_label_idx) => {
                         // Pop reference, branch if null (consuming ref), push back if not null.
                         // br_on_null does NOT carry the ref value on the branch path,
@@ -6768,7 +7828,13 @@ impl StacklessEngine {
                                     break;
                                 }
                                 let stack_idx = block_stack.len() - 1 - br_label_idx as usize;
-                                if let Some((block_type, start_pc, block_type_idx, entry_stack_height)) = block_stack.get(stack_idx).copied() {
+                                if let Some((
+                                    block_type,
+                                    start_pc,
+                                    block_type_idx,
+                                    entry_stack_height,
+                                )) = block_stack.get(stack_idx).copied()
+                                {
                                     // Determine how many values to preserve (matching Br handler)
                                     let values_to_preserve = if block_type == "loop" {
                                         match block_type_idx {
@@ -6776,12 +7842,14 @@ impl StacklessEngine {
                                             0x7F | 0x7E | 0x7D | 0x7C | 0x7B => 0,
                                             0x70 | 0x6F => 0,
                                             _ => {
-                                                if let Some(func_type) = module.types.get(block_type_idx as usize) {
+                                                if let Some(func_type) =
+                                                    module.types.get(block_type_idx as usize)
+                                                {
                                                     func_type.params.len()
                                                 } else {
                                                     0
                                                 }
-                                            }
+                                            },
                                         }
                                     } else {
                                         match block_type_idx {
@@ -6790,12 +7858,14 @@ impl StacklessEngine {
                                             0x70 | 0x6F => 1,
                                             0x69 | 0x6E | 0x6D | 0x6C | 0x6B | 0x6A | 0x73 => 1,
                                             _ => {
-                                                if let Some(func_type) = module.types.get(block_type_idx as usize) {
+                                                if let Some(func_type) =
+                                                    module.types.get(block_type_idx as usize)
+                                                {
                                                     func_type.results.len()
                                                 } else {
                                                     1
                                                 }
-                                            }
+                                            },
                                         }
                                     };
 
@@ -6841,9 +7911,13 @@ impl StacklessEngine {
                                         while new_pc < instructions.len() && target_depth > 0 {
                                             if let Some(search_instr) = instructions.get(new_pc) {
                                                 match search_instr {
-                                                    Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => {
+                                                    Instruction::Block { .. }
+                                                    | Instruction::Loop { .. }
+                                                    | Instruction::If { .. }
+                                                    | Instruction::Try { .. }
+                                                    | Instruction::TryTable { .. } => {
                                                         depth += 1;
-                                                    }
+                                                    },
                                                     Instruction::End => {
                                                         if depth == 0 {
                                                             target_depth -= 1;
@@ -6855,8 +7929,8 @@ impl StacklessEngine {
                                                         } else {
                                                             depth -= 1;
                                                         }
-                                                    }
-                                                    _ => {}
+                                                    },
+                                                    _ => {},
                                                 }
                                             }
                                             new_pc += 1;
@@ -6874,7 +7948,7 @@ impl StacklessEngine {
                                 operand_stack.push(ref_val);
                             }
                         }
-                    }
+                    },
 
                     Instruction::BrOnNonNull(br_label_idx) => {
                         // Pop reference, branch if NOT null (pushing ref on branch path),
@@ -6894,20 +7968,30 @@ impl StacklessEngine {
                                     break;
                                 }
                                 let stack_idx = block_stack.len() - 1 - br_label_idx as usize;
-                                if let Some((block_type, start_pc, block_type_idx, entry_stack_height)) = block_stack.get(stack_idx).copied() {
+                                if let Some((
+                                    block_type,
+                                    start_pc,
+                                    block_type_idx,
+                                    entry_stack_height,
+                                )) = block_stack.get(stack_idx).copied()
+                                {
                                     // Determine how many values to preserve (same logic as Br)
                                     let values_to_preserve = if block_type == "loop" {
                                         match block_type_idx {
                                             0x40 => 0,
                                             0x7F | 0x7E | 0x7D | 0x7C | 0x7B | 0x70 | 0x6F => 0,
-                                            _ => module.types.get(block_type_idx as usize)
+                                            _ => module
+                                                .types
+                                                .get(block_type_idx as usize)
                                                 .map_or(0, |ft| ft.params.len()),
                                         }
                                     } else {
                                         match block_type_idx {
                                             0x40 => 0,
                                             0x7F | 0x7E | 0x7D | 0x7C | 0x7B | 0x70 | 0x6F => 1,
-                                            _ => module.types.get(block_type_idx as usize)
+                                            _ => module
+                                                .types
+                                                .get(block_type_idx as usize)
                                                 .map_or(1, |ft| ft.results.len()),
                                         }
                                     };
@@ -6958,9 +8042,13 @@ impl StacklessEngine {
                                         while new_pc < instructions.len() && target_depth > 0 {
                                             if let Some(search_instr) = instructions.get(new_pc) {
                                                 match search_instr {
-                                                    Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => {
+                                                    Instruction::Block { .. }
+                                                    | Instruction::Loop { .. }
+                                                    | Instruction::If { .. }
+                                                    | Instruction::Try { .. }
+                                                    | Instruction::TryTable { .. } => {
                                                         depth += 1;
-                                                    }
+                                                    },
                                                     Instruction::End => {
                                                         if depth == 0 {
                                                             target_depth -= 1;
@@ -6974,8 +8062,8 @@ impl StacklessEngine {
                                                         } else {
                                                             depth -= 1;
                                                         }
-                                                    }
-                                                    _ => {}
+                                                    },
+                                                    _ => {},
                                                 }
                                             }
                                             new_pc += 1;
@@ -6988,7 +8076,7 @@ impl StacklessEngine {
                             }
                             // Null - consume the reference (don't push back)
                         }
-                    }
+                    },
 
                     // ==================== TABLE OPERATIONS ====================
                     Instruction::TableGet(table_idx) => {
@@ -7005,7 +8093,7 @@ impl StacklessEngine {
                                     ));
                                 }
                                 idx as u32
-                            }
+                            },
                             Value::I64(idx) => {
                                 if idx < 0 {
                                     return Err(kiln_error::Error::runtime_trap(
@@ -7015,12 +8103,12 @@ impl StacklessEngine {
                                 u32::try_from(idx).map_err(|_| {
                                     kiln_error::Error::runtime_trap("out of bounds table access")
                                 })?
-                            }
+                            },
                             _ => {
                                 return Err(kiln_error::Error::runtime_trap(
                                     "table.get: expected i32 or i64 index on stack",
                                 ));
-                            }
+                            },
                         };
 
                         #[cfg(feature = "tracing")]
@@ -7041,19 +8129,28 @@ impl StacklessEngine {
                                 // Return null reference based on table element type
                                 use kiln_foundation::types::HeapType;
                                 match table.element_type() {
-                                    kiln_foundation::types::RefType::Funcref => Value::FuncRef(None),
-                                    kiln_foundation::types::RefType::Externref => Value::ExternRef(None),
+                                    kiln_foundation::types::RefType::Funcref => {
+                                        Value::FuncRef(None)
+                                    },
+                                    kiln_foundation::types::RefType::Externref => {
+                                        Value::ExternRef(None)
+                                    },
                                     kiln_foundation::types::RefType::Gc(gc) => match gc.heap_type {
                                         HeapType::Func | HeapType::NoFunc => Value::FuncRef(None),
-                                        HeapType::Extern | HeapType::NoExtern => Value::ExternRef(None),
-                                        HeapType::I31 | HeapType::Eq | HeapType::Any | HeapType::None => Value::I31Ref(None),
+                                        HeapType::Extern | HeapType::NoExtern => {
+                                            Value::ExternRef(None)
+                                        },
+                                        HeapType::I31
+                                        | HeapType::Eq
+                                        | HeapType::Any
+                                        | HeapType::None => Value::I31Ref(None),
                                         HeapType::Struct => Value::StructRef(None),
                                         HeapType::Array => Value::ArrayRef(None),
                                         HeapType::Exn => Value::ExnRef(None),
                                         HeapType::Concrete(_) => Value::FuncRef(None),
                                     },
                                 }
-                            }
+                            },
                         };
                         operand_stack.push(value);
 
@@ -7063,7 +8160,7 @@ impl StacklessEngine {
                             elem_idx = elem_idx,
                             "[TableGet] SUCCESS"
                         );
-                    }
+                    },
 
                     Instruction::TableSet(table_idx) => {
                         // table.set: [it ref] -> [] where it=i64 if table64, else i32
@@ -7083,7 +8180,7 @@ impl StacklessEngine {
                                     ));
                                 }
                                 i as u32
-                            }
+                            },
                             Value::I64(i) => {
                                 if i < 0 {
                                     return Err(kiln_error::Error::runtime_trap(
@@ -7093,12 +8190,12 @@ impl StacklessEngine {
                                 u32::try_from(i).map_err(|_| {
                                     kiln_error::Error::runtime_trap("out of bounds table access")
                                 })?
-                            }
+                            },
                             _ => {
                                 return Err(kiln_error::Error::runtime_trap(
                                     "table.set: expected i32 or i64 index",
                                 ));
-                            }
+                            },
                         };
 
                         #[cfg(feature = "tracing")]
@@ -7121,7 +8218,7 @@ impl StacklessEngine {
                                 return Err(kiln_error::Error::runtime_trap(
                                     "table.set: value must be a reference type",
                                 ));
-                            }
+                            },
                         };
 
                         // Get the table and set the element
@@ -7134,16 +8231,13 @@ impl StacklessEngine {
                             elem_idx = elem_idx,
                             "[TableSet] SUCCESS"
                         );
-                    }
+                    },
 
                     Instruction::TableSize(table_idx) => {
                         // table.size: [] -> [it] where it=i64 if table64, else i32
                         // Push current table size onto stack
                         #[cfg(feature = "tracing")]
-                        trace!(
-                            table_idx = table_idx,
-                            "[TableSize] Getting table size"
-                        );
+                        trace!(table_idx = table_idx, "[TableSize] Getting table size");
 
                         let table = instance.table(table_idx)?;
                         let size = table.size();
@@ -7154,12 +8248,8 @@ impl StacklessEngine {
                         }
 
                         #[cfg(feature = "tracing")]
-                        trace!(
-                            table_idx = table_idx,
-                            size = size,
-                            "[TableSize] SUCCESS"
-                        );
-                    }
+                        trace!(table_idx = table_idx, size = size, "[TableSize] SUCCESS");
+                    },
 
                     Instruction::TableGrow(table_idx) => {
                         // table.grow: [ref it] -> [it] where it=i64 if table64, else i32
@@ -7168,7 +8258,9 @@ impl StacklessEngine {
                             kiln_error::Error::runtime_trap("table.grow: expected delta on stack")
                         })?;
                         let init_value = operand_stack.pop().ok_or_else(|| {
-                            kiln_error::Error::runtime_trap("table.grow: expected init value on stack")
+                            kiln_error::Error::runtime_trap(
+                                "table.grow: expected init value on stack",
+                            )
                         })?;
 
                         // Determine if this is a table64 table
@@ -7177,16 +8269,24 @@ impl StacklessEngine {
 
                         let delta_u32: Option<u32> = match delta {
                             Value::I32(d) => {
-                                if d < 0 { None } else { Some(d as u32) }
-                            }
+                                if d < 0 {
+                                    None
+                                } else {
+                                    Some(d as u32)
+                                }
+                            },
                             Value::I64(d) => {
-                                if d < 0 { None } else { u32::try_from(d).ok() }
-                            }
+                                if d < 0 {
+                                    None
+                                } else {
+                                    u32::try_from(d).ok()
+                                }
+                            },
                             _ => {
                                 return Err(kiln_error::Error::runtime_trap(
                                     "table.grow: expected i32 or i64 delta",
                                 ));
-                            }
+                            },
                         };
 
                         #[cfg(feature = "tracing")]
@@ -7206,12 +8306,12 @@ impl StacklessEngine {
                                 | Value::I31Ref(_)
                                 | Value::StructRef(_)
                                 | Value::ArrayRef(_)
-                                | Value::Ref(_) => {}
+                                | Value::Ref(_) => {},
                                 _ => {
                                     return Err(kiln_error::Error::runtime_trap(
                                         "table.grow: init value must be a reference type",
                                     ));
-                                }
+                                },
                             }
 
                             match table.grow(delta_val, init_value) {
@@ -7227,7 +8327,7 @@ impl StacklessEngine {
                                         old_size = old_size,
                                         "[TableGrow] SUCCESS"
                                     );
-                                }
+                                },
                                 Err(_) => {
                                     // Growth failed (e.g., exceeded max size)
                                     if is_table64 {
@@ -7240,7 +8340,7 @@ impl StacklessEngine {
                                         table_idx = table_idx,
                                         "[TableGrow] Failed, returning -1"
                                     );
-                                }
+                                },
                             }
                         } else {
                             // Negative or overflow delta - growth fails
@@ -7250,12 +8350,9 @@ impl StacklessEngine {
                                 operand_stack.push(Value::I32(-1));
                             }
                             #[cfg(feature = "tracing")]
-                            trace!(
-                                table_idx = table_idx,
-                                "[TableGrow] Failed, returning -1"
-                            );
+                            trace!(table_idx = table_idx, "[TableGrow] Failed, returning -1");
                         }
-                    }
+                    },
 
                     Instruction::TableFill(table_idx) => {
                         // table.fill: [it ref it] -> [] where it=i64 if table64, else i32
@@ -7279,7 +8376,7 @@ impl StacklessEngine {
                                     ));
                                 }
                                 i as u32
-                            }
+                            },
                             Value::I64(i) => {
                                 if i < 0 {
                                     return Err(kiln_error::Error::runtime_trap(
@@ -7289,12 +8386,12 @@ impl StacklessEngine {
                                 u32::try_from(i).map_err(|_| {
                                     kiln_error::Error::runtime_trap("out of bounds table access")
                                 })?
-                            }
+                            },
                             _ => {
                                 return Err(kiln_error::Error::runtime_trap(
                                     "table.fill: expected i32 or i64 for dest",
                                 ));
-                            }
+                            },
                         };
 
                         // Extract fill size (i32 or i64)
@@ -7306,7 +8403,7 @@ impl StacklessEngine {
                                     ));
                                 }
                                 i as u32
-                            }
+                            },
                             Value::I64(i) => {
                                 if i < 0 {
                                     return Err(kiln_error::Error::runtime_trap(
@@ -7316,12 +8413,12 @@ impl StacklessEngine {
                                 u32::try_from(i).map_err(|_| {
                                     kiln_error::Error::runtime_trap("out of bounds table access")
                                 })?
-                            }
+                            },
                             _ => {
                                 return Err(kiln_error::Error::runtime_trap(
                                     "table.fill: expected i32 or i64 for size",
                                 ));
-                            }
+                            },
                         };
 
                         #[cfg(feature = "tracing")]
@@ -7345,7 +8442,7 @@ impl StacklessEngine {
                                 return Err(kiln_error::Error::runtime_trap(
                                     "table.fill: value must be a reference type",
                                 ));
-                            }
+                            },
                         };
 
                         let table = instance.table(table_idx)?;
@@ -7358,7 +8455,7 @@ impl StacklessEngine {
                             size = fill_size,
                             "[TableFill] SUCCESS"
                         );
-                    }
+                    },
 
                     Instruction::TableCopy(dst_table_idx, src_table_idx) => {
                         // table.copy: [it_d, it_s, it_n] -> [] (table64-aware)
@@ -7367,10 +8464,14 @@ impl StacklessEngine {
                             kiln_error::Error::runtime_trap("table.copy: expected size on stack")
                         })?;
                         let src_val = operand_stack.pop().ok_or_else(|| {
-                            kiln_error::Error::runtime_trap("table.copy: expected src offset on stack")
+                            kiln_error::Error::runtime_trap(
+                                "table.copy: expected src offset on stack",
+                            )
                         })?;
                         let dst_val = operand_stack.pop().ok_or_else(|| {
-                            kiln_error::Error::runtime_trap("table.copy: expected dst offset on stack")
+                            kiln_error::Error::runtime_trap(
+                                "table.copy: expected dst offset on stack",
+                            )
                         })?;
 
                         // Helper closure to extract u32 from i32 or i64 Value
@@ -7383,7 +8484,7 @@ impl StacklessEngine {
                                         ));
                                     }
                                     Ok(*i as u32)
-                                }
+                                },
                                 Value::I64(i) => {
                                     if *i < 0 {
                                         return Err(kiln_error::Error::runtime_trap(
@@ -7391,9 +8492,11 @@ impl StacklessEngine {
                                         ));
                                     }
                                     u32::try_from(*i).map_err(|_| {
-                                        kiln_error::Error::runtime_trap("out of bounds table access")
+                                        kiln_error::Error::runtime_trap(
+                                            "out of bounds table access",
+                                        )
                                     })
-                                }
+                                },
                                 _ => Err(kiln_error::Error::runtime_trap(
                                     "table.copy: expected i32 or i64 value",
                                 )),
@@ -7425,17 +8528,15 @@ impl StacklessEngine {
                             let dst_table = instance.table(dst_table_idx)?;
 
                             // Bounds check BEFORE zero-length check (per WebAssembly spec)
-                            let src_end = src_idx.checked_add(copy_size)
-                                .ok_or_else(|| kiln_error::Error::runtime_trap(
-                                    "out of bounds table access"
-                                ))?;
-                            let dst_end = dst_idx.checked_add(copy_size)
-                                .ok_or_else(|| kiln_error::Error::runtime_trap(
-                                    "out of bounds table access"
-                                ))?;
+                            let src_end = src_idx.checked_add(copy_size).ok_or_else(|| {
+                                kiln_error::Error::runtime_trap("out of bounds table access")
+                            })?;
+                            let dst_end = dst_idx.checked_add(copy_size).ok_or_else(|| {
+                                kiln_error::Error::runtime_trap("out of bounds table access")
+                            })?;
                             if src_end > src_table.size() || dst_end > dst_table.size() {
                                 return Err(kiln_error::Error::runtime_trap(
-                                    "out of bounds table access"
+                                    "out of bounds table access",
                                 ));
                             }
 
@@ -7461,7 +8562,7 @@ impl StacklessEngine {
                             src_table = src_table_idx,
                             "[TableCopy] SUCCESS"
                         );
-                    }
+                    },
 
                     Instruction::TableInit(elem_seg_idx, table_idx) => {
                         // table.init: [it, i32, i32] -> [] (it=i64 if table64)
@@ -7470,10 +8571,14 @@ impl StacklessEngine {
                             kiln_error::Error::runtime_trap("table.init: expected size on stack")
                         })?;
                         let src_offset = operand_stack.pop().ok_or_else(|| {
-                            kiln_error::Error::runtime_trap("table.init: expected src offset on stack")
+                            kiln_error::Error::runtime_trap(
+                                "table.init: expected src offset on stack",
+                            )
                         })?;
                         let dst_offset = operand_stack.pop().ok_or_else(|| {
-                            kiln_error::Error::runtime_trap("table.init: expected dst offset on stack")
+                            kiln_error::Error::runtime_trap(
+                                "table.init: expected dst offset on stack",
+                            )
                         })?;
 
                         // Extract size (always i32)
@@ -7485,12 +8590,12 @@ impl StacklessEngine {
                                     ));
                                 }
                                 i as u32
-                            }
+                            },
                             _ => {
                                 return Err(kiln_error::Error::runtime_trap(
                                     "table.init: expected i32 for size",
                                 ));
-                            }
+                            },
                         };
 
                         // Extract src_offset (always i32, indexes into element segment)
@@ -7502,12 +8607,12 @@ impl StacklessEngine {
                                     ));
                                 }
                                 i as u32
-                            }
+                            },
                             _ => {
                                 return Err(kiln_error::Error::runtime_trap(
                                     "table.init: expected i32 for src offset",
                                 ));
-                            }
+                            },
                         };
 
                         // Extract dst_offset (i32 or i64 depending on table64)
@@ -7519,7 +8624,7 @@ impl StacklessEngine {
                                     ));
                                 }
                                 i as u32
-                            }
+                            },
                             Value::I64(i) => {
                                 if i < 0 {
                                     return Err(kiln_error::Error::runtime_trap(
@@ -7529,12 +8634,12 @@ impl StacklessEngine {
                                 u32::try_from(i).map_err(|_| {
                                     kiln_error::Error::runtime_trap("out of bounds table access")
                                 })?
-                            }
+                            },
                             _ => {
                                 return Err(kiln_error::Error::runtime_trap(
                                     "table.init: expected i32 or i64 for dst offset",
                                 ));
-                            }
+                            },
                         };
 
                         #[cfg(feature = "tracing")]
@@ -7548,24 +8653,27 @@ impl StacklessEngine {
                         );
 
                         // Get the element segment from the module (needed for bounds check)
-                        let elem_segment = module.elements.get(elem_seg_idx as usize)
-                            .ok_or_else(|| kiln_error::Error::runtime_trap(
-                                "table.init: invalid element segment index"
-                            ))?;
+                        let elem_segment =
+                            module.elements.get(elem_seg_idx as usize).ok_or_else(|| {
+                                kiln_error::Error::runtime_trap(
+                                    "table.init: invalid element segment index",
+                                )
+                            })?;
 
                         // Check if the element segment has been dropped
                         // Dropped segments have effective length 0
-                        let effective_elem_len = if instance.is_element_segment_dropped(elem_seg_idx) {
-                            0
-                        } else {
-                            elem_segment.items.len()
-                        };
+                        let effective_elem_len =
+                            if instance.is_element_segment_dropped(elem_seg_idx) {
+                                0
+                            } else {
+                                elem_segment.items.len()
+                            };
 
                         // Check bounds in element segment (must happen BEFORE zero-size check per spec)
-                        let src_end = (src_idx as usize).checked_add(init_size as usize)
-                            .ok_or_else(|| kiln_error::Error::runtime_trap(
-                                "out of bounds table access"
-                            ))?;
+                        let src_end =
+                            (src_idx as usize).checked_add(init_size as usize).ok_or_else(
+                                || kiln_error::Error::runtime_trap("out of bounds table access"),
+                            )?;
                         if src_end > effective_elem_len {
                             return Err(kiln_error::Error::runtime_trap(
                                 "out of bounds table access",
@@ -7574,10 +8682,9 @@ impl StacklessEngine {
 
                         // Get table and check bounds (must happen BEFORE zero-size check per spec)
                         let table = instance.table(table_idx)?;
-                        let dst_end = dst_idx.checked_add(init_size)
-                            .ok_or_else(|| kiln_error::Error::runtime_trap(
-                                "out of bounds table access"
-                            ))?;
+                        let dst_end = dst_idx.checked_add(init_size).ok_or_else(|| {
+                            kiln_error::Error::runtime_trap("out of bounds table access")
+                        })?;
                         if dst_end > table.size() {
                             return Err(kiln_error::Error::runtime_trap(
                                 "out of bounds table access",
@@ -7591,7 +8698,9 @@ impl StacklessEngine {
                             // Continue to next instruction
                         } else {
                             // Use pre-resolved element values when available (handles GC types like i31ref)
-                            let has_resolved = module.resolved_elem_items.get(elem_seg_idx as usize)
+                            let has_resolved = module
+                                .resolved_elem_items
+                                .get(elem_seg_idx as usize)
                                 .map_or(false, |v| !v.is_empty());
 
                             // Copy elements from segment to table
@@ -7600,24 +8709,27 @@ impl StacklessEngine {
 
                                 let value = if has_resolved {
                                     // Use pre-resolved values (handles i31ref, structref, etc.)
-                                    let resolved = &module.resolved_elem_items[elem_seg_idx as usize];
+                                    let resolved =
+                                        &module.resolved_elem_items[elem_seg_idx as usize];
                                     if item_idx < resolved.len() {
                                         Some(resolved[item_idx].clone())
                                     } else {
                                         Some(Value::FuncRef(None))
                                     }
                                 } else {
-                                    let func_idx = elem_segment.items.get(item_idx)
-                                        .map_err(|_| kiln_error::Error::runtime_trap(
-                                            "table.init: element segment access error"
-                                        ))?;
+                                    let func_idx =
+                                        elem_segment.items.get(item_idx).map_err(|_| {
+                                            kiln_error::Error::runtime_trap(
+                                                "table.init: element segment access error",
+                                            )
+                                        })?;
 
                                     // u32::MAX is sentinel for null reference
                                     if func_idx == u32::MAX {
                                         Some(Value::FuncRef(None))
                                     } else {
                                         Some(Value::FuncRef(Some(
-                                            kiln_foundation::values::FuncRef::from_index(func_idx)
+                                            kiln_foundation::values::FuncRef::from_index(func_idx),
                                         )))
                                     }
                                 };
@@ -7631,7 +8743,7 @@ impl StacklessEngine {
                                 "[TableInit] SUCCESS"
                             );
                         }
-                    }
+                    },
 
                     Instruction::ElemDrop(elem_seg_idx) => {
                         // elem.drop: [] -> []
@@ -7661,7 +8773,7 @@ impl StacklessEngine {
                             elem_seg_idx = elem_seg_idx,
                             "[ElemDrop] SUCCESS (segment marked as dropped)"
                         );
-                    }
+                    },
 
                     // ===============================================
                     // Atomic Memory Operations (0xFE prefix)
@@ -7672,11 +8784,16 @@ impl StacklessEngine {
                     Instruction::MemoryAtomicNotify { memarg } => {
                         // memory.atomic.notify: [i32, i32] -> [i32]
                         // Wake up to count threads waiting on the given address
-                        if let (Some(Value::I32(count)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I32(count)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             // Check alignment - notify requires 4-byte alignment
                             if effective_addr % 4 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             #[cfg(feature = "tracing")]
                             trace!(
@@ -7688,18 +8805,27 @@ impl StacklessEngine {
                             // A full implementation would use futex-like mechanisms
                             operand_stack.push(Value::I32(0));
                         }
-                    }
+                    },
 
                     Instruction::MemoryAtomicWait32 { memarg } => {
                         // memory.atomic.wait32: [i32, i32, i64] -> [i32]
                         // Wait for i32 value at address to change, with timeout
-                        if let (Some(Value::I64(timeout)), Some(Value::I32(expected)), Some(Value::I32(addr))) =
-                            (operand_stack.pop(), operand_stack.pop(), operand_stack.pop())
-                        {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (
+                            Some(Value::I64(timeout)),
+                            Some(Value::I32(expected)),
+                            Some(Value::I32(addr)),
+                        ) = (
+                            operand_stack.pop(),
+                            operand_stack.pop(),
+                            operand_stack.pop(),
+                        ) {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             // Check alignment - wait32 requires 4-byte alignment
                             if effective_addr % 4 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             #[cfg(feature = "tracing")]
                             trace!(
@@ -7720,29 +8846,42 @@ impl StacklessEngine {
                                             // Return 1 if value differs, 2 if would timeout (single-threaded)
                                             let result = if current != expected { 1 } else { 2 };
                                             operand_stack.push(Value::I32(result));
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::MemoryAtomicWait64 { memarg } => {
                         // memory.atomic.wait64: [i32, i64, i64] -> [i32]
                         // Wait for i64 value at address to change, with timeout
-                        if let (Some(Value::I64(timeout)), Some(Value::I64(expected)), Some(Value::I32(addr))) =
-                            (operand_stack.pop(), operand_stack.pop(), operand_stack.pop())
-                        {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (
+                            Some(Value::I64(timeout)),
+                            Some(Value::I64(expected)),
+                            Some(Value::I32(addr)),
+                        ) = (
+                            operand_stack.pop(),
+                            operand_stack.pop(),
+                            operand_stack.pop(),
+                        ) {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             // Check alignment - wait64 requires 8-byte alignment
                             if effective_addr % 8 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             #[cfg(feature = "tracing")]
                             trace!(
@@ -7760,18 +8899,22 @@ impl StacklessEngine {
                                             let current = i64::from_le_bytes(buffer);
                                             let result = if current != expected { 1 } else { 2 };
                                             operand_stack.push(Value::I32(result));
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::AtomicFence => {
                         // atomic.fence: [] -> []
@@ -7779,18 +8922,20 @@ impl StacklessEngine {
                         #[cfg(feature = "tracing")]
                         trace!("[AtomicFence] Memory fence");
                         core::sync::atomic::fence(Ordering::SeqCst);
-                    }
+                    },
 
                     // ===============================================
                     // Atomic Loads
                     // ===============================================
-
                     Instruction::I32AtomicLoad { memarg } => {
                         if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             // Check 4-byte alignment for i32
                             if effective_addr % 4 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -7806,25 +8951,32 @@ impl StacklessEngine {
                                                 "[I32AtomicLoad] Loaded"
                                             );
                                             operand_stack.push(Value::I32(value));
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicLoad { memarg } => {
                         if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             // Check 8-byte alignment for i64
                             if effective_addr % 8 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -7840,22 +8992,27 @@ impl StacklessEngine {
                                                 "[I64AtomicLoad] Loaded"
                                             );
                                             operand_stack.push(Value::I64(value));
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I32AtomicLoad8U { memarg } => {
                         if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             // 8-bit loads have natural alignment (1 byte)
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -7871,25 +9028,32 @@ impl StacklessEngine {
                                                 "[I32AtomicLoad8U] Loaded"
                                             );
                                             operand_stack.push(Value::I32(value));
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I32AtomicLoad16U { memarg } => {
                         if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             // Check 2-byte alignment for i16
                             if effective_addr % 2 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -7905,22 +9069,27 @@ impl StacklessEngine {
                                                 "[I32AtomicLoad16U] Loaded"
                                             );
                                             operand_stack.push(Value::I32(value));
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicLoad8U { memarg } => {
                         if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -7935,24 +9104,31 @@ impl StacklessEngine {
                                                 "[I64AtomicLoad8U] Loaded"
                                             );
                                             operand_stack.push(Value::I64(value));
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicLoad16U { memarg } => {
                         if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -7968,24 +9144,31 @@ impl StacklessEngine {
                                                 "[I64AtomicLoad16U] Loaded"
                                             );
                                             operand_stack.push(Value::I64(value));
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicLoad32U { memarg } => {
                         if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8001,28 +9184,36 @@ impl StacklessEngine {
                                                 "[I64AtomicLoad32U] Loaded"
                                             );
                                             operand_stack.push(Value::I64(value));
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     // ===============================================
                     // Atomic Stores
                     // ===============================================
-
                     Instruction::I32AtomicStore { memarg } => {
-                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8036,24 +9227,33 @@ impl StacklessEngine {
                                                 value = value,
                                                 "[I32AtomicStore] Stored"
                                             );
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory write out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicStore { memarg } => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 8 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8067,22 +9267,29 @@ impl StacklessEngine {
                                                 value = value,
                                                 "[I64AtomicStore] Stored"
                                             );
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory write out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I32AtomicStore8 { memarg } => {
-                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -8095,24 +9302,33 @@ impl StacklessEngine {
                                                 value = value as u8,
                                                 "[I32AtomicStore8] Stored"
                                             );
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory write out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I32AtomicStore16 { memarg } => {
-                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8126,22 +9342,29 @@ impl StacklessEngine {
                                                 value = value as u16,
                                                 "[I32AtomicStore16] Stored"
                                             );
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory write out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicStore8 { memarg } => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -8154,24 +9377,33 @@ impl StacklessEngine {
                                                 value = value as u8,
                                                 "[I64AtomicStore8] Stored"
                                             );
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory write out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicStore16 { memarg } => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8185,24 +9417,33 @@ impl StacklessEngine {
                                                 value = value as u16,
                                                 "[I64AtomicStore16] Stored"
                                             );
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory write out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicStore32 { memarg } => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8216,28 +9457,36 @@ impl StacklessEngine {
                                                 value = value as u32,
                                                 "[I64AtomicStore32] Stored"
                                             );
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory write out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     // ===============================================
                     // Atomic RMW Add Operations
                     // ===============================================
-
                     Instruction::I32AtomicRmwAdd { memarg } => {
-                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8252,36 +9501,48 @@ impl StacklessEngine {
                                                 Ok(()) => {
                                                     #[cfg(feature = "tracing")]
                                                     trace!(
-                                                        addr = format_args!("0x{:x}", effective_addr),
+                                                        addr =
+                                                            format_args!("0x{:x}", effective_addr),
                                                         old_value = old_value,
                                                         add_value = value,
                                                         new_value = new_value,
                                                         "[I32AtomicRmwAdd] RMW Add"
                                                     );
                                                     operand_stack.push(Value::I32(old_value));
-                                                }
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicRmwAdd { memarg } => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 8 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8296,32 +9557,42 @@ impl StacklessEngine {
                                                 Ok(()) => {
                                                     #[cfg(feature = "tracing")]
                                                     trace!(
-                                                        addr = format_args!("0x{:x}", effective_addr),
+                                                        addr =
+                                                            format_args!("0x{:x}", effective_addr),
                                                         old_value = old_value,
                                                         "[I64AtomicRmwAdd] RMW Add"
                                                     );
                                                     operand_stack.push(Value::I64(old_value));
-                                                }
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I32AtomicRmw8AddU { memarg } => {
-                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -8330,32 +9601,45 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = buffer[0];
                                             let new_value = old_value.wrapping_add(value as u8);
-                                            match memory.write_shared(effective_addr, &[new_value]) {
+                                            match memory.write_shared(effective_addr, &[new_value])
+                                            {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I32(old_value as i32));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I32(old_value as i32));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I32AtomicRmw16AddU { memarg } => {
-                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8365,30 +9649,43 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = u16::from_le_bytes(buffer);
                                             let new_value = old_value.wrapping_add(value as u16);
-                                            match memory.write_shared(effective_addr, &new_value.to_le_bytes()) {
+                                            match memory.write_shared(
+                                                effective_addr,
+                                                &new_value.to_le_bytes(),
+                                            ) {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I32(old_value as i32));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I32(old_value as i32));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicRmw8AddU { memarg } => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -8397,32 +9694,45 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = buffer[0];
                                             let new_value = old_value.wrapping_add(value as u8);
-                                            match memory.write_shared(effective_addr, &[new_value]) {
+                                            match memory.write_shared(effective_addr, &[new_value])
+                                            {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I64(old_value as i64));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I64(old_value as i64));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicRmw16AddU { memarg } => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8432,32 +9742,47 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = u16::from_le_bytes(buffer);
                                             let new_value = old_value.wrapping_add(value as u16);
-                                            match memory.write_shared(effective_addr, &new_value.to_le_bytes()) {
+                                            match memory.write_shared(
+                                                effective_addr,
+                                                &new_value.to_le_bytes(),
+                                            ) {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I64(old_value as i64));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I64(old_value as i64));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicRmw32AddU { memarg } => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8467,36 +9792,50 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = u32::from_le_bytes(buffer);
                                             let new_value = old_value.wrapping_add(value as u32);
-                                            match memory.write_shared(effective_addr, &new_value.to_le_bytes()) {
+                                            match memory.write_shared(
+                                                effective_addr,
+                                                &new_value.to_le_bytes(),
+                                            ) {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I64(old_value as i64));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I64(old_value as i64));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     // ===============================================
                     // Atomic RMW Sub Operations
                     // ===============================================
-
                     Instruction::I32AtomicRmwSub { memarg } => {
-                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8506,32 +9845,46 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = i32::from_le_bytes(buffer);
                                             let new_value = old_value.wrapping_sub(value);
-                                            match memory.write_shared(effective_addr, &new_value.to_le_bytes()) {
+                                            match memory.write_shared(
+                                                effective_addr,
+                                                &new_value.to_le_bytes(),
+                                            ) {
                                                 Ok(()) => {
                                                     operand_stack.push(Value::I32(old_value));
-                                                }
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicRmwSub { memarg } => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 8 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8541,30 +9894,42 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = i64::from_le_bytes(buffer);
                                             let new_value = old_value.wrapping_sub(value);
-                                            match memory.write_shared(effective_addr, &new_value.to_le_bytes()) {
+                                            match memory.write_shared(
+                                                effective_addr,
+                                                &new_value.to_le_bytes(),
+                                            ) {
                                                 Ok(()) => {
                                                     operand_stack.push(Value::I64(old_value));
-                                                }
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I32AtomicRmw8SubU { memarg } => {
-                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -8573,32 +9938,45 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = buffer[0];
                                             let new_value = old_value.wrapping_sub(value as u8);
-                                            match memory.write_shared(effective_addr, &[new_value]) {
+                                            match memory.write_shared(effective_addr, &[new_value])
+                                            {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I32(old_value as i32));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I32(old_value as i32));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I32AtomicRmw16SubU { memarg } => {
-                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8608,30 +9986,43 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = u16::from_le_bytes(buffer);
                                             let new_value = old_value.wrapping_sub(value as u16);
-                                            match memory.write_shared(effective_addr, &new_value.to_le_bytes()) {
+                                            match memory.write_shared(
+                                                effective_addr,
+                                                &new_value.to_le_bytes(),
+                                            ) {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I32(old_value as i32));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I32(old_value as i32));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicRmw8SubU { memarg } => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -8640,32 +10031,45 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = buffer[0];
                                             let new_value = old_value.wrapping_sub(value as u8);
-                                            match memory.write_shared(effective_addr, &[new_value]) {
+                                            match memory.write_shared(effective_addr, &[new_value])
+                                            {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I64(old_value as i64));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I64(old_value as i64));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicRmw16SubU { memarg } => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8675,32 +10079,47 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = u16::from_le_bytes(buffer);
                                             let new_value = old_value.wrapping_sub(value as u16);
-                                            match memory.write_shared(effective_addr, &new_value.to_le_bytes()) {
+                                            match memory.write_shared(
+                                                effective_addr,
+                                                &new_value.to_le_bytes(),
+                                            ) {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I64(old_value as i64));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I64(old_value as i64));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicRmw32SubU { memarg } => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8710,36 +10129,50 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = u32::from_le_bytes(buffer);
                                             let new_value = old_value.wrapping_sub(value as u32);
-                                            match memory.write_shared(effective_addr, &new_value.to_le_bytes()) {
+                                            match memory.write_shared(
+                                                effective_addr,
+                                                &new_value.to_le_bytes(),
+                                            ) {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I64(old_value as i64));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I64(old_value as i64));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     // ===============================================
                     // Atomic RMW And Operations
                     // ===============================================
-
                     Instruction::I32AtomicRmwAnd { memarg } => {
-                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8749,32 +10182,46 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = i32::from_le_bytes(buffer);
                                             let new_value = old_value & value;
-                                            match memory.write_shared(effective_addr, &new_value.to_le_bytes()) {
+                                            match memory.write_shared(
+                                                effective_addr,
+                                                &new_value.to_le_bytes(),
+                                            ) {
                                                 Ok(()) => {
                                                     operand_stack.push(Value::I32(old_value));
-                                                }
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicRmwAnd { memarg } => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 8 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8784,30 +10231,42 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = i64::from_le_bytes(buffer);
                                             let new_value = old_value & value;
-                                            match memory.write_shared(effective_addr, &new_value.to_le_bytes()) {
+                                            match memory.write_shared(
+                                                effective_addr,
+                                                &new_value.to_le_bytes(),
+                                            ) {
                                                 Ok(()) => {
                                                     operand_stack.push(Value::I64(old_value));
-                                                }
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I32AtomicRmw8AndU { memarg } => {
-                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -8816,32 +10275,45 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = buffer[0];
                                             let new_value = old_value & (value as u8);
-                                            match memory.write_shared(effective_addr, &[new_value]) {
+                                            match memory.write_shared(effective_addr, &[new_value])
+                                            {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I32(old_value as i32));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I32(old_value as i32));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I32AtomicRmw16AndU { memarg } => {
-                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8851,30 +10323,43 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = u16::from_le_bytes(buffer);
                                             let new_value = old_value & (value as u16);
-                                            match memory.write_shared(effective_addr, &new_value.to_le_bytes()) {
+                                            match memory.write_shared(
+                                                effective_addr,
+                                                &new_value.to_le_bytes(),
+                                            ) {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I32(old_value as i32));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I32(old_value as i32));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicRmw8AndU { memarg } => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -8883,32 +10368,45 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = buffer[0];
                                             let new_value = old_value & (value as u8);
-                                            match memory.write_shared(effective_addr, &[new_value]) {
+                                            match memory.write_shared(effective_addr, &[new_value])
+                                            {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I64(old_value as i64));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I64(old_value as i64));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicRmw16AndU { memarg } => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8918,32 +10416,47 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = u16::from_le_bytes(buffer);
                                             let new_value = old_value & (value as u16);
-                                            match memory.write_shared(effective_addr, &new_value.to_le_bytes()) {
+                                            match memory.write_shared(
+                                                effective_addr,
+                                                &new_value.to_le_bytes(),
+                                            ) {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I64(old_value as i64));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I64(old_value as i64));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicRmw32AndU { memarg } => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8953,36 +10466,50 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = u32::from_le_bytes(buffer);
                                             let new_value = old_value & (value as u32);
-                                            match memory.write_shared(effective_addr, &new_value.to_le_bytes()) {
+                                            match memory.write_shared(
+                                                effective_addr,
+                                                &new_value.to_le_bytes(),
+                                            ) {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I64(old_value as i64));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I64(old_value as i64));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     // ===============================================
                     // Atomic RMW Or Operations
                     // ===============================================
-
                     Instruction::I32AtomicRmwOr { memarg } => {
-                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8992,32 +10519,46 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = i32::from_le_bytes(buffer);
                                             let new_value = old_value | value;
-                                            match memory.write_shared(effective_addr, &new_value.to_le_bytes()) {
+                                            match memory.write_shared(
+                                                effective_addr,
+                                                &new_value.to_le_bytes(),
+                                            ) {
                                                 Ok(()) => {
                                                     operand_stack.push(Value::I32(old_value));
-                                                }
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicRmwOr { memarg } => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 8 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -9027,30 +10568,42 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = i64::from_le_bytes(buffer);
                                             let new_value = old_value | value;
-                                            match memory.write_shared(effective_addr, &new_value.to_le_bytes()) {
+                                            match memory.write_shared(
+                                                effective_addr,
+                                                &new_value.to_le_bytes(),
+                                            ) {
                                                 Ok(()) => {
                                                     operand_stack.push(Value::I64(old_value));
-                                                }
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I32AtomicRmw8OrU { memarg } => {
-                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -9059,32 +10612,45 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = buffer[0];
                                             let new_value = old_value | (value as u8);
-                                            match memory.write_shared(effective_addr, &[new_value]) {
+                                            match memory.write_shared(effective_addr, &[new_value])
+                                            {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I32(old_value as i32));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I32(old_value as i32));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I32AtomicRmw16OrU { memarg } => {
-                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -9094,30 +10660,43 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = u16::from_le_bytes(buffer);
                                             let new_value = old_value | (value as u16);
-                                            match memory.write_shared(effective_addr, &new_value.to_le_bytes()) {
+                                            match memory.write_shared(
+                                                effective_addr,
+                                                &new_value.to_le_bytes(),
+                                            ) {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I32(old_value as i32));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I32(old_value as i32));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicRmw8OrU { memarg } => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -9126,32 +10705,45 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = buffer[0];
                                             let new_value = old_value | (value as u8);
-                                            match memory.write_shared(effective_addr, &[new_value]) {
+                                            match memory.write_shared(effective_addr, &[new_value])
+                                            {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I64(old_value as i64));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I64(old_value as i64));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicRmw16OrU { memarg } => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -9161,32 +10753,47 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = u16::from_le_bytes(buffer);
                                             let new_value = old_value | (value as u16);
-                                            match memory.write_shared(effective_addr, &new_value.to_le_bytes()) {
+                                            match memory.write_shared(
+                                                effective_addr,
+                                                &new_value.to_le_bytes(),
+                                            ) {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I64(old_value as i64));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I64(old_value as i64));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicRmw32OrU { memarg } => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -9196,36 +10803,50 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = u32::from_le_bytes(buffer);
                                             let new_value = old_value | (value as u32);
-                                            match memory.write_shared(effective_addr, &new_value.to_le_bytes()) {
+                                            match memory.write_shared(
+                                                effective_addr,
+                                                &new_value.to_le_bytes(),
+                                            ) {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I64(old_value as i64));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I64(old_value as i64));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     // ===============================================
                     // Atomic RMW Xor Operations
                     // ===============================================
-
                     Instruction::I32AtomicRmwXor { memarg } => {
-                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -9235,32 +10856,46 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = i32::from_le_bytes(buffer);
                                             let new_value = old_value ^ value;
-                                            match memory.write_shared(effective_addr, &new_value.to_le_bytes()) {
+                                            match memory.write_shared(
+                                                effective_addr,
+                                                &new_value.to_le_bytes(),
+                                            ) {
                                                 Ok(()) => {
                                                     operand_stack.push(Value::I32(old_value));
-                                                }
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicRmwXor { memarg } => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 8 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -9270,30 +10905,42 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = i64::from_le_bytes(buffer);
                                             let new_value = old_value ^ value;
-                                            match memory.write_shared(effective_addr, &new_value.to_le_bytes()) {
+                                            match memory.write_shared(
+                                                effective_addr,
+                                                &new_value.to_le_bytes(),
+                                            ) {
                                                 Ok(()) => {
                                                     operand_stack.push(Value::I64(old_value));
-                                                }
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I32AtomicRmw8XorU { memarg } => {
-                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -9302,32 +10949,45 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = buffer[0];
                                             let new_value = old_value ^ (value as u8);
-                                            match memory.write_shared(effective_addr, &[new_value]) {
+                                            match memory.write_shared(effective_addr, &[new_value])
+                                            {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I32(old_value as i32));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I32(old_value as i32));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I32AtomicRmw16XorU { memarg } => {
-                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -9337,30 +10997,43 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = u16::from_le_bytes(buffer);
                                             let new_value = old_value ^ (value as u16);
-                                            match memory.write_shared(effective_addr, &new_value.to_le_bytes()) {
+                                            match memory.write_shared(
+                                                effective_addr,
+                                                &new_value.to_le_bytes(),
+                                            ) {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I32(old_value as i32));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I32(old_value as i32));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicRmw8XorU { memarg } => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -9369,32 +11042,45 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = buffer[0];
                                             let new_value = old_value ^ (value as u8);
-                                            match memory.write_shared(effective_addr, &[new_value]) {
+                                            match memory.write_shared(effective_addr, &[new_value])
+                                            {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I64(old_value as i64));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I64(old_value as i64));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicRmw16XorU { memarg } => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -9404,32 +11090,47 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = u16::from_le_bytes(buffer);
                                             let new_value = old_value ^ (value as u16);
-                                            match memory.write_shared(effective_addr, &new_value.to_le_bytes()) {
+                                            match memory.write_shared(
+                                                effective_addr,
+                                                &new_value.to_le_bytes(),
+                                            ) {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I64(old_value as i64));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I64(old_value as i64));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicRmw32XorU { memarg } => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -9439,36 +11140,50 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = u32::from_le_bytes(buffer);
                                             let new_value = old_value ^ (value as u32);
-                                            match memory.write_shared(effective_addr, &new_value.to_le_bytes()) {
+                                            match memory.write_shared(
+                                                effective_addr,
+                                                &new_value.to_le_bytes(),
+                                            ) {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I64(old_value as i64));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I64(old_value as i64));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     // ===============================================
                     // Atomic RMW Exchange Operations
                     // ===============================================
-
                     Instruction::I32AtomicRmwXchg { memarg } => {
-                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -9477,32 +11192,45 @@ impl StacklessEngine {
                                     match memory.read(effective_addr, &mut buffer) {
                                         Ok(()) => {
                                             let old_value = i32::from_le_bytes(buffer);
-                                            match memory.write_shared(effective_addr, &value.to_le_bytes()) {
+                                            match memory
+                                                .write_shared(effective_addr, &value.to_le_bytes())
+                                            {
                                                 Ok(()) => {
                                                     operand_stack.push(Value::I32(old_value));
-                                                }
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicRmwXchg { memarg } => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 8 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -9511,30 +11239,41 @@ impl StacklessEngine {
                                     match memory.read(effective_addr, &mut buffer) {
                                         Ok(()) => {
                                             let old_value = i64::from_le_bytes(buffer);
-                                            match memory.write_shared(effective_addr, &value.to_le_bytes()) {
+                                            match memory
+                                                .write_shared(effective_addr, &value.to_le_bytes())
+                                            {
                                                 Ok(()) => {
                                                     operand_stack.push(Value::I64(old_value));
-                                                }
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I32AtomicRmw8XchgU { memarg } => {
-                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -9542,32 +11281,46 @@ impl StacklessEngine {
                                     match memory.read(effective_addr, &mut buffer) {
                                         Ok(()) => {
                                             let old_value = buffer[0];
-                                            match memory.write_shared(effective_addr, &[(value as u8)]) {
+                                            match memory
+                                                .write_shared(effective_addr, &[(value as u8)])
+                                            {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I32(old_value as i32));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I32(old_value as i32));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I32AtomicRmw16XchgU { memarg } => {
-                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -9576,30 +11329,43 @@ impl StacklessEngine {
                                     match memory.read(effective_addr, &mut buffer) {
                                         Ok(()) => {
                                             let old_value = u16::from_le_bytes(buffer);
-                                            match memory.write_shared(effective_addr, &(value as u16).to_le_bytes()) {
+                                            match memory.write_shared(
+                                                effective_addr,
+                                                &(value as u16).to_le_bytes(),
+                                            ) {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I32(old_value as i32));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I32(old_value as i32));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicRmw8XchgU { memarg } => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -9607,32 +11373,46 @@ impl StacklessEngine {
                                     match memory.read(effective_addr, &mut buffer) {
                                         Ok(()) => {
                                             let old_value = buffer[0];
-                                            match memory.write_shared(effective_addr, &[(value as u8)]) {
+                                            match memory
+                                                .write_shared(effective_addr, &[(value as u8)])
+                                            {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I64(old_value as i64));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I64(old_value as i64));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicRmw16XchgU { memarg } => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -9641,32 +11421,47 @@ impl StacklessEngine {
                                     match memory.read(effective_addr, &mut buffer) {
                                         Ok(()) => {
                                             let old_value = u16::from_le_bytes(buffer);
-                                            match memory.write_shared(effective_addr, &(value as u16).to_le_bytes()) {
+                                            match memory.write_shared(
+                                                effective_addr,
+                                                &(value as u16).to_le_bytes(),
+                                            ) {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I64(old_value as i64));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I64(old_value as i64));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicRmw32XchgU { memarg } => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) =
+                            (operand_stack.pop(), operand_stack.pop())
+                        {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -9675,39 +11470,57 @@ impl StacklessEngine {
                                     match memory.read(effective_addr, &mut buffer) {
                                         Ok(()) => {
                                             let old_value = u32::from_le_bytes(buffer);
-                                            match memory.write_shared(effective_addr, &(value as u32).to_le_bytes()) {
+                                            match memory.write_shared(
+                                                effective_addr,
+                                                &(value as u32).to_le_bytes(),
+                                            ) {
                                                 Ok(()) => {
-                                                    operand_stack.push(Value::I64(old_value as i64));
-                                                }
+                                                    operand_stack
+                                                        .push(Value::I64(old_value as i64));
+                                                },
                                                 Err(_) => {
-                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                }
+                                                    return Err(kiln_error::Error::runtime_trap(
+                                                        "Memory write out of bounds",
+                                                    ));
+                                                },
                                             }
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     // ===============================================
                     // Atomic Compare-Exchange Operations
                     // ===============================================
-
                     Instruction::I32AtomicRmwCmpxchg { memarg } => {
                         // cmpxchg: [addr, expected, replacement] -> [old_value]
-                        if let (Some(Value::I32(replacement)), Some(Value::I32(expected)), Some(Value::I32(addr))) =
-                            (operand_stack.pop(), operand_stack.pop(), operand_stack.pop())
-                        {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (
+                            Some(Value::I32(replacement)),
+                            Some(Value::I32(expected)),
+                            Some(Value::I32(addr)),
+                        ) = (
+                            operand_stack.pop(),
+                            operand_stack.pop(),
+                            operand_stack.pop(),
+                        ) {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -9718,11 +11531,18 @@ impl StacklessEngine {
                                             let old_value = i32::from_le_bytes(buffer);
                                             // Only write if old_value == expected
                                             if old_value == expected {
-                                                match memory.write_shared(effective_addr, &replacement.to_le_bytes()) {
-                                                    Ok(()) => {}
+                                                match memory.write_shared(
+                                                    effective_addr,
+                                                    &replacement.to_le_bytes(),
+                                                ) {
+                                                    Ok(()) => {},
                                                     Err(_) => {
-                                                        return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                    }
+                                                        return Err(
+                                                            kiln_error::Error::runtime_trap(
+                                                                "Memory write out of bounds",
+                                                            ),
+                                                        );
+                                                    },
                                                 }
                                             }
                                             #[cfg(feature = "tracing")]
@@ -9735,26 +11555,39 @@ impl StacklessEngine {
                                                 "[I32AtomicRmwCmpxchg] CmpXchg"
                                             );
                                             operand_stack.push(Value::I32(old_value));
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicRmwCmpxchg { memarg } => {
-                        if let (Some(Value::I64(replacement)), Some(Value::I64(expected)), Some(Value::I32(addr))) =
-                            (operand_stack.pop(), operand_stack.pop(), operand_stack.pop())
-                        {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (
+                            Some(Value::I64(replacement)),
+                            Some(Value::I64(expected)),
+                            Some(Value::I32(addr)),
+                        ) = (
+                            operand_stack.pop(),
+                            operand_stack.pop(),
+                            operand_stack.pop(),
+                        ) {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 8 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -9764,32 +11597,50 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = i64::from_le_bytes(buffer);
                                             if old_value == expected {
-                                                match memory.write_shared(effective_addr, &replacement.to_le_bytes()) {
-                                                    Ok(()) => {}
+                                                match memory.write_shared(
+                                                    effective_addr,
+                                                    &replacement.to_le_bytes(),
+                                                ) {
+                                                    Ok(()) => {},
                                                     Err(_) => {
-                                                        return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                    }
+                                                        return Err(
+                                                            kiln_error::Error::runtime_trap(
+                                                                "Memory write out of bounds",
+                                                            ),
+                                                        );
+                                                    },
                                                 }
                                             }
                                             operand_stack.push(Value::I64(old_value));
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I32AtomicRmw8CmpxchgU { memarg } => {
-                        if let (Some(Value::I32(replacement)), Some(Value::I32(expected)), Some(Value::I32(addr))) =
-                            (operand_stack.pop(), operand_stack.pop(), operand_stack.pop())
-                        {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (
+                            Some(Value::I32(replacement)),
+                            Some(Value::I32(expected)),
+                            Some(Value::I32(addr)),
+                        ) = (
+                            operand_stack.pop(),
+                            operand_stack.pop(),
+                            operand_stack.pop(),
+                        ) {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -9798,34 +11649,54 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = buffer[0];
                                             if old_value == (expected as u8) {
-                                                match memory.write_shared(effective_addr, &[(replacement as u8)]) {
-                                                    Ok(()) => {}
+                                                match memory.write_shared(
+                                                    effective_addr,
+                                                    &[(replacement as u8)],
+                                                ) {
+                                                    Ok(()) => {},
                                                     Err(_) => {
-                                                        return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                    }
+                                                        return Err(
+                                                            kiln_error::Error::runtime_trap(
+                                                                "Memory write out of bounds",
+                                                            ),
+                                                        );
+                                                    },
                                                 }
                                             }
                                             operand_stack.push(Value::I32(old_value as i32));
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I32AtomicRmw16CmpxchgU { memarg } => {
-                        if let (Some(Value::I32(replacement)), Some(Value::I32(expected)), Some(Value::I32(addr))) =
-                            (operand_stack.pop(), operand_stack.pop(), operand_stack.pop())
-                        {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (
+                            Some(Value::I32(replacement)),
+                            Some(Value::I32(expected)),
+                            Some(Value::I32(addr)),
+                        ) = (
+                            operand_stack.pop(),
+                            operand_stack.pop(),
+                            operand_stack.pop(),
+                        ) {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -9835,32 +11706,50 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = u16::from_le_bytes(buffer);
                                             if old_value == (expected as u16) {
-                                                match memory.write_shared(effective_addr, &(replacement as u16).to_le_bytes()) {
-                                                    Ok(()) => {}
+                                                match memory.write_shared(
+                                                    effective_addr,
+                                                    &(replacement as u16).to_le_bytes(),
+                                                ) {
+                                                    Ok(()) => {},
                                                     Err(_) => {
-                                                        return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                    }
+                                                        return Err(
+                                                            kiln_error::Error::runtime_trap(
+                                                                "Memory write out of bounds",
+                                                            ),
+                                                        );
+                                                    },
                                                 }
                                             }
                                             operand_stack.push(Value::I32(old_value as i32));
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicRmw8CmpxchgU { memarg } => {
-                        if let (Some(Value::I64(replacement)), Some(Value::I64(expected)), Some(Value::I32(addr))) =
-                            (operand_stack.pop(), operand_stack.pop(), operand_stack.pop())
-                        {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (
+                            Some(Value::I64(replacement)),
+                            Some(Value::I64(expected)),
+                            Some(Value::I32(addr)),
+                        ) = (
+                            operand_stack.pop(),
+                            operand_stack.pop(),
+                            operand_stack.pop(),
+                        ) {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -9869,34 +11758,54 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = buffer[0];
                                             if old_value == (expected as u8) {
-                                                match memory.write_shared(effective_addr, &[(replacement as u8)]) {
-                                                    Ok(()) => {}
+                                                match memory.write_shared(
+                                                    effective_addr,
+                                                    &[(replacement as u8)],
+                                                ) {
+                                                    Ok(()) => {},
                                                     Err(_) => {
-                                                        return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                    }
+                                                        return Err(
+                                                            kiln_error::Error::runtime_trap(
+                                                                "Memory write out of bounds",
+                                                            ),
+                                                        );
+                                                    },
                                                 }
                                             }
                                             operand_stack.push(Value::I64(old_value as i64));
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicRmw16CmpxchgU { memarg } => {
-                        if let (Some(Value::I64(replacement)), Some(Value::I64(expected)), Some(Value::I32(addr))) =
-                            (operand_stack.pop(), operand_stack.pop(), operand_stack.pop())
-                        {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (
+                            Some(Value::I64(replacement)),
+                            Some(Value::I64(expected)),
+                            Some(Value::I32(addr)),
+                        ) = (
+                            operand_stack.pop(),
+                            operand_stack.pop(),
+                            operand_stack.pop(),
+                        ) {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -9906,34 +11815,54 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = u16::from_le_bytes(buffer);
                                             if old_value == (expected as u16) {
-                                                match memory.write_shared(effective_addr, &(replacement as u16).to_le_bytes()) {
-                                                    Ok(()) => {}
+                                                match memory.write_shared(
+                                                    effective_addr,
+                                                    &(replacement as u16).to_le_bytes(),
+                                                ) {
+                                                    Ok(()) => {},
                                                     Err(_) => {
-                                                        return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                    }
+                                                        return Err(
+                                                            kiln_error::Error::runtime_trap(
+                                                                "Memory write out of bounds",
+                                                            ),
+                                                        );
+                                                    },
                                                 }
                                             }
                                             operand_stack.push(Value::I64(old_value as i64));
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     Instruction::I64AtomicRmw32CmpxchgU { memarg } => {
-                        if let (Some(Value::I64(replacement)), Some(Value::I64(expected)), Some(Value::I32(addr))) =
-                            (operand_stack.pop(), operand_stack.pop(), operand_stack.pop())
-                        {
-                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
+                        if let (
+                            Some(Value::I64(replacement)),
+                            Some(Value::I64(expected)),
+                            Some(Value::I32(addr)),
+                        ) = (
+                            operand_stack.pop(),
+                            operand_stack.pop(),
+                            operand_stack.pop(),
+                        ) {
+                            let effective_addr =
+                                (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
-                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "unaligned atomic access",
+                                ));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -9943,26 +11872,37 @@ impl StacklessEngine {
                                         Ok(()) => {
                                             let old_value = u32::from_le_bytes(buffer);
                                             if old_value == (expected as u32) {
-                                                match memory.write_shared(effective_addr, &(replacement as u32).to_le_bytes()) {
-                                                    Ok(()) => {}
+                                                match memory.write_shared(
+                                                    effective_addr,
+                                                    &(replacement as u32).to_le_bytes(),
+                                                ) {
+                                                    Ok(()) => {},
                                                     Err(_) => {
-                                                        return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
-                                                    }
+                                                        return Err(
+                                                            kiln_error::Error::runtime_trap(
+                                                                "Memory write out of bounds",
+                                                            ),
+                                                        );
+                                                    },
                                                 }
                                             }
                                             operand_stack.push(Value::I64(old_value as i64));
-                                        }
+                                        },
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
-                                        }
+                                            return Err(kiln_error::Error::runtime_trap(
+                                                "Memory read out of bounds",
+                                            ));
+                                        },
                                     }
-                                }
+                                },
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
-                                }
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "Memory access error",
+                                    ));
+                                },
                             }
                         }
-                    }
+                    },
 
                     // End of atomic operations
                     // ===============================================
@@ -9976,9 +11916,14 @@ impl StacklessEngine {
                         block_depth += 1;
                         block_stack.push(("try", pc, block_type_idx, operand_stack.len()));
                         #[cfg(feature = "tracing")]
-                        trace!("Try: block_type_idx={}, depth now {}, stack_height={}", block_type_idx, block_depth, operand_stack.len());
+                        trace!(
+                            "Try: block_type_idx={}, depth now {}, stack_height={}",
+                            block_type_idx,
+                            block_depth,
+                            operand_stack.len()
+                        );
                         // Continue execution - End will close this like any other block
-                    }
+                    },
                     Instruction::Throw(tag_idx) => {
                         // Throw an exception with the given tag
                         #[cfg(feature = "tracing")]
@@ -10015,7 +11960,8 @@ impl StacklessEngine {
 
                         // Get the effective tag identity for identity-based matching
                         // This handles both imported tags and exported local tags
-                        let thrown_tag_identity = self.get_effective_tag_identity(instance_id, &module, tag_idx);
+                        let thrown_tag_identity =
+                            self.get_effective_tag_identity(instance_id, &module, tag_idx);
 
                         // Walk block_stack from top to bottom looking for try_table with matching handler
                         let mut found_handler = false;
@@ -10024,7 +11970,9 @@ impl StacklessEngine {
                         let mut handler_is_catch_all = false;
                         let mut try_block_idx = 0usize;
 
-                        for (idx, (block_type, try_pc, _, _)) in block_stack.iter().enumerate().rev() {
+                        for (idx, (block_type, try_pc, _, _)) in
+                            block_stack.iter().enumerate().rev()
+                        {
                             if *block_type == "try_table" {
                                 // Found a try_table - check its handlers
                                 if let Some(try_instr) = instructions.get(*try_pc) {
@@ -10101,7 +12049,10 @@ impl StacklessEngine {
                             } else {
                                 // Label targets function level - return with exception
                                 #[cfg(feature = "tracing")]
-                                trace!("[EXCEPTION] Handler label {} exceeds block depth, returning", handler_label);
+                                trace!(
+                                    "[EXCEPTION] Handler label {} exceeds block depth, returning",
+                                    handler_label
+                                );
                                 break;
                             };
 
@@ -10133,7 +12084,11 @@ impl StacklessEngine {
                             if handler_is_ref {
                                 // Store exception in exception_storage for throw_ref
                                 let exn_idx = self.exception_storage.len() as u32;
-                                self.exception_storage.push((tag_idx, thrown_tag_identity.clone(), exception_payload.clone()));
+                                self.exception_storage.push((
+                                    tag_idx,
+                                    thrown_tag_identity.clone(),
+                                    exception_payload.clone(),
+                                ));
                                 operand_stack.push(Value::ExnRef(Some(exn_idx)));
                             }
 
@@ -10149,7 +12104,7 @@ impl StacklessEngine {
                             // Find the End of the target block by scanning forward
                             // We need to skip over ALL inner blocks' Ends (not just try_table's)
                             // depth = number of blocks we're exiting from throw location to target
-                            let mut ends_to_find = 1i32;  // Just looking for target block's End
+                            let mut ends_to_find = 1i32; // Just looking for target block's End
                             let mut new_pc = pc + 1;
                             // Skip all blocks from throw location down to (but not including) target
                             // Use original_block_count (before popping) to know how many ends to skip
@@ -10158,11 +12113,11 @@ impl StacklessEngine {
                             while new_pc < instructions.len() && ends_to_find > 0 {
                                 if let Some(instr) = instructions.get(new_pc) {
                                     match instr {
-                                        Instruction::Block { .. } |
-                                        Instruction::Loop { .. } |
-                                        Instruction::If { .. } |
-                                        Instruction::Try { .. } |
-                                        Instruction::TryTable { .. } => depth += 1,
+                                        Instruction::Block { .. }
+                                        | Instruction::Loop { .. }
+                                        | Instruction::If { .. }
+                                        | Instruction::Try { .. }
+                                        | Instruction::TryTable { .. } => depth += 1,
                                         Instruction::End => {
                                             if depth == 0 {
                                                 ends_to_find -= 1;
@@ -10175,8 +12130,8 @@ impl StacklessEngine {
                                             } else {
                                                 depth -= 1;
                                             }
-                                        }
-                                        _ => {}
+                                        },
+                                        _ => {},
                                     }
                                 }
                                 new_pc += 1;
@@ -10186,8 +12141,10 @@ impl StacklessEngine {
                             {
                                 // Get effective tag identity for cross-module exception matching
                                 // This handles both imported tags and exported local tags
-                                let tag_identity = self.get_effective_tag_identity(instance_id, &module, tag_idx);
-                                self.active_exception = Some((instance_id, tag_idx, tag_identity, exception_payload));
+                                let tag_identity =
+                                    self.get_effective_tag_identity(instance_id, &module, tag_idx);
+                                self.active_exception =
+                                    Some((instance_id, tag_idx, tag_identity, exception_payload));
                             }
                             #[cfg(feature = "tracing")]
                             trace!(
@@ -10195,11 +12152,9 @@ impl StacklessEngine {
                                 "[EXCEPTION] No handler found - propagating to caller"
                             );
                             // Return error to trigger unwinding - caller will check active_exception
-                            return Err(kiln_error::Error::runtime_trap(
-                                "exception",
-                            ));
+                            return Err(kiln_error::Error::runtime_trap("exception"));
                         }
-                    }
+                    },
                     Instruction::ThrowRef => {
                         // Throw an exception from an exnref on the stack
                         // Pop the exnref and re-throw with original tag and payload
@@ -10207,25 +12162,31 @@ impl StacklessEngine {
                             let (tag_idx, thrown_tag_identity, exception_payload) = match ref_val {
                                 Value::ExnRef(Some(exn_idx)) => {
                                     // Look up the exception from storage (includes tag identity)
-                                    if let Some((stored_tag, stored_identity, stored_payload)) = self.exception_storage.get(exn_idx as usize) {
-                                        (*stored_tag, stored_identity.clone(), stored_payload.clone())
+                                    if let Some((stored_tag, stored_identity, stored_payload)) =
+                                        self.exception_storage.get(exn_idx as usize)
+                                    {
+                                        (
+                                            *stored_tag,
+                                            stored_identity.clone(),
+                                            stored_payload.clone(),
+                                        )
                                     } else {
                                         return Err(kiln_error::Error::runtime_trap(
                                             "invalid exception reference",
                                         ));
                                     }
-                                }
+                                },
                                 Value::ExnRef(None) => {
                                     // Throwing null exnref is a trap
                                     return Err(kiln_error::Error::runtime_trap(
                                         "null exception reference",
                                     ));
-                                }
+                                },
                                 _ => {
                                     return Err(kiln_error::Error::runtime_type_mismatch(
                                         "throw_ref expects an exnref",
                                     ));
-                                }
+                                },
                             };
 
                             #[cfg(feature = "tracing")]
@@ -10244,7 +12205,9 @@ impl StacklessEngine {
                             let mut handler_is_catch_all = false;
                             let mut try_block_idx = 0usize;
 
-                            for (idx, (block_type, try_pc, _, _)) in block_stack.iter().enumerate().rev() {
+                            for (idx, (block_type, try_pc, _, _)) in
+                                block_stack.iter().enumerate().rev()
+                            {
                                 if *block_type == "try_table" {
                                     if let Some(try_instr) = instructions.get(*try_pc) {
                                         if let Instruction::TryTable { handlers, .. } = try_instr {
@@ -10302,11 +12265,12 @@ impl StacklessEngine {
                             if found_handler {
                                 // Calculate target block index BEFORE popping
                                 // Per wast crate encoding, handler_label is relative to try_table's PARENT
-                                let target_block_idx = if handler_label as usize + 1 <= try_block_idx {
-                                    try_block_idx - 1 - handler_label as usize
-                                } else {
-                                    break; // Function return
-                                };
+                                let target_block_idx =
+                                    if handler_label as usize + 1 <= try_block_idx {
+                                        try_block_idx - 1 - handler_label as usize
+                                    } else {
+                                        break; // Function return
+                                    };
 
                                 let (_, _, _, entry_stack_height) = block_stack[target_block_idx];
                                 // Save original block count for depth calculation
@@ -10333,24 +12297,29 @@ impl StacklessEngine {
                                 // If handler is *Ref variant, store and push new exnref
                                 if handler_is_ref {
                                     let new_exn_idx = self.exception_storage.len() as u32;
-                                    self.exception_storage.push((tag_idx, thrown_tag_identity.clone(), exception_payload.clone()));
+                                    self.exception_storage.push((
+                                        tag_idx,
+                                        thrown_tag_identity.clone(),
+                                        exception_payload.clone(),
+                                    ));
                                     operand_stack.push(Value::ExnRef(Some(new_exn_idx)));
                                 }
 
                                 // Find End of target block
-                                let mut ends_to_find = 1i32;  // Just looking for target block's End
+                                let mut ends_to_find = 1i32; // Just looking for target block's End
                                 let mut new_pc = pc + 1;
                                 // Skip all blocks from throw location down to (but not including) target
-                                let mut depth = (original_block_count - 1 - target_block_idx) as i32;
+                                let mut depth =
+                                    (original_block_count - 1 - target_block_idx) as i32;
 
                                 while new_pc < instructions.len() && ends_to_find > 0 {
                                     if let Some(instr) = instructions.get(new_pc) {
                                         match instr {
-                                            Instruction::Block { .. } |
-                                            Instruction::Loop { .. } |
-                                            Instruction::If { .. } |
-                                            Instruction::Try { .. } |
-                                            Instruction::TryTable { .. } => depth += 1,
+                                            Instruction::Block { .. }
+                                            | Instruction::Loop { .. }
+                                            | Instruction::If { .. }
+                                            | Instruction::Try { .. }
+                                            | Instruction::TryTable { .. } => depth += 1,
                                             Instruction::End => {
                                                 if depth == 0 {
                                                     ends_to_find -= 1;
@@ -10361,8 +12330,8 @@ impl StacklessEngine {
                                                 } else {
                                                     depth -= 1;
                                                 }
-                                            }
-                                            _ => {}
+                                            },
+                                            _ => {},
                                         }
                                     }
                                     new_pc += 1;
@@ -10372,7 +12341,12 @@ impl StacklessEngine {
                                 {
                                     // Use the stored tag identity for cross-module exception matching
                                     // (thrown_tag_identity was retrieved from exception_storage)
-                                    self.active_exception = Some((instance_id, tag_idx, thrown_tag_identity, exception_payload));
+                                    self.active_exception = Some((
+                                        instance_id,
+                                        tag_idx,
+                                        thrown_tag_identity,
+                                        exception_payload,
+                                    ));
                                 }
                                 return Err(kiln_error::Error::runtime_trap("exception"));
                             }
@@ -10381,7 +12355,7 @@ impl StacklessEngine {
                                 "throw_ref: stack underflow",
                             ));
                         }
-                    }
+                    },
                     Instruction::TryTable { block_type_idx, .. } => {
                         // Modern try_table block with catch handlers
                         // For Phase 4, we treat it like a regular block
@@ -10389,14 +12363,22 @@ impl StacklessEngine {
                         block_depth += 1;
                         block_stack.push(("try_table", pc, block_type_idx, operand_stack.len()));
                         #[cfg(feature = "tracing")]
-                        trace!("TryTable: block_type_idx={}, depth now {}, stack_height={}", block_type_idx, block_depth, operand_stack.len());
-                    }
+                        trace!(
+                            "TryTable: block_type_idx={}, depth now {}, stack_height={}",
+                            block_type_idx,
+                            block_depth,
+                            operand_stack.len()
+                        );
+                    },
                     Instruction::Catch(_tag_idx) => {
                         // Legacy catch clause - skip forward to find End
                         // This is only reached if we fall through from try block
                         // (no exception was thrown), so we skip the catch code
                         #[cfg(feature = "tracing")]
-                        trace!("Catch: skipping catch clause (no exception), tag_idx={}", _tag_idx);
+                        trace!(
+                            "Catch: skipping catch clause (no exception), tag_idx={}",
+                            _tag_idx
+                        );
 
                         // Scan forward to find matching End, skipping nested blocks
                         let mut depth = 1;
@@ -10404,19 +12386,21 @@ impl StacklessEngine {
                         while new_pc < instructions.len() && depth > 0 {
                             if let Some(instr) = instructions.get(new_pc) {
                                 match instr {
-                                    Instruction::Block { .. } |
-                                    Instruction::Loop { .. } |
-                                    Instruction::If { .. } |
-                                    Instruction::Try { .. } |
-                                    Instruction::TryTable { .. } => depth += 1,
+                                    Instruction::Block { .. }
+                                    | Instruction::Loop { .. }
+                                    | Instruction::If { .. }
+                                    | Instruction::Try { .. }
+                                    | Instruction::TryTable { .. } => depth += 1,
                                     Instruction::End => depth -= 1,
-                                    _ => {}
+                                    _ => {},
                                 }
                             }
-                            if depth > 0 { new_pc += 1; }
+                            if depth > 0 {
+                                new_pc += 1;
+                            }
                         }
                         pc = new_pc - 1; // -1 because we'll +1 at end of loop
-                    }
+                    },
                     Instruction::CatchAll => {
                         // Legacy catch_all clause - skip forward to End
                         #[cfg(feature = "tracing")]
@@ -10427,19 +12411,21 @@ impl StacklessEngine {
                         while new_pc < instructions.len() && depth > 0 {
                             if let Some(instr) = instructions.get(new_pc) {
                                 match instr {
-                                    Instruction::Block { .. } |
-                                    Instruction::Loop { .. } |
-                                    Instruction::If { .. } |
-                                    Instruction::Try { .. } |
-                                    Instruction::TryTable { .. } => depth += 1,
+                                    Instruction::Block { .. }
+                                    | Instruction::Loop { .. }
+                                    | Instruction::If { .. }
+                                    | Instruction::Try { .. }
+                                    | Instruction::TryTable { .. } => depth += 1,
                                     Instruction::End => depth -= 1,
-                                    _ => {}
+                                    _ => {},
                                 }
                             }
-                            if depth > 0 { new_pc += 1; }
+                            if depth > 0 {
+                                new_pc += 1;
+                            }
                         }
                         pc = new_pc - 1;
-                    }
+                    },
                     Instruction::Rethrow(label_idx) => {
                         // Legacy rethrow - rethrow exception from a catch block
                         // For Phase 4, just trap
@@ -10452,7 +12438,7 @@ impl StacklessEngine {
                         return Err(kiln_error::Error::runtime_trap(
                             "uncaught exception (rethrow)",
                         ));
-                    }
+                    },
                     Instruction::Delegate(label_idx) => {
                         // Legacy delegate - delegate exception to outer handler
                         // For Phase 4, treat like branch to end of block
@@ -10477,11 +12463,11 @@ impl StacklessEngine {
                             while new_pc < instructions.len() && target_depth > 0 {
                                 if let Some(instr) = instructions.get(new_pc) {
                                     match instr {
-                                        Instruction::Block { .. } |
-                                        Instruction::Loop { .. } |
-                                        Instruction::If { .. } |
-                                        Instruction::Try { .. } |
-                                        Instruction::TryTable { .. } => depth += 1,
+                                        Instruction::Block { .. }
+                                        | Instruction::Loop { .. }
+                                        | Instruction::If { .. }
+                                        | Instruction::Try { .. }
+                                        | Instruction::TryTable { .. } => depth += 1,
                                         Instruction::End => {
                                             if depth == 0 {
                                                 target_depth -= 1;
@@ -10492,20 +12478,19 @@ impl StacklessEngine {
                                             } else {
                                                 depth -= 1;
                                             }
-                                        }
-                                        _ => {}
+                                        },
+                                        _ => {},
                                     }
                                 }
                                 new_pc += 1;
                             }
                         }
-                    }
+                    },
 
                     // ========================================
                     // GC (Garbage Collection) Instructions
                     // WebAssembly GC Proposal
                     // ========================================
-
                     Instruction::StructNew(type_idx) => {
                         // struct.new: [field_values...] -> [structref]
                         // Pop field values in reverse order, create struct with them
@@ -10520,26 +12505,31 @@ impl StacklessEngine {
 
                         let mut struct_ref = kiln_foundation::values::StructRef::new(
                             type_idx,
-                            kiln_foundation::traits::DefaultMemoryProvider::default()
-                        ).map_err(|_| kiln_error::Error::runtime_error("Failed to create struct"))?;
+                            kiln_foundation::traits::DefaultMemoryProvider::default(),
+                        )
+                        .map_err(|_| kiln_error::Error::runtime_error("Failed to create struct"))?;
 
                         // Pop field values (they are on the stack in order, so pop in reverse)
                         let mut field_values = Vec::new();
                         for _ in 0..field_count {
-                            let val = operand_stack.pop().ok_or_else(||
-                                kiln_error::Error::runtime_trap("struct.new: not enough values on stack"))?;
+                            let val = operand_stack.pop().ok_or_else(|| {
+                                kiln_error::Error::runtime_trap(
+                                    "struct.new: not enough values on stack",
+                                )
+                            })?;
                             field_values.push(val);
                         }
                         field_values.reverse();
 
                         // Add fields to struct
                         for val in field_values {
-                            struct_ref.add_field(val).map_err(|_|
-                                kiln_error::Error::runtime_error("Failed to add field to struct"))?;
+                            struct_ref.add_field(val).map_err(|_| {
+                                kiln_error::Error::runtime_error("Failed to add field to struct")
+                            })?;
                         }
 
                         operand_stack.push(Value::StructRef(Some(GcStructRef::new(struct_ref))));
-                    }
+                    },
 
                     Instruction::StructNewDefault(type_idx) => {
                         // struct.new_default: [] -> [structref]
@@ -10549,35 +12539,55 @@ impl StacklessEngine {
 
                         let mut struct_ref = kiln_foundation::values::StructRef::new(
                             type_idx,
-                            kiln_foundation::traits::DefaultMemoryProvider::default()
-                        ).map_err(|_| kiln_error::Error::runtime_error("Failed to create struct"))?;
+                            kiln_foundation::traits::DefaultMemoryProvider::default(),
+                        )
+                        .map_err(|_| kiln_error::Error::runtime_error("Failed to create struct"))?;
 
                         // Determine field types from GC type info and add default values
                         {
-                            if let Some(crate::module::GcTypeInfo::Struct(fields)) = module.gc_types.get(type_idx as usize) {
+                            if let Some(crate::module::GcTypeInfo::Struct(fields)) =
+                                module.gc_types.get(type_idx as usize)
+                            {
                                 for field in fields {
                                     let default_val = match &field.storage {
-                                        crate::module::GcFieldStorage::I8 |
-                                        crate::module::GcFieldStorage::I16 |
-                                        crate::module::GcFieldStorage::Value(0x7F) => Value::I32(0),
+                                        crate::module::GcFieldStorage::I8
+                                        | crate::module::GcFieldStorage::I16
+                                        | crate::module::GcFieldStorage::Value(0x7F) => {
+                                            Value::I32(0)
+                                        },
                                         crate::module::GcFieldStorage::Value(0x7E) => Value::I64(0),
-                                        crate::module::GcFieldStorage::Value(0x7D) => Value::F32(FloatBits32::from_f32(0.0)),
-                                        crate::module::GcFieldStorage::Value(0x7C) => Value::F64(FloatBits64::from_f64(0.0)),
-                                        crate::module::GcFieldStorage::Value(0x7B) => Value::V128(V128 { bytes: [0u8; 16] }),
+                                        crate::module::GcFieldStorage::Value(0x7D) => {
+                                            Value::F32(FloatBits32::from_f32(0.0))
+                                        },
+                                        crate::module::GcFieldStorage::Value(0x7C) => {
+                                            Value::F64(FloatBits64::from_f64(0.0))
+                                        },
+                                        crate::module::GcFieldStorage::Value(0x7B) => {
+                                            Value::V128(V128 { bytes: [0u8; 16] })
+                                        },
                                         // Reference types default to null
-                                        crate::module::GcFieldStorage::Value(0x6C) => Value::I31Ref(None),
-                                        crate::module::GcFieldStorage::Value(0x6B) => Value::StructRef(None),
-                                        crate::module::GcFieldStorage::Value(0x6A) => Value::ArrayRef(None),
+                                        crate::module::GcFieldStorage::Value(0x6C) => {
+                                            Value::I31Ref(None)
+                                        },
+                                        crate::module::GcFieldStorage::Value(0x6B) => {
+                                            Value::StructRef(None)
+                                        },
+                                        crate::module::GcFieldStorage::Value(0x6A) => {
+                                            Value::ArrayRef(None)
+                                        },
                                         _ => Value::I32(0), // Default for other types
                                     };
-                                    struct_ref.add_field(default_val).map_err(|_|
-                                        kiln_error::Error::runtime_error("Failed to add default field to struct"))?;
+                                    struct_ref.add_field(default_val).map_err(|_| {
+                                        kiln_error::Error::runtime_error(
+                                            "Failed to add default field to struct",
+                                        )
+                                    })?;
                                 }
                             }
                         }
 
                         operand_stack.push(Value::StructRef(Some(GcStructRef::new(struct_ref))));
-                    }
+                    },
 
                     Instruction::StructGet(type_idx, field_idx) => {
                         // struct.get: [structref] -> [value]
@@ -10587,12 +12597,16 @@ impl StacklessEngine {
                             if let Ok(field) = s.get_field(field_idx as usize) {
                                 operand_stack.push(field.clone());
                             } else {
-                                return Err(kiln_error::Error::runtime_trap("struct.get: field index out of bounds"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "struct.get: field index out of bounds",
+                                ));
                             }
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("null structure reference"));
+                            return Err(kiln_error::Error::runtime_trap(
+                                "null structure reference",
+                            ));
                         }
-                    }
+                    },
 
                     Instruction::StructGetS(type_idx, field_idx) => {
                         // struct.get_s: [structref] -> [i32] (sign-extend packed field)
@@ -10602,28 +12616,36 @@ impl StacklessEngine {
                             if let Ok(field) = s.get_field(field_idx as usize) {
                                 // Sign-extend packed i8/i16 fields
                                 let val = match &field {
-                                    Value::I32(v) => {
-                                        match module.gc_types.get(type_idx as usize) {
-                                            Some(crate::module::GcTypeInfo::Struct(fields)) if (field_idx as usize) < fields.len() => {
-                                                match fields[field_idx as usize].storage {
-                                                    crate::module::GcFieldStorage::I8 => Value::I32((*v as i8) as i32),
-                                                    crate::module::GcFieldStorage::I16 => Value::I32((*v as i16) as i32),
-                                                    _ => field.clone(),
-                                                }
+                                    Value::I32(v) => match module.gc_types.get(type_idx as usize) {
+                                        Some(crate::module::GcTypeInfo::Struct(fields))
+                                            if (field_idx as usize) < fields.len() =>
+                                        {
+                                            match fields[field_idx as usize].storage {
+                                                crate::module::GcFieldStorage::I8 => {
+                                                    Value::I32((*v as i8) as i32)
+                                                },
+                                                crate::module::GcFieldStorage::I16 => {
+                                                    Value::I32((*v as i16) as i32)
+                                                },
+                                                _ => field.clone(),
                                             }
-                                            _ => field.clone(),
-                                        }
-                                    }
+                                        },
+                                        _ => field.clone(),
+                                    },
                                     _ => field.clone(),
                                 };
                                 operand_stack.push(val);
                             } else {
-                                return Err(kiln_error::Error::runtime_trap("struct.get_s: field index out of bounds"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "struct.get_s: field index out of bounds",
+                                ));
                             }
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("null structure reference"));
+                            return Err(kiln_error::Error::runtime_trap(
+                                "null structure reference",
+                            ));
                         }
-                    }
+                    },
 
                     Instruction::StructGetU(type_idx, field_idx) => {
                         // struct.get_u: [structref] -> [i32] (zero-extend packed field)
@@ -10633,58 +12655,74 @@ impl StacklessEngine {
                             if let Ok(field) = s.get_field(field_idx as usize) {
                                 // Zero-extend packed i8/i16 fields
                                 let val = match &field {
-                                    Value::I32(v) => {
-                                        match module.gc_types.get(type_idx as usize) {
-                                            Some(crate::module::GcTypeInfo::Struct(fields)) if (field_idx as usize) < fields.len() => {
-                                                match fields[field_idx as usize].storage {
-                                                    crate::module::GcFieldStorage::I8 => Value::I32(*v & 0xFF),
-                                                    crate::module::GcFieldStorage::I16 => Value::I32(*v & 0xFFFF),
-                                                    _ => field.clone(),
-                                                }
+                                    Value::I32(v) => match module.gc_types.get(type_idx as usize) {
+                                        Some(crate::module::GcTypeInfo::Struct(fields))
+                                            if (field_idx as usize) < fields.len() =>
+                                        {
+                                            match fields[field_idx as usize].storage {
+                                                crate::module::GcFieldStorage::I8 => {
+                                                    Value::I32(*v & 0xFF)
+                                                },
+                                                crate::module::GcFieldStorage::I16 => {
+                                                    Value::I32(*v & 0xFFFF)
+                                                },
+                                                _ => field.clone(),
                                             }
-                                            _ => field.clone(),
-                                        }
-                                    }
+                                        },
+                                        _ => field.clone(),
+                                    },
                                     _ => field.clone(),
                                 };
                                 operand_stack.push(val);
                             } else {
-                                return Err(kiln_error::Error::runtime_trap("struct.get_u: field index out of bounds"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "struct.get_u: field index out of bounds",
+                                ));
                             }
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("null structure reference"));
+                            return Err(kiln_error::Error::runtime_trap(
+                                "null structure reference",
+                            ));
                         }
-                    }
+                    },
 
                     Instruction::StructSet(type_idx, field_idx) => {
                         // struct.set: [structref value] -> []
                         #[cfg(feature = "tracing")]
                         trace!("StructSet: type_idx={}, field_idx={}", type_idx, field_idx);
-                        let value = operand_stack.pop().ok_or_else(||
-                            kiln_error::Error::runtime_trap("struct.set: expected value"))?;
+                        let value = operand_stack.pop().ok_or_else(|| {
+                            kiln_error::Error::runtime_trap("struct.set: expected value")
+                        })?;
                         // Truncate packed i8/i16 fields
                         let value = match &value {
-                            Value::I32(v) => {
-                                match module.gc_types.get(type_idx as usize) {
-                                    Some(crate::module::GcTypeInfo::Struct(fields)) if (field_idx as usize) < fields.len() => {
-                                        match fields[field_idx as usize].storage {
-                                            crate::module::GcFieldStorage::I8 => Value::I32(*v & 0xFF),
-                                            crate::module::GcFieldStorage::I16 => Value::I32(*v & 0xFFFF),
-                                            _ => value,
-                                        }
+                            Value::I32(v) => match module.gc_types.get(type_idx as usize) {
+                                Some(crate::module::GcTypeInfo::Struct(fields))
+                                    if (field_idx as usize) < fields.len() =>
+                                {
+                                    match fields[field_idx as usize].storage {
+                                        crate::module::GcFieldStorage::I8 => Value::I32(*v & 0xFF),
+                                        crate::module::GcFieldStorage::I16 => {
+                                            Value::I32(*v & 0xFFFF)
+                                        },
+                                        _ => value,
                                     }
-                                    _ => value,
-                                }
-                            }
+                                },
+                                _ => value,
+                            },
                             _ => value,
                         };
                         if let Some(Value::StructRef(Some(mut s))) = operand_stack.pop() {
-                            s.set_field(field_idx as usize, value).map_err(|_|
-                                kiln_error::Error::runtime_trap("struct.set: field index out of bounds"))?;
+                            s.set_field(field_idx as usize, value).map_err(|_| {
+                                kiln_error::Error::runtime_trap(
+                                    "struct.set: field index out of bounds",
+                                )
+                            })?;
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("null structure reference"));
+                            return Err(kiln_error::Error::runtime_trap(
+                                "null structure reference",
+                            ));
                         }
-                    }
+                    },
 
                     Instruction::ArrayNew(type_idx) => {
                         // array.new: [value i32] -> [arrayref]
@@ -10692,20 +12730,27 @@ impl StacklessEngine {
                         trace!("ArrayNew: type_idx={}", type_idx);
                         let length = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as u32,
-                            _ => return Err(kiln_error::Error::runtime_trap("array.new: expected i32 length")),
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "array.new: expected i32 length",
+                                ));
+                            },
                         };
-                        let init_value = operand_stack.pop().ok_or_else(||
-                            kiln_error::Error::runtime_trap("array.new: expected init value"))?;
+                        let init_value = operand_stack.pop().ok_or_else(|| {
+                            kiln_error::Error::runtime_trap("array.new: expected init value")
+                        })?;
                         let mut array_ref = kiln_foundation::values::ArrayRef::new(
                             type_idx,
-                            kiln_foundation::traits::DefaultMemoryProvider::default()
-                        ).map_err(|_| kiln_error::Error::runtime_error("Failed to create array"))?;
+                            kiln_foundation::traits::DefaultMemoryProvider::default(),
+                        )
+                        .map_err(|_| kiln_error::Error::runtime_error("Failed to create array"))?;
                         for _ in 0..length {
-                            array_ref.push(init_value.clone()).map_err(|_|
-                                kiln_error::Error::runtime_error("Failed to push to array"))?;
+                            array_ref.push(init_value.clone()).map_err(|_| {
+                                kiln_error::Error::runtime_error("Failed to push to array")
+                            })?;
                         }
                         operand_stack.push(Value::ArrayRef(Some(GcArrayRef::new(array_ref))));
-                    }
+                    },
 
                     Instruction::ArrayNewDefault(type_idx) => {
                         // array.new_default: [i32] -> [arrayref]
@@ -10713,43 +12758,71 @@ impl StacklessEngine {
                         trace!("ArrayNewDefault: type_idx={}", type_idx);
                         let length = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as u32,
-                            _ => return Err(kiln_error::Error::runtime_trap("array.new_default: expected i32 length")),
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "array.new_default: expected i32 length",
+                                ));
+                            },
                         };
                         // Determine the default value from the array's element type
                         let default_val = match module.gc_types.get(type_idx as usize) {
                             Some(crate::module::GcTypeInfo::Array(field)) => {
                                 match &field.storage {
-                                    crate::module::GcFieldStorage::I8 |
-                                    crate::module::GcFieldStorage::I16 |
-                                    crate::module::GcFieldStorage::Value(0x7F) => Value::I32(0),
+                                    crate::module::GcFieldStorage::I8
+                                    | crate::module::GcFieldStorage::I16
+                                    | crate::module::GcFieldStorage::Value(0x7F) => Value::I32(0),
                                     crate::module::GcFieldStorage::Value(0x7E) => Value::I64(0),
-                                    crate::module::GcFieldStorage::Value(0x7D) => Value::F32(FloatBits32::from_f32(0.0)),
-                                    crate::module::GcFieldStorage::Value(0x7C) => Value::F64(FloatBits64::from_f64(0.0)),
-                                    crate::module::GcFieldStorage::Value(0x7B) => Value::V128(V128 { bytes: [0u8; 16] }),
-                                    crate::module::GcFieldStorage::Value(0x6C) => Value::I31Ref(None),
-                                    crate::module::GcFieldStorage::Value(0x6B) => Value::StructRef(None),
-                                    crate::module::GcFieldStorage::Value(0x6A) => Value::ArrayRef(None),
-                                    crate::module::GcFieldStorage::Value(0x70) => Value::FuncRef(None),
-                                    crate::module::GcFieldStorage::Value(0x6F) => Value::ExternRef(None),
-                                    crate::module::GcFieldStorage::Value(0x6E) => Value::StructRef(None), // anyref defaults to null
-                                    crate::module::GcFieldStorage::Value(0x6D) => Value::StructRef(None), // eqref defaults to null
-                                    crate::module::GcFieldStorage::Value(0x63) |
-                                    crate::module::GcFieldStorage::Value(0x64) => Value::FuncRef(None), // ref null/non-null defaults
+                                    crate::module::GcFieldStorage::Value(0x7D) => {
+                                        Value::F32(FloatBits32::from_f32(0.0))
+                                    },
+                                    crate::module::GcFieldStorage::Value(0x7C) => {
+                                        Value::F64(FloatBits64::from_f64(0.0))
+                                    },
+                                    crate::module::GcFieldStorage::Value(0x7B) => {
+                                        Value::V128(V128 { bytes: [0u8; 16] })
+                                    },
+                                    crate::module::GcFieldStorage::Value(0x6C) => {
+                                        Value::I31Ref(None)
+                                    },
+                                    crate::module::GcFieldStorage::Value(0x6B) => {
+                                        Value::StructRef(None)
+                                    },
+                                    crate::module::GcFieldStorage::Value(0x6A) => {
+                                        Value::ArrayRef(None)
+                                    },
+                                    crate::module::GcFieldStorage::Value(0x70) => {
+                                        Value::FuncRef(None)
+                                    },
+                                    crate::module::GcFieldStorage::Value(0x6F) => {
+                                        Value::ExternRef(None)
+                                    },
+                                    crate::module::GcFieldStorage::Value(0x6E) => {
+                                        Value::StructRef(None)
+                                    }, // anyref defaults to null
+                                    crate::module::GcFieldStorage::Value(0x6D) => {
+                                        Value::StructRef(None)
+                                    }, // eqref defaults to null
+                                    crate::module::GcFieldStorage::Value(0x63)
+                                    | crate::module::GcFieldStorage::Value(0x64) => {
+                                        Value::FuncRef(None)
+                                    }, // ref null/non-null defaults
                                     _ => Value::I32(0),
                                 }
-                            }
+                            },
                             _ => Value::I32(0),
                         };
                         let mut array_ref = kiln_foundation::values::ArrayRef::new(
                             type_idx,
-                            kiln_foundation::traits::DefaultMemoryProvider::default()
-                        ).map_err(|_| kiln_error::Error::runtime_error("Failed to create array"))?;
+                            kiln_foundation::traits::DefaultMemoryProvider::default(),
+                        )
+                        .map_err(|_| kiln_error::Error::runtime_error("Failed to create array"))?;
                         for _ in 0..length {
-                            array_ref.push(default_val.clone()).map_err(|_|
-                                kiln_error::Error::runtime_error("Failed to push to array"))?;
+                            array_ref.push(default_val.clone()).map_err(|_| {
+                                kiln_error::Error::runtime_error("Failed to push to array")
+                            })?;
                         }
                         operand_stack.push(Value::ArrayRef(Some(GcArrayRef::new(array_ref))));
-                    }
+                    },
 
                     Instruction::ArrayNewFixed(type_idx, count) => {
                         // array.new_fixed: [values...] -> [arrayref]
@@ -10764,14 +12837,16 @@ impl StacklessEngine {
                         values.reverse();
                         let mut array_ref = kiln_foundation::values::ArrayRef::new(
                             type_idx,
-                            kiln_foundation::traits::DefaultMemoryProvider::default()
-                        ).map_err(|_| kiln_error::Error::runtime_error("Failed to create array"))?;
+                            kiln_foundation::traits::DefaultMemoryProvider::default(),
+                        )
+                        .map_err(|_| kiln_error::Error::runtime_error("Failed to create array"))?;
                         for v in values {
-                            array_ref.push(v).map_err(|_|
-                                kiln_error::Error::runtime_error("Failed to push to array"))?;
+                            array_ref.push(v).map_err(|_| {
+                                kiln_error::Error::runtime_error("Failed to push to array")
+                            })?;
                         }
                         operand_stack.push(Value::ArrayRef(Some(GcArrayRef::new(array_ref))));
-                    }
+                    },
 
                     Instruction::ArrayGet(type_idx) => {
                         // array.get: [arrayref i32] -> [value]
@@ -10779,33 +12854,49 @@ impl StacklessEngine {
                         trace!("ArrayGet: type_idx={}", type_idx);
                         let index = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as usize,
-                            _ => return Err(kiln_error::Error::runtime_trap("array.get: expected i32 index")),
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "array.get: expected i32 index",
+                                ));
+                            },
                         };
                         if let Some(Value::ArrayRef(Some(a))) = operand_stack.pop() {
                             if let Ok(elem) = a.get(index) {
                                 operand_stack.push(elem.clone());
                             } else {
-                                return Err(kiln_error::Error::runtime_trap("out of bounds array access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "out of bounds array access",
+                                ));
                             }
                         } else {
                             return Err(kiln_error::Error::runtime_trap("null array reference"));
                         }
-                    }
+                    },
 
                     Instruction::ArrayGetS(type_idx) => {
                         // array.get_s: [arrayref i32] -> [i32] (sign-extend packed)
                         let index = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as usize,
-                            _ => return Err(kiln_error::Error::runtime_trap("array.get_s: expected i32 index")),
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "array.get_s: expected i32 index",
+                                ));
+                            },
                         };
                         if let Some(Value::ArrayRef(Some(a))) = operand_stack.pop() {
                             if let Ok(elem) = a.get(index) {
                                 let val = match &elem {
                                     Value::I32(v) => match module.gc_types.get(type_idx as usize) {
-                                        Some(crate::module::GcTypeInfo::Array(f)) => match f.storage {
-                                            crate::module::GcFieldStorage::I8 => Value::I32((*v as i8) as i32),
-                                            crate::module::GcFieldStorage::I16 => Value::I32((*v as i16) as i32),
-                                            _ => elem.clone(),
+                                        Some(crate::module::GcTypeInfo::Array(f)) => {
+                                            match f.storage {
+                                                crate::module::GcFieldStorage::I8 => {
+                                                    Value::I32((*v as i8) as i32)
+                                                },
+                                                crate::module::GcFieldStorage::I16 => {
+                                                    Value::I32((*v as i16) as i32)
+                                                },
+                                                _ => elem.clone(),
+                                            }
                                         },
                                         _ => elem.clone(),
                                     },
@@ -10813,27 +12904,39 @@ impl StacklessEngine {
                                 };
                                 operand_stack.push(val);
                             } else {
-                                return Err(kiln_error::Error::runtime_trap("out of bounds array access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "out of bounds array access",
+                                ));
                             }
                         } else {
                             return Err(kiln_error::Error::runtime_trap("null array reference"));
                         }
-                    }
+                    },
 
                     Instruction::ArrayGetU(type_idx) => {
                         // array.get_u: [arrayref i32] -> [i32] (zero-extend packed)
                         let index = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as usize,
-                            _ => return Err(kiln_error::Error::runtime_trap("array.get_u: expected i32 index")),
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "array.get_u: expected i32 index",
+                                ));
+                            },
                         };
                         if let Some(Value::ArrayRef(Some(a))) = operand_stack.pop() {
                             if let Ok(elem) = a.get(index) {
                                 let val = match &elem {
                                     Value::I32(v) => match module.gc_types.get(type_idx as usize) {
-                                        Some(crate::module::GcTypeInfo::Array(f)) => match f.storage {
-                                            crate::module::GcFieldStorage::I8 => Value::I32(*v & 0xFF),
-                                            crate::module::GcFieldStorage::I16 => Value::I32(*v & 0xFFFF),
-                                            _ => elem.clone(),
+                                        Some(crate::module::GcTypeInfo::Array(f)) => {
+                                            match f.storage {
+                                                crate::module::GcFieldStorage::I8 => {
+                                                    Value::I32(*v & 0xFF)
+                                                },
+                                                crate::module::GcFieldStorage::I16 => {
+                                                    Value::I32(*v & 0xFFFF)
+                                                },
+                                                _ => elem.clone(),
+                                            }
                                         },
                                         _ => elem.clone(),
                                     },
@@ -10841,17 +12944,20 @@ impl StacklessEngine {
                                 };
                                 operand_stack.push(val);
                             } else {
-                                return Err(kiln_error::Error::runtime_trap("out of bounds array access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "out of bounds array access",
+                                ));
                             }
                         } else {
                             return Err(kiln_error::Error::runtime_trap("null array reference"));
                         }
-                    }
+                    },
 
                     Instruction::ArraySet(type_idx) => {
                         // array.set: [arrayref i32 value] -> []
-                        let value = operand_stack.pop().ok_or_else(||
-                            kiln_error::Error::runtime_trap("array.set: expected value"))?;
+                        let value = operand_stack.pop().ok_or_else(|| {
+                            kiln_error::Error::runtime_trap("array.set: expected value")
+                        })?;
                         // Truncate packed i8/i16 fields
                         let value = match &value {
                             Value::I32(v) => match module.gc_types.get(type_idx as usize) {
@@ -10866,15 +12972,20 @@ impl StacklessEngine {
                         };
                         let index = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as usize,
-                            _ => return Err(kiln_error::Error::runtime_trap("array.set: expected i32 index")),
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "array.set: expected i32 index",
+                                ));
+                            },
                         };
                         if let Some(Value::ArrayRef(Some(mut a))) = operand_stack.pop() {
-                            a.set(index, value).map_err(|_|
-                                kiln_error::Error::runtime_trap("out of bounds array access"))?;
+                            a.set(index, value).map_err(|_| {
+                                kiln_error::Error::runtime_trap("out of bounds array access")
+                            })?;
                         } else {
                             return Err(kiln_error::Error::runtime_trap("null array reference"));
                         }
-                    }
+                    },
 
                     Instruction::ArrayLen => {
                         // array.len: [arrayref] -> [i32]
@@ -10885,7 +12996,7 @@ impl StacklessEngine {
                         } else {
                             return Err(kiln_error::Error::runtime_trap("null array reference"));
                         }
-                    }
+                    },
 
                     Instruction::RefI31 => {
                         // ref.i31: [i32] -> [i31ref]
@@ -10898,7 +13009,7 @@ impl StacklessEngine {
                         } else {
                             return Err(kiln_error::Error::runtime_trap("ref.i31: expected i32"));
                         }
-                    }
+                    },
 
                     Instruction::I31GetS => {
                         // i31.get_s: [i31ref] -> [i32] (sign-extended from 31 bits)
@@ -10913,15 +13024,17 @@ impl StacklessEngine {
                                     n & 0x7FFFFFFF
                                 };
                                 operand_stack.push(Value::I32(sign_extended));
-                            }
+                            },
                             Some(Value::I31Ref(None)) => {
                                 return Err(kiln_error::Error::runtime_trap("null i31 reference"));
-                            }
+                            },
                             _ => {
-                                return Err(kiln_error::Error::runtime_trap("i31.get_s: expected i31ref"));
-                            }
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "i31.get_s: expected i31ref",
+                                ));
+                            },
                         }
-                    }
+                    },
 
                     Instruction::I31GetU => {
                         // i31.get_u: [i31ref] -> [i32] (zero-extended)
@@ -10931,15 +13044,17 @@ impl StacklessEngine {
                             Some(Value::I31Ref(Some(n))) => {
                                 // Zero-extend: mask to 31 bits
                                 operand_stack.push(Value::I32(n & 0x7FFFFFFF));
-                            }
+                            },
                             Some(Value::I31Ref(None)) => {
                                 return Err(kiln_error::Error::runtime_trap("null i31 reference"));
-                            }
+                            },
                             _ => {
-                                return Err(kiln_error::Error::runtime_trap("i31.get_u: expected i31ref"));
-                            }
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "i31.get_u: expected i31ref",
+                                ));
+                            },
                         }
-                    }
+                    },
 
                     Instruction::ArrayNewData(type_idx, data_idx) => {
                         // array.new_data: [offset i32, size i32] -> [arrayref]
@@ -10948,11 +13063,19 @@ impl StacklessEngine {
                         trace!("ArrayNewData: type_idx={}, data_idx={}", type_idx, data_idx);
                         let size = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as u32,
-                            _ => return Err(kiln_error::Error::runtime_trap("array.new_data: expected i32 size")),
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "array.new_data: expected i32 size",
+                                ));
+                            },
                         };
                         let offset_val = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as u32,
-                            _ => return Err(kiln_error::Error::runtime_trap("array.new_data: expected i32 offset")),
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "array.new_data: expected i32 offset",
+                                ));
+                            },
                         };
                         // Get element size from GC type info
                         let elem_size = match module.gc_types.get(type_idx as usize) {
@@ -10960,10 +13083,12 @@ impl StacklessEngine {
                             _ => 4, // default to 4 bytes if type info unavailable
                         };
                         // Get data segment
-                        let data_segment = module.data.get(data_idx as usize)
-                            .ok_or_else(|| kiln_error::Error::runtime_trap("array.new_data: invalid data index"))?;
+                        let data_segment = module.data.get(data_idx as usize).ok_or_else(|| {
+                            kiln_error::Error::runtime_trap("array.new_data: invalid data index")
+                        })?;
                         // Check if the data segment has been dropped (via data.drop)
-                        let is_dropped = self.dropped_data_segments
+                        let is_dropped = self
+                            .dropped_data_segments
                             .get(&instance_id)
                             .and_then(|v| v.get(data_idx as usize))
                             .copied()
@@ -10973,29 +13098,47 @@ impl StacklessEngine {
                         let byte_offset = offset_val as usize;
                         let byte_length = size as usize * elem_size;
                         if byte_offset + byte_length > data_len {
-                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+                            return Err(kiln_error::Error::runtime_trap(
+                                "out of bounds memory access",
+                            ));
                         }
                         let mut array_ref = kiln_foundation::values::ArrayRef::new(
                             type_idx,
-                            kiln_foundation::traits::DefaultMemoryProvider::default()
-                        ).map_err(|_| kiln_error::Error::runtime_error("Failed to create array"))?;
+                            kiln_foundation::traits::DefaultMemoryProvider::default(),
+                        )
+                        .map_err(|_| kiln_error::Error::runtime_error("Failed to create array"))?;
                         for i in 0..size as usize {
                             let start = byte_offset + i * elem_size;
                             let val = match elem_size {
                                 1 => Value::I32(data_bytes[start] as i32),
-                                2 => Value::I32(i16::from_le_bytes([data_bytes[start], data_bytes[start+1]]) as i32),
-                                4 => Value::I32(i32::from_le_bytes([data_bytes[start], data_bytes[start+1], data_bytes[start+2], data_bytes[start+3]])),
+                                2 => Value::I32(i16::from_le_bytes([
+                                    data_bytes[start],
+                                    data_bytes[start + 1],
+                                ]) as i32),
+                                4 => Value::I32(i32::from_le_bytes([
+                                    data_bytes[start],
+                                    data_bytes[start + 1],
+                                    data_bytes[start + 2],
+                                    data_bytes[start + 3],
+                                ])),
                                 8 => Value::I64(i64::from_le_bytes([
-                                    data_bytes[start], data_bytes[start+1], data_bytes[start+2], data_bytes[start+3],
-                                    data_bytes[start+4], data_bytes[start+5], data_bytes[start+6], data_bytes[start+7],
+                                    data_bytes[start],
+                                    data_bytes[start + 1],
+                                    data_bytes[start + 2],
+                                    data_bytes[start + 3],
+                                    data_bytes[start + 4],
+                                    data_bytes[start + 5],
+                                    data_bytes[start + 6],
+                                    data_bytes[start + 7],
                                 ])),
                                 _ => Value::I32(0),
                             };
-                            array_ref.push(val).map_err(|_|
-                                kiln_error::Error::runtime_error("Failed to push to array"))?;
+                            array_ref.push(val).map_err(|_| {
+                                kiln_error::Error::runtime_error("Failed to push to array")
+                            })?;
                         }
                         operand_stack.push(Value::ArrayRef(Some(GcArrayRef::new(array_ref))));
-                    }
+                    },
 
                     Instruction::ArrayNewElem(type_idx, elem_idx) => {
                         // array.new_elem: [offset i32, size i32] -> [arrayref]
@@ -11006,11 +13149,19 @@ impl StacklessEngine {
                         trace!("ArrayNewElem: type_idx={}, elem_idx={}", type_idx, elem_idx);
                         let size = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as u32,
-                            _ => return Err(kiln_error::Error::runtime_trap("array.new_elem: expected i32 size")),
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "array.new_elem: expected i32 size",
+                                ));
+                            },
                         };
                         let offset_val = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as u32,
-                            _ => return Err(kiln_error::Error::runtime_trap("array.new_elem: expected i32 offset")),
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "array.new_elem: expected i32 offset",
+                                ));
+                            },
                         };
                         // Use resolved_elem_items for pre-evaluated values (GC types),
                         // fall back to raw items for plain funcref segments.
@@ -11019,21 +13170,24 @@ impl StacklessEngine {
                         let elem_len = if instance.is_element_segment_dropped(elem_idx) {
                             0
                         } else if let Some(r) = resolved {
-                            if !r.is_empty() { r.len() } else {
-                                module.elements.get(elem_idx as usize)
-                                    .map_or(0, |e| e.items.len())
+                            if !r.is_empty() {
+                                r.len()
+                            } else {
+                                module.elements.get(elem_idx as usize).map_or(0, |e| e.items.len())
                             }
                         } else {
-                            module.elements.get(elem_idx as usize)
-                                .map_or(0, |e| e.items.len())
+                            module.elements.get(elem_idx as usize).map_or(0, |e| e.items.len())
                         };
                         if offset_val as u64 + size as u64 > elem_len as u64 {
-                            return Err(kiln_error::Error::runtime_trap("out of bounds table access"));
+                            return Err(kiln_error::Error::runtime_trap(
+                                "out of bounds table access",
+                            ));
                         }
                         let mut array_ref = kiln_foundation::values::ArrayRef::new(
                             type_idx,
-                            kiln_foundation::traits::DefaultMemoryProvider::default()
-                        ).map_err(|_| kiln_error::Error::runtime_error("Failed to create array"))?;
+                            kiln_foundation::traits::DefaultMemoryProvider::default(),
+                        )
+                        .map_err(|_| kiln_error::Error::runtime_error("Failed to create array"))?;
                         for i in 0..size as usize {
                             let idx = offset_val as usize + i;
                             let item_val = if let Some(resolved_items) = resolved {
@@ -11042,21 +13196,32 @@ impl StacklessEngine {
                                 } else {
                                     // Fallback to raw function index
                                     let elem_segment = &module.elements[elem_idx as usize];
-                                    let func_idx = elem_segment.items.get(idx)
-                                        .map_err(|_| kiln_error::Error::runtime_trap("array.new_elem: element access failed"))?;
-                                    Value::FuncRef(Some(kiln_foundation::values::FuncRef::from_index(func_idx)))
+                                    let func_idx = elem_segment.items.get(idx).map_err(|_| {
+                                        kiln_error::Error::runtime_trap(
+                                            "array.new_elem: element access failed",
+                                        )
+                                    })?;
+                                    Value::FuncRef(Some(
+                                        kiln_foundation::values::FuncRef::from_index(func_idx),
+                                    ))
                                 }
                             } else {
                                 let elem_segment = &module.elements[elem_idx as usize];
-                                let func_idx = elem_segment.items.get(idx)
-                                    .map_err(|_| kiln_error::Error::runtime_trap("array.new_elem: element access failed"))?;
-                                Value::FuncRef(Some(kiln_foundation::values::FuncRef::from_index(func_idx)))
+                                let func_idx = elem_segment.items.get(idx).map_err(|_| {
+                                    kiln_error::Error::runtime_trap(
+                                        "array.new_elem: element access failed",
+                                    )
+                                })?;
+                                Value::FuncRef(Some(kiln_foundation::values::FuncRef::from_index(
+                                    func_idx,
+                                )))
                             };
-                            array_ref.push(item_val).map_err(|_|
-                                kiln_error::Error::runtime_error("Failed to push to array"))?;
+                            array_ref.push(item_val).map_err(|_| {
+                                kiln_error::Error::runtime_error("Failed to push to array")
+                            })?;
                         }
                         operand_stack.push(Value::ArrayRef(Some(GcArrayRef::new(array_ref))));
-                    }
+                    },
 
                     Instruction::ArrayFill(type_idx) => {
                         // array.fill: [arrayref i32 value i32] -> []
@@ -11064,27 +13229,43 @@ impl StacklessEngine {
                         trace!("ArrayFill: type_idx={}", type_idx);
                         let size = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as u32,
-                            _ => return Err(kiln_error::Error::runtime_trap("array.fill: expected i32 size")),
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "array.fill: expected i32 size",
+                                ));
+                            },
                         };
-                        let fill_value = operand_stack.pop().ok_or_else(||
-                            kiln_error::Error::runtime_trap("array.fill: expected fill value"))?;
+                        let fill_value = operand_stack.pop().ok_or_else(|| {
+                            kiln_error::Error::runtime_trap("array.fill: expected fill value")
+                        })?;
                         let offset_val = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as u32,
-                            _ => return Err(kiln_error::Error::runtime_trap("array.fill: expected i32 offset")),
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "array.fill: expected i32 offset",
+                                ));
+                            },
                         };
                         if let Some(Value::ArrayRef(Some(mut a))) = operand_stack.pop() {
                             let len = a.len() as u32;
                             if offset_val + size > len {
-                                return Err(kiln_error::Error::runtime_trap("out of bounds array access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "out of bounds array access",
+                                ));
                             }
                             for i in 0..size {
-                                a.set((offset_val + i) as usize, fill_value.clone()).map_err(|_|
-                                    kiln_error::Error::runtime_trap("out of bounds array access"))?;
+                                a.set((offset_val + i) as usize, fill_value.clone()).map_err(
+                                    |_| {
+                                        kiln_error::Error::runtime_trap(
+                                            "out of bounds array access",
+                                        )
+                                    },
+                                )?;
                             }
                         } else {
                             return Err(kiln_error::Error::runtime_trap("null array reference"));
                         }
-                    }
+                    },
 
                     Instruction::ArrayCopy(dst_type_idx, src_type_idx) => {
                         // array.copy: [dst_arrayref dst_offset src_arrayref src_offset len] -> []
@@ -11092,65 +13273,112 @@ impl StacklessEngine {
                         trace!("ArrayCopy: dst={}, src={}", dst_type_idx, src_type_idx);
                         let len = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as u32,
-                            _ => return Err(kiln_error::Error::runtime_trap("array.copy: expected i32 len")),
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "array.copy: expected i32 len",
+                                ));
+                            },
                         };
                         let src_offset = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as u32,
-                            _ => return Err(kiln_error::Error::runtime_trap("array.copy: expected i32 src_offset")),
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "array.copy: expected i32 src_offset",
+                                ));
+                            },
                         };
                         let src_array = match operand_stack.pop() {
                             Some(Value::ArrayRef(Some(a))) => a,
-                            _ => return Err(kiln_error::Error::runtime_trap("null array reference")),
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "null array reference",
+                                ));
+                            },
                         };
                         let dst_offset = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as u32,
-                            _ => return Err(kiln_error::Error::runtime_trap("array.copy: expected i32 dst_offset")),
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "array.copy: expected i32 dst_offset",
+                                ));
+                            },
                         };
                         if let Some(Value::ArrayRef(Some(mut dst_array))) = operand_stack.pop() {
-                            if src_offset + len > src_array.len() as u32 || dst_offset + len > dst_array.len() as u32 {
-                                return Err(kiln_error::Error::runtime_trap("out of bounds array access"));
+                            if src_offset + len > src_array.len() as u32
+                                || dst_offset + len > dst_array.len() as u32
+                            {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "out of bounds array access",
+                                ));
                             }
                             // Copy elements (handle overlap correctly)
                             let mut elems = Vec::new();
                             for i in 0..len {
-                                let elem = src_array.get((src_offset + i) as usize).map_err(|_|
-                                    kiln_error::Error::runtime_trap("array.copy: src get failed"))?;
+                                let elem =
+                                    src_array.get((src_offset + i) as usize).map_err(|_| {
+                                        kiln_error::Error::runtime_trap(
+                                            "array.copy: src get failed",
+                                        )
+                                    })?;
                                 elems.push(elem);
                             }
                             for (i, elem) in elems.into_iter().enumerate() {
-                                dst_array.set((dst_offset as usize) + i, elem).map_err(|_|
-                                    kiln_error::Error::runtime_trap("array.copy: dst set failed"))?;
+                                dst_array.set((dst_offset as usize) + i, elem).map_err(|_| {
+                                    kiln_error::Error::runtime_trap("array.copy: dst set failed")
+                                })?;
                             }
                         } else {
                             return Err(kiln_error::Error::runtime_trap("null array reference"));
                         }
-                    }
+                    },
 
                     Instruction::ArrayInitData(type_idx, data_idx) => {
                         // array.init_data: [arrayref dst_offset src_offset len] -> []
                         #[cfg(feature = "tracing")]
-                        trace!("ArrayInitData: type_idx={}, data_idx={}", type_idx, data_idx);
+                        trace!(
+                            "ArrayInitData: type_idx={}, data_idx={}",
+                            type_idx, data_idx
+                        );
                         let len = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as u32,
-                            _ => return Err(kiln_error::Error::runtime_trap("array.init_data: expected i32 len")),
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "array.init_data: expected i32 len",
+                                ));
+                            },
                         };
                         let src_offset = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as u32,
-                            _ => return Err(kiln_error::Error::runtime_trap("array.init_data: expected i32 src_offset")),
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "array.init_data: expected i32 src_offset",
+                                ));
+                            },
                         };
                         let dst_offset = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as u32,
-                            _ => return Err(kiln_error::Error::runtime_trap("array.init_data: expected i32 dst_offset")),
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "array.init_data: expected i32 dst_offset",
+                                ));
+                            },
                         };
                         if let Some(Value::ArrayRef(Some(mut a))) = operand_stack.pop() {
                             let elem_size = match module.gc_types.get(type_idx as usize) {
-                                Some(crate::module::GcTypeInfo::Array(field)) => field.size_in_bytes(),
+                                Some(crate::module::GcTypeInfo::Array(field)) => {
+                                    field.size_in_bytes()
+                                },
                                 _ => 4,
                             };
-                            let data_segment = module.data.get(data_idx as usize)
-                                .ok_or_else(|| kiln_error::Error::runtime_trap("array.init_data: invalid data index"))?;
+                            let data_segment =
+                                module.data.get(data_idx as usize).ok_or_else(|| {
+                                    kiln_error::Error::runtime_trap(
+                                        "array.init_data: invalid data index",
+                                    )
+                                })?;
                             // Check if the data segment has been dropped (via data.drop)
-                            let is_dropped = self.dropped_data_segments
+                            let is_dropped = self
+                                .dropped_data_segments
                                 .get(&instance_id)
                                 .and_then(|v| v.get(data_idx as usize))
                                 .copied()
@@ -11160,50 +13388,88 @@ impl StacklessEngine {
                             let byte_offset = src_offset as usize;
                             let byte_length = len as usize * elem_size;
                             if byte_offset + byte_length > data_len {
-                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "out of bounds memory access",
+                                ));
                             }
                             if dst_offset + len > a.len() as u32 {
-                                return Err(kiln_error::Error::runtime_trap("out of bounds array access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "out of bounds array access",
+                                ));
                             }
                             for i in 0..len as usize {
                                 let start = byte_offset + i * elem_size;
                                 let val = match elem_size {
                                     1 => Value::I32(data_bytes[start] as i32),
-                                    2 => Value::I32(i16::from_le_bytes([data_bytes[start], data_bytes[start+1]]) as i32),
-                                    4 => Value::I32(i32::from_le_bytes([data_bytes[start], data_bytes[start+1], data_bytes[start+2], data_bytes[start+3]])),
+                                    2 => Value::I32(i16::from_le_bytes([
+                                        data_bytes[start],
+                                        data_bytes[start + 1],
+                                    ]) as i32),
+                                    4 => Value::I32(i32::from_le_bytes([
+                                        data_bytes[start],
+                                        data_bytes[start + 1],
+                                        data_bytes[start + 2],
+                                        data_bytes[start + 3],
+                                    ])),
                                     8 => Value::I64(i64::from_le_bytes([
-                                        data_bytes[start], data_bytes[start+1], data_bytes[start+2], data_bytes[start+3],
-                                        data_bytes[start+4], data_bytes[start+5], data_bytes[start+6], data_bytes[start+7],
+                                        data_bytes[start],
+                                        data_bytes[start + 1],
+                                        data_bytes[start + 2],
+                                        data_bytes[start + 3],
+                                        data_bytes[start + 4],
+                                        data_bytes[start + 5],
+                                        data_bytes[start + 6],
+                                        data_bytes[start + 7],
                                     ])),
                                     _ => Value::I32(0),
                                 };
-                                a.set((dst_offset as usize) + i, val).map_err(|_|
-                                    kiln_error::Error::runtime_trap("array.init_data: set failed"))?;
+                                a.set((dst_offset as usize) + i, val).map_err(|_| {
+                                    kiln_error::Error::runtime_trap("array.init_data: set failed")
+                                })?;
                             }
                         } else {
                             return Err(kiln_error::Error::runtime_trap("null array reference"));
                         }
-                    }
+                    },
 
                     Instruction::ArrayInitElem(type_idx, elem_idx) => {
                         // array.init_elem: [arrayref dst_offset src_offset len] -> []
                         #[cfg(feature = "tracing")]
-                        trace!("ArrayInitElem: type_idx={}, elem_idx={}", type_idx, elem_idx);
+                        trace!(
+                            "ArrayInitElem: type_idx={}, elem_idx={}",
+                            type_idx, elem_idx
+                        );
                         let len = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as u32,
-                            _ => return Err(kiln_error::Error::runtime_trap("array.init_elem: expected i32 len")),
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "array.init_elem: expected i32 len",
+                                ));
+                            },
                         };
                         let src_offset = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as u32,
-                            _ => return Err(kiln_error::Error::runtime_trap("array.init_elem: expected i32 src_offset")),
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "array.init_elem: expected i32 src_offset",
+                                ));
+                            },
                         };
                         let dst_offset = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as u32,
-                            _ => return Err(kiln_error::Error::runtime_trap("array.init_elem: expected i32 dst_offset")),
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "array.init_elem: expected i32 dst_offset",
+                                ));
+                            },
                         };
                         if let Some(Value::ArrayRef(Some(mut a))) = operand_stack.pop() {
-                            let elem_segment = module.elements.get(elem_idx as usize)
-                                .ok_or_else(|| kiln_error::Error::runtime_trap("array.init_elem: invalid elem index"))?;
+                            let elem_segment =
+                                module.elements.get(elem_idx as usize).ok_or_else(|| {
+                                    kiln_error::Error::runtime_trap(
+                                        "array.init_elem: invalid elem index",
+                                    )
+                                })?;
                             // Check if element segment has been dropped (effective length 0)
                             let effective_len = if instance.is_element_segment_dropped(elem_idx) {
                                 0
@@ -11211,10 +13477,14 @@ impl StacklessEngine {
                                 elem_segment.items.len()
                             };
                             if src_offset as u64 + len as u64 > effective_len as u64 {
-                                return Err(kiln_error::Error::runtime_trap("out of bounds table access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "out of bounds table access",
+                                ));
                             }
                             if dst_offset as u64 + len as u64 > a.len() as u64 {
-                                return Err(kiln_error::Error::runtime_trap("out of bounds array access"));
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "out of bounds array access",
+                                ));
                             }
                             // Use resolved_elem_items for pre-evaluated values
                             let resolved = module.resolved_elem_items.get(elem_idx as usize);
@@ -11224,79 +13494,106 @@ impl StacklessEngine {
                                     if !resolved_items.is_empty() && idx < resolved_items.len() {
                                         resolved_items[idx].clone()
                                     } else {
-                                        let item_idx = elem_segment.items.get(idx)
-                                            .map_err(|_| kiln_error::Error::runtime_trap("array.init_elem: element access failed"))?;
-                                        Value::FuncRef(Some(kiln_foundation::values::FuncRef::from_index(item_idx)))
+                                        let item_idx =
+                                            elem_segment.items.get(idx).map_err(|_| {
+                                                kiln_error::Error::runtime_trap(
+                                                    "array.init_elem: element access failed",
+                                                )
+                                            })?;
+                                        Value::FuncRef(Some(
+                                            kiln_foundation::values::FuncRef::from_index(item_idx),
+                                        ))
                                     }
                                 } else {
-                                    let item_idx = elem_segment.items.get(idx)
-                                        .map_err(|_| kiln_error::Error::runtime_trap("array.init_elem: element access failed"))?;
-                                    Value::FuncRef(Some(kiln_foundation::values::FuncRef::from_index(item_idx)))
+                                    let item_idx = elem_segment.items.get(idx).map_err(|_| {
+                                        kiln_error::Error::runtime_trap(
+                                            "array.init_elem: element access failed",
+                                        )
+                                    })?;
+                                    Value::FuncRef(Some(
+                                        kiln_foundation::values::FuncRef::from_index(item_idx),
+                                    ))
                                 };
-                                a.set((dst_offset as usize) + i, item_val).map_err(|_|
-                                    kiln_error::Error::runtime_trap("array.init_elem: set failed"))?;
+                                a.set((dst_offset as usize) + i, item_val).map_err(|_| {
+                                    kiln_error::Error::runtime_trap("array.init_elem: set failed")
+                                })?;
                             }
                         } else {
                             return Err(kiln_error::Error::runtime_trap("null array reference"));
                         }
-                    }
+                    },
 
                     Instruction::RefTest(heap_type) => {
                         // ref.test: [ref] -> [i32]
                         // Test if reference matches heap type (non-null)
                         #[cfg(feature = "tracing")]
                         trace!("RefTest: {:?}", heap_type);
-                        let val = operand_stack.pop().ok_or_else(||
-                            kiln_error::Error::runtime_trap("ref.test: expected reference"))?;
-                        let result = ref_test_value_with_module(&val, &heap_type, false, Some(&module));
+                        let val = operand_stack.pop().ok_or_else(|| {
+                            kiln_error::Error::runtime_trap("ref.test: expected reference")
+                        })?;
+                        let result =
+                            ref_test_value_with_module(&val, &heap_type, false, Some(&module));
                         operand_stack.push(Value::I32(if result { 1 } else { 0 }));
-                    }
+                    },
 
                     Instruction::RefTestNull(heap_type) => {
                         // ref.test (nullable): [ref] -> [i32]
                         // Test if reference matches heap type (nullable variant)
                         #[cfg(feature = "tracing")]
                         trace!("RefTestNull: {:?}", heap_type);
-                        let val = operand_stack.pop().ok_or_else(||
-                            kiln_error::Error::runtime_trap("ref.test: expected reference"))?;
-                        let result = ref_test_value_with_module(&val, &heap_type, true, Some(&module));
+                        let val = operand_stack.pop().ok_or_else(|| {
+                            kiln_error::Error::runtime_trap("ref.test: expected reference")
+                        })?;
+                        let result =
+                            ref_test_value_with_module(&val, &heap_type, true, Some(&module));
                         operand_stack.push(Value::I32(if result { 1 } else { 0 }));
-                    }
+                    },
 
                     Instruction::RefCast(heap_type) => {
                         // ref.cast: [ref] -> [ref]
                         // Cast reference to heap type, trap if fails (non-null)
                         #[cfg(feature = "tracing")]
                         trace!("RefCast: {:?}", heap_type);
-                        let val = operand_stack.pop().ok_or_else(||
-                            kiln_error::Error::runtime_trap("ref.cast: expected reference"))?;
+                        let val = operand_stack.pop().ok_or_else(|| {
+                            kiln_error::Error::runtime_trap("ref.cast: expected reference")
+                        })?;
                         if !ref_test_value_with_module(&val, &heap_type, false, Some(&module)) {
                             return Err(kiln_error::Error::runtime_trap("cast failure"));
                         }
                         operand_stack.push(val);
-                    }
+                    },
 
                     Instruction::RefCastNull(heap_type) => {
                         // ref.cast (nullable): [ref] -> [ref]
                         // Cast reference, allow null
                         #[cfg(feature = "tracing")]
                         trace!("RefCastNull: {:?}", heap_type);
-                        let val = operand_stack.pop().ok_or_else(||
-                            kiln_error::Error::runtime_trap("ref.cast: expected reference"))?;
+                        let val = operand_stack.pop().ok_or_else(|| {
+                            kiln_error::Error::runtime_trap("ref.cast: expected reference")
+                        })?;
                         if !ref_test_value_with_module(&val, &heap_type, true, Some(&module)) {
                             return Err(kiln_error::Error::runtime_trap("cast failure"));
                         }
                         operand_stack.push(val);
-                    }
+                    },
 
-                    Instruction::BrOnCast { flags, label: label_idx, from_type: _, to_type } => {
+                    Instruction::BrOnCast {
+                        flags,
+                        label: label_idx,
+                        from_type: _,
+                        to_type,
+                    } => {
                         // br_on_cast: [ref] -> [ref]
                         // Branch if cast succeeds, consuming the reference on the branch path
                         // flags bit 1: to_type is nullable (null matches)
                         #[cfg(feature = "tracing")]
-                        trace!("BrOnCast: label={}, flags={}, to_type={:?}", label_idx, flags, to_type);
-                        let val = operand_stack.pop().ok_or_else(||
-                            kiln_error::Error::runtime_trap("br_on_cast: expected reference"))?;
+                        trace!(
+                            "BrOnCast: label={}, flags={}, to_type={:?}",
+                            label_idx, flags, to_type
+                        );
+                        let val = operand_stack.pop().ok_or_else(|| {
+                            kiln_error::Error::runtime_trap("br_on_cast: expected reference")
+                        })?;
                         // Test if cast would succeed
                         let to_nullable = (flags & 2) != 0;
                         if ref_test_value_with_module(&val, &to_type, to_nullable, Some(&module)) {
@@ -11307,7 +13604,9 @@ impl StacklessEngine {
                                 break; // Branch out of function
                             }
                             let stack_idx = block_stack.len() - 1 - label_idx as usize;
-                            if let Some((block_type, start_pc, _bti, entry_stack_height)) = block_stack.get(stack_idx).copied() {
+                            if let Some((block_type, start_pc, _bti, entry_stack_height)) =
+                                block_stack.get(stack_idx).copied()
+                            {
                                 // Keep branch target values, restore stack below
                                 let branch_val = operand_stack.pop();
                                 while operand_stack.len() > entry_stack_height {
@@ -11344,9 +13643,13 @@ impl StacklessEngine {
                                     while new_pc < instructions.len() && target_depth > 0 {
                                         if let Some(si) = instructions.get(new_pc) {
                                             match si {
-                                                Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => {
+                                                Instruction::Block { .. }
+                                                | Instruction::Loop { .. }
+                                                | Instruction::If { .. }
+                                                | Instruction::Try { .. }
+                                                | Instruction::TryTable { .. } => {
                                                     depth += 1;
-                                                }
+                                                },
                                                 Instruction::End => {
                                                     if depth == 0 {
                                                         target_depth -= 1;
@@ -11358,8 +13661,8 @@ impl StacklessEngine {
                                                     } else {
                                                         depth -= 1;
                                                     }
-                                                }
-                                                _ => {}
+                                                },
+                                                _ => {},
                                             }
                                         }
                                         new_pc += 1;
@@ -11371,16 +13674,25 @@ impl StacklessEngine {
                             // Cast fails - push original value back, don't branch
                             operand_stack.push(val);
                         }
-                    }
+                    },
 
-                    Instruction::BrOnCastFail { flags, label: label_idx, from_type: _, to_type } => {
+                    Instruction::BrOnCastFail {
+                        flags,
+                        label: label_idx,
+                        from_type: _,
+                        to_type,
+                    } => {
                         // br_on_cast_fail: [ref] -> [ref]
                         // Branch if cast FAILS
                         // flags bit 1: to_type is nullable
                         #[cfg(feature = "tracing")]
-                        trace!("BrOnCastFail: label={}, flags={}, to_type={:?}", label_idx, flags, to_type);
-                        let val = operand_stack.pop().ok_or_else(||
-                            kiln_error::Error::runtime_trap("br_on_cast_fail: expected reference"))?;
+                        trace!(
+                            "BrOnCastFail: label={}, flags={}, to_type={:?}",
+                            label_idx, flags, to_type
+                        );
+                        let val = operand_stack.pop().ok_or_else(|| {
+                            kiln_error::Error::runtime_trap("br_on_cast_fail: expected reference")
+                        })?;
                         let to_nullable = (flags & 2) != 0;
                         if !ref_test_value_with_module(&val, &to_type, to_nullable, Some(&module)) {
                             // Cast fails - push value and branch
@@ -11390,7 +13702,9 @@ impl StacklessEngine {
                                 break; // Branch out of function
                             }
                             let stack_idx = block_stack.len() - 1 - label_idx as usize;
-                            if let Some((block_type, start_pc, _bti, entry_stack_height)) = block_stack.get(stack_idx).copied() {
+                            if let Some((block_type, start_pc, _bti, entry_stack_height)) =
+                                block_stack.get(stack_idx).copied()
+                            {
                                 // Keep branch target values, restore stack below
                                 let branch_val = operand_stack.pop();
                                 while operand_stack.len() > entry_stack_height {
@@ -11427,9 +13741,13 @@ impl StacklessEngine {
                                     while new_pc < instructions.len() && target_depth > 0 {
                                         if let Some(si) = instructions.get(new_pc) {
                                             match si {
-                                                Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => {
+                                                Instruction::Block { .. }
+                                                | Instruction::Loop { .. }
+                                                | Instruction::If { .. }
+                                                | Instruction::Try { .. }
+                                                | Instruction::TryTable { .. } => {
                                                     depth += 1;
-                                                }
+                                                },
                                                 Instruction::End => {
                                                     if depth == 0 {
                                                         target_depth -= 1;
@@ -11441,8 +13759,8 @@ impl StacklessEngine {
                                                     } else {
                                                         depth -= 1;
                                                     }
-                                                }
-                                                _ => {}
+                                                },
+                                                _ => {},
                                             }
                                         }
                                         new_pc += 1;
@@ -11454,7 +13772,7 @@ impl StacklessEngine {
                             // Cast succeeds - push value back, don't branch
                             operand_stack.push(val);
                         }
-                    }
+                    },
 
                     Instruction::AnyConvertExtern => {
                         // any.convert_extern: [externref] -> [anyref]
@@ -11463,8 +13781,11 @@ impl StacklessEngine {
                         // that is NOT eq/i31/struct/array. We represent this as Value::Ref.
                         #[cfg(feature = "tracing")]
                         trace!("AnyConvertExtern");
-                        let val = operand_stack.pop().ok_or_else(||
-                            kiln_error::Error::runtime_trap("any.convert_extern: expected reference"))?;
+                        let val = operand_stack.pop().ok_or_else(|| {
+                            kiln_error::Error::runtime_trap(
+                                "any.convert_extern: expected reference",
+                            )
+                        })?;
                         let result = match val {
                             Value::ExternRef(None) => Value::I31Ref(None), // null extern -> null any
                             Value::ExternRef(Some(er)) => {
@@ -11483,11 +13804,11 @@ impl StacklessEngine {
                                 } else {
                                     Value::Ref(er.index) // opaque any for host-provided externrefs
                                 }
-                            }
+                            },
                             other => other, // pass through (shouldn't happen per spec)
                         };
                         operand_stack.push(result);
-                    }
+                    },
 
                     Instruction::ExternConvertAny => {
                         // extern.convert_any: [anyref] -> [externref]
@@ -11495,14 +13816,22 @@ impl StacklessEngine {
                         // Per the spec, null stays null, non-null becomes an externref.
                         #[cfg(feature = "tracing")]
                         trace!("ExternConvertAny");
-                        let val = operand_stack.pop().ok_or_else(||
-                            kiln_error::Error::runtime_trap("extern.convert_any: expected reference"))?;
+                        let val = operand_stack.pop().ok_or_else(|| {
+                            kiln_error::Error::runtime_trap(
+                                "extern.convert_any: expected reference",
+                            )
+                        })?;
                         let result = match &val {
-                            Value::StructRef(None) | Value::ArrayRef(None)
-                            | Value::I31Ref(None) | Value::ExternRef(None)
-                            | Value::ExnRef(None) | Value::FuncRef(None) => Value::ExternRef(None),
-                            Value::StructRef(Some(_)) | Value::ArrayRef(Some(_))
-                            | Value::I31Ref(Some(_)) | Value::Ref(_) => {
+                            Value::StructRef(None)
+                            | Value::ArrayRef(None)
+                            | Value::I31Ref(None)
+                            | Value::ExternRef(None)
+                            | Value::ExnRef(None)
+                            | Value::FuncRef(None) => Value::ExternRef(None),
+                            Value::StructRef(Some(_))
+                            | Value::ArrayRef(Some(_))
+                            | Value::I31Ref(Some(_))
+                            | Value::Ref(_) => {
                                 // Store the original value in the extern table so
                                 // any.convert_extern can recover it for round-trip identity.
                                 // Use high bit (0x80000000) to distinguish from host externrefs.
@@ -11512,36 +13841,51 @@ impl StacklessEngine {
                                     t.push(val.clone());
                                     idx | 0x80000000
                                 });
-                                Value::ExternRef(Some(kiln_foundation::values::ExternRef { index: idx }))
-                            }
+                                Value::ExternRef(Some(kiln_foundation::values::ExternRef {
+                                    index: idx,
+                                }))
+                            },
                             _ => val, // pass through for non-null ExternRef etc.
                         };
                         operand_stack.push(result);
-                    }
+                    },
 
                     // ========================================
                     // SIMD Instructions (V128)
                     // ========================================
                     Instruction::V128Const { bytes } => {
                         push_v128(&mut operand_stack, bytes);
-                    }
+                    },
                     Instruction::SimdShuffle { lanes } => {
                         let b = pop_v128(&mut operand_stack)?;
                         let a = pop_v128(&mut operand_stack)?;
-                        push_v128(&mut operand_stack, crate::stackless::simd_ops::i8x16_shuffle(&a, &b, &lanes));
-                    }
+                        push_v128(
+                            &mut operand_stack,
+                            crate::stackless::simd_ops::i8x16_shuffle(&a, &b, &lanes),
+                        );
+                    },
                     Instruction::SimdOp { opcode } => {
                         execute_simd_op(opcode, &mut operand_stack)?;
-                    }
+                    },
                     Instruction::SimdLaneOp { opcode, lane } => {
                         execute_simd_lane_op(opcode, lane, &mut operand_stack)?;
-                    }
+                    },
                     Instruction::SimdMemOp { opcode, memarg } => {
                         execute_simd_mem_op(opcode, &memarg, &mut operand_stack, &instance)?;
-                    }
-                    Instruction::SimdMemLaneOp { opcode, memarg, lane } => {
-                        execute_simd_mem_lane_op(opcode, &memarg, lane, &mut operand_stack, &instance)?;
-                    }
+                    },
+                    Instruction::SimdMemLaneOp {
+                        opcode,
+                        memarg,
+                        lane,
+                    } => {
+                        execute_simd_mem_lane_op(
+                            opcode,
+                            &memarg,
+                            lane,
+                            &mut operand_stack,
+                            &instance,
+                        )?;
+                    },
 
                     _ => {
                         // CLAUDE.md: FAIL LOUD AND EARLY - return error instead of silently skipping
@@ -11550,7 +13894,7 @@ impl StacklessEngine {
                         return Err(kiln_error::Error::runtime_error(
                             "Unimplemented instruction encountered",
                         ));
-                    }
+                    },
                 }
 
                 // Increment program counter for next iteration
@@ -11560,7 +13904,10 @@ impl StacklessEngine {
             // Return values from operand stack matching function signature
             #[cfg(feature = "tracing")]
 
-            trace!("Function complete. Operand stack has {} values", operand_stack.len());
+            trace!(
+                "Function complete. Operand stack has {} values",
+                operand_stack.len()
+            );
             #[cfg(feature = "tracing")]
 
             trace!("STATS: Executed {} instructions total", instruction_count);
@@ -11595,9 +13942,7 @@ impl StacklessEngine {
             // Return completed execution - call depth is handled by the trampoline wrapper
             Ok(ExecutionOutcome::Complete(results))
         }
-
     }
-
 
     /// Get the remaining fuel for execution
     pub fn remaining_fuel(&self) -> Option<u64> {
@@ -11627,10 +13972,7 @@ impl StacklessEngine {
         params: &[Value],
         max_instructions: u32,
     ) -> Result<crate::stackless::ExecutionResult> {
-        use kiln_foundation::{
-            budget_aware_provider::CrateId,
-            safe_managed_alloc,
-        };
+        use kiln_foundation::{budget_aware_provider::CrateId, safe_managed_alloc};
 
         // Validate function exists
         let module = instance.module();
@@ -11641,10 +13983,9 @@ impl StacklessEngine {
         }
 
         // Get function type
-        let func = module
-            .functions
-            .get(func_idx)
-            .ok_or_else(|| kiln_error::Error::runtime_function_not_found("Failed to get function"))?;
+        let func = module.functions.get(func_idx).ok_or_else(|| {
+            kiln_error::Error::runtime_function_not_found("Failed to get function")
+        })?;
         let func_type = module
             .types
             .get(func.type_idx as usize)
@@ -11670,8 +14011,7 @@ impl StacklessEngine {
         }
 
         // Update instruction pointer
-        self.instruction_pointer
-            .fetch_add(max_instructions as u64, Ordering::Relaxed);
+        self.instruction_pointer.fetch_add(max_instructions as u64, Ordering::Relaxed);
 
         // Consume some fuel
         let fuel_to_consume = max_instructions.min(100) as u64;
@@ -11680,8 +14020,7 @@ impl StacklessEngine {
             self.fuel.store(0, Ordering::Relaxed);
             return Ok(crate::stackless::ExecutionResult::FuelExhausted);
         }
-        self.fuel
-            .fetch_sub(fuel_to_consume, Ordering::Relaxed);
+        self.fuel.fetch_sub(fuel_to_consume, Ordering::Relaxed);
 
         Ok(crate::stackless::ExecutionResult::Completed(results))
     }
@@ -11701,17 +14040,13 @@ impl StacklessEngine {
         &mut self,
         max_instructions: u32,
     ) -> Result<crate::stackless::ExecutionResult> {
-        use kiln_foundation::{
-            budget_aware_provider::CrateId,
-            safe_managed_alloc,
-        };
+        use kiln_foundation::{budget_aware_provider::CrateId, safe_managed_alloc};
 
         // Simulate continued execution
         // In real implementation, would resume from saved state
 
         // Update instruction pointer
-        self.instruction_pointer
-            .fetch_add(max_instructions as u64, Ordering::Relaxed);
+        self.instruction_pointer.fetch_add(max_instructions as u64, Ordering::Relaxed);
 
         // Consume some fuel
         let fuel_to_consume = max_instructions.min(100) as u64;
@@ -11720,8 +14055,7 @@ impl StacklessEngine {
             self.fuel.store(0, Ordering::Relaxed);
             return Ok(crate::stackless::ExecutionResult::FuelExhausted);
         }
-        self.fuel
-            .fetch_sub(fuel_to_consume, Ordering::Relaxed);
+        self.fuel.fetch_sub(fuel_to_consume, Ordering::Relaxed);
 
         // For now, return completed with empty results
         let provider = safe_managed_alloc!(1024, CrateId::Runtime)?;
@@ -11759,15 +14093,23 @@ impl StacklessEngine {
     /// not the overall import index. import_order contains ALL imports (functions,
     /// globals, memories, tables, tags), so we must iterate through import_types
     /// to find the Nth function import.
-    fn find_import_by_index(&self, module: &crate::module::Module, func_idx: usize) -> Result<(String, String)> {
+    fn find_import_by_index(
+        &self,
+        module: &crate::module::Module,
+        func_idx: usize,
+    ) -> Result<(String, String)> {
         use crate::module::RuntimeImportDesc;
 
         #[cfg(feature = "tracing")]
         let _span = kiln_foundation::tracing::ImportTrace::lookup("", "").entered();
 
         #[cfg(feature = "tracing")]
-        debug!("Looking for function import at index {} (import_order.len()={}, import_types.len()={})",
-               func_idx, module.import_order.len(), module.import_types.len());
+        debug!(
+            "Looking for function import at index {} (import_order.len()={}, import_types.len()={})",
+            func_idx,
+            module.import_order.len(),
+            module.import_types.len()
+        );
 
         // Iterate through ALL imports, counting only function imports until we find the one we want
         {
@@ -11777,8 +14119,10 @@ impl StacklessEngine {
                 if let Some(RuntimeImportDesc::Function(_)) = module.import_types.get(i) {
                     if func_import_count == func_idx {
                         #[cfg(feature = "tracing")]
-                        trace!("Found function import {} at overall index {}: {}::{}",
-                               func_idx, i, module_name, field_name);
+                        trace!(
+                            "Found function import {} at overall index {}: {}::{}",
+                            func_idx, i, module_name, field_name
+                        );
                         return Ok((module_name.clone(), field_name.clone()));
                     }
                     func_import_count += 1;
@@ -11787,12 +14131,20 @@ impl StacklessEngine {
         }
 
         #[cfg(feature = "tracing")]
-        trace!("Could not find function import at index {} (import_order.len()={})", func_idx, module.import_order.len());
+        trace!(
+            "Could not find function import at index {} (import_order.len()={})",
+            func_idx,
+            module.import_order.len()
+        );
         Err(kiln_error::Error::runtime_error("Import not found"))
     }
 
     /// Collect function arguments from operand stack based on function signature
-    fn collect_function_args(module: &crate::module::Module, func_idx: usize, operand_stack: &mut Vec<Value>) -> Vec<Value> {
+    fn collect_function_args(
+        module: &crate::module::Module,
+        func_idx: usize,
+        operand_stack: &mut Vec<Value>,
+    ) -> Vec<Value> {
         // Get the function's type signature to determine param count
         let param_count = if let Some(func) = module.functions.get(func_idx) {
             if let Some(func_type) = module.types.get(func.type_idx as usize) {
@@ -11827,15 +14179,19 @@ impl StacklessEngine {
                     if let Some(func_type) = module.types.get(*type_idx as usize) {
                         return func_type.params.len();
                     }
-                }
-                _ => {} // Not a function import
+                },
+                _ => {}, // Not a function import
             }
         }
         0 // Default to 0 if we can't determine
     }
 
     /// Collect import function arguments from operand stack
-    fn collect_import_args(module: &crate::module::Module, import_idx: usize, operand_stack: &mut Vec<Value>) -> Vec<Value> {
+    fn collect_import_args(
+        module: &crate::module::Module,
+        import_idx: usize,
+        operand_stack: &mut Vec<Value>,
+    ) -> Vec<Value> {
         let param_count = Self::get_import_param_count(module, import_idx);
 
         // Pop arguments from stack in reverse order
@@ -11862,7 +14218,9 @@ impl StacklessEngine {
             }
         }
 
-        Err(kiln_error::Error::runtime_error("Export function not found"))
+        Err(kiln_error::Error::runtime_error(
+            "Export function not found",
+        ))
     }
 
     /// Find an import's parameter count by module and field name
@@ -11888,8 +14246,8 @@ impl StacklessEngine {
                             if let Some(func_type) = module.types.get(*type_idx as usize) {
                                 return func_type.params.len();
                             }
-                        }
-                        _ => {} // Not a function import
+                        },
+                        _ => {}, // Not a function import
                     }
                 }
             }
@@ -11918,8 +14276,15 @@ impl StacklessEngine {
     }
 
     /// Call cabi_realloc to allocate memory in WASM instance
-    fn call_cabi_realloc(&mut self, instance_id: usize, func_idx: usize,
-                         old_ptr: u32, old_size: u32, align: u32, new_size: u32) -> Result<u32> {
+    fn call_cabi_realloc(
+        &mut self,
+        instance_id: usize,
+        func_idx: usize,
+        old_ptr: u32,
+        old_size: u32,
+        align: u32,
+        new_size: u32,
+    ) -> Result<u32> {
         #[cfg(feature = "tracing")]
         trace!(
             old_ptr = old_ptr,
@@ -11943,7 +14308,9 @@ impl StacklessEngine {
         if let Some(Value::I32(ptr)) = results.first() {
             Ok(*ptr as u32)
         } else {
-            Err(kiln_error::Error::runtime_error("cabi_realloc returned invalid value"))
+            Err(kiln_error::Error::runtime_error(
+                "cabi_realloc returned invalid value",
+            ))
         }
     }
 
@@ -11966,7 +14333,9 @@ impl StacklessEngine {
         args: &[String],
     ) -> Result<Option<(u32, Vec<(u32, u32)>)>> {
         // Find cabi_realloc export
-        let instance = self.instances.get(&instance_id)
+        let instance = self
+            .instances
+            .get(&instance_id)
             .ok_or_else(|| kiln_error::Error::runtime_error("Instance not found"))?
             .clone();
         let module = instance.module();
@@ -11975,9 +14344,11 @@ impl StacklessEngine {
             Ok(idx) => idx,
             Err(_) => {
                 #[cfg(feature = "tracing")]
-                trace!("[WASI-ALLOC] cabi_realloc not found, falling back to stack-relative allocation");
+                trace!(
+                    "[WASI-ALLOC] cabi_realloc not found, falling back to stack-relative allocation"
+                );
                 return Ok(None);
-            }
+            },
         };
 
         if args.is_empty() {
@@ -11998,14 +14369,17 @@ impl StacklessEngine {
         let list_ptr = self.call_cabi_realloc(
             instance_id,
             cabi_realloc_idx,
-            0,  // old_ptr (NULL for new allocation)
-            0,  // old_size
-            8,  // align (8-byte alignment for pointers)
+            0, // old_ptr (NULL for new allocation)
+            0, // old_size
+            8, // align (8-byte alignment for pointers)
             list_size as u32,
         )?;
 
         #[cfg(feature = "tracing")]
-        trace!(list_ptr = format_args!("0x{:x}", list_ptr), "[WASI-ALLOC] list array allocated");
+        trace!(
+            list_ptr = format_args!("0x{:x}", list_ptr),
+            "[WASI-ALLOC] list array allocated"
+        );
 
         // Allocate EACH string separately to ensure proper allocator metadata
         // This is critical: dlmalloc needs metadata before each allocation
@@ -12018,9 +14392,9 @@ impl StacklessEngine {
             let string_ptr = self.call_cabi_realloc(
                 instance_id,
                 cabi_realloc_idx,
-                0,  // old_ptr (NULL for new allocation)
-                0,  // old_size
-                1,  // align (1-byte alignment for strings)
+                0, // old_ptr (NULL for new allocation)
+                0, // old_size
+                1, // align (1-byte alignment for strings)
                 string_len,
             )?;
 
@@ -12086,12 +14460,12 @@ impl StacklessEngine {
                 }
 
                 Ok(())
-            }
+            },
             None => {
                 #[cfg(feature = "tracing")]
                 trace!("[WASI-PREALLOC] No allocation needed or cabi_realloc not available");
                 Ok(())
-            }
+            },
         }
     }
 
@@ -12121,12 +14495,12 @@ impl StacklessEngine {
                     handler.set_preopens_allocation(list_ptr, string_ptrs);
                 }
                 Ok(())
-            }
+            },
             None => {
                 #[cfg(feature = "tracing")]
                 trace!("[WASI-PREALLOC] preopens: cabi_realloc not available");
                 Ok(())
-            }
+            },
         }
     }
 
@@ -12141,7 +14515,9 @@ impl StacklessEngine {
         instance_id: usize,
         paths: &[String],
     ) -> Result<Option<(u32, Vec<(u32, u32)>)>> {
-        let instance = self.instances.get(&instance_id)
+        let instance = self
+            .instances
+            .get(&instance_id)
             .ok_or_else(|| kiln_error::Error::runtime_error("Instance not found"))?
             .clone();
         let module = instance.module();
@@ -12152,7 +14528,7 @@ impl StacklessEngine {
                 #[cfg(feature = "tracing")]
                 trace!("[WASI-ALLOC] cabi_realloc not found for preopens");
                 return Ok(None);
-            }
+            },
         };
 
         if paths.is_empty() {
@@ -12195,11 +14571,17 @@ impl StacklessEngine {
     /// to the guest's requested `len`, capped to a sane maximum. Returns None if the
     /// component has no cabi_realloc export. SR-38.
     #[cfg(feature = "wasi")]
-    fn allocate_wasi_read_buffer(&mut self, instance_id: usize, len: u32) -> Result<Option<(u32, u32)>> {
+    fn allocate_wasi_read_buffer(
+        &mut self,
+        instance_id: usize,
+        len: u32,
+    ) -> Result<Option<(u32, u32)>> {
         const MAX_READ_BUF: u32 = 1 << 20; // 1 MiB cap; reads clamp to this, guest loops for more
         let size = len.clamp(1, MAX_READ_BUF);
 
-        let instance = self.instances.get(&instance_id)
+        let instance = self
+            .instances
+            .get(&instance_id)
             .ok_or_else(|| kiln_error::Error::runtime_error("Instance not found"))?
             .clone();
         let module = instance.module();
@@ -12213,13 +14595,21 @@ impl StacklessEngine {
 
     /// Write data to WASM instance memory
     fn write_to_instance(&self, instance_id: usize, addr: u32, data: &[u8]) -> Result<()> {
-        let instance = self.instances.get(&instance_id)
+        let instance = self
+            .instances
+            .get(&instance_id)
             .ok_or_else(|| kiln_error::Error::runtime_error("Instance not found"))?;
 
         #[cfg(feature = "tracing")]
 
-
-        debug!("WASI init: write_to_instance: module declares {} memories",                   if instance.module().memories.is_empty() { 0 } else { instance.module().memories.len() });
+        debug!(
+            "WASI init: write_to_instance: module declares {} memories",
+            if instance.module().memories.is_empty() {
+                0
+            } else {
+                instance.module().memories.len()
+            }
+        );
 
         // Try to get memory - this will fail if instance doesn't have runtime memory initialized
         let memory = match instance.memory(0) {
@@ -12227,23 +14617,36 @@ impl StacklessEngine {
             Err(e) => {
                 #[cfg(feature = "tracing")]
 
-                debug!("WASI init: write_to_instance: failed to get memory: {:?}", e);
+                debug!(
+                    "WASI init: write_to_instance: failed to get memory: {:?}",
+                    e
+                );
                 return Err(e);
-            }
+            },
         };
 
-        let pages = memory.0.size();  // This is the size() method that returns pages
-        let bytes = pages as usize * 65536;  // Convert pages to bytes
+        let pages = memory.0.size(); // This is the size() method that returns pages
+        let bytes = pages as usize * 65536; // Convert pages to bytes
         #[cfg(feature = "tracing")]
 
-        debug!("WASI init: write_to_instance: memory {} pages = {} bytes", pages, bytes);
+        debug!(
+            "WASI init: write_to_instance: memory {} pages = {} bytes",
+            pages, bytes
+        );
 
         // Verify the write won't exceed memory bounds
         if (addr as usize + data.len()) > bytes {
             #[cfg(feature = "tracing")]
 
-            debug!("WASI init: write_to_instance: write at {:#x} + {} bytes would exceed {} byte memory",                      addr, data.len(), bytes);
-            return Err(kiln_error::Error::runtime_execution_error("Write would exceed memory bounds"));
+            debug!(
+                "WASI init: write_to_instance: write at {:#x} + {} bytes would exceed {} byte memory",
+                addr,
+                data.len(),
+                bytes
+            );
+            return Err(kiln_error::Error::runtime_execution_error(
+                "Write would exceed memory bounds",
+            ));
         }
 
         memory.0.write_shared(addr, data)?;
@@ -12257,10 +14660,17 @@ impl StacklessEngine {
     /// - Address 0x100 (256 bytes) is well within even small WASM memories
     /// - The data is just zeros which won't interfere with normal operation
     /// - WASM code that reads these pointers will get valid empty lists/None values
-    fn initialize_wasi_stubs(&mut self, instance_id: usize, module: &crate::module::Module) -> Result<()> {
+    fn initialize_wasi_stubs(
+        &mut self,
+        instance_id: usize,
+        module: &crate::module::Module,
+    ) -> Result<()> {
         #[cfg(feature = "tracing")]
 
-        debug!("WASI init: Initializing WASI stubs for instance {}", instance_id);
+        debug!(
+            "WASI init: Initializing WASI stubs for instance {}",
+            instance_id
+        );
 
         // Use a low fixed address that's guaranteed to be valid in most WASM memories
         // We need 16 bytes total: 8 for empty list + 1 for option None + 7 padding
@@ -12271,7 +14681,10 @@ impl StacklessEngine {
             Ok(_) => {
                 #[cfg(feature = "tracing")]
 
-                info!("WASI init: ✓ Wrote 16 bytes of stub data at ptr={:#x}", base_ptr);
+                info!(
+                    "WASI init: ✓ Wrote 16 bytes of stub data at ptr={:#x}",
+                    base_ptr
+                );
 
                 // Cache the pointers
                 let stub_mem = WasiStubMemory {
@@ -12287,14 +14700,16 @@ impl StacklessEngine {
 
                 info!("WASI init: ✓ WASI stubs initialized with memory write");
                 Ok(())
-            }
+            },
             Err(_e) => {
                 #[cfg(feature = "tracing")]
 
                 debug!("WASI init: Instance has no accessible memory (normal for adapter modules)");
                 #[cfg(feature = "tracing")]
 
-                debug!("WASI init: Using fallback pointers (stub WASI functions will return empty values)");
+                debug!(
+                    "WASI init: Using fallback pointers (stub WASI functions will return empty values)"
+                );
 
                 // Even if we can't write, we can still return valid pointers
                 // The WASM memory likely has zeros at these addresses anyway
@@ -12308,7 +14723,7 @@ impl StacklessEngine {
 
                 self.wasi_stubs.insert(instance_id, stub_mem);
                 Ok(()) // Don't fail - just use the pointers anyway
-            }
+            },
         }
     }
 
@@ -12335,11 +14750,15 @@ impl StacklessEngine {
         if let Some(ref registry) = self.host_registry {
             if Self::registry_serves(registry, module_name, field_name) {
                 #[cfg(feature = "tracing")]
-                debug!("WASI: Found {} in host registry, calling implementation", field_name);
+                debug!(
+                    "WASI: Found {} in host registry, calling implementation",
+                    field_name
+                );
 
                 let args: Vec<kiln_foundation::Value> = vec![];
                 let mut dummy_engine: i32 = 0;
-                match registry.call_host_function(&mut dummy_engine, module_name, field_name, args) {
+                match registry.call_host_function(&mut dummy_engine, module_name, field_name, args)
+                {
                     Ok(result) => {
                         #[cfg(feature = "tracing")]
                         debug!("WASI: Host function {} returned successfully", field_name);
@@ -12347,12 +14766,12 @@ impl StacklessEngine {
                             return Ok(Some(val.clone()));
                         }
                         return Ok(None);
-                    }
+                    },
                     Err(e) => {
                         #[cfg(feature = "tracing")]
                         debug!("WASI: Host function {} failed: {:?}", field_name, e);
                         return Err(e);
-                    }
+                    },
                 }
             }
         }
@@ -12369,19 +14788,20 @@ impl StacklessEngine {
             let args = Self::collect_import_args_by_name(&module, module_name, field_name, stack);
 
             #[cfg(feature = "wasi")]
-            let args_alloc = if module_name.contains("wasi:cli/environment") && field_name == "get-arguments" {
-                let wasi_args = kiln_wasi::get_global_wasi_args()?;
-                if !wasi_args.is_empty() {
-                    match self.allocate_wasi_args_memory(instance_id, &wasi_args) {
-                        Ok(alloc) => alloc,
-                        Err(_e) => None,
+            let args_alloc =
+                if module_name.contains("wasi:cli/environment") && field_name == "get-arguments" {
+                    let wasi_args = kiln_wasi::get_global_wasi_args()?;
+                    if !wasi_args.is_empty() {
+                        match self.allocate_wasi_args_memory(instance_id, &wasi_args) {
+                            Ok(alloc) => alloc,
+                            Err(_e) => None,
+                        }
+                    } else {
+                        None
                     }
                 } else {
                     None
-                }
-            } else {
-                None
-            };
+                };
 
             #[cfg(not(feature = "wasi"))]
             let args_alloc: Option<(u32, Vec<(u32, u32)>)> = None;
@@ -12394,11 +14814,14 @@ impl StacklessEngine {
                 && (field_name.contains("input-stream.read")
                     || field_name.contains("input-stream.blocking-read"))
             {
-                let len = args.get(1).and_then(|v| match v {
-                    Value::I64(n) => Some(*n as u32),
-                    Value::I32(n) => Some(*n as u32),
-                    _ => None,
-                }).unwrap_or(0);
+                let len = args
+                    .get(1)
+                    .and_then(|v| match v {
+                        Value::I64(n) => Some(*n as u32),
+                        Value::I32(n) => Some(*n as u32),
+                        _ => None,
+                    })
+                    .unwrap_or(0);
                 if len > 0 {
                     match self.allocate_wasi_read_buffer(instance_id, len) {
                         Ok(a) => a,
@@ -12423,13 +14846,18 @@ impl StacklessEngine {
                 }
 
                 // Get instance and memory
-                let instance = self.instances.get(&instance_id)
-                    .ok_or_else(|| kiln_error::Error::runtime_error("Instance not found for host handler call"))?
+                let instance = self
+                    .instances
+                    .get(&instance_id)
+                    .ok_or_else(|| {
+                        kiln_error::Error::runtime_error("Instance not found for host handler call")
+                    })?
                     .clone();
 
                 // Get memory as MemoryAccessor
                 let mem_wrapper = instance.memory(0).ok();
-                let memory: Option<&dyn kiln_foundation::MemoryAccessor> = mem_wrapper.as_ref()
+                let memory: Option<&dyn kiln_foundation::MemoryAccessor> = mem_wrapper
+                    .as_ref()
                     .map(|m| m.0.as_ref() as &dyn kiln_foundation::MemoryAccessor);
 
                 #[cfg(feature = "tracing")]
@@ -12472,7 +14900,7 @@ impl StacklessEngine {
 
         Err(kiln_error::Error::runtime_error(
             "WASI function called but no host_handler configured. \
-             Use engine.set_host_handler() with a WasiDispatcher to enable WASI support."
+             Use engine.set_host_handler() with a WasiDispatcher to enable WASI support.",
         ))
     }
 }
@@ -12490,7 +14918,11 @@ impl StacklessEngine {
 /// The `allow_null` parameter controls whether null references pass the test:
 /// - `false`: ref.test / ref.cast (non-nullable) - null fails
 /// - `true`: ref.test null / ref.cast null (nullable) - null passes
-fn ref_test_value(val: &Value, heap_type: &kiln_foundation::types::HeapType, allow_null: bool) -> bool {
+fn ref_test_value(
+    val: &Value,
+    heap_type: &kiln_foundation::types::HeapType,
+    allow_null: bool,
+) -> bool {
     ref_test_value_with_module(val, heap_type, allow_null, None)
 }
 
@@ -12512,11 +14944,15 @@ fn ref_test_value_with_module(
     match heap_type {
         HeapType::Func => matches!(val, Value::FuncRef(Some(_))),
         HeapType::Extern => matches!(val, Value::ExternRef(Some(_))),
-        HeapType::Any => matches!(val,
-            Value::StructRef(Some(_)) | Value::ArrayRef(Some(_)) | Value::I31Ref(Some(_))
-            | Value::Ref(_) // internalized extern (via any.convert_extern)
+        HeapType::Any => matches!(
+            val,
+            Value::StructRef(Some(_))
+                | Value::ArrayRef(Some(_))
+                | Value::I31Ref(Some(_))
+                | Value::Ref(_) // internalized extern (via any.convert_extern)
         ),
-        HeapType::Eq => matches!(val,
+        HeapType::Eq => matches!(
+            val,
             Value::StructRef(Some(_)) | Value::ArrayRef(Some(_)) | Value::I31Ref(Some(_))
         ),
         HeapType::I31 => matches!(val, Value::I31Ref(Some(_))),
@@ -12532,8 +14968,7 @@ fn ref_test_value_with_module(
                 // FuncRef: look up the function's declared type index from the module
                 Value::FuncRef(Some(fref)) => {
                     if let Some(module) = module {
-                        module.get_function(fref.index)
-                            .map(|f| f.type_idx)
+                        module.get_function(fref.index).map(|f| f.type_idx)
                     } else {
                         // Without module info we cannot resolve the function's type
                         None
@@ -12598,9 +15033,14 @@ fn is_runtime_subtype_canonical(
 
 /// Test if a value is a null reference
 fn is_null_ref(val: &Value) -> bool {
-    matches!(val,
-        Value::FuncRef(None) | Value::ExternRef(None) | Value::StructRef(None) |
-        Value::ArrayRef(None) | Value::I31Ref(None) | Value::ExnRef(None)
+    matches!(
+        val,
+        Value::FuncRef(None)
+            | Value::ExternRef(None)
+            | Value::StructRef(None)
+            | Value::ArrayRef(None)
+            | Value::I31Ref(None)
+            | Value::ExnRef(None)
     )
 }
 
@@ -12608,8 +15048,12 @@ fn is_null_ref(val: &Value) -> bool {
 fn pop_v128(stack: &mut Vec<Value>) -> Result<[u8; 16]> {
     match stack.pop() {
         Some(Value::V128(v)) => Ok(v.bytes),
-        Some(_) => Err(kiln_error::Error::runtime_execution_error("SIMD: expected v128")),
-        None => Err(kiln_error::Error::runtime_execution_error("SIMD: stack underflow")),
+        Some(_) => Err(kiln_error::Error::runtime_execution_error(
+            "SIMD: expected v128",
+        )),
+        None => Err(kiln_error::Error::runtime_execution_error(
+            "SIMD: stack underflow",
+        )),
     }
 }
 
@@ -12617,8 +15061,12 @@ fn pop_v128(stack: &mut Vec<Value>) -> Result<[u8; 16]> {
 fn pop_i32_for_simd(stack: &mut Vec<Value>) -> Result<i32> {
     match stack.pop() {
         Some(Value::I32(v)) => Ok(v),
-        Some(_) => Err(kiln_error::Error::runtime_execution_error("SIMD: expected i32")),
-        None => Err(kiln_error::Error::runtime_execution_error("SIMD: stack underflow")),
+        Some(_) => Err(kiln_error::Error::runtime_execution_error(
+            "SIMD: expected i32",
+        )),
+        None => Err(kiln_error::Error::runtime_execution_error(
+            "SIMD: stack underflow",
+        )),
     }
 }
 
@@ -12633,374 +15081,1703 @@ fn execute_simd_op(opcode: u32, stack: &mut Vec<Value>) -> Result<()> {
 
     match opcode {
         // v128.not
-        0x4D => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::v128_not(&a)); }
+        0x4D => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::v128_not(&a));
+        },
         // v128.and
-        0x4E => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::v128_and(&a, &b)); }
+        0x4E => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::v128_and(&a, &b));
+        },
         // v128.andnot
-        0x4F => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::v128_andnot(&a, &b)); }
+        0x4F => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::v128_andnot(&a, &b));
+        },
         // v128.or
-        0x50 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::v128_or(&a, &b)); }
+        0x50 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::v128_or(&a, &b));
+        },
         // v128.xor
-        0x51 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::v128_xor(&a, &b)); }
+        0x51 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::v128_xor(&a, &b));
+        },
         // v128.bitselect
-        0x52 => { let c = pop_v128(stack)?; let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::v128_bitselect(&a, &b, &c)); }
+        0x52 => {
+            let c = pop_v128(stack)?;
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::v128_bitselect(&a, &b, &c));
+        },
         // v128.any_true
-        0x53 => { let a = pop_v128(stack)?; stack.push(Value::I32(if simd_ops::v128_any_true(&a) { 1 } else { 0 })); }
+        0x53 => {
+            let a = pop_v128(stack)?;
+            stack.push(Value::I32(if simd_ops::v128_any_true(&a) { 1 } else { 0 }));
+        },
 
         // i8x16 splat
-        0x0F => { let val = pop_i32_for_simd(stack)?; push_v128(stack, simd_ops::splat_i8x16(val as u8)); }
+        0x0F => {
+            let val = pop_i32_for_simd(stack)?;
+            push_v128(stack, simd_ops::splat_i8x16(val as u8));
+        },
         // i16x8 splat
-        0x10 => { let val = pop_i32_for_simd(stack)?; push_v128(stack, simd_ops::splat_i16x8(val as u16)); }
+        0x10 => {
+            let val = pop_i32_for_simd(stack)?;
+            push_v128(stack, simd_ops::splat_i16x8(val as u16));
+        },
         // i32x4 splat
-        0x11 => { let val = pop_i32_for_simd(stack)?; push_v128(stack, simd_ops::splat_i32x4(val as u32)); }
+        0x11 => {
+            let val = pop_i32_for_simd(stack)?;
+            push_v128(stack, simd_ops::splat_i32x4(val as u32));
+        },
         // i64x2 splat
         0x12 => {
             let val = match stack.pop() {
                 Some(Value::I64(v)) => v,
-                Some(_) => return Err(kiln_error::Error::runtime_execution_error("SIMD: expected i64")),
-                None => return Err(kiln_error::Error::runtime_execution_error("SIMD: stack underflow")),
+                Some(_) => {
+                    return Err(kiln_error::Error::runtime_execution_error(
+                        "SIMD: expected i64",
+                    ));
+                },
+                None => {
+                    return Err(kiln_error::Error::runtime_execution_error(
+                        "SIMD: stack underflow",
+                    ));
+                },
             };
             push_v128(stack, simd_ops::splat_i64x2(val as u64));
-        }
+        },
         // f32x4 splat
         0x13 => {
             let val = match stack.pop() {
                 Some(Value::F32(v)) => v.to_f32(),
-                Some(_) => return Err(kiln_error::Error::runtime_execution_error("SIMD: expected f32")),
-                None => return Err(kiln_error::Error::runtime_execution_error("SIMD: stack underflow")),
+                Some(_) => {
+                    return Err(kiln_error::Error::runtime_execution_error(
+                        "SIMD: expected f32",
+                    ));
+                },
+                None => {
+                    return Err(kiln_error::Error::runtime_execution_error(
+                        "SIMD: stack underflow",
+                    ));
+                },
             };
             push_v128(stack, simd_ops::splat_f32x4(val));
-        }
+        },
         // f64x2 splat
         0x14 => {
             let val = match stack.pop() {
                 Some(Value::F64(v)) => v.to_f64(),
-                Some(_) => return Err(kiln_error::Error::runtime_execution_error("SIMD: expected f64")),
-                None => return Err(kiln_error::Error::runtime_execution_error("SIMD: stack underflow")),
+                Some(_) => {
+                    return Err(kiln_error::Error::runtime_execution_error(
+                        "SIMD: expected f64",
+                    ));
+                },
+                None => {
+                    return Err(kiln_error::Error::runtime_execution_error(
+                        "SIMD: stack underflow",
+                    ));
+                },
             };
             push_v128(stack, simd_ops::splat_f64x2(val));
-        }
+        },
 
         // i8x16 comparisons
-        0x23 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..16 { r[i] = if simd_ops::get_i8(&a, i) == simd_ops::get_i8(&b, i) { 0xFF } else { 0 }; } push_v128(stack, r); }
-        0x24 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..16 { r[i] = if simd_ops::get_i8(&a, i) != simd_ops::get_i8(&b, i) { 0xFF } else { 0 }; } push_v128(stack, r); }
-        0x25 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..16 { r[i] = if simd_ops::get_i8(&a, i) < simd_ops::get_i8(&b, i) { 0xFF } else { 0 }; } push_v128(stack, r); }
-        0x26 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..16 { r[i] = if simd_ops::get_u8(&a, i) < simd_ops::get_u8(&b, i) { 0xFF } else { 0 }; } push_v128(stack, r); }
-        0x27 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..16 { r[i] = if simd_ops::get_i8(&a, i) > simd_ops::get_i8(&b, i) { 0xFF } else { 0 }; } push_v128(stack, r); }
-        0x28 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..16 { r[i] = if simd_ops::get_u8(&a, i) > simd_ops::get_u8(&b, i) { 0xFF } else { 0 }; } push_v128(stack, r); }
-        0x29 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..16 { r[i] = if simd_ops::get_i8(&a, i) <= simd_ops::get_i8(&b, i) { 0xFF } else { 0 }; } push_v128(stack, r); }
-        0x2A => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..16 { r[i] = if simd_ops::get_u8(&a, i) <= simd_ops::get_u8(&b, i) { 0xFF } else { 0 }; } push_v128(stack, r); }
-        0x2B => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..16 { r[i] = if simd_ops::get_i8(&a, i) >= simd_ops::get_i8(&b, i) { 0xFF } else { 0 }; } push_v128(stack, r); }
-        0x2C => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..16 { r[i] = if simd_ops::get_u8(&a, i) >= simd_ops::get_u8(&b, i) { 0xFF } else { 0 }; } push_v128(stack, r); }
+        0x23 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..16 {
+                r[i] = if simd_ops::get_i8(&a, i) == simd_ops::get_i8(&b, i) { 0xFF } else { 0 };
+            }
+            push_v128(stack, r);
+        },
+        0x24 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..16 {
+                r[i] = if simd_ops::get_i8(&a, i) != simd_ops::get_i8(&b, i) { 0xFF } else { 0 };
+            }
+            push_v128(stack, r);
+        },
+        0x25 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..16 {
+                r[i] = if simd_ops::get_i8(&a, i) < simd_ops::get_i8(&b, i) { 0xFF } else { 0 };
+            }
+            push_v128(stack, r);
+        },
+        0x26 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..16 {
+                r[i] = if simd_ops::get_u8(&a, i) < simd_ops::get_u8(&b, i) { 0xFF } else { 0 };
+            }
+            push_v128(stack, r);
+        },
+        0x27 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..16 {
+                r[i] = if simd_ops::get_i8(&a, i) > simd_ops::get_i8(&b, i) { 0xFF } else { 0 };
+            }
+            push_v128(stack, r);
+        },
+        0x28 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..16 {
+                r[i] = if simd_ops::get_u8(&a, i) > simd_ops::get_u8(&b, i) { 0xFF } else { 0 };
+            }
+            push_v128(stack, r);
+        },
+        0x29 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..16 {
+                r[i] = if simd_ops::get_i8(&a, i) <= simd_ops::get_i8(&b, i) { 0xFF } else { 0 };
+            }
+            push_v128(stack, r);
+        },
+        0x2A => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..16 {
+                r[i] = if simd_ops::get_u8(&a, i) <= simd_ops::get_u8(&b, i) { 0xFF } else { 0 };
+            }
+            push_v128(stack, r);
+        },
+        0x2B => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..16 {
+                r[i] = if simd_ops::get_i8(&a, i) >= simd_ops::get_i8(&b, i) { 0xFF } else { 0 };
+            }
+            push_v128(stack, r);
+        },
+        0x2C => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..16 {
+                r[i] = if simd_ops::get_u8(&a, i) >= simd_ops::get_u8(&b, i) { 0xFF } else { 0 };
+            }
+            push_v128(stack, r);
+        },
 
         // i16x8 comparisons
-        0x2D => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..8 { simd_ops::set_i16(&mut r, i, if simd_ops::get_i16(&a, i) == simd_ops::get_i16(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0x2E => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..8 { simd_ops::set_i16(&mut r, i, if simd_ops::get_i16(&a, i) != simd_ops::get_i16(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0x2F => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..8 { simd_ops::set_i16(&mut r, i, if simd_ops::get_i16(&a, i) < simd_ops::get_i16(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0x30 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..8 { simd_ops::set_i16(&mut r, i, if simd_ops::get_u16(&a, i) < simd_ops::get_u16(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0x31 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..8 { simd_ops::set_i16(&mut r, i, if simd_ops::get_i16(&a, i) > simd_ops::get_i16(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0x32 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..8 { simd_ops::set_i16(&mut r, i, if simd_ops::get_u16(&a, i) > simd_ops::get_u16(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0x33 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..8 { simd_ops::set_i16(&mut r, i, if simd_ops::get_i16(&a, i) <= simd_ops::get_i16(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0x34 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..8 { simd_ops::set_i16(&mut r, i, if simd_ops::get_u16(&a, i) <= simd_ops::get_u16(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0x35 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..8 { simd_ops::set_i16(&mut r, i, if simd_ops::get_i16(&a, i) >= simd_ops::get_i16(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0x36 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..8 { simd_ops::set_i16(&mut r, i, if simd_ops::get_u16(&a, i) >= simd_ops::get_u16(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x2D => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..8 {
+                simd_ops::set_i16(
+                    &mut r,
+                    i,
+                    if simd_ops::get_i16(&a, i) == simd_ops::get_i16(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0x2E => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..8 {
+                simd_ops::set_i16(
+                    &mut r,
+                    i,
+                    if simd_ops::get_i16(&a, i) != simd_ops::get_i16(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0x2F => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..8 {
+                simd_ops::set_i16(
+                    &mut r,
+                    i,
+                    if simd_ops::get_i16(&a, i) < simd_ops::get_i16(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0x30 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..8 {
+                simd_ops::set_i16(
+                    &mut r,
+                    i,
+                    if simd_ops::get_u16(&a, i) < simd_ops::get_u16(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0x31 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..8 {
+                simd_ops::set_i16(
+                    &mut r,
+                    i,
+                    if simd_ops::get_i16(&a, i) > simd_ops::get_i16(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0x32 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..8 {
+                simd_ops::set_i16(
+                    &mut r,
+                    i,
+                    if simd_ops::get_u16(&a, i) > simd_ops::get_u16(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0x33 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..8 {
+                simd_ops::set_i16(
+                    &mut r,
+                    i,
+                    if simd_ops::get_i16(&a, i) <= simd_ops::get_i16(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0x34 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..8 {
+                simd_ops::set_i16(
+                    &mut r,
+                    i,
+                    if simd_ops::get_u16(&a, i) <= simd_ops::get_u16(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0x35 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..8 {
+                simd_ops::set_i16(
+                    &mut r,
+                    i,
+                    if simd_ops::get_i16(&a, i) >= simd_ops::get_i16(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0x36 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..8 {
+                simd_ops::set_i16(
+                    &mut r,
+                    i,
+                    if simd_ops::get_u16(&a, i) >= simd_ops::get_u16(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
 
         // i32x4 comparisons
-        0x37 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if simd_ops::get_i32(&a, i) == simd_ops::get_i32(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0x38 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if simd_ops::get_i32(&a, i) != simd_ops::get_i32(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0x39 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if simd_ops::get_i32(&a, i) < simd_ops::get_i32(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0x3A => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if (simd_ops::get_i32(&a, i) as u32) < (simd_ops::get_i32(&b, i) as u32) { -1 } else { 0 }); } push_v128(stack, r); }
-        0x3B => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if simd_ops::get_i32(&a, i) > simd_ops::get_i32(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0x3C => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if (simd_ops::get_i32(&a, i) as u32) > (simd_ops::get_i32(&b, i) as u32) { -1 } else { 0 }); } push_v128(stack, r); }
-        0x3D => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if simd_ops::get_i32(&a, i) <= simd_ops::get_i32(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0x3E => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if (simd_ops::get_i32(&a, i) as u32) <= (simd_ops::get_i32(&b, i) as u32) { -1 } else { 0 }); } push_v128(stack, r); }
-        0x3F => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if simd_ops::get_i32(&a, i) >= simd_ops::get_i32(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0x40 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if (simd_ops::get_i32(&a, i) as u32) >= (simd_ops::get_i32(&b, i) as u32) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x37 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..4 {
+                simd_ops::set_i32(
+                    &mut r,
+                    i,
+                    if simd_ops::get_i32(&a, i) == simd_ops::get_i32(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0x38 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..4 {
+                simd_ops::set_i32(
+                    &mut r,
+                    i,
+                    if simd_ops::get_i32(&a, i) != simd_ops::get_i32(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0x39 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..4 {
+                simd_ops::set_i32(
+                    &mut r,
+                    i,
+                    if simd_ops::get_i32(&a, i) < simd_ops::get_i32(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0x3A => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..4 {
+                simd_ops::set_i32(
+                    &mut r,
+                    i,
+                    if (simd_ops::get_i32(&a, i) as u32) < (simd_ops::get_i32(&b, i) as u32) {
+                        -1
+                    } else {
+                        0
+                    },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0x3B => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..4 {
+                simd_ops::set_i32(
+                    &mut r,
+                    i,
+                    if simd_ops::get_i32(&a, i) > simd_ops::get_i32(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0x3C => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..4 {
+                simd_ops::set_i32(
+                    &mut r,
+                    i,
+                    if (simd_ops::get_i32(&a, i) as u32) > (simd_ops::get_i32(&b, i) as u32) {
+                        -1
+                    } else {
+                        0
+                    },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0x3D => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..4 {
+                simd_ops::set_i32(
+                    &mut r,
+                    i,
+                    if simd_ops::get_i32(&a, i) <= simd_ops::get_i32(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0x3E => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..4 {
+                simd_ops::set_i32(
+                    &mut r,
+                    i,
+                    if (simd_ops::get_i32(&a, i) as u32) <= (simd_ops::get_i32(&b, i) as u32) {
+                        -1
+                    } else {
+                        0
+                    },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0x3F => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..4 {
+                simd_ops::set_i32(
+                    &mut r,
+                    i,
+                    if simd_ops::get_i32(&a, i) >= simd_ops::get_i32(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0x40 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..4 {
+                simd_ops::set_i32(
+                    &mut r,
+                    i,
+                    if (simd_ops::get_i32(&a, i) as u32) >= (simd_ops::get_i32(&b, i) as u32) {
+                        -1
+                    } else {
+                        0
+                    },
+                );
+            }
+            push_v128(stack, r);
+        },
 
         // f32x4 comparisons
-        0x41 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if simd_ops::get_f32(&a, i) == simd_ops::get_f32(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0x42 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if simd_ops::get_f32(&a, i) != simd_ops::get_f32(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0x43 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if simd_ops::get_f32(&a, i) < simd_ops::get_f32(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0x44 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if simd_ops::get_f32(&a, i) > simd_ops::get_f32(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0x45 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if simd_ops::get_f32(&a, i) <= simd_ops::get_f32(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0x46 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if simd_ops::get_f32(&a, i) >= simd_ops::get_f32(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x41 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..4 {
+                simd_ops::set_i32(
+                    &mut r,
+                    i,
+                    if simd_ops::get_f32(&a, i) == simd_ops::get_f32(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0x42 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..4 {
+                simd_ops::set_i32(
+                    &mut r,
+                    i,
+                    if simd_ops::get_f32(&a, i) != simd_ops::get_f32(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0x43 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..4 {
+                simd_ops::set_i32(
+                    &mut r,
+                    i,
+                    if simd_ops::get_f32(&a, i) < simd_ops::get_f32(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0x44 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..4 {
+                simd_ops::set_i32(
+                    &mut r,
+                    i,
+                    if simd_ops::get_f32(&a, i) > simd_ops::get_f32(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0x45 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..4 {
+                simd_ops::set_i32(
+                    &mut r,
+                    i,
+                    if simd_ops::get_f32(&a, i) <= simd_ops::get_f32(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0x46 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..4 {
+                simd_ops::set_i32(
+                    &mut r,
+                    i,
+                    if simd_ops::get_f32(&a, i) >= simd_ops::get_f32(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
 
         // f64x2 comparisons
-        0x47 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_i64(&mut r, i, if simd_ops::get_f64(&a, i) == simd_ops::get_f64(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0x48 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_i64(&mut r, i, if simd_ops::get_f64(&a, i) != simd_ops::get_f64(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0x49 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_i64(&mut r, i, if simd_ops::get_f64(&a, i) < simd_ops::get_f64(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0x4A => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_i64(&mut r, i, if simd_ops::get_f64(&a, i) > simd_ops::get_f64(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0x4B => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_i64(&mut r, i, if simd_ops::get_f64(&a, i) <= simd_ops::get_f64(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0x4C => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_i64(&mut r, i, if simd_ops::get_f64(&a, i) >= simd_ops::get_f64(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x47 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..2 {
+                simd_ops::set_i64(
+                    &mut r,
+                    i,
+                    if simd_ops::get_f64(&a, i) == simd_ops::get_f64(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0x48 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..2 {
+                simd_ops::set_i64(
+                    &mut r,
+                    i,
+                    if simd_ops::get_f64(&a, i) != simd_ops::get_f64(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0x49 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..2 {
+                simd_ops::set_i64(
+                    &mut r,
+                    i,
+                    if simd_ops::get_f64(&a, i) < simd_ops::get_f64(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0x4A => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..2 {
+                simd_ops::set_i64(
+                    &mut r,
+                    i,
+                    if simd_ops::get_f64(&a, i) > simd_ops::get_f64(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0x4B => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..2 {
+                simd_ops::set_i64(
+                    &mut r,
+                    i,
+                    if simd_ops::get_f64(&a, i) <= simd_ops::get_f64(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0x4C => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..2 {
+                simd_ops::set_i64(
+                    &mut r,
+                    i,
+                    if simd_ops::get_f64(&a, i) >= simd_ops::get_f64(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
 
         // i8x16 swizzle
-        0x0E => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_swizzle(&a, &b)); }
+        0x0E => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i8x16_swizzle(&a, &b));
+        },
 
         // i8x16 operations
-        0x60 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_abs(&a)); }
-        0x61 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_neg(&a)); }
-        0x62 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_popcnt(&a)); }
-        0x63 => { let a = pop_v128(stack)?; stack.push(Value::I32(if simd_ops::i8x16_all_true(&a) { 1 } else { 0 })); }
-        0x64 => { let a = pop_v128(stack)?; stack.push(Value::I32(simd_ops::i8x16_bitmask(&a) as i32)); }
-        0x65 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_narrow_i16x8_s(&a, &b)); }
-        0x66 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_narrow_i16x8_u(&a, &b)); }
+        0x60 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i8x16_abs(&a));
+        },
+        0x61 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i8x16_neg(&a));
+        },
+        0x62 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i8x16_popcnt(&a));
+        },
+        0x63 => {
+            let a = pop_v128(stack)?;
+            stack.push(Value::I32(if simd_ops::i8x16_all_true(&a) { 1 } else { 0 }));
+        },
+        0x64 => {
+            let a = pop_v128(stack)?;
+            stack.push(Value::I32(simd_ops::i8x16_bitmask(&a) as i32));
+        },
+        0x65 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i8x16_narrow_i16x8_s(&a, &b));
+        },
+        0x66 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i8x16_narrow_i16x8_u(&a, &b));
+        },
         // f32x4.ceil/floor/trunc/nearest
-        0x67 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f32x4_ceil(&a)); }
-        0x68 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f32x4_floor(&a)); }
-        0x69 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f32x4_trunc(&a)); }
-        0x6A => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f32x4_nearest(&a)); }
+        0x67 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::f32x4_ceil(&a));
+        },
+        0x68 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::f32x4_floor(&a));
+        },
+        0x69 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::f32x4_trunc(&a));
+        },
+        0x6A => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::f32x4_nearest(&a));
+        },
         // i8x16 shifts
-        0x6B => { let shift = pop_i32_for_simd(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_shl(&a, shift as u32)); }
-        0x6C => { let shift = pop_i32_for_simd(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_shr_s(&a, shift as u32)); }
-        0x6D => { let shift = pop_i32_for_simd(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_shr_u(&a, shift as u32)); }
+        0x6B => {
+            let shift = pop_i32_for_simd(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i8x16_shl(&a, shift as u32));
+        },
+        0x6C => {
+            let shift = pop_i32_for_simd(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i8x16_shr_s(&a, shift as u32));
+        },
+        0x6D => {
+            let shift = pop_i32_for_simd(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i8x16_shr_u(&a, shift as u32));
+        },
         // i8x16 arithmetic
-        0x6E => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_add(&a, &b)); }
-        0x6F => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_add_sat_s(&a, &b)); }
-        0x70 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_add_sat_u(&a, &b)); }
-        0x71 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_sub(&a, &b)); }
-        0x72 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_sub_sat_s(&a, &b)); }
-        0x73 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_sub_sat_u(&a, &b)); }
+        0x6E => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i8x16_add(&a, &b));
+        },
+        0x6F => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i8x16_add_sat_s(&a, &b));
+        },
+        0x70 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i8x16_add_sat_u(&a, &b));
+        },
+        0x71 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i8x16_sub(&a, &b));
+        },
+        0x72 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i8x16_sub_sat_s(&a, &b));
+        },
+        0x73 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i8x16_sub_sat_u(&a, &b));
+        },
         // f64x2.ceil/floor
-        0x74 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f64x2_ceil(&a)); }
-        0x75 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f64x2_floor(&a)); }
+        0x74 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::f64x2_ceil(&a));
+        },
+        0x75 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::f64x2_floor(&a));
+        },
         // i8x16 min/max
-        0x76 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_min_s(&a, &b)); }
-        0x77 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_min_u(&a, &b)); }
-        0x78 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_max_s(&a, &b)); }
-        0x79 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_max_u(&a, &b)); }
+        0x76 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i8x16_min_s(&a, &b));
+        },
+        0x77 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i8x16_min_u(&a, &b));
+        },
+        0x78 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i8x16_max_s(&a, &b));
+        },
+        0x79 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i8x16_max_u(&a, &b));
+        },
         // f64x2.trunc
-        0x7A => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f64x2_trunc(&a)); }
+        0x7A => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::f64x2_trunc(&a));
+        },
         // i8x16.avgr_u
-        0x7B => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_avgr_u(&a, &b)); }
+        0x7B => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i8x16_avgr_u(&a, &b));
+        },
         // extadd_pairwise
-        0x7C => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_extadd_pairwise_i8x16_s(&a)); }
-        0x7D => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_extadd_pairwise_i8x16_u(&a)); }
-        0x7E => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_extadd_pairwise_i16x8_s(&a)); }
-        0x7F => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_extadd_pairwise_i16x8_u(&a)); }
+        0x7C => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_extadd_pairwise_i8x16_s(&a));
+        },
+        0x7D => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_extadd_pairwise_i8x16_u(&a));
+        },
+        0x7E => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_extadd_pairwise_i16x8_s(&a));
+        },
+        0x7F => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_extadd_pairwise_i16x8_u(&a));
+        },
 
         // i16x8 operations
-        0x80 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_abs(&a)); }
-        0x81 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_neg(&a)); }
-        0x82 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_q15mulr_sat_s(&a, &b)); }
-        0x83 => { let a = pop_v128(stack)?; stack.push(Value::I32(if simd_ops::i16x8_all_true(&a) { 1 } else { 0 })); }
-        0x84 => { let a = pop_v128(stack)?; stack.push(Value::I32(simd_ops::i16x8_bitmask(&a) as i32)); }
-        0x85 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_narrow_i32x4_s(&a, &b)); }
-        0x86 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_narrow_i32x4_u(&a, &b)); }
-        0x87 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_extend_low_i8x16_s(&a)); }
-        0x88 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_extend_high_i8x16_s(&a)); }
-        0x89 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_extend_low_i8x16_u(&a)); }
-        0x8A => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_extend_high_i8x16_u(&a)); }
-        0x8B => { let shift = pop_i32_for_simd(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_shl(&a, shift as u32)); }
-        0x8C => { let shift = pop_i32_for_simd(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_shr_s(&a, shift as u32)); }
-        0x8D => { let shift = pop_i32_for_simd(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_shr_u(&a, shift as u32)); }
-        0x8E => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_add(&a, &b)); }
-        0x8F => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_add_sat_s(&a, &b)); }
-        0x90 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_add_sat_u(&a, &b)); }
-        0x91 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_sub(&a, &b)); }
-        0x92 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_sub_sat_s(&a, &b)); }
-        0x93 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_sub_sat_u(&a, &b)); }
+        0x80 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_abs(&a));
+        },
+        0x81 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_neg(&a));
+        },
+        0x82 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_q15mulr_sat_s(&a, &b));
+        },
+        0x83 => {
+            let a = pop_v128(stack)?;
+            stack.push(Value::I32(if simd_ops::i16x8_all_true(&a) { 1 } else { 0 }));
+        },
+        0x84 => {
+            let a = pop_v128(stack)?;
+            stack.push(Value::I32(simd_ops::i16x8_bitmask(&a) as i32));
+        },
+        0x85 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_narrow_i32x4_s(&a, &b));
+        },
+        0x86 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_narrow_i32x4_u(&a, &b));
+        },
+        0x87 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_extend_low_i8x16_s(&a));
+        },
+        0x88 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_extend_high_i8x16_s(&a));
+        },
+        0x89 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_extend_low_i8x16_u(&a));
+        },
+        0x8A => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_extend_high_i8x16_u(&a));
+        },
+        0x8B => {
+            let shift = pop_i32_for_simd(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_shl(&a, shift as u32));
+        },
+        0x8C => {
+            let shift = pop_i32_for_simd(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_shr_s(&a, shift as u32));
+        },
+        0x8D => {
+            let shift = pop_i32_for_simd(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_shr_u(&a, shift as u32));
+        },
+        0x8E => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_add(&a, &b));
+        },
+        0x8F => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_add_sat_s(&a, &b));
+        },
+        0x90 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_add_sat_u(&a, &b));
+        },
+        0x91 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_sub(&a, &b));
+        },
+        0x92 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_sub_sat_s(&a, &b));
+        },
+        0x93 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_sub_sat_u(&a, &b));
+        },
         // f64x2.nearest
-        0x94 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f64x2_nearest(&a)); }
-        0x95 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_mul(&a, &b)); }
-        0x96 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_min_s(&a, &b)); }
-        0x97 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_min_u(&a, &b)); }
-        0x98 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_max_s(&a, &b)); }
-        0x99 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_max_u(&a, &b)); }
-        0x9B => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_avgr_u(&a, &b)); }
-        0x9C => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_extmul_low_i8x16_s(&a, &b)); }
-        0x9D => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_extmul_high_i8x16_s(&a, &b)); }
-        0x9E => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_extmul_low_i8x16_u(&a, &b)); }
-        0x9F => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_extmul_high_i8x16_u(&a, &b)); }
+        0x94 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::f64x2_nearest(&a));
+        },
+        0x95 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_mul(&a, &b));
+        },
+        0x96 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_min_s(&a, &b));
+        },
+        0x97 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_min_u(&a, &b));
+        },
+        0x98 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_max_s(&a, &b));
+        },
+        0x99 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_max_u(&a, &b));
+        },
+        0x9B => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_avgr_u(&a, &b));
+        },
+        0x9C => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_extmul_low_i8x16_s(&a, &b));
+        },
+        0x9D => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_extmul_high_i8x16_s(&a, &b));
+        },
+        0x9E => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_extmul_low_i8x16_u(&a, &b));
+        },
+        0x9F => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_extmul_high_i8x16_u(&a, &b));
+        },
 
         // i32x4 operations
-        0xA0 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_abs(&a)); }
-        0xA1 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_neg(&a)); }
-        0xA3 => { let a = pop_v128(stack)?; stack.push(Value::I32(if simd_ops::i32x4_all_true(&a) { 1 } else { 0 })); }
-        0xA4 => { let a = pop_v128(stack)?; stack.push(Value::I32(simd_ops::i32x4_bitmask(&a) as i32)); }
-        0xA7 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_extend_low_i16x8_s(&a)); }
-        0xA8 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_extend_high_i16x8_s(&a)); }
-        0xA9 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_extend_low_i16x8_u(&a)); }
-        0xAA => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_extend_high_i16x8_u(&a)); }
-        0xAB => { let shift = pop_i32_for_simd(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_shl(&a, shift as u32)); }
-        0xAC => { let shift = pop_i32_for_simd(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_shr_s(&a, shift as u32)); }
-        0xAD => { let shift = pop_i32_for_simd(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_shr_u(&a, shift as u32)); }
-        0xAE => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_add(&a, &b)); }
-        0xB1 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_sub(&a, &b)); }
-        0xB5 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_mul(&a, &b)); }
-        0xB6 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_min_s(&a, &b)); }
-        0xB7 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_min_u(&a, &b)); }
-        0xB8 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_max_s(&a, &b)); }
-        0xB9 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_max_u(&a, &b)); }
-        0xBA => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_dot_i16x8_s(&a, &b)); }
-        0xBC => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_extmul_low_i16x8_s(&a, &b)); }
-        0xBD => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_extmul_high_i16x8_s(&a, &b)); }
-        0xBE => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_extmul_low_i16x8_u(&a, &b)); }
-        0xBF => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_extmul_high_i16x8_u(&a, &b)); }
+        0xA0 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_abs(&a));
+        },
+        0xA1 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_neg(&a));
+        },
+        0xA3 => {
+            let a = pop_v128(stack)?;
+            stack.push(Value::I32(if simd_ops::i32x4_all_true(&a) { 1 } else { 0 }));
+        },
+        0xA4 => {
+            let a = pop_v128(stack)?;
+            stack.push(Value::I32(simd_ops::i32x4_bitmask(&a) as i32));
+        },
+        0xA7 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_extend_low_i16x8_s(&a));
+        },
+        0xA8 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_extend_high_i16x8_s(&a));
+        },
+        0xA9 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_extend_low_i16x8_u(&a));
+        },
+        0xAA => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_extend_high_i16x8_u(&a));
+        },
+        0xAB => {
+            let shift = pop_i32_for_simd(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_shl(&a, shift as u32));
+        },
+        0xAC => {
+            let shift = pop_i32_for_simd(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_shr_s(&a, shift as u32));
+        },
+        0xAD => {
+            let shift = pop_i32_for_simd(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_shr_u(&a, shift as u32));
+        },
+        0xAE => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_add(&a, &b));
+        },
+        0xB1 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_sub(&a, &b));
+        },
+        0xB5 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_mul(&a, &b));
+        },
+        0xB6 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_min_s(&a, &b));
+        },
+        0xB7 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_min_u(&a, &b));
+        },
+        0xB8 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_max_s(&a, &b));
+        },
+        0xB9 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_max_u(&a, &b));
+        },
+        0xBA => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_dot_i16x8_s(&a, &b));
+        },
+        0xBC => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_extmul_low_i16x8_s(&a, &b));
+        },
+        0xBD => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_extmul_high_i16x8_s(&a, &b));
+        },
+        0xBE => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_extmul_low_i16x8_u(&a, &b));
+        },
+        0xBF => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_extmul_high_i16x8_u(&a, &b));
+        },
 
         // i64x2 operations
-        0xC0 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_abs(&a)); }
-        0xC1 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_neg(&a)); }
-        0xC3 => { let a = pop_v128(stack)?; stack.push(Value::I32(if simd_ops::i64x2_all_true(&a) { 1 } else { 0 })); }
-        0xC4 => { let a = pop_v128(stack)?; stack.push(Value::I32(simd_ops::i64x2_bitmask(&a) as i32)); }
-        0xC7 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_extend_low_i32x4_s(&a)); }
-        0xC8 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_extend_high_i32x4_s(&a)); }
-        0xC9 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_extend_low_i32x4_u(&a)); }
-        0xCA => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_extend_high_i32x4_u(&a)); }
-        0xCB => { let shift = pop_i32_for_simd(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_shl(&a, shift as u32)); }
-        0xCC => { let shift = pop_i32_for_simd(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_shr_s(&a, shift as u32)); }
-        0xCD => { let shift = pop_i32_for_simd(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_shr_u(&a, shift as u32)); }
-        0xCE => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_add(&a, &b)); }
-        0xD1 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_sub(&a, &b)); }
-        0xD5 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_mul(&a, &b)); }
+        0xC0 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i64x2_abs(&a));
+        },
+        0xC1 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i64x2_neg(&a));
+        },
+        0xC3 => {
+            let a = pop_v128(stack)?;
+            stack.push(Value::I32(if simd_ops::i64x2_all_true(&a) { 1 } else { 0 }));
+        },
+        0xC4 => {
+            let a = pop_v128(stack)?;
+            stack.push(Value::I32(simd_ops::i64x2_bitmask(&a) as i32));
+        },
+        0xC7 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i64x2_extend_low_i32x4_s(&a));
+        },
+        0xC8 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i64x2_extend_high_i32x4_s(&a));
+        },
+        0xC9 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i64x2_extend_low_i32x4_u(&a));
+        },
+        0xCA => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i64x2_extend_high_i32x4_u(&a));
+        },
+        0xCB => {
+            let shift = pop_i32_for_simd(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i64x2_shl(&a, shift as u32));
+        },
+        0xCC => {
+            let shift = pop_i32_for_simd(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i64x2_shr_s(&a, shift as u32));
+        },
+        0xCD => {
+            let shift = pop_i32_for_simd(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i64x2_shr_u(&a, shift as u32));
+        },
+        0xCE => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i64x2_add(&a, &b));
+        },
+        0xD1 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i64x2_sub(&a, &b));
+        },
+        0xD5 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i64x2_mul(&a, &b));
+        },
         // i64x2 comparisons
-        0xD6 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_i64(&mut r, i, if simd_ops::get_i64(&a, i) == simd_ops::get_i64(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0xD7 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_i64(&mut r, i, if simd_ops::get_i64(&a, i) != simd_ops::get_i64(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0xD8 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_i64(&mut r, i, if simd_ops::get_i64(&a, i) < simd_ops::get_i64(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0xD9 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_i64(&mut r, i, if simd_ops::get_i64(&a, i) > simd_ops::get_i64(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0xDA => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_i64(&mut r, i, if simd_ops::get_i64(&a, i) <= simd_ops::get_i64(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0xDB => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_i64(&mut r, i, if simd_ops::get_i64(&a, i) >= simd_ops::get_i64(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
-        0xDC => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_extmul_low_i32x4_s(&a, &b)); }
-        0xDD => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_extmul_high_i32x4_s(&a, &b)); }
-        0xDE => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_extmul_low_i32x4_u(&a, &b)); }
-        0xDF => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_extmul_high_i32x4_u(&a, &b)); }
+        0xD6 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..2 {
+                simd_ops::set_i64(
+                    &mut r,
+                    i,
+                    if simd_ops::get_i64(&a, i) == simd_ops::get_i64(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0xD7 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..2 {
+                simd_ops::set_i64(
+                    &mut r,
+                    i,
+                    if simd_ops::get_i64(&a, i) != simd_ops::get_i64(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0xD8 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..2 {
+                simd_ops::set_i64(
+                    &mut r,
+                    i,
+                    if simd_ops::get_i64(&a, i) < simd_ops::get_i64(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0xD9 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..2 {
+                simd_ops::set_i64(
+                    &mut r,
+                    i,
+                    if simd_ops::get_i64(&a, i) > simd_ops::get_i64(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0xDA => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..2 {
+                simd_ops::set_i64(
+                    &mut r,
+                    i,
+                    if simd_ops::get_i64(&a, i) <= simd_ops::get_i64(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0xDB => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..2 {
+                simd_ops::set_i64(
+                    &mut r,
+                    i,
+                    if simd_ops::get_i64(&a, i) >= simd_ops::get_i64(&b, i) { -1 } else { 0 },
+                );
+            }
+            push_v128(stack, r);
+        },
+        0xDC => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i64x2_extmul_low_i32x4_s(&a, &b));
+        },
+        0xDD => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i64x2_extmul_high_i32x4_s(&a, &b));
+        },
+        0xDE => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i64x2_extmul_low_i32x4_u(&a, &b));
+        },
+        0xDF => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i64x2_extmul_high_i32x4_u(&a, &b));
+        },
 
         // f32x4 operations
-        0xE0 => { let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_f32(&mut r, i, simd_ops::get_f32(&a, i).abs()); } push_v128(stack, r); }
-        0xE1 => { let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_f32(&mut r, i, -simd_ops::get_f32(&a, i)); } push_v128(stack, r); }
-        0xE3 => { let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_f32(&mut r, i, simd_ops::canonicalize_f32(simd_ops::get_f32(&a, i).sqrt())); } push_v128(stack, r); }
-        0xE4 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_f32(&mut r, i, simd_ops::canonicalize_f32(simd_ops::get_f32(&a, i) + simd_ops::get_f32(&b, i))); } push_v128(stack, r); }
-        0xE5 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_f32(&mut r, i, simd_ops::canonicalize_f32(simd_ops::get_f32(&a, i) - simd_ops::get_f32(&b, i))); } push_v128(stack, r); }
-        0xE6 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_f32(&mut r, i, simd_ops::canonicalize_f32(simd_ops::get_f32(&a, i) * simd_ops::get_f32(&b, i))); } push_v128(stack, r); }
-        0xE7 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_f32(&mut r, i, simd_ops::canonicalize_f32(simd_ops::get_f32(&a, i) / simd_ops::get_f32(&b, i))); } push_v128(stack, r); }
+        0xE0 => {
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..4 {
+                simd_ops::set_f32(&mut r, i, simd_ops::get_f32(&a, i).abs());
+            }
+            push_v128(stack, r);
+        },
+        0xE1 => {
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..4 {
+                simd_ops::set_f32(&mut r, i, -simd_ops::get_f32(&a, i));
+            }
+            push_v128(stack, r);
+        },
+        0xE3 => {
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..4 {
+                simd_ops::set_f32(
+                    &mut r,
+                    i,
+                    simd_ops::canonicalize_f32(simd_ops::get_f32(&a, i).sqrt()),
+                );
+            }
+            push_v128(stack, r);
+        },
+        0xE4 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..4 {
+                simd_ops::set_f32(
+                    &mut r,
+                    i,
+                    simd_ops::canonicalize_f32(simd_ops::get_f32(&a, i) + simd_ops::get_f32(&b, i)),
+                );
+            }
+            push_v128(stack, r);
+        },
+        0xE5 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..4 {
+                simd_ops::set_f32(
+                    &mut r,
+                    i,
+                    simd_ops::canonicalize_f32(simd_ops::get_f32(&a, i) - simd_ops::get_f32(&b, i)),
+                );
+            }
+            push_v128(stack, r);
+        },
+        0xE6 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..4 {
+                simd_ops::set_f32(
+                    &mut r,
+                    i,
+                    simd_ops::canonicalize_f32(simd_ops::get_f32(&a, i) * simd_ops::get_f32(&b, i)),
+                );
+            }
+            push_v128(stack, r);
+        },
+        0xE7 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..4 {
+                simd_ops::set_f32(
+                    &mut r,
+                    i,
+                    simd_ops::canonicalize_f32(simd_ops::get_f32(&a, i) / simd_ops::get_f32(&b, i)),
+                );
+            }
+            push_v128(stack, r);
+        },
         // f32x4.min
         0xE8 => {
-            let b = pop_v128(stack)?; let a = pop_v128(stack)?;
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
             let mut r = [0u8; 16];
             for i in 0..4 {
-                let va = simd_ops::get_f32(&a, i); let vb = simd_ops::get_f32(&b, i);
-                let result = if va.is_nan() || vb.is_nan() { simd_ops::canonicalize_f32(f32::NAN) }
-                    else if va == 0.0 && vb == 0.0 { if va.is_sign_negative() { va } else { vb } }
-                    else if va < vb { va } else { vb };
+                let va = simd_ops::get_f32(&a, i);
+                let vb = simd_ops::get_f32(&b, i);
+                let result = if va.is_nan() || vb.is_nan() {
+                    simd_ops::canonicalize_f32(f32::NAN)
+                } else if va == 0.0 && vb == 0.0 {
+                    if va.is_sign_negative() { va } else { vb }
+                } else if va < vb {
+                    va
+                } else {
+                    vb
+                };
                 simd_ops::set_f32(&mut r, i, result);
             }
             push_v128(stack, r);
-        }
+        },
         // f32x4.max
         0xE9 => {
-            let b = pop_v128(stack)?; let a = pop_v128(stack)?;
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
             let mut r = [0u8; 16];
             for i in 0..4 {
-                let va = simd_ops::get_f32(&a, i); let vb = simd_ops::get_f32(&b, i);
-                let result = if va.is_nan() || vb.is_nan() { simd_ops::canonicalize_f32(f32::NAN) }
-                    else if va == 0.0 && vb == 0.0 { if va.is_sign_positive() { va } else { vb } }
-                    else if va > vb { va } else { vb };
+                let va = simd_ops::get_f32(&a, i);
+                let vb = simd_ops::get_f32(&b, i);
+                let result = if va.is_nan() || vb.is_nan() {
+                    simd_ops::canonicalize_f32(f32::NAN)
+                } else if va == 0.0 && vb == 0.0 {
+                    if va.is_sign_positive() { va } else { vb }
+                } else if va > vb {
+                    va
+                } else {
+                    vb
+                };
                 simd_ops::set_f32(&mut r, i, result);
             }
             push_v128(stack, r);
-        }
+        },
         // f32x4.pmin/pmax
-        0xEA => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { let va = simd_ops::get_f32(&a, i); let vb = simd_ops::get_f32(&b, i); simd_ops::set_f32(&mut r, i, if vb < va { vb } else { va }); } push_v128(stack, r); }
-        0xEB => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { let va = simd_ops::get_f32(&a, i); let vb = simd_ops::get_f32(&b, i); simd_ops::set_f32(&mut r, i, if va < vb { vb } else { va }); } push_v128(stack, r); }
+        0xEA => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..4 {
+                let va = simd_ops::get_f32(&a, i);
+                let vb = simd_ops::get_f32(&b, i);
+                simd_ops::set_f32(&mut r, i, if vb < va { vb } else { va });
+            }
+            push_v128(stack, r);
+        },
+        0xEB => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..4 {
+                let va = simd_ops::get_f32(&a, i);
+                let vb = simd_ops::get_f32(&b, i);
+                simd_ops::set_f32(&mut r, i, if va < vb { vb } else { va });
+            }
+            push_v128(stack, r);
+        },
 
         // f64x2 operations
-        0xEC => { let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_f64(&mut r, i, simd_ops::get_f64(&a, i).abs()); } push_v128(stack, r); }
-        0xED => { let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_f64(&mut r, i, -simd_ops::get_f64(&a, i)); } push_v128(stack, r); }
-        0xEF => { let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_f64(&mut r, i, simd_ops::canonicalize_f64(simd_ops::get_f64(&a, i).sqrt())); } push_v128(stack, r); }
-        0xF0 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_f64(&mut r, i, simd_ops::canonicalize_f64(simd_ops::get_f64(&a, i) + simd_ops::get_f64(&b, i))); } push_v128(stack, r); }
-        0xF1 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_f64(&mut r, i, simd_ops::canonicalize_f64(simd_ops::get_f64(&a, i) - simd_ops::get_f64(&b, i))); } push_v128(stack, r); }
-        0xF2 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_f64(&mut r, i, simd_ops::canonicalize_f64(simd_ops::get_f64(&a, i) * simd_ops::get_f64(&b, i))); } push_v128(stack, r); }
-        0xF3 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_f64(&mut r, i, simd_ops::canonicalize_f64(simd_ops::get_f64(&a, i) / simd_ops::get_f64(&b, i))); } push_v128(stack, r); }
+        0xEC => {
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..2 {
+                simd_ops::set_f64(&mut r, i, simd_ops::get_f64(&a, i).abs());
+            }
+            push_v128(stack, r);
+        },
+        0xED => {
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..2 {
+                simd_ops::set_f64(&mut r, i, -simd_ops::get_f64(&a, i));
+            }
+            push_v128(stack, r);
+        },
+        0xEF => {
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..2 {
+                simd_ops::set_f64(
+                    &mut r,
+                    i,
+                    simd_ops::canonicalize_f64(simd_ops::get_f64(&a, i).sqrt()),
+                );
+            }
+            push_v128(stack, r);
+        },
+        0xF0 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..2 {
+                simd_ops::set_f64(
+                    &mut r,
+                    i,
+                    simd_ops::canonicalize_f64(simd_ops::get_f64(&a, i) + simd_ops::get_f64(&b, i)),
+                );
+            }
+            push_v128(stack, r);
+        },
+        0xF1 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..2 {
+                simd_ops::set_f64(
+                    &mut r,
+                    i,
+                    simd_ops::canonicalize_f64(simd_ops::get_f64(&a, i) - simd_ops::get_f64(&b, i)),
+                );
+            }
+            push_v128(stack, r);
+        },
+        0xF2 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..2 {
+                simd_ops::set_f64(
+                    &mut r,
+                    i,
+                    simd_ops::canonicalize_f64(simd_ops::get_f64(&a, i) * simd_ops::get_f64(&b, i)),
+                );
+            }
+            push_v128(stack, r);
+        },
+        0xF3 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..2 {
+                simd_ops::set_f64(
+                    &mut r,
+                    i,
+                    simd_ops::canonicalize_f64(simd_ops::get_f64(&a, i) / simd_ops::get_f64(&b, i)),
+                );
+            }
+            push_v128(stack, r);
+        },
         // f64x2.min
         0xF4 => {
-            let b = pop_v128(stack)?; let a = pop_v128(stack)?;
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
             let mut r = [0u8; 16];
             for i in 0..2 {
-                let va = simd_ops::get_f64(&a, i); let vb = simd_ops::get_f64(&b, i);
-                let result = if va.is_nan() || vb.is_nan() { simd_ops::canonicalize_f64(f64::NAN) }
-                    else if va == 0.0 && vb == 0.0 { if va.is_sign_negative() { va } else { vb } }
-                    else if va < vb { va } else { vb };
+                let va = simd_ops::get_f64(&a, i);
+                let vb = simd_ops::get_f64(&b, i);
+                let result = if va.is_nan() || vb.is_nan() {
+                    simd_ops::canonicalize_f64(f64::NAN)
+                } else if va == 0.0 && vb == 0.0 {
+                    if va.is_sign_negative() { va } else { vb }
+                } else if va < vb {
+                    va
+                } else {
+                    vb
+                };
                 simd_ops::set_f64(&mut r, i, result);
             }
             push_v128(stack, r);
-        }
+        },
         // f64x2.max
         0xF5 => {
-            let b = pop_v128(stack)?; let a = pop_v128(stack)?;
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
             let mut r = [0u8; 16];
             for i in 0..2 {
-                let va = simd_ops::get_f64(&a, i); let vb = simd_ops::get_f64(&b, i);
-                let result = if va.is_nan() || vb.is_nan() { simd_ops::canonicalize_f64(f64::NAN) }
-                    else if va == 0.0 && vb == 0.0 { if va.is_sign_positive() { va } else { vb } }
-                    else if va > vb { va } else { vb };
+                let va = simd_ops::get_f64(&a, i);
+                let vb = simd_ops::get_f64(&b, i);
+                let result = if va.is_nan() || vb.is_nan() {
+                    simd_ops::canonicalize_f64(f64::NAN)
+                } else if va == 0.0 && vb == 0.0 {
+                    if va.is_sign_positive() { va } else { vb }
+                } else if va > vb {
+                    va
+                } else {
+                    vb
+                };
                 simd_ops::set_f64(&mut r, i, result);
             }
             push_v128(stack, r);
-        }
+        },
         // f64x2.pmin/pmax
-        0xF6 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { let va = simd_ops::get_f64(&a, i); let vb = simd_ops::get_f64(&b, i); simd_ops::set_f64(&mut r, i, if vb < va { vb } else { va }); } push_v128(stack, r); }
-        0xF7 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { let va = simd_ops::get_f64(&a, i); let vb = simd_ops::get_f64(&b, i); simd_ops::set_f64(&mut r, i, if va < vb { vb } else { va }); } push_v128(stack, r); }
+        0xF6 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..2 {
+                let va = simd_ops::get_f64(&a, i);
+                let vb = simd_ops::get_f64(&b, i);
+                simd_ops::set_f64(&mut r, i, if vb < va { vb } else { va });
+            }
+            push_v128(stack, r);
+        },
+        0xF7 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..2 {
+                let va = simd_ops::get_f64(&a, i);
+                let vb = simd_ops::get_f64(&b, i);
+                simd_ops::set_f64(&mut r, i, if va < vb { vb } else { va });
+            }
+            push_v128(stack, r);
+        },
 
         // Conversion operations
-        0xF8 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_trunc_sat_f32x4_s(&a)); }
-        0xF9 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_trunc_sat_f32x4_u(&a)); }
-        0xFA => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f32x4_convert_i32x4_s(&a)); }
-        0xFB => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f32x4_convert_i32x4_u(&a)); }
-        0xFC => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_trunc_sat_f64x2_s_zero(&a)); }
-        0xFD => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_trunc_sat_f64x2_u_zero(&a)); }
-        0xFE => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f64x2_convert_low_i32x4_s(&a)); }
-        0xFF => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f64x2_convert_low_i32x4_u(&a)); }
+        0xF8 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_trunc_sat_f32x4_s(&a));
+        },
+        0xF9 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_trunc_sat_f32x4_u(&a));
+        },
+        0xFA => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::f32x4_convert_i32x4_s(&a));
+        },
+        0xFB => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::f32x4_convert_i32x4_u(&a));
+        },
+        0xFC => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_trunc_sat_f64x2_s_zero(&a));
+        },
+        0xFD => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_trunc_sat_f64x2_u_zero(&a));
+        },
+        0xFE => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::f64x2_convert_low_i32x4_s(&a));
+        },
+        0xFF => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::f64x2_convert_low_i32x4_u(&a));
+        },
         // f32x4.demote_f64x2_zero / f64x2.promote_low_f32x4
-        0x5E => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f32x4_demote_f64x2_zero(&a)); }
-        0x5F => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f64x2_promote_low_f32x4(&a)); }
+        0x5E => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::f32x4_demote_f64x2_zero(&a));
+        },
+        0x5F => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::f64x2_promote_low_f32x4(&a));
+        },
 
         // ============================================================
         // Relaxed SIMD operations (0x100+)
         // ============================================================
 
         // i8x16.relaxed_swizzle
-        0x100 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_relaxed_swizzle(&a, &b)); }
+        0x100 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i8x16_relaxed_swizzle(&a, &b));
+        },
         // i32x4.relaxed_trunc_f32x4_s
-        0x101 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_relaxed_trunc_f32x4_s(&a)); }
+        0x101 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_relaxed_trunc_f32x4_s(&a));
+        },
         // i32x4.relaxed_trunc_f32x4_u
-        0x102 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_relaxed_trunc_f32x4_u(&a)); }
+        0x102 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_relaxed_trunc_f32x4_u(&a));
+        },
         // i32x4.relaxed_trunc_f64x2_s_zero
-        0x103 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_relaxed_trunc_f64x2_s_zero(&a)); }
+        0x103 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_relaxed_trunc_f64x2_s_zero(&a));
+        },
         // i32x4.relaxed_trunc_f64x2_u_zero
-        0x104 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_relaxed_trunc_f64x2_u_zero(&a)); }
+        0x104 => {
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i32x4_relaxed_trunc_f64x2_u_zero(&a));
+        },
         // f32x4.relaxed_madd
-        0x105 => { let c = pop_v128(stack)?; let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::f32x4_relaxed_madd(&a, &b, &c)); }
+        0x105 => {
+            let c = pop_v128(stack)?;
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::f32x4_relaxed_madd(&a, &b, &c));
+        },
         // f32x4.relaxed_nmadd
-        0x106 => { let c = pop_v128(stack)?; let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::f32x4_relaxed_nmadd(&a, &b, &c)); }
+        0x106 => {
+            let c = pop_v128(stack)?;
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::f32x4_relaxed_nmadd(&a, &b, &c));
+        },
         // f64x2.relaxed_madd
-        0x107 => { let c = pop_v128(stack)?; let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::f64x2_relaxed_madd(&a, &b, &c)); }
+        0x107 => {
+            let c = pop_v128(stack)?;
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::f64x2_relaxed_madd(&a, &b, &c));
+        },
         // f64x2.relaxed_nmadd
-        0x108 => { let c = pop_v128(stack)?; let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::f64x2_relaxed_nmadd(&a, &b, &c)); }
+        0x108 => {
+            let c = pop_v128(stack)?;
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::f64x2_relaxed_nmadd(&a, &b, &c));
+        },
         // i8x16.relaxed_laneselect
-        0x109 => { let c = pop_v128(stack)?; let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::relaxed_laneselect(&a, &b, &c)); }
+        0x109 => {
+            let c = pop_v128(stack)?;
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::relaxed_laneselect(&a, &b, &c));
+        },
         // i16x8.relaxed_laneselect
-        0x10A => { let c = pop_v128(stack)?; let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::relaxed_laneselect(&a, &b, &c)); }
+        0x10A => {
+            let c = pop_v128(stack)?;
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::relaxed_laneselect(&a, &b, &c));
+        },
         // i32x4.relaxed_laneselect
-        0x10B => { let c = pop_v128(stack)?; let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::relaxed_laneselect(&a, &b, &c)); }
+        0x10B => {
+            let c = pop_v128(stack)?;
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::relaxed_laneselect(&a, &b, &c));
+        },
         // i64x2.relaxed_laneselect
-        0x10C => { let c = pop_v128(stack)?; let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::relaxed_laneselect(&a, &b, &c)); }
+        0x10C => {
+            let c = pop_v128(stack)?;
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::relaxed_laneselect(&a, &b, &c));
+        },
         // f32x4.relaxed_min
-        0x10D => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::f32x4_relaxed_min(&a, &b)); }
+        0x10D => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::f32x4_relaxed_min(&a, &b));
+        },
         // f32x4.relaxed_max
-        0x10E => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::f32x4_relaxed_max(&a, &b)); }
+        0x10E => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::f32x4_relaxed_max(&a, &b));
+        },
         // f64x2.relaxed_min
-        0x10F => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::f64x2_relaxed_min(&a, &b)); }
+        0x10F => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::f64x2_relaxed_min(&a, &b));
+        },
         // f64x2.relaxed_max
-        0x110 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::f64x2_relaxed_max(&a, &b)); }
+        0x110 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::f64x2_relaxed_max(&a, &b));
+        },
         // i16x8.relaxed_q15mulr_s
-        0x111 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_relaxed_q15mulr_s(&a, &b)); }
+        0x111 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_relaxed_q15mulr_s(&a, &b));
+        },
         // i16x8.relaxed_dot_i8x16_i7x16_s
-        0x112 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_relaxed_dot_i8x16_i7x16_s(&a, &b)); }
+        0x112 => {
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(stack, simd_ops::i16x8_relaxed_dot_i8x16_i7x16_s(&a, &b));
+        },
         // i32x4.relaxed_dot_i8x16_i7x16_add_s
-        0x113 => { let c = pop_v128(stack)?; let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_relaxed_dot_i8x16_i7x16_add_s(&a, &b, &c)); }
+        0x113 => {
+            let c = pop_v128(stack)?;
+            let b = pop_v128(stack)?;
+            let a = pop_v128(stack)?;
+            push_v128(
+                stack,
+                simd_ops::i32x4_relaxed_dot_i8x16_i7x16_add_s(&a, &b, &c),
+            );
+        },
 
         _ => {
-            return Err(kiln_error::Error::runtime_execution_error("Unimplemented SIMD opcode"));
-        }
+            return Err(kiln_error::Error::runtime_execution_error(
+                "Unimplemented SIMD opcode",
+            ));
+        },
     }
     Ok(())
 }
@@ -13012,57 +16789,132 @@ fn execute_simd_lane_op(opcode: u32, lane: u8, stack: &mut Vec<Value>) -> Result
 
     match opcode {
         // i8x16.extract_lane_s
-        0x15 => { let a = pop_v128(stack)?; stack.push(Value::I32(simd_ops::get_i8(&a, lane_idx) as i32)); }
+        0x15 => {
+            let a = pop_v128(stack)?;
+            stack.push(Value::I32(simd_ops::get_i8(&a, lane_idx) as i32));
+        },
         // i8x16.extract_lane_u
-        0x16 => { let a = pop_v128(stack)?; stack.push(Value::I32(simd_ops::get_u8(&a, lane_idx) as i32)); }
+        0x16 => {
+            let a = pop_v128(stack)?;
+            stack.push(Value::I32(simd_ops::get_u8(&a, lane_idx) as i32));
+        },
         // i8x16.replace_lane
-        0x17 => { let val = pop_i32_for_simd(stack)?; let mut a = pop_v128(stack)?; simd_ops::set_u8(&mut a, lane_idx, val as u8); push_v128(stack, a); }
+        0x17 => {
+            let val = pop_i32_for_simd(stack)?;
+            let mut a = pop_v128(stack)?;
+            simd_ops::set_u8(&mut a, lane_idx, val as u8);
+            push_v128(stack, a);
+        },
         // i16x8.extract_lane_s
-        0x18 => { let a = pop_v128(stack)?; stack.push(Value::I32(simd_ops::get_i16(&a, lane_idx) as i32)); }
+        0x18 => {
+            let a = pop_v128(stack)?;
+            stack.push(Value::I32(simd_ops::get_i16(&a, lane_idx) as i32));
+        },
         // i16x8.extract_lane_u
-        0x19 => { let a = pop_v128(stack)?; stack.push(Value::I32(simd_ops::get_u16(&a, lane_idx) as i32)); }
+        0x19 => {
+            let a = pop_v128(stack)?;
+            stack.push(Value::I32(simd_ops::get_u16(&a, lane_idx) as i32));
+        },
         // i16x8.replace_lane
-        0x1A => { let val = pop_i32_for_simd(stack)?; let mut a = pop_v128(stack)?; simd_ops::set_u16(&mut a, lane_idx, val as u16); push_v128(stack, a); }
+        0x1A => {
+            let val = pop_i32_for_simd(stack)?;
+            let mut a = pop_v128(stack)?;
+            simd_ops::set_u16(&mut a, lane_idx, val as u16);
+            push_v128(stack, a);
+        },
         // i32x4.extract_lane
-        0x1B => { let a = pop_v128(stack)?; stack.push(Value::I32(simd_ops::get_i32(&a, lane_idx))); }
+        0x1B => {
+            let a = pop_v128(stack)?;
+            stack.push(Value::I32(simd_ops::get_i32(&a, lane_idx)));
+        },
         // i32x4.replace_lane
-        0x1C => { let val = pop_i32_for_simd(stack)?; let mut a = pop_v128(stack)?; simd_ops::set_i32(&mut a, lane_idx, val); push_v128(stack, a); }
+        0x1C => {
+            let val = pop_i32_for_simd(stack)?;
+            let mut a = pop_v128(stack)?;
+            simd_ops::set_i32(&mut a, lane_idx, val);
+            push_v128(stack, a);
+        },
         // i64x2.extract_lane
-        0x1D => { let a = pop_v128(stack)?; stack.push(Value::I64(simd_ops::get_i64(&a, lane_idx))); }
+        0x1D => {
+            let a = pop_v128(stack)?;
+            stack.push(Value::I64(simd_ops::get_i64(&a, lane_idx)));
+        },
         // i64x2.replace_lane
         0x1E => {
             let val = match stack.pop() {
                 Some(Value::I64(v)) => v,
-                Some(_) => return Err(kiln_error::Error::runtime_execution_error("SIMD: expected i64")),
-                None => return Err(kiln_error::Error::runtime_execution_error("SIMD: stack underflow")),
+                Some(_) => {
+                    return Err(kiln_error::Error::runtime_execution_error(
+                        "SIMD: expected i64",
+                    ));
+                },
+                None => {
+                    return Err(kiln_error::Error::runtime_execution_error(
+                        "SIMD: stack underflow",
+                    ));
+                },
             };
-            let mut a = pop_v128(stack)?; simd_ops::set_i64(&mut a, lane_idx, val); push_v128(stack, a);
-        }
+            let mut a = pop_v128(stack)?;
+            simd_ops::set_i64(&mut a, lane_idx, val);
+            push_v128(stack, a);
+        },
         // f32x4.extract_lane
-        0x1F => { let a = pop_v128(stack)?; stack.push(Value::F32(FloatBits32::from_f32(simd_ops::get_f32(&a, lane_idx)))); }
+        0x1F => {
+            let a = pop_v128(stack)?;
+            stack.push(Value::F32(FloatBits32::from_f32(simd_ops::get_f32(
+                &a, lane_idx,
+            ))));
+        },
         // f32x4.replace_lane
         0x20 => {
             let val = match stack.pop() {
                 Some(Value::F32(v)) => v.to_f32(),
-                Some(_) => return Err(kiln_error::Error::runtime_execution_error("SIMD: expected f32")),
-                None => return Err(kiln_error::Error::runtime_execution_error("SIMD: stack underflow")),
+                Some(_) => {
+                    return Err(kiln_error::Error::runtime_execution_error(
+                        "SIMD: expected f32",
+                    ));
+                },
+                None => {
+                    return Err(kiln_error::Error::runtime_execution_error(
+                        "SIMD: stack underflow",
+                    ));
+                },
             };
-            let mut a = pop_v128(stack)?; simd_ops::set_f32(&mut a, lane_idx, val); push_v128(stack, a);
-        }
+            let mut a = pop_v128(stack)?;
+            simd_ops::set_f32(&mut a, lane_idx, val);
+            push_v128(stack, a);
+        },
         // f64x2.extract_lane
-        0x21 => { let a = pop_v128(stack)?; stack.push(Value::F64(FloatBits64::from_f64(simd_ops::get_f64(&a, lane_idx)))); }
+        0x21 => {
+            let a = pop_v128(stack)?;
+            stack.push(Value::F64(FloatBits64::from_f64(simd_ops::get_f64(
+                &a, lane_idx,
+            ))));
+        },
         // f64x2.replace_lane
         0x22 => {
             let val = match stack.pop() {
                 Some(Value::F64(v)) => v.to_f64(),
-                Some(_) => return Err(kiln_error::Error::runtime_execution_error("SIMD: expected f64")),
-                None => return Err(kiln_error::Error::runtime_execution_error("SIMD: stack underflow")),
+                Some(_) => {
+                    return Err(kiln_error::Error::runtime_execution_error(
+                        "SIMD: expected f64",
+                    ));
+                },
+                None => {
+                    return Err(kiln_error::Error::runtime_execution_error(
+                        "SIMD: stack underflow",
+                    ));
+                },
             };
-            let mut a = pop_v128(stack)?; simd_ops::set_f64(&mut a, lane_idx, val); push_v128(stack, a);
-        }
+            let mut a = pop_v128(stack)?;
+            simd_ops::set_f64(&mut a, lane_idx, val);
+            push_v128(stack, a);
+        },
         _ => {
-            return Err(kiln_error::Error::runtime_execution_error("Unimplemented SIMD lane opcode"));
-        }
+            return Err(kiln_error::Error::runtime_execution_error(
+                "Unimplemented SIMD lane opcode",
+            ));
+        },
     }
     Ok(())
 }
@@ -13082,9 +16934,11 @@ fn execute_simd_mem_op(
             let mem = instance.memory(memarg.memory_index as u32)?;
             let memory = &mem.0;
             let mut buf = [0u8; 16];
-            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            memory
+                .read(ea, &mut buf)
+                .map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
             push_v128(stack, buf);
-        }
+        },
         // v128.load8x8_s - load 8 bytes, sign-extend each to i16
         0x01 => {
             let addr = pop_i32_for_simd(stack)?;
@@ -13092,14 +16946,16 @@ fn execute_simd_mem_op(
             let mem = instance.memory(memarg.memory_index as u32)?;
             let memory = &mem.0;
             let mut buf = [0u8; 8];
-            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            memory
+                .read(ea, &mut buf)
+                .map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
             let mut result = [0u8; 16];
             for i in 0..8 {
                 let val = buf[i] as i8 as i16;
                 result[i * 2..i * 2 + 2].copy_from_slice(&val.to_le_bytes());
             }
             push_v128(stack, result);
-        }
+        },
         // v128.load8x8_u - load 8 bytes, zero-extend each to i16
         0x02 => {
             let addr = pop_i32_for_simd(stack)?;
@@ -13107,14 +16963,16 @@ fn execute_simd_mem_op(
             let mem = instance.memory(memarg.memory_index as u32)?;
             let memory = &mem.0;
             let mut buf = [0u8; 8];
-            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            memory
+                .read(ea, &mut buf)
+                .map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
             let mut result = [0u8; 16];
             for i in 0..8 {
                 let val = buf[i] as u16;
                 result[i * 2..i * 2 + 2].copy_from_slice(&val.to_le_bytes());
             }
             push_v128(stack, result);
-        }
+        },
         // v128.load16x4_s - load 8 bytes (4×i16), sign-extend each to i32
         0x03 => {
             let addr = pop_i32_for_simd(stack)?;
@@ -13122,14 +16980,16 @@ fn execute_simd_mem_op(
             let mem = instance.memory(memarg.memory_index as u32)?;
             let memory = &mem.0;
             let mut buf = [0u8; 8];
-            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            memory
+                .read(ea, &mut buf)
+                .map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
             let mut result = [0u8; 16];
             for i in 0..4 {
                 let val = i16::from_le_bytes([buf[i * 2], buf[i * 2 + 1]]) as i32;
                 result[i * 4..i * 4 + 4].copy_from_slice(&val.to_le_bytes());
             }
             push_v128(stack, result);
-        }
+        },
         // v128.load16x4_u - load 8 bytes (4×i16), zero-extend each to i32
         0x04 => {
             let addr = pop_i32_for_simd(stack)?;
@@ -13137,14 +16997,16 @@ fn execute_simd_mem_op(
             let mem = instance.memory(memarg.memory_index as u32)?;
             let memory = &mem.0;
             let mut buf = [0u8; 8];
-            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            memory
+                .read(ea, &mut buf)
+                .map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
             let mut result = [0u8; 16];
             for i in 0..4 {
                 let val = u16::from_le_bytes([buf[i * 2], buf[i * 2 + 1]]) as u32;
                 result[i * 4..i * 4 + 4].copy_from_slice(&val.to_le_bytes());
             }
             push_v128(stack, result);
-        }
+        },
         // v128.load32x2_s - load 8 bytes (2×i32), sign-extend each to i64
         0x05 => {
             let addr = pop_i32_for_simd(stack)?;
@@ -13152,14 +17014,21 @@ fn execute_simd_mem_op(
             let mem = instance.memory(memarg.memory_index as u32)?;
             let memory = &mem.0;
             let mut buf = [0u8; 8];
-            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            memory
+                .read(ea, &mut buf)
+                .map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
             let mut result = [0u8; 16];
             for i in 0..2 {
-                let val = i32::from_le_bytes([buf[i * 4], buf[i * 4 + 1], buf[i * 4 + 2], buf[i * 4 + 3]]) as i64;
+                let val = i32::from_le_bytes([
+                    buf[i * 4],
+                    buf[i * 4 + 1],
+                    buf[i * 4 + 2],
+                    buf[i * 4 + 3],
+                ]) as i64;
                 result[i * 8..i * 8 + 8].copy_from_slice(&val.to_le_bytes());
             }
             push_v128(stack, result);
-        }
+        },
         // v128.load32x2_u - load 8 bytes (2×i32), zero-extend each to i64
         0x06 => {
             let addr = pop_i32_for_simd(stack)?;
@@ -13167,14 +17036,21 @@ fn execute_simd_mem_op(
             let mem = instance.memory(memarg.memory_index as u32)?;
             let memory = &mem.0;
             let mut buf = [0u8; 8];
-            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            memory
+                .read(ea, &mut buf)
+                .map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
             let mut result = [0u8; 16];
             for i in 0..2 {
-                let val = u32::from_le_bytes([buf[i * 4], buf[i * 4 + 1], buf[i * 4 + 2], buf[i * 4 + 3]]) as u64;
+                let val = u32::from_le_bytes([
+                    buf[i * 4],
+                    buf[i * 4 + 1],
+                    buf[i * 4 + 2],
+                    buf[i * 4 + 3],
+                ]) as u64;
                 result[i * 8..i * 8 + 8].copy_from_slice(&val.to_le_bytes());
             }
             push_v128(stack, result);
-        }
+        },
         // v128.load8_splat - load 1 byte, splat to all 16 lanes
         0x07 => {
             let addr = pop_i32_for_simd(stack)?;
@@ -13182,9 +17058,11 @@ fn execute_simd_mem_op(
             let mem = instance.memory(memarg.memory_index as u32)?;
             let memory = &mem.0;
             let mut buf = [0u8; 1];
-            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            memory
+                .read(ea, &mut buf)
+                .map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
             push_v128(stack, [buf[0]; 16]);
-        }
+        },
         // v128.load16_splat - load 2 bytes, splat to all 8 lanes
         0x08 => {
             let addr = pop_i32_for_simd(stack)?;
@@ -13192,14 +17070,16 @@ fn execute_simd_mem_op(
             let mem = instance.memory(memarg.memory_index as u32)?;
             let memory = &mem.0;
             let mut buf = [0u8; 2];
-            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            memory
+                .read(ea, &mut buf)
+                .map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
             let mut result = [0u8; 16];
             for i in 0..8 {
                 result[i * 2] = buf[0];
                 result[i * 2 + 1] = buf[1];
             }
             push_v128(stack, result);
-        }
+        },
         // v128.load32_splat - load 4 bytes, splat to all 4 lanes
         0x09 => {
             let addr = pop_i32_for_simd(stack)?;
@@ -13207,13 +17087,15 @@ fn execute_simd_mem_op(
             let mem = instance.memory(memarg.memory_index as u32)?;
             let memory = &mem.0;
             let mut buf = [0u8; 4];
-            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            memory
+                .read(ea, &mut buf)
+                .map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
             let mut result = [0u8; 16];
             for i in 0..4 {
                 result[i * 4..i * 4 + 4].copy_from_slice(&buf);
             }
             push_v128(stack, result);
-        }
+        },
         // v128.load64_splat - load 8 bytes, splat to both lanes
         0x0A => {
             let addr = pop_i32_for_simd(stack)?;
@@ -13221,12 +17103,14 @@ fn execute_simd_mem_op(
             let mem = instance.memory(memarg.memory_index as u32)?;
             let memory = &mem.0;
             let mut buf = [0u8; 8];
-            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            memory
+                .read(ea, &mut buf)
+                .map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
             let mut result = [0u8; 16];
             result[0..8].copy_from_slice(&buf);
             result[8..16].copy_from_slice(&buf);
             push_v128(stack, result);
-        }
+        },
         // v128.store - store 16 bytes
         0x0B => {
             let v = pop_v128(stack)?;
@@ -13234,8 +17118,10 @@ fn execute_simd_mem_op(
             let ea = calculate_effective_address(addr, memarg.offset, 16)? as u32;
             let mem = instance.memory(memarg.memory_index as u32)?;
             let memory = &mem.0;
-            memory.write_shared(ea, &v).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
-        }
+            memory
+                .write_shared(ea, &v)
+                .map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+        },
         // v128.load32_zero - load 4 bytes into low 32 bits, zero rest
         0x5C => {
             let addr = pop_i32_for_simd(stack)?;
@@ -13243,9 +17129,11 @@ fn execute_simd_mem_op(
             let mem = instance.memory(memarg.memory_index as u32)?;
             let memory = &mem.0;
             let mut result = [0u8; 16];
-            memory.read(ea, &mut result[0..4]).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            memory
+                .read(ea, &mut result[0..4])
+                .map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
             push_v128(stack, result);
-        }
+        },
         // v128.load64_zero - load 8 bytes into low 64 bits, zero rest
         0x5D => {
             let addr = pop_i32_for_simd(stack)?;
@@ -13253,12 +17141,16 @@ fn execute_simd_mem_op(
             let mem = instance.memory(memarg.memory_index as u32)?;
             let memory = &mem.0;
             let mut result = [0u8; 16];
-            memory.read(ea, &mut result[0..8]).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            memory
+                .read(ea, &mut result[0..8])
+                .map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
             push_v128(stack, result);
-        }
+        },
         _ => {
-            return Err(kiln_error::Error::runtime_execution_error("Unimplemented SIMD memory opcode"));
-        }
+            return Err(kiln_error::Error::runtime_execution_error(
+                "Unimplemented SIMD memory opcode",
+            ));
+        },
     }
     Ok(())
 }
@@ -13281,10 +17173,12 @@ fn execute_simd_mem_lane_op(
             let mem = instance.memory(memarg.memory_index as u32)?;
             let memory = &mem.0;
             let mut buf = [0u8; 1];
-            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            memory
+                .read(ea, &mut buf)
+                .map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
             v[lane_idx] = buf[0];
             push_v128(stack, v);
-        }
+        },
         // v128.load16_lane - load 2 bytes into specified lane
         0x55 => {
             let mut v = pop_v128(stack)?;
@@ -13293,12 +17187,14 @@ fn execute_simd_mem_lane_op(
             let mem = instance.memory(memarg.memory_index as u32)?;
             let memory = &mem.0;
             let mut buf = [0u8; 2];
-            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            memory
+                .read(ea, &mut buf)
+                .map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
             let off = lane_idx * 2;
             v[off] = buf[0];
             v[off + 1] = buf[1];
             push_v128(stack, v);
-        }
+        },
         // v128.load32_lane - load 4 bytes into specified lane
         0x56 => {
             let mut v = pop_v128(stack)?;
@@ -13307,11 +17203,13 @@ fn execute_simd_mem_lane_op(
             let mem = instance.memory(memarg.memory_index as u32)?;
             let memory = &mem.0;
             let mut buf = [0u8; 4];
-            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            memory
+                .read(ea, &mut buf)
+                .map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
             let off = lane_idx * 4;
             v[off..off + 4].copy_from_slice(&buf);
             push_v128(stack, v);
-        }
+        },
         // v128.load64_lane - load 8 bytes into specified lane
         0x57 => {
             let mut v = pop_v128(stack)?;
@@ -13320,11 +17218,13 @@ fn execute_simd_mem_lane_op(
             let mem = instance.memory(memarg.memory_index as u32)?;
             let memory = &mem.0;
             let mut buf = [0u8; 8];
-            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            memory
+                .read(ea, &mut buf)
+                .map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
             let off = lane_idx * 8;
             v[off..off + 8].copy_from_slice(&buf);
             push_v128(stack, v);
-        }
+        },
         // v128.store8_lane - store 1 byte from specified lane
         0x58 => {
             let v = pop_v128(stack)?;
@@ -13332,8 +17232,10 @@ fn execute_simd_mem_lane_op(
             let ea = calculate_effective_address(addr, memarg.offset, 1)? as u32;
             let mem = instance.memory(memarg.memory_index as u32)?;
             let memory = &mem.0;
-            memory.write_shared(ea, &[v[lane_idx]]).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
-        }
+            memory
+                .write_shared(ea, &[v[lane_idx]])
+                .map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+        },
         // v128.store16_lane - store 2 bytes from specified lane
         0x59 => {
             let v = pop_v128(stack)?;
@@ -13342,8 +17244,10 @@ fn execute_simd_mem_lane_op(
             let mem = instance.memory(memarg.memory_index as u32)?;
             let memory = &mem.0;
             let off = lane_idx * 2;
-            memory.write_shared(ea, &v[off..off + 2]).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
-        }
+            memory
+                .write_shared(ea, &v[off..off + 2])
+                .map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+        },
         // v128.store32_lane - store 4 bytes from specified lane
         0x5A => {
             let v = pop_v128(stack)?;
@@ -13352,8 +17256,10 @@ fn execute_simd_mem_lane_op(
             let mem = instance.memory(memarg.memory_index as u32)?;
             let memory = &mem.0;
             let off = lane_idx * 4;
-            memory.write_shared(ea, &v[off..off + 4]).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
-        }
+            memory
+                .write_shared(ea, &v[off..off + 4])
+                .map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+        },
         // v128.store64_lane - store 8 bytes from specified lane
         0x5B => {
             let v = pop_v128(stack)?;
@@ -13362,11 +17268,15 @@ fn execute_simd_mem_lane_op(
             let mem = instance.memory(memarg.memory_index as u32)?;
             let memory = &mem.0;
             let off = lane_idx * 8;
-            memory.write_shared(ea, &v[off..off + 8]).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
-        }
+            memory
+                .write_shared(ea, &v[off..off + 8])
+                .map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+        },
         _ => {
-            return Err(kiln_error::Error::runtime_execution_error("Unimplemented SIMD memory lane opcode"));
-        }
+            return Err(kiln_error::Error::runtime_execution_error(
+                "Unimplemented SIMD memory lane opcode",
+            ));
+        },
     }
     Ok(())
 }
@@ -13394,13 +17304,22 @@ mod p3_builtin_tests {
     // rivet: verifies SR-65
     #[test]
     fn p3_builtin_names_are_recognised_only_in_the_root_namespaces() {
-        assert_eq!(P3Builtin::from_import("$root", "[context-get-1]"), Some(P3Builtin::ContextGet(1)));
+        assert_eq!(
+            P3Builtin::from_import("$root", "[context-get-1]"),
+            Some(P3Builtin::ContextGet(1))
+        );
         assert_eq!(
             P3Builtin::from_import("[export]$root", "[context-set-0]$2"),
             Some(P3Builtin::ContextSet(0))
         );
-        assert_eq!(P3Builtin::from_import("$root", "[task-return]foo"), Some(P3Builtin::TaskReturn));
-        assert_eq!(P3Builtin::from_import("$root", "[waitable-join]"), Some(P3Builtin::WaitableJoin));
+        assert_eq!(
+            P3Builtin::from_import("$root", "[task-return]foo"),
+            Some(P3Builtin::TaskReturn)
+        );
+        assert_eq!(
+            P3Builtin::from_import("$root", "[waitable-join]"),
+            Some(P3Builtin::WaitableJoin)
+        );
         assert_eq!(P3Builtin::from_import("$root", "[context-get-x]"), None);
         assert_eq!(P3Builtin::from_import("$root", "[stream-new-0]"), None);
         assert_eq!(P3Builtin::from_import("env", "[waitable-join]"), None);

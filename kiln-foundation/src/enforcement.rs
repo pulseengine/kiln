@@ -8,12 +8,8 @@
 #[cfg(any(feature = "std", feature = "alloc"))]
 use crate::capabilities::CapabilityGuardedProvider;
 use crate::{
-    budget_aware_provider::CrateId,
-    capabilities::MemoryCapabilityContext,
-    memory_coordinator::CrateIdentifier,
-    safe_managed_alloc,
-    Error,
-    Result,
+    Error, Result, budget_aware_provider::CrateId, capabilities::MemoryCapabilityContext,
+    memory_coordinator::CrateIdentifier, safe_managed_alloc,
 };
 
 /// Sealed trait to prevent external implementation
@@ -148,4 +144,3 @@ impl<const START: usize, const SIZE: usize> MemoryRegion<START, SIZE> {
         START
     }
 }
-

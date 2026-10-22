@@ -43,11 +43,7 @@ pub struct WaitableSet {
 impl WaitableSet {
     /// Return the index of the first ready waitable, if any.
     pub fn first_ready(&self) -> Option<u32> {
-        if self.ready_mask == 0 {
-            None
-        } else {
-            Some(self.ready_mask.trailing_zeros())
-        }
+        if self.ready_mask == 0 { None } else { Some(self.ready_mask.trailing_zeros()) }
     }
 }
 
@@ -458,8 +454,9 @@ impl TaskManager {
                 #[cfg(not(feature = "std"))]
                 {
                     let provider = safe_managed_alloc!(65536, CrateId::Component)?;
-                    let mut bounded_values = BoundedVec::new()
-                        .map_err(|_| kiln_error::Error::runtime_execution_error("Error occurred"))?;
+                    let mut bounded_values = BoundedVec::new().map_err(|_| {
+                        kiln_error::Error::runtime_execution_error("Error occurred")
+                    })?;
                     for value in values {
                         bounded_values.push(value).map_err(|_| {
                             kiln_error::Error::runtime_execution_error("Error occurred")

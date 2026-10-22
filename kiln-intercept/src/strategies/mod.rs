@@ -8,16 +8,9 @@ mod firewall;
 mod logging;
 mod stats;
 
-pub use firewall::{
-    FirewallConfig,
-    FirewallRule,
-    FirewallStrategy,
-};
+pub use firewall::{FirewallConfig, FirewallRule, FirewallStrategy};
 pub use logging::LoggingStrategy;
 #[cfg(not(feature = "std"))]
 pub use stats::FunctionStats;
 #[cfg(feature = "std")]
-pub use stats::{
-    FunctionStats,
-    StatisticsStrategy,
-};
+pub use stats::{FunctionStats, StatisticsStrategy};

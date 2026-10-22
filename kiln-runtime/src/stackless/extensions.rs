@@ -5,11 +5,7 @@
 //! the Component Model.
 
 use crate::{
-    module::{
-        GlobalWrapper,
-        MemoryWrapper,
-        TableWrapper,
-    },
+    module::{GlobalWrapper, MemoryWrapper, TableWrapper},
     prelude::*,
     stackless::engine::StacklessEngine,
 };
@@ -29,10 +25,7 @@ pub trait ModuleInstance: Debug {
     fn global(&self, idx: u32) -> Result<GlobalWrapper>;
 
     /// Get the function type for a function in this instance
-    fn function_type(
-        &self,
-        idx: u32,
-    ) -> Result<kiln_foundation::types::FuncType>;
+    fn function_type(&self, idx: u32) -> Result<kiln_foundation::types::FuncType>;
 }
 
 // Further implementations will be added in subsequent updates

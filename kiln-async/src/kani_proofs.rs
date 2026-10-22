@@ -47,10 +47,10 @@ fn verify_fsm_step_total_and_terminal_absorbing() {
         Ok(_next) => {
             // A successful transition can only leave a non-terminal state.
             assert!(!state.is_terminal());
-        }
+        },
         Err(_) => {
             // Illegal transitions are rejected loud — no panic, no silent Ok.
-        }
+        },
     }
 }
 
@@ -60,7 +60,10 @@ fn verify_fsm_step_total_and_terminal_absorbing() {
 #[kani::unwind(7)]
 fn verify_ready_queue_never_overflows() {
     let mut q: ReadyQueue<4> = ReadyQueue::new();
-    let id = TaskId { index: 1, generation: 0 };
+    let id = TaskId {
+        index: 1,
+        generation: 0,
+    };
     for _ in 0..6 {
         if kani::any() {
             // push returns Err when full — never overflows the backing array.

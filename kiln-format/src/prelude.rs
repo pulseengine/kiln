@@ -11,53 +11,24 @@
 // primitives since kiln-sync is not implemented yet, we use spin-based locks as
 // a placeholder
 #[cfg(not(feature = "std"))]
-pub use core::cell::{
-    Cell,
-    RefCell,
-};
+pub use core::cell::{Cell, RefCell};
 pub use core::{
     any::Any,
-    cmp::{
-        Eq,
-        Ord,
-        PartialEq,
-        PartialOrd,
-    },
-    convert::{
-        TryFrom,
-        TryInto,
-    },
+    cmp::{Eq, Ord, PartialEq, PartialOrd},
+    convert::{TryFrom, TryInto},
     fmt,
-    fmt::{
-        Debug,
-        Display,
-    },
+    fmt::{Debug, Display},
     marker::PhantomData,
     mem,
-    ops::{
-        Deref,
-        DerefMut,
-    },
-    slice,
-    str,
+    ops::{Deref, DerefMut},
+    slice, str,
 };
 
 // Re-export from kiln-error
-pub use kiln_error::{
-    codes,
-    kinds,
-    Error,
-    ErrorCategory,
-    FromError,
-    Result,
-    ToErrorCategory,
-};
+pub use kiln_error::{Error, ErrorCategory, FromError, Result, ToErrorCategory, codes, kinds};
 // Binary std/no_std choice
 #[cfg(feature = "std")]
-pub use kiln_foundation::component_value::{
-    ComponentValue,
-    ValType,
-};
+pub use kiln_foundation::component_value::{ComponentValue, ValType};
 #[cfg(feature = "std")]
 pub use kiln_foundation::safe_memory::StdProvider as StdMemoryProvider;
 // Re-export additional clean types when allocation is available
@@ -70,103 +41,52 @@ pub use kiln_foundation::MemoryProvider;
 #[cfg(all(feature = "safety", not(feature = "std")))]
 pub use kiln_foundation::NoStdProvider as NoStdMemoryProvider;
 // Re-export clean types from kiln-foundation
+#[cfg(not(any(feature = "std")))]
+pub use kiln_foundation::{BoundedMap, BoundedString, BoundedVec};
 pub use kiln_foundation::{
-    // Legacy types for compatibility
-    types::{
-        BlockType,
-        RefType,
-        ValueType,
-    },
-    values::Value,
-    // Verification types
-    verification::VerificationLevel,
     BoundedStack,
     // SafeMemory types
     SafeMemoryHandler,
     SafeSlice,
-};
-#[cfg(not(any(feature = "std")))]
-pub use kiln_foundation::{
-    BoundedMap,
-    BoundedString,
-    BoundedVec,
+    // Legacy types for compatibility
+    types::{BlockType, RefType, ValueType},
+    values::Value,
+    // Verification types
+    verification::VerificationLevel,
 };
 // Clean types without provider parameters - only when allocation is available
 #[cfg(any(feature = "std", feature = "alloc"))]
 pub use kiln_foundation::{
-    CleanFuncType,
-    CleanGlobalType,
-    CleanMemoryType,
-    CleanTableType,
-    CleanValType,
-    CleanValue,
+    CleanFuncType, CleanGlobalType, CleanMemoryType, CleanTableType, CleanValType, CleanValue,
 };
 // Re-export type factory types - only when allocation is available
 #[cfg(any(feature = "std", feature = "alloc"))]
-pub use kiln_foundation::{
-    ComponentTypeFactory,
-    RuntimeTypeFactory,
-    TypeFactory,
-};
+pub use kiln_foundation::{ComponentTypeFactory, RuntimeTypeFactory, TypeFactory};
 
 // Re-export from this crate's modules
 pub use crate::{
     // Binary module constants and functions
-    binary::{
-        read_leb128_u32,
-        read_string,
-        WASM_MAGIC,
-        WASM_VERSION,
-    },
+    binary::{WASM_MAGIC, WASM_VERSION, read_leb128_u32, read_string},
     // Conversion utilities
     conversion::{
-        block_type_to_format_block_type,
-        convert,
-        format_block_type_to_block_type,
-        format_limits_to_kiln_limits,
-        format_value_type,
-        format_value_type as value_type_to_byte,
-        parse_value_type,
-        validate,
-        validate_format,
-        validate_option,
-        kiln_limits_to_format_limits,
+        block_type_to_format_block_type, convert, format_block_type_to_block_type,
+        format_limits_to_kiln_limits, format_value_type, format_value_type as value_type_to_byte,
+        kiln_limits_to_format_limits, parse_value_type, validate, validate_format, validate_option,
     },
     // Error conversion utilities
     error::{
-        parse_error,
-        runtime_error,
-        to_kiln_error,
-        type_error,
-        validation_error,
-        kiln_runtime_error,
-        kiln_type_error,
-        kiln_validation_error,
-        IntoError,
+        IntoError, kiln_runtime_error, kiln_type_error, kiln_validation_error, parse_error,
+        runtime_error, to_kiln_error, type_error, validation_error,
     },
     // Section constants
     section::{
-        CODE_ID,
-        CUSTOM_ID,
-        DATA_COUNT_ID,
-        DATA_ID,
-        ELEMENT_ID,
-        EXPORT_ID,
-        FUNCTION_ID,
-        GLOBAL_ID,
-        IMPORT_ID,
-        MEMORY_ID,
-        START_ID,
-        TABLE_ID,
-        TYPE_ID,
+        CODE_ID, CUSTOM_ID, DATA_COUNT_ID, DATA_ID, ELEMENT_ID, EXPORT_ID, FUNCTION_ID, GLOBAL_ID,
+        IMPORT_ID, MEMORY_ID, START_ID, TABLE_ID, TYPE_ID,
     },
 };
 // Re-export collection types for no_std
 #[cfg(not(any(feature = "std")))]
-pub use crate::{
-    WasmString,
-    WasmVec,
-};
+pub use crate::{WasmString, WasmVec};
 
 // Helper functions for memory safety
 
@@ -209,11 +129,7 @@ pub fn memory_provider_with_capacity(capacity: usize) -> kiln_foundation::safe_m
 pub fn create_format_provider<const N: usize>() -> kiln_error::Result<
     kiln_foundation::capabilities::CapabilityAwareProvider<kiln_foundation::NoStdProvider<N>>,
 > {
-    use kiln_foundation::{
-        capability_context,
-        safe_capability_alloc,
-        CrateId,
-    };
+    use kiln_foundation::{CrateId, capability_context, safe_capability_alloc};
     let context: kiln_error::Result<_> = capability_context!(dynamic(CrateId::Format, N));
     let context = context?;
     safe_capability_alloc!(context, CrateId::Format, N)
@@ -235,21 +151,10 @@ pub mod std_prelude {
         // These types appear to be from the component module
         component::ComponentType,
         // SafeMemory types
-        safe_memory::{
-            SafeMemoryHandler,
-            SafeSlice,
-            SafeStack,
-        },
+        safe_memory::{SafeMemoryHandler, SafeSlice, SafeStack},
         // Import correctly from types module
         types::{
-            BlockType,
-            FuncType,
-            GlobalType,
-            Limits,
-            MemoryType,
-            RefType,
-            TableType,
-            ValueType,
+            BlockType, FuncType, GlobalType, Limits, MemoryType, RefType, TableType, ValueType,
         },
         // Verification
         verification::VerificationLevel,
@@ -257,41 +162,19 @@ pub mod std_prelude {
 
     // Explicitly re-export conversion utilities
     pub use crate::conversion::{
-        block_type_to_format_block_type,
-        convert,
-        format_block_type_to_block_type,
-        format_limits_to_kiln_limits,
-        format_value_type,
-        format_value_type as value_type_to_byte,
-        parse_value_type,
-        validate,
-        validate_format,
-        validate_option,
-        kiln_limits_to_format_limits,
+        block_type_to_format_block_type, convert, format_block_type_to_block_type,
+        format_limits_to_kiln_limits, format_value_type, format_value_type as value_type_to_byte,
+        kiln_limits_to_format_limits, parse_value_type, validate, validate_format, validate_option,
     };
     // Error handling
     pub use crate::error::{
-        parse_error,
-        runtime_error,
-        to_kiln_error,
-        type_error,
-        validation_error,
-        kiln_runtime_error,
-        kiln_type_error,
-        kiln_validation_error,
-        IntoError,
+        IntoError, kiln_runtime_error, kiln_type_error, kiln_validation_error, parse_error,
+        runtime_error, to_kiln_error, type_error, validation_error,
     };
     // Format types - fix incorrect modules
-    pub use crate::{
-        binary,
-        types::FormatBlockType,
-        validation::Validatable,
-    };
+    pub use crate::{binary, types::FormatBlockType, validation::Validatable};
     #[cfg(feature = "std")]
-    pub use crate::{
-        component::Component,
-        module::Module,
-    };
+    pub use crate::{component::Component, module::Module};
 }
 
 #[cfg(feature = "std")]
@@ -302,89 +185,41 @@ pub mod no_std_prelude {
     // Re-export collection types for no_std
     // External crate imports
     // Base error types from kiln_error
-    pub use kiln_error::{
-        codes,
-        kinds,
-        Error,
-        ErrorCategory,
-        FromError,
-        Result,
-        ToErrorCategory,
-    };
+    pub use kiln_error::{Error, ErrorCategory, FromError, Result, ToErrorCategory, codes, kinds};
     // Binary std/no_std choice
     #[cfg(feature = "std")]
     pub use kiln_foundation::component_value::ValType;
     // Base types from kiln_foundation - fix incorrect paths
+    #[cfg(not(any(feature = "std")))]
+    pub use kiln_foundation::{BoundedMap, BoundedString, BoundedVec};
     pub use kiln_foundation::{
         // These types appear to be from the component module
         component::ComponentType,
         // SafeMemory types
-        safe_memory::{
-            SafeMemoryHandler,
-            SafeSlice,
-            SafeStack,
-        },
+        safe_memory::{SafeMemoryHandler, SafeSlice, SafeStack},
         // Import correctly from types module
         types::{
-            BlockType,
-            FuncType,
-            GlobalType,
-            Limits,
-            MemoryType,
-            RefType,
-            TableType,
-            ValueType,
+            BlockType, FuncType, GlobalType, Limits, MemoryType, RefType, TableType, ValueType,
         },
         // Verification
         verification::VerificationLevel,
     };
-    #[cfg(not(any(feature = "std")))]
-    pub use kiln_foundation::{
-        BoundedMap,
-        BoundedString,
-        BoundedVec,
-    };
 
     // Explicitly re-export conversion utilities
     pub use crate::conversion::{
-        block_type_to_format_block_type,
-        convert,
-        format_block_type_to_block_type,
-        format_limits_to_kiln_limits,
-        format_value_type,
-        format_value_type as value_type_to_byte,
-        parse_value_type,
-        validate,
-        validate_format,
-        validate_option,
-        kiln_limits_to_format_limits,
+        block_type_to_format_block_type, convert, format_block_type_to_block_type,
+        format_limits_to_kiln_limits, format_value_type, format_value_type as value_type_to_byte,
+        kiln_limits_to_format_limits, parse_value_type, validate, validate_format, validate_option,
     };
     // Error handling
     pub use crate::error::{
-        parse_error,
-        runtime_error,
-        to_kiln_error,
-        type_error,
-        validation_error,
-        kiln_runtime_error,
-        kiln_type_error,
-        kiln_validation_error,
-        IntoError,
+        IntoError, kiln_runtime_error, kiln_type_error, kiln_validation_error, parse_error,
+        runtime_error, to_kiln_error, type_error, validation_error,
     };
     // Format types - fix incorrect modules
-    pub use crate::{
-        binary,
-        types::FormatBlockType,
-        validation::Validatable,
-    };
-    #[cfg(feature = "std")]
-    pub use crate::{
-        component::Component,
-        module::Module,
-    };
     #[cfg(not(any(feature = "std")))]
-    pub use crate::{
-        WasmString,
-        WasmVec,
-    };
+    pub use crate::{WasmString, WasmVec};
+    pub use crate::{binary, types::FormatBlockType, validation::Validatable};
+    #[cfg(feature = "std")]
+    pub use crate::{component::Component, module::Module};
 }

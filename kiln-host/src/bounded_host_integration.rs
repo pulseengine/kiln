@@ -94,17 +94,11 @@
 extern crate alloc;
 use alloc::{
     boxed::Box,
-    string::{
-        String,
-        ToString,
-    },
+    string::{String, ToString},
     vec::Vec,
 };
 
-use kiln_error::{
-    Error,
-    Result,
-};
+use kiln_error::{Error, Result};
 
 /// Host integration limits configuration
 ///
@@ -113,31 +107,31 @@ use kiln_error::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HostIntegrationLimits {
     /// Maximum number of host functions that can be registered
-    pub max_host_functions:   usize,
+    pub max_host_functions: usize,
     /// Maximum number of callback registrations allowed
-    pub max_callbacks:        usize,
+    pub max_callbacks: usize,
     /// Maximum call stack depth to prevent stack overflow
     pub max_call_stack_depth: usize,
     /// Maximum size of parameters in bytes for host function calls
-    pub max_parameter_size:   usize,
+    pub max_parameter_size: usize,
     /// Maximum size of return data in bytes from host functions
-    pub max_return_size:      usize,
+    pub max_return_size: usize,
     /// Maximum number of concurrent host function calls allowed
     pub max_concurrent_calls: usize,
     /// Total memory budget in bytes for host integration operations
-    pub memory_budget:        usize,
+    pub memory_budget: usize,
 }
 
 impl Default for HostIntegrationLimits {
     fn default() -> Self {
         Self {
-            max_host_functions:   256,
-            max_callbacks:        1024,
+            max_host_functions: 256,
+            max_callbacks: 1024,
             max_call_stack_depth: 64,
-            max_parameter_size:   4096,
-            max_return_size:      4096,
+            max_parameter_size: 4096,
+            max_return_size: 4096,
             max_concurrent_calls: 16,
-            memory_budget:        1024 * 1024, // 1MB
+            memory_budget: 1024 * 1024, // 1MB
         }
     }
 }
@@ -147,13 +141,13 @@ impl HostIntegrationLimits {
     #[must_use]
     pub fn embedded() -> Self {
         Self {
-            max_host_functions:   32,
-            max_callbacks:        128,
+            max_host_functions: 32,
+            max_callbacks: 128,
             max_call_stack_depth: 16,
-            max_parameter_size:   512,
-            max_return_size:      512,
+            max_parameter_size: 512,
+            max_return_size: 512,
             max_concurrent_calls: 4,
-            memory_budget:        64 * 1024, // 64KB
+            memory_budget: 64 * 1024, // 64KB
         }
     }
 
@@ -161,13 +155,13 @@ impl HostIntegrationLimits {
     #[must_use]
     pub fn qnx() -> Self {
         Self {
-            max_host_functions:   128,
-            max_callbacks:        512,
+            max_host_functions: 128,
+            max_callbacks: 512,
             max_call_stack_depth: 32,
-            max_parameter_size:   2048,
-            max_return_size:      2048,
+            max_parameter_size: 2048,
+            max_return_size: 2048,
             max_concurrent_calls: 8,
-            memory_budget:        512 * 1024, // 512KB
+            memory_budget: 512 * 1024, // 512KB
         }
     }
 
@@ -204,17 +198,17 @@ pub struct ComponentInstanceId(pub u32);
 #[derive(Debug, Clone)]
 pub struct BoundedCallContext {
     /// Unique identifier for the host function to be called
-    pub function_id:        HostFunctionId,
+    pub function_id: HostFunctionId,
     /// Identifier of the component instance making the call
     pub component_instance: ComponentInstanceId,
     /// Parameter data for the function call (bounded by `max_parameter_size`)
-    pub parameters:         Vec<u8>,
+    pub parameters: Vec<u8>,
     /// Current call stack depth for recursion prevention
-    pub call_depth:         usize,
+    pub call_depth: usize,
     /// Amount of memory used by this call context
-    pub memory_used:        usize,
+    pub memory_used: usize,
     /// ASIL safety level required by the calling component (0-4)
-    pub safety_level:       u8, // ASIL level
+    pub safety_level: u8, // ASIL level
 }
 
 impl BoundedCallContext {
@@ -285,13 +279,13 @@ impl BoundedCallContext {
 #[derive(Debug, Clone)]
 pub struct BoundedCallResult {
     /// Return data from the host function (bounded by `max_return_size`)
-    pub return_data:       Vec<u8>,
+    pub return_data: Vec<u8>,
     /// Amount of memory used during function execution
-    pub memory_used:       usize,
+    pub memory_used: usize,
     /// Execution time in microseconds for performance monitoring
     pub execution_time_us: u64,
     /// Whether the function call completed successfully
-    pub success:           bool,
+    pub success: bool,
 }
 
 impl BoundedCallResult {
@@ -315,10 +309,10 @@ impl BoundedCallResult {
     #[must_use]
     pub fn error() -> Self {
         Self {
-            return_data:       alloc::vec::Vec::new(),
-            memory_used:       0,
+            return_data: alloc::vec::Vec::new(),
+            memory_used: 0,
             execution_time_us: 0,
-            success:           false,
+            success: false,
         }
     }
 
@@ -372,10 +366,10 @@ pub type BoundedHostHandler =
 
 /// Simple host function implementation
 pub struct SimpleBoundedHostFunction {
-    name:               String,
-    handler:            BoundedHostHandler,
+    name: String,
+    handler: BoundedHostHandler,
     memory_requirement: usize,
-    safety_level:       u8,
+    safety_level: u8,
 }
 
 impl SimpleBoundedHostFunction {
@@ -422,20 +416,20 @@ impl BoundedHostFunction for SimpleBoundedHostFunction {
 /// Active function call tracking
 #[derive(Debug)]
 struct ActiveCall {
-    function_id:        HostFunctionId,
+    function_id: HostFunctionId,
     component_instance: ComponentInstanceId,
     #[allow(dead_code)]
-    start_time:         u64,
-    memory_used:        usize,
+    start_time: u64,
+    memory_used: usize,
 }
 
 /// Bounded host integration manager
 pub struct BoundedHostIntegrationManager {
-    limits:            HostIntegrationLimits,
-    functions:         Vec<Box<dyn BoundedHostFunction>>,
-    active_calls:      Vec<ActiveCall>,
+    limits: HostIntegrationLimits,
+    functions: Vec<Box<dyn BoundedHostFunction>>,
+    active_calls: Vec<ActiveCall>,
     total_memory_used: usize,
-    next_function_id:  u32,
+    next_function_id: u32,
 }
 
 impl BoundedHostIntegrationManager {
@@ -631,15 +625,15 @@ pub struct HostIntegrationStatistics {
     /// Number of host functions currently registered
     pub registered_functions: usize,
     /// Number of host function calls currently active
-    pub active_calls:         usize,
+    pub active_calls: usize,
     /// Total amount of memory currently used by host integration (bytes)
-    pub total_memory_used:    usize,
+    pub total_memory_used: usize,
     /// Amount of memory still available for host integration (bytes)
-    pub available_memory:     usize,
+    pub available_memory: usize,
     /// Maximum call stack depth currently reached
-    pub max_call_depth:       usize,
+    pub max_call_depth: usize,
     /// Memory utilization as a percentage (0.0 to 100.0)
-    pub memory_utilization:   f64, // Percentage
+    pub memory_utilization: f64, // Percentage
 }
 
 /// Convenience functions for creating common host functions
@@ -855,6 +849,6 @@ mod tests {
 
         let cancelled = manager.cancel_instance_calls(ComponentInstanceId(1));
         assert_eq!(cancelled, 0); // No active calls to cancel in this simple
-                                  // test
+        // test
     }
 }

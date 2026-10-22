@@ -5,26 +5,13 @@
 //! access the same linear memory with proper atomic synchronization.
 
 #[cfg(feature = "std")]
-use std::sync::{
-    Arc,
-    RwLock,
-};
+use std::sync::{Arc, RwLock};
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 
 use crate::{
     prelude::*,
-    traits::{
-        Checksummable,
-        FromBytes,
-        ToBytes,
-        Validatable,
-    },
+    traits::{Checksummable, FromBytes, ToBytes, Validatable},
 };
 
 /// WebAssembly memory type supporting both linear and shared memory
@@ -283,13 +270,13 @@ pub enum SharedMemoryAccess {
 #[derive(Debug, Clone)]
 pub struct SharedMemorySegment {
     /// Memory type
-    pub memory_type:    MemoryType,
+    pub memory_type: MemoryType,
     /// Access permissions
-    pub access:         SharedMemoryAccess,
+    pub access: SharedMemoryAccess,
     /// Base address offset
-    pub offset:         u64,
+    pub offset: u64,
     /// Size in bytes
-    pub size:           u64,
+    pub size: u64,
     /// Whether this segment supports atomic operations
     pub atomic_capable: bool,
 }
@@ -473,20 +460,20 @@ pub struct SharedMemoryStats {
     /// Number of registered memory segments
     pub registered_segments: u64,
     /// Total memory accesses performed
-    pub memory_accesses:     u64,
+    pub memory_accesses: u64,
     /// Number of atomic operations performed
-    pub atomic_operations:   u64,
+    pub atomic_operations: u64,
     /// Number of access violations detected
-    pub access_violations:   u64,
+    pub access_violations: u64,
 }
 
 impl SharedMemoryStats {
     fn new() -> Self {
         Self {
             registered_segments: 0,
-            memory_accesses:     0,
-            atomic_operations:   0,
-            access_violations:   0,
+            memory_accesses: 0,
+            atomic_operations: 0,
+            access_violations: 0,
         }
     }
 
@@ -509,4 +496,3 @@ impl SharedMemoryStats {
         }
     }
 }
-

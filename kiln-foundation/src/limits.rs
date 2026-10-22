@@ -259,11 +259,7 @@ pub use platform::*;
 /// This is a helper for decoder implementations to provide consistent error messages.
 #[inline]
 pub const fn check_limit(count: usize, limit: usize, what: &'static str) -> Option<&'static str> {
-    if count > limit {
-        Some(what)
-    } else {
-        None
-    }
+    if count > limit { Some(what) } else { None }
 }
 
 /// Compile-time assertions to ensure limits are reasonable
@@ -512,15 +508,14 @@ mod tests {
         let estimated_imports_mem = MAX_IMPORTS * 128;
         let estimated_exports_mem = MAX_EXPORTS * 128;
 
-        let total_estimate =
-            estimated_types_mem + estimated_funcs_mem + estimated_imports_mem + estimated_exports_mem;
+        let total_estimate = estimated_types_mem
+            + estimated_funcs_mem
+            + estimated_imports_mem
+            + estimated_exports_mem;
 
         // This is just an estimate - actual usage depends on implementation
         // The point is to verify limits produce reasonable memory estimates
-        assert!(
-            total_estimate > 0,
-            "memory estimate should be positive"
-        );
+        assert!(total_estimate > 0, "memory estimate should be positive");
 
         // Log the estimate for debugging (won't print unless test fails)
         if total_estimate > 1_000_000_000 {

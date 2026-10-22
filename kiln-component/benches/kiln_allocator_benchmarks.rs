@@ -43,7 +43,8 @@ fn bench_vec_push(c: &mut Criterion) {
         #[cfg(feature = "safety-critical")]
         group.bench_with_input(BenchmarkId::new("kiln_vec", size), size, |b, &size| {
             b.iter(|| {
-                let mut vec: KilnVec<usize, { CrateId::Component as u8 }, VEC_LIMIT> = KilnVec::new();
+                let mut vec: KilnVec<usize, { CrateId::Component as u8 }, VEC_LIMIT> =
+                    KilnVec::new();
                 for i in 0..size {
                     let _ = vec.push(black_box(i));
                 }
@@ -163,17 +164,21 @@ fn bench_map_lookup(c: &mut Criterion) {
 
         // Kiln HashMap lookup
         #[cfg(feature = "safety-critical")]
-        group.bench_with_input(BenchmarkId::new("kiln_hashmap", size), &kiln_map, |b, map| {
-            b.iter(|| {
-                let mut sum = 0;
-                for i in 0..*size {
-                    if let Some(&val) = map.get(&(i as u32)) {
-                        sum += black_box(val);
+        group.bench_with_input(
+            BenchmarkId::new("kiln_hashmap", size),
+            &kiln_map,
+            |b, map| {
+                b.iter(|| {
+                    let mut sum = 0;
+                    for i in 0..*size {
+                        if let Some(&val) = map.get(&(i as u32)) {
+                            sum += black_box(val);
+                        }
                     }
-                }
-                sum
-            })
-        });
+                    sum
+                })
+            },
+        );
     }
 
     group.finish();

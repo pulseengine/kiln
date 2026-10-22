@@ -12,29 +12,16 @@
 
 // Conditionally import std or core items for f32/f64
 #[cfg(not(feature = "std"))]
-use core::{
-    f32,
-    f64,
-};
+use core::{f32, f64};
 #[cfg(feature = "std")]
-use std::{
-    f32,
-    f64,
-};
+use std::{f32, f64};
 
-use kiln_error::{
-    codes::TrapCode,
-    Error as KilnError,
-    Result,
-};
+use kiln_error::{Error as KilnError, Result, codes::TrapCode};
 
 // Import necessary items from this crate's prelude and kiln-error
-use crate::prelude::{
-    FloatBits32,
-    FloatBits64,
-}; // Result, TrapCode, KilnError should come
-   // via kiln_error directly or be aliased in
-   // prelude
+use crate::prelude::{FloatBits32, FloatBits64}; // Result, TrapCode, KilnError should come
+// via kiln_error directly or be aliased in
+// prelude
 
 // Module-level constants for Wasm conversion boundaries
 const I64_MAX_AS_F32: f32 = 9_223_372_036_854_775_808.0_f32;
@@ -133,10 +120,7 @@ mod no_std_math_trunc {
 // --- Start of no_std math polyfills for rounding ---
 #[cfg(not(feature = "std"))]
 mod no_std_math_rounding {
-    use super::no_std_math_trunc::{
-        trunc_f32_polyfill,
-        trunc_f64_polyfill,
-    };
+    use super::no_std_math_trunc::{trunc_f32_polyfill, trunc_f64_polyfill};
 
     // Polyfill for f32::floor
     pub(super) fn floor_f32_polyfill(f_val: f32) -> f32 {
@@ -190,8 +174,8 @@ mod no_std_math_rounding {
         // At this point, fr == 0.5. Round to even.
         // If fl is even, return fl. If fl is odd, return fl + 1.0 (which is ceil).
         let ce = fl + 1.0; // This is ceil_f32_polyfill(f_val)
-                           // Check if fl is even: fl % 2.0 == 0.0
-                           // An even number divided by 2 is an integer.
+        // Check if fl is even: fl % 2.0 == 0.0
+        // An even number divided by 2 is an integer.
         let half_fl = fl / 2.0;
         if half_fl == trunc_f32_polyfill(half_fl) {
             // fl is even
@@ -208,11 +192,7 @@ mod no_std_math_rounding {
             return d_val;
         }
         let t = trunc_f64_polyfill(d_val);
-        if d_val >= 0.0 || t == d_val {
-            t
-        } else {
-            t - 1.0
-        }
+        if d_val >= 0.0 || t == d_val { t } else { t - 1.0 }
     }
 
     // Polyfill for f64::ceil
@@ -221,11 +201,7 @@ mod no_std_math_rounding {
             return d_val;
         }
         let t = trunc_f64_polyfill(d_val);
-        if d_val <= 0.0 || t == d_val {
-            t
-        } else {
-            t + 1.0
-        }
+        if d_val <= 0.0 || t == d_val { t } else { t + 1.0 }
     }
 
     // Polyfill for f64::round (ties to even)
@@ -262,10 +238,7 @@ mod no_std_math_rounding {
 // --- Start of no_std math polyfills for sqrt ---
 #[cfg(not(feature = "std"))]
 mod no_std_math_sqrt {
-    use crate::float_bits::{
-        FloatBits32,
-        FloatBits64,
-    }; // Keep for NAN const access
+    use crate::float_bits::{FloatBits32, FloatBits64}; // Keep for NAN const access
 
     // Polyfill for f32::sqrt using Newton-Raphson method
     pub(super) fn sqrt_f32_polyfill(f_val: f32) -> f32 {
@@ -298,7 +271,7 @@ mod no_std_math_sqrt {
         if y == 0.0 {
             // Should only happen if f_val was extremely small, leading to y=0
             y = f32::MIN_POSITIVE; // Use a tiny positive number to start if
-                                   // f_val * 0.5 underflowed
+            // f_val * 0.5 underflowed
         }
 
         // Newton-Raphson iterations: y_new = (y_old + x / y_old) / 2.0
@@ -313,7 +286,7 @@ mod no_std_math_sqrt {
                 // This implies f_val is extremely small, or an issue occurred.
                 // Result for very small positive f_val should be very small positive.
                 return 0.0f32.copysign(f_val); // Or handle as an underflow to
-                                               // 0, preserving sign.
+                // 0, preserving sign.
             }
             y = (y + f_val / y) * 0.5;
             if y == prev_y {
@@ -1416,11 +1389,7 @@ pub fn wasm_f32_min(lhs: FloatBits32, rhs: FloatBits32) -> Result<FloatBits32> {
         // Special handling for +0.0 and -0.0
         // Wasm: min(-0.0, +0.0) is -0.0. min(+0.0, -0.0) is -0.0.
         // If l is -0.0 (negative sign bit), it's smaller or equal.
-        if l.is_sign_negative() {
-            Ok(lhs)
-        } else {
-            Ok(rhs)
-        } // If l is +0.0, r must be -0.0 or +0.0
+        if l.is_sign_negative() { Ok(lhs) } else { Ok(rhs) } // If l is +0.0, r must be -0.0 or +0.0
     } else {
         // Standard comparison for non-NaN, non-zero cases.
         // Rust's f32::min behaves correctly for Wasm's non-NaN requirements.
@@ -1446,11 +1415,7 @@ pub fn wasm_f32_max(lhs: FloatBits32, rhs: FloatBits32) -> Result<FloatBits32> {
         // Special handling for +0.0 and -0.0
         // Wasm: max(-0.0, +0.0) is +0.0. max(+0.0, -0.0) is +0.0.
         // If l is +0.0 (positive sign bit), it's greater or equal.
-        if l.is_sign_positive() {
-            Ok(lhs)
-        } else {
-            Ok(rhs)
-        } // If l is -0.0, r must be +0.0 or -0.0
+        if l.is_sign_positive() { Ok(lhs) } else { Ok(rhs) } // If l is -0.0, r must be +0.0 or -0.0
     } else {
         // Rust's f32::max behaves correctly for Wasm's non-NaN requirements.
         Ok(FloatBits32::from_float(l.max(r)))
@@ -1558,11 +1523,7 @@ pub fn wasm_f64_min(lhs: FloatBits64, rhs: FloatBits64) -> Result<FloatBits64> {
     if l.is_nan() || r.is_nan() {
         Ok(FloatBits64::NAN)
     } else if l == r && l == 0.0 {
-        if l.is_sign_negative() {
-            Ok(lhs)
-        } else {
-            Ok(rhs)
-        }
+        if l.is_sign_negative() { Ok(lhs) } else { Ok(rhs) }
     } else {
         Ok(FloatBits64::from_float(l.min(r)))
     }
@@ -1576,11 +1537,7 @@ pub fn wasm_f64_max(lhs: FloatBits64, rhs: FloatBits64) -> Result<FloatBits64> {
     if l.is_nan() || r.is_nan() {
         Ok(FloatBits64::NAN)
     } else if l == r && l == 0.0 {
-        if l.is_sign_positive() {
-            Ok(lhs)
-        } else {
-            Ok(rhs)
-        }
+        if l.is_sign_positive() { Ok(lhs) } else { Ok(rhs) }
     } else {
         Ok(FloatBits64::from_float(l.max(r)))
     }
@@ -1707,11 +1664,7 @@ pub fn i32_trunc_sat_f32_s(val: FloatBits32) -> i32 {
     if f.is_nan() {
         0
     } else if f.is_infinite() {
-        if f.is_sign_positive() {
-            i32::MAX
-        } else {
-            i32::MIN
-        }
+        if f.is_sign_positive() { i32::MAX } else { i32::MIN }
     } else {
         let trunc = f32_trunc_compat(f);
         // Check against the valid range for i32 represented as f32
@@ -1755,11 +1708,7 @@ pub fn i32_trunc_sat_f32_u(val: FloatBits32) -> i32 {
     if f.is_nan() {
         0
     } else if f.is_infinite() {
-        if f.is_sign_positive() {
-            u32::MAX as i32
-        } else {
-            0
-        } // Negative infinity saturates to 0 for unsigned
+        if f.is_sign_positive() { u32::MAX as i32 } else { 0 } // Negative infinity saturates to 0 for unsigned
     } else {
         let trunc = f32_trunc_compat(f);
         // Check against valid range for u32 represented as f32
@@ -1797,11 +1746,7 @@ pub fn i64_trunc_sat_f32_s(val: FloatBits32) -> i64 {
     if f.is_nan() {
         0
     } else if f.is_infinite() {
-        if f.is_sign_positive() {
-            i64::MAX
-        } else {
-            i64::MIN
-        }
+        if f.is_sign_positive() { i64::MAX } else { i64::MIN }
     } else {
         let trunc = f32_trunc_compat(f);
         // Wasm spec Table 15 range: (-9223372036854775808.0, 9223372036854775808.0)
@@ -1834,11 +1779,7 @@ pub fn i64_trunc_sat_f32_u(val: FloatBits32) -> i64 {
     if f.is_nan() {
         0
     } else if f.is_infinite() {
-        if f.is_sign_positive() {
-            u64::MAX as i64
-        } else {
-            0
-        }
+        if f.is_sign_positive() { u64::MAX as i64 } else { 0 }
     } else {
         let trunc = f32_trunc_compat(f);
         // Wasm spec Table 15 range: (0.0, 18446744073709551616.0)
@@ -1865,11 +1806,7 @@ pub fn i32_trunc_sat_f64_s(val: FloatBits64) -> i32 {
     if f.is_nan() {
         0
     } else if f.is_infinite() {
-        if f.is_sign_positive() {
-            i32::MAX
-        } else {
-            i32::MIN
-        }
+        if f.is_sign_positive() { i32::MAX } else { i32::MIN }
     } else {
         let trunc = f64_trunc_compat(f);
         // Wasm spec Table 15 range: (-2147483648.0, 2147483648.0)
@@ -1897,11 +1834,7 @@ pub fn i32_trunc_sat_f64_u(val: FloatBits64) -> i32 {
     if f.is_nan() {
         0
     } else if f.is_infinite() {
-        if f.is_sign_positive() {
-            u32::MAX as i32
-        } else {
-            0
-        }
+        if f.is_sign_positive() { u32::MAX as i32 } else { 0 }
     } else {
         let trunc = f64_trunc_compat(f);
         // Wasm spec Table 15 range: (0.0, 4294967296.0)
@@ -1925,11 +1858,7 @@ pub fn i64_trunc_sat_f64_s(val: FloatBits64) -> i64 {
     if f.is_nan() {
         0
     } else if f.is_infinite() {
-        if f.is_sign_positive() {
-            i64::MAX
-        } else {
-            i64::MIN
-        }
+        if f.is_sign_positive() { i64::MAX } else { i64::MIN }
     } else {
         let trunc = f64_trunc_compat(f);
         // Wasm spec Table 15 range: (-9223372036854775808.0, 9223372036854775808.0)
@@ -1968,11 +1897,7 @@ pub fn i64_trunc_sat_f64_u(val: FloatBits64) -> i64 {
     if f.is_nan() {
         0
     } else if f.is_infinite() {
-        if f.is_sign_positive() {
-            u64::MAX as i64
-        } else {
-            0
-        }
+        if f.is_sign_positive() { u64::MAX as i64 } else { 0 }
     } else {
         let trunc = f64_trunc_compat(f);
         // Wasm spec Table 15 range: (0.0, 18446744073709551616.0) which is 2^64
@@ -2133,7 +2058,7 @@ pub fn i64_trunc_f32_s(val: FloatBits32) -> Result<i64> {
 
     if !(I64_MIN_AS_F32..I64_MAX_AS_F32).contains(&f_trunc) {
         if f_trunc == I64_MIN_AS_F32 { // Check for exact lower bound
-             // This is okay, will become i64::MIN
+            // This is okay, will become i64::MIN
         } else {
             return Err(trap(TrapCode::IntegerOverflow));
         }
@@ -2190,7 +2115,7 @@ pub fn i64_trunc_f64_s(val: FloatBits64) -> Result<i64> {
         // Let's use the numeric literals from spec's Table 15 for bounds check.
         if !(-9_223_372_036_854_775_808.0_f64..9_223_372_036_854_775_808.0_f64).contains(&d_trunc) {
             if d_trunc == -9_223_372_036_854_775_808.0_f64 { // i64::MIN
-                 // okay
+                // okay
             } else {
                 return Err(trap(TrapCode::IntegerOverflow));
             }

@@ -11,28 +11,11 @@
 #[cfg(feature = "std")]
 use crate::prelude::LinkInterceptor;
 use crate::prelude::{
-    codes,
-    str,
-    Any,
-    BuiltinType,
-    Debug,
-    Eq,
-    Error,
-    ErrorCategory,
-    HashMap,
-    HostFunctionHandler,
-    Ord,
-    PartialEq,
-    PartialOrd,
-    Result,
-    Value,
+    Any, BuiltinType, Debug, Eq, Error, ErrorCategory, HashMap, HostFunctionHandler, Ord,
+    PartialEq, PartialOrd, Result, Value, codes, str,
 };
 #[cfg(feature = "std")]
-use crate::prelude::{
-    fmt,
-    Arc,
-    BuiltinHost,
-};
+use crate::prelude::{Arc, BuiltinHost, fmt};
 
 // Type aliases for no_std compatibility
 // In no_std mode, we can't use Box<dyn Any>, so we'll use a wrapper type
@@ -44,10 +27,7 @@ pub struct CallbackData {
 }
 
 #[cfg(not(feature = "std"))]
-use crate::bounded_host_infra::{
-    HostProvider,
-    HOST_MEMORY_SIZE,
-};
+use crate::bounded_host_infra::{HOST_MEMORY_SIZE, HostProvider};
 
 #[cfg(not(feature = "std"))]
 type CallbackMap = HashMap<CallbackType, CallbackData, 32, HostProvider>;
@@ -65,11 +45,8 @@ type ValueVec = kiln_foundation::BoundedVec<Value, 16, HostProvider>;
 type StringVec = Vec<String>;
 
 #[cfg(not(feature = "std"))]
-type StringVec = kiln_foundation::BoundedVec<
-    kiln_foundation::bounded::BoundedString<64>,
-    32,
-    HostProvider,
->;
+type StringVec =
+    kiln_foundation::BoundedVec<kiln_foundation::bounded::BoundedString<64>, 32, HostProvider>;
 
 // For returning references, we'll use a simplified approach in no_std
 #[cfg(feature = "std")]
@@ -273,8 +250,8 @@ impl CallbackRegistry {
     #[cfg(feature = "std")]
     pub fn new() -> Self {
         Self {
-            callbacks:      HashMap::with_capacity(0),
-            interceptor:    None,
+            callbacks: HashMap::with_capacity(0),
+            interceptor: None,
             host_functions: HashMap::with_capacity(0),
         }
     }
@@ -291,7 +268,7 @@ impl CallbackRegistry {
         use crate::bounded_host_infra::create_host_provider;
         let provider = create_host_provider().expect("Failed to create host provider");
         Self {
-            callbacks:      HashMap::new(provider).unwrap_or_default(),
+            callbacks: HashMap::new(provider).unwrap_or_default(),
             host_functions: HostFunctionsNoStd::default(),
         }
     }
@@ -640,10 +617,7 @@ mod tests {
     #[cfg(not(feature = "std"))]
     use alloc::vec;
 
-    use kiln_foundation::{
-        builtin::BuiltinType,
-        values::Value,
-    };
+    use kiln_foundation::{builtin::BuiltinType, values::Value};
 
     use super::*;
 

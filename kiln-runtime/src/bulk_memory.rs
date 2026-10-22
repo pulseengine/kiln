@@ -19,22 +19,11 @@
 //! - Comprehensive validation and error handling
 //! - Proper bounds checking and overflow detection
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 use kiln_foundation::values::Value;
 use kiln_instructions::memory_ops::{
-    DataDrop,
-    DataSegmentOperations,
-    MemoryCopy,
-    MemoryFill,
-    MemoryGrow,
-    MemoryInit,
-    MemoryOperations,
-    MemorySize,
+    DataDrop, DataSegmentOperations, MemoryCopy, MemoryFill, MemoryGrow, MemoryInit,
+    MemoryOperations, MemorySize,
 };
 
 /// Provider trait for bulk memory management across ASIL levels

@@ -16,18 +16,9 @@
 //! futex implementation and kernel objects, supporting no_std/no_alloc
 //! environments on embedded systems.
 
-use core::{
-    fmt,
-    sync::atomic::AtomicU32,
-    time::Duration,
-};
+use core::{fmt, sync::atomic::AtomicU32, time::Duration};
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 
 use crate::sync::FutexLike;
 
@@ -113,11 +104,11 @@ unsafe extern "C" {
 #[derive(Debug)]
 pub struct ZephyrFutex {
     /// The atomic value used for synchronization
-    value:     AtomicU32,
+    value: AtomicU32,
     /// Binary std/no_std choice
     futex_obj: *mut ZephyrFutexHandle,
     /// Padding to ensure cache line alignment
-    _padding:  [u8; 56], // Adjust for embedded cache line sizes
+    _padding: [u8; 56], // Adjust for embedded cache line sizes
 }
 
 // Safety: ZephyrFutex contains only atomic values and Zephyr kernel objects
@@ -296,11 +287,11 @@ impl Drop for ZephyrFutex {
 #[derive(Debug)]
 pub struct ZephyrSemaphoreFutex {
     /// The atomic value used for synchronization
-    value:     AtomicU32,
+    value: AtomicU32,
     /// Binary std/no_std choice
     semaphore: *mut u8, // Placeholder for k_sem structure
     /// Padding for alignment
-    _padding:  [u8; 60],
+    _padding: [u8; 60],
 }
 
 // Safety: Same as ZephyrFutex
@@ -311,9 +302,9 @@ impl ZephyrSemaphoreFutex {
     /// Create a new semaphore-based futex
     pub fn new(initial_value: u32) -> Self {
         Self {
-            value:     AtomicU32::new(initial_value),
+            value: AtomicU32::new(initial_value),
             semaphore: core::ptr::null_mut(), // Would point to actual k_sem object
-            _padding:  [0; 60],
+            _padding: [0; 60],
         }
     }
 }

@@ -22,22 +22,10 @@
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_possible_truncation)]
 
-use kiln_error::{
-    Error,
-    Result,
-};
-use kiln_foundation::{
-    types::ValueType,
-    values::Value,
-};
+use kiln_error::{Error, Result};
+use kiln_foundation::{types::ValueType, values::Value};
 
-use crate::prelude::{
-    DataSegmentOperations,
-    Debug,
-    MemoryOperations,
-    Validate,
-    ValidationContext,
-};
+use crate::prelude::{DataSegmentOperations, Debug, MemoryOperations, Validate, ValidationContext};
 
 /// Maximum number of memories supported per module
 pub const MAX_MEMORIES: usize = 16;
@@ -48,15 +36,15 @@ pub struct MultiMemoryLoad {
     /// Memory index
     pub memory_index: u32,
     /// Memory offset (u64 for memory64 support)
-    pub offset:       u64,
+    pub offset: u64,
     /// Required alignment
-    pub align:        u32,
+    pub align: u32,
     /// Value type to load
-    pub value_type:   ValueType,
+    pub value_type: ValueType,
     /// Whether this is a signed load
-    pub signed:       bool,
+    pub signed: bool,
     /// Memory access width in bytes
-    pub width:        u32,
+    pub width: u32,
 }
 
 impl MultiMemoryLoad {
@@ -179,11 +167,11 @@ impl MultiMemoryLoad {
         // Convert to basic MemoryLoad and execute
         let basic_load = crate::memory_ops::MemoryLoad {
             memory_index: self.memory_index,
-            offset:       self.offset,
-            align:        self.align,
-            value_type:   self.value_type,
-            signed:       self.signed,
-            width:        self.width,
+            offset: self.offset,
+            align: self.align,
+            value_type: self.value_type,
+            signed: self.signed,
+            width: self.width,
         };
 
         basic_load.execute(memory, addr_arg)
@@ -196,13 +184,13 @@ pub struct MultiMemoryStore {
     /// Memory index
     pub memory_index: u32,
     /// Memory offset (u64 for memory64 support)
-    pub offset:       u64,
+    pub offset: u64,
     /// Required alignment
-    pub align:        u32,
+    pub align: u32,
     /// Value type to store
-    pub value_type:   ValueType,
+    pub value_type: ValueType,
     /// Memory access width in bytes
-    pub width:        u32,
+    pub width: u32,
 }
 
 impl MultiMemoryStore {
@@ -294,10 +282,10 @@ impl MultiMemoryStore {
         // Convert to basic MemoryStore and execute
         let basic_store = crate::memory_ops::MemoryStore {
             memory_index: self.memory_index,
-            offset:       self.offset,
-            align:        self.align,
-            value_type:   self.value_type,
-            width:        self.width,
+            offset: self.offset,
+            align: self.align,
+            value_type: self.value_type,
+            width: self.width,
         };
 
         basic_store.execute(memory, addr_arg, value)
@@ -378,7 +366,7 @@ pub struct MultiMemoryCrossCopy {
     /// Destination memory index
     pub dest_memory_index: u32,
     /// Source memory index
-    pub src_memory_index:  u32,
+    pub src_memory_index: u32,
 }
 
 impl MultiMemoryCrossCopy {
@@ -597,7 +585,6 @@ impl Validate for MultiMemoryGrow {
         Ok(())
     }
 }
-
 
 // Test module removed due to extensive API mismatches
 // TODO: Reimplement tests with correct multi-memory API

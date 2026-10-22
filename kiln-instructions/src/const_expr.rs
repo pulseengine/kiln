@@ -10,15 +10,9 @@
 //! The extended constant expressions proposal adds support for more
 //! instructions in constant contexts.
 
-use kiln_error::{
-    Error,
-    Result,
-};
+use kiln_error::{Error, Result};
 use kiln_foundation::{
-    types::{
-        RefType,
-        ValueType,
-    },
+    types::{RefType, ValueType},
     values::Value,
 };
 use kiln_math;
@@ -26,14 +20,8 @@ use kiln_math;
 #[cfg(not(feature = "std"))]
 use crate::prelude::BoundedVec;
 use crate::{
-    prelude::{
-        Debug,
-        PartialEq,
-    },
-    validation::{
-        Validate,
-        ValidationContext,
-    },
+    prelude::{Debug, PartialEq},
+    validation::{Validate, ValidationContext},
 };
 
 /// Instructions allowed in constant expressions
@@ -99,7 +87,7 @@ pub trait ConstExprContext {
 pub struct ConstExprSequence {
     // Use a fixed-size array for no_std compatibility
     instructions: [Option<ConstExpr>; 16],
-    len:          usize,
+    len: usize,
 }
 
 impl ConstExprSequence {
@@ -108,7 +96,7 @@ impl ConstExprSequence {
     pub fn new() -> Self {
         Self {
             instructions: Default::default(),
-            len:          0,
+            len: 0,
         }
     }
 
@@ -446,15 +434,12 @@ impl Default for ConstExprSequence {
 #[cfg(all(test, feature = "std"))]
 mod tests {
     // Import Vec and vec! based on feature flags
-    use std::{
-        vec,
-        vec::Vec,
-    };
+    use std::{vec, vec::Vec};
 
     use super::*;
 
     struct TestConstExprContext {
-        globals:    Vec<Value>,
+        globals: Vec<Value>,
         func_count: u32,
     }
 
@@ -482,7 +467,7 @@ mod tests {
         expr.push(ConstExpr::End).unwrap();
 
         let context = TestConstExprContext {
-            globals:    Vec::new(),
+            globals: Vec::new(),
             func_count: 0,
         };
 
@@ -499,7 +484,7 @@ mod tests {
         expr.push(ConstExpr::End).unwrap();
 
         let context = TestConstExprContext {
-            globals:    Vec::new(),
+            globals: Vec::new(),
             func_count: 0,
         };
 
@@ -514,7 +499,7 @@ mod tests {
         expr.push(ConstExpr::End).unwrap();
 
         let context = TestConstExprContext {
-            globals:    {
+            globals: {
                 let mut v = Vec::new();
                 v.push(Value::I32(100));
                 v

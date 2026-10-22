@@ -82,12 +82,12 @@ pub enum IsolationLevel {
 impl<P> Default for PlatformConfig<P> {
     fn default() -> Self {
         Self {
-            max_pages:              1024,
-            guard_pages:            true,
+            max_pages: 1024,
+            guard_pages: true,
             static_allocation_size: None,
-            rt_priority:            None,
-            isolation_level:        None,
-            _paradigm:              PhantomData,
+            rt_priority: None,
+            isolation_level: None,
+            _paradigm: PhantomData,
         }
     }
 }

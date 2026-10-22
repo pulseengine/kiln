@@ -401,4 +401,3 @@ impl GenerativeTypeRegistry {
         }
     }
 }
-

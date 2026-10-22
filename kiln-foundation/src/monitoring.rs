@@ -5,29 +5,22 @@
 //!
 //! SW-REQ-ID: REQ_MONITOR_001 - System observability
 
-use core::sync::atomic::{
-    AtomicU64,
-    AtomicUsize,
-    Ordering,
-};
+use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
-use crate::{
-    budget_aware_provider::CrateId,
-    memory_coordinator::CrateIdentifier,
-};
+use crate::{budget_aware_provider::CrateId, memory_coordinator::CrateIdentifier};
 
 /// Global monitoring statistics
 pub struct MemoryMonitor {
     /// Total allocations across all crates
-    pub total_allocations:         AtomicU64,
+    pub total_allocations: AtomicU64,
     /// Total deallocations across all crates
-    pub total_deallocations:       AtomicU64,
+    pub total_deallocations: AtomicU64,
     /// Peak memory usage
-    pub peak_usage:                AtomicUsize,
+    pub peak_usage: AtomicUsize,
     /// Current total allocated bytes
-    pub current_usage:             AtomicUsize,
+    pub current_usage: AtomicUsize,
     /// Number of allocation failures
-    pub allocation_failures:       AtomicU64,
+    pub allocation_failures: AtomicU64,
     /// Number of budget overruns prevented
     pub budget_overruns_prevented: AtomicU64,
 }
@@ -42,11 +35,11 @@ impl MemoryMonitor {
     /// Create a new memory monitor
     pub const fn new() -> Self {
         Self {
-            total_allocations:         AtomicU64::new(0),
-            total_deallocations:       AtomicU64::new(0),
-            peak_usage:                AtomicUsize::new(0),
-            current_usage:             AtomicUsize::new(0),
-            allocation_failures:       AtomicU64::new(0),
+            total_allocations: AtomicU64::new(0),
+            total_deallocations: AtomicU64::new(0),
+            peak_usage: AtomicUsize::new(0),
+            current_usage: AtomicUsize::new(0),
+            allocation_failures: AtomicU64::new(0),
             budget_overruns_prevented: AtomicU64::new(0),
         }
     }
@@ -90,11 +83,11 @@ impl MemoryMonitor {
     /// Get current statistics snapshot
     pub fn get_statistics(&self) -> MemoryStatistics {
         MemoryStatistics {
-            total_allocations:         self.total_allocations.load(Ordering::Relaxed),
-            total_deallocations:       self.total_deallocations.load(Ordering::Relaxed),
-            peak_usage:                self.peak_usage.load(Ordering::Relaxed),
-            current_usage:             self.current_usage.load(Ordering::Relaxed),
-            allocation_failures:       self.allocation_failures.load(Ordering::Relaxed),
+            total_allocations: self.total_allocations.load(Ordering::Relaxed),
+            total_deallocations: self.total_deallocations.load(Ordering::Relaxed),
+            peak_usage: self.peak_usage.load(Ordering::Relaxed),
+            current_usage: self.current_usage.load(Ordering::Relaxed),
+            allocation_failures: self.allocation_failures.load(Ordering::Relaxed),
             budget_overruns_prevented: self.budget_overruns_prevented.load(Ordering::Relaxed),
         }
     }
@@ -113,11 +106,11 @@ impl MemoryMonitor {
 /// Snapshot of memory statistics
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MemoryStatistics {
-    pub total_allocations:         u64,
-    pub total_deallocations:       u64,
-    pub peak_usage:                usize,
-    pub current_usage:             usize,
-    pub allocation_failures:       u64,
+    pub total_allocations: u64,
+    pub total_deallocations: u64,
+    pub peak_usage: usize,
+    pub current_usage: usize,
+    pub allocation_failures: u64,
     pub budget_overruns_prevented: u64,
 }
 
@@ -176,10 +169,10 @@ impl core::ops::Deref for PerTestThreadMemoryMonitor {
 
 /// Per-crate monitoring
 pub struct CrateMonitor {
-    crate_id:      CrateId,
-    allocations:   AtomicU64,
+    crate_id: CrateId,
+    allocations: AtomicU64,
     current_usage: AtomicUsize,
-    peak_usage:    AtomicUsize,
+    peak_usage: AtomicUsize,
 }
 
 impl CrateMonitor {
@@ -221,20 +214,20 @@ impl CrateMonitor {
 
     pub fn get_statistics(&self) -> CrateStatistics {
         CrateStatistics {
-            crate_id:      self.crate_id,
-            allocations:   self.allocations.load(Ordering::Relaxed),
+            crate_id: self.crate_id,
+            allocations: self.allocations.load(Ordering::Relaxed),
             current_usage: self.current_usage.load(Ordering::Relaxed),
-            peak_usage:    self.peak_usage.load(Ordering::Relaxed),
+            peak_usage: self.peak_usage.load(Ordering::Relaxed),
         }
     }
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct CrateStatistics {
-    pub crate_id:      CrateId,
-    pub allocations:   u64,
+    pub crate_id: CrateId,
+    pub allocations: u64,
     pub current_usage: usize,
-    pub peak_usage:    usize,
+    pub peak_usage: usize,
 }
 
 /// Debug tracking for development
@@ -247,10 +240,7 @@ pub fn debug_track_allocation(crate_id: CrateId, size: usize, purpose: &str) {
     {
         use std::{
             collections::HashMap,
-            sync::{
-                Mutex,
-                OnceLock,
-            },
+            sync::{Mutex, OnceLock},
         };
 
         static DEBUG_TRACKER: OnceLock<Mutex<HashMap<String, (usize, usize)>>> = OnceLock::new();
@@ -271,14 +261,14 @@ pub fn get_system_report() -> SystemReport {
 
     SystemReport {
         global_statistics: global_stats,
-        system_health:     calculate_system_health(&global_stats),
+        system_health: calculate_system_health(&global_stats),
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct SystemReport {
     pub global_statistics: MemoryStatistics,
-    pub system_health:     SystemHealth,
+    pub system_health: SystemHealth,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

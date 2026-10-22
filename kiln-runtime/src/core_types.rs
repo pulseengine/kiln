@@ -7,47 +7,29 @@
 use kiln_error::Result;
 use kiln_foundation::{
     bounded::BoundedVec,
-    prelude::{
-        codes,
-        BoundedCapacity,
-        Clone,
-        Debug,
-        Default,
-        Eq,
-        Error,
-        ErrorCategory,
-        PartialEq,
-    },
+    prelude::{BoundedCapacity, Clone, Debug, Default, Eq, Error, ErrorCategory, PartialEq, codes},
     safe_memory::NoStdProvider,
-    traits::{
-        Checksummable,
-        FromBytes,
-        ToBytes,
-    },
+    traits::{Checksummable, FromBytes, ToBytes},
 };
 use kiln_instructions::Value;
 
 use crate::{
     bounded_runtime_infra::RuntimeProvider,
     prelude::ToString,
-    simple_types::{
-        LocalsVec,
-        ParameterVec,
-        ValueStackVec,
-    },
+    simple_types::{LocalsVec, ParameterVec, ValueStackVec},
 };
 
 /// Call frame for function execution tracking
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct CallFrame {
     /// Function index being executed
-    pub function_index:      u32,
+    pub function_index: u32,
     /// Current instruction pointer
     pub instruction_pointer: u32,
     /// Local variables for this frame
-    pub locals:              LocalsVec,
+    pub locals: LocalsVec,
     /// Return address (for stackless execution)
-    pub return_address:      Option<u32>,
+    pub return_address: Option<u32>,
 }
 
 impl Checksummable for CallFrame {
@@ -99,13 +81,13 @@ impl FromBytes for CallFrame {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ComponentExecutionState {
     /// Whether the component is currently running
-    pub is_running:          bool,
+    pub is_running: bool,
     /// Current instruction pointer (if running)
     pub instruction_pointer: u32,
     /// Stack depth
-    pub stack_depth:         usize,
+    pub stack_depth: usize,
     /// Gas remaining for execution
-    pub gas_remaining:       u64,
+    pub gas_remaining: u64,
 }
 
 impl Checksummable for ComponentExecutionState {
@@ -167,11 +149,11 @@ pub struct ExecutionContext {
     /// Value stack for WebAssembly execution
     pub value_stack: ValueStackVec,
     /// Call stack for function tracking
-    pub call_stack:  ParameterVec, // Reuse parameter vec for simplicity
+    pub call_stack: ParameterVec, // Reuse parameter vec for simplicity
     /// Current execution statistics
-    pub stats:       crate::execution::ExecutionStats,
+    pub stats: crate::execution::ExecutionStats,
     /// Whether execution is currently active
-    pub is_active:   bool,
+    pub is_active: bool,
 }
 
 impl ExecutionContext {
@@ -180,9 +162,9 @@ impl ExecutionContext {
         let provider = RuntimeProvider::default();
         Ok(ExecutionContext {
             value_stack: BoundedVec::new(provider.clone())?,
-            call_stack:  BoundedVec::new(provider)?,
-            stats:       crate::execution::ExecutionStats::new(),
-            is_active:   false,
+            call_stack: BoundedVec::new(provider)?,
+            stats: crate::execution::ExecutionStats::new(),
+            is_active: false,
         })
     }
 

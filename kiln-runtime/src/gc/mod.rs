@@ -75,11 +75,7 @@ impl GcRef {
     /// Get the heap offset (returns None for null)
     #[inline]
     pub const fn offset(&self) -> Option<u32> {
-        if self.offset == 0 {
-            None
-        } else {
-            Some(self.offset)
-        }
+        if self.offset == 0 { None } else { Some(self.offset) }
     }
 }
 

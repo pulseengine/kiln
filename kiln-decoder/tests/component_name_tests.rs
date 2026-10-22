@@ -145,7 +145,7 @@ fn test_custom_section_with_name() {
     // Custom section
     binary.push(binary::COMPONENT_CUSTOM_SECTION_ID);
     binary.extend_from_slice(&binary::with_alloc::write_leb128_u32(
-        custom_section_content.len() as u32
+        custom_section_content.len() as u32,
     ));
     binary.extend_from_slice(&custom_section_content);
 

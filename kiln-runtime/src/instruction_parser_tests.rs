@@ -22,7 +22,10 @@ mod tests {
         let bytecode = vec![0x00, 0x0B]; // unreachable + end
         let instructions = parse_instructions(&bytecode).unwrap();
         assert_eq!(instructions.len(), 2);
-        assert!(matches!(instructions.get(0).unwrap(), Instruction::Unreachable));
+        assert!(matches!(
+            instructions.get(0).unwrap(),
+            Instruction::Unreachable
+        ));
     }
 
     #[test]

@@ -13,20 +13,12 @@ use core::fmt;
 use std::{
     collections::VecDeque,
     sync::{
-        atomic::{
-            AtomicU64,
-            Ordering,
-        },
-        Arc,
-        Mutex,
+        Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
     },
 };
 
-use super::{
-    NNOperation,
-    ResourceUsageStats,
-    VerificationLevel,
-};
+use super::{NNOperation, ResourceUsageStats, VerificationLevel};
 use crate::prelude::*;
 
 /// Log levels for WASI-NN operations
@@ -35,13 +27,13 @@ pub enum LogLevel {
     /// Critical security events or system failures
     Critical = 0,
     /// Security warnings or significant errors
-    Warning  = 1,
+    Warning = 1,
     /// Informational events (operations, resource usage)
-    Info     = 2,
+    Info = 2,
     /// Debug information for development
-    Debug    = 3,
+    Debug = 3,
     /// Detailed trace information
-    Trace    = 4,
+    Trace = 4,
 }
 
 impl fmt::Display for LogLevel {
@@ -76,28 +68,22 @@ pub enum EventType {
 pub enum SecurityEvent {
     /// Rate limit exceeded
     RateLimitExceeded {
-        operation:  String,
+        operation: String,
         limit_type: String,
     },
     /// Resource quota exceeded
     QuotaExceeded {
         resource_type: String,
-        current:       usize,
-        limit:         usize,
+        current: usize,
+        limit: usize,
     },
     /// Unauthorized operation attempted
-    UnauthorizedOperation {
-        operation: String,
-        reason:    String,
-    },
+    UnauthorizedOperation { operation: String, reason: String },
     /// Model validation failed
-    ModelValidationFailed {
-        reason:     String,
-        model_size: usize,
-    },
+    ModelValidationFailed { reason: String, model_size: usize },
     /// Capability verification failed
     CapabilityVerificationFailed {
-        operation:        String,
+        operation: String,
         capability_level: String,
     },
     /// Suspicious activity detected
@@ -109,9 +95,9 @@ pub enum SecurityEvent {
 pub enum PerformanceEvent {
     /// Operation timing
     OperationTiming {
-        operation:   String,
+        operation: String,
         duration_us: u64,
-        success:     bool,
+        success: bool,
     },
     /// Memory usage snapshot
     MemorySnapshot {
@@ -121,18 +107,18 @@ pub enum PerformanceEvent {
     /// Throughput measurement
     Throughput {
         operations_per_second: f64,
-        window_size_ms:        u64,
+        window_size_ms: u64,
     },
     /// Latency measurement
     Latency {
         operation: String,
-        p50_us:    u64,
-        p95_us:    u64,
-        p99_us:    u64,
+        p50_us: u64,
+        p95_us: u64,
+        p99_us: u64,
     },
     /// Resource efficiency
     Efficiency {
-        cpu_utilization:   f64,
+        cpu_utilization: f64,
         memory_efficiency: f64,
     },
 }
@@ -143,19 +129,19 @@ pub enum ResourceEvent {
     /// Resource allocated
     Allocated {
         resource_type: String,
-        amount:        usize,
-        total_used:    usize,
+        amount: usize,
+        total_used: usize,
     },
     /// Resource deallocated
     Deallocated {
         resource_type: String,
-        amount:        usize,
-        total_used:    usize,
+        amount: usize,
+        total_used: usize,
     },
     /// Resource usage warning
     UsageWarning {
-        resource_type:     String,
-        usage_percent:     u8,
+        resource_type: String,
+        usage_percent: u8,
         threshold_percent: u8,
     },
     /// Resource leak detected
@@ -170,28 +156,28 @@ pub enum ResourceEvent {
 pub enum OperationEvent {
     /// Operation started
     Started {
-        operation:    String,
+        operation: String,
         operation_id: u64,
-        context:      String,
+        context: String,
     },
     /// Operation completed successfully
     Completed {
-        operation:    String,
+        operation: String,
         operation_id: u64,
-        duration_us:  u64,
+        duration_us: u64,
     },
     /// Operation failed
     Failed {
-        operation:    String,
+        operation: String,
         operation_id: u64,
-        error:        String,
-        duration_us:  u64,
+        error: String,
+        duration_us: u64,
     },
     /// Operation cancelled
     Cancelled {
-        operation:    String,
+        operation: String,
         operation_id: u64,
-        reason:       String,
+        reason: String,
     },
 }
 
@@ -200,14 +186,14 @@ pub enum OperationEvent {
 pub enum ErrorEvent {
     /// Validation error
     ValidationError {
-        field:    String,
-        value:    String,
+        field: String,
+        value: String,
         expected: String,
     },
     /// Internal error
     InternalError {
-        component:       String,
-        error:           String,
+        component: String,
+        error: String,
         recovery_action: String,
     },
     /// Configuration error
@@ -215,8 +201,8 @@ pub enum ErrorEvent {
     /// External dependency error
     DependencyError {
         dependency: String,
-        error:      String,
-        impact:     String,
+        error: String,
+        impact: String,
     },
 }
 
@@ -224,19 +210,19 @@ pub enum ErrorEvent {
 #[derive(Debug, Clone)]
 pub struct LogEntry {
     /// Timestamp in microseconds since epoch
-    pub timestamp:          u64,
+    pub timestamp: u64,
     /// Log level
-    pub level:              LogLevel,
+    pub level: LogLevel,
     /// Event type and details
-    pub event:              EventType,
+    pub event: EventType,
     /// Component that generated the log
-    pub component:          String,
+    pub component: String,
     /// Verification level context
     pub verification_level: Option<VerificationLevel>,
     /// Additional context data
-    pub context:            Vec<(String, String)>,
+    pub context: Vec<(String, String)>,
     /// Correlation ID for request tracing
-    pub correlation_id:     Option<String>,
+    pub correlation_id: Option<String>,
 }
 
 impl LogEntry {
@@ -381,28 +367,28 @@ impl LogEntry {
 #[derive(Debug, Clone)]
 pub struct LoggerConfig {
     /// Minimum log level to output
-    pub min_level:               LogLevel,
+    pub min_level: LogLevel,
     /// Maximum number of log entries to keep in memory
-    pub max_entries:             usize,
+    pub max_entries: usize,
     /// Whether to output JSON format
-    pub json_format:             bool,
+    pub json_format: bool,
     /// Whether to include timestamps
-    pub include_timestamps:      bool,
+    pub include_timestamps: bool,
     /// Whether to include correlation IDs
     pub include_correlation_ids: bool,
     /// Buffer size for batched logging
-    pub buffer_size:             usize,
+    pub buffer_size: usize,
 }
 
 impl Default for LoggerConfig {
     fn default() -> Self {
         Self {
-            min_level:               LogLevel::Info,
-            max_entries:             10_000,
-            json_format:             false,
-            include_timestamps:      true,
+            min_level: LogLevel::Info,
+            max_entries: 10_000,
+            json_format: false,
+            include_timestamps: true,
             include_correlation_ids: true,
-            buffer_size:             100,
+            buffer_size: 100,
         }
     }
 }
@@ -410,13 +396,13 @@ impl Default for LoggerConfig {
 /// WASI-NN Logger implementation
 #[derive(Debug)]
 pub struct Logger {
-    config:            LoggerConfig,
-    entries:           Mutex<VecDeque<LogEntry>>,
+    config: LoggerConfig,
+    entries: Mutex<VecDeque<LogEntry>>,
     operation_counter: AtomicU64,
     // Performance metrics
-    total_operations:  AtomicU64,
-    total_errors:      AtomicU64,
-    start_time:        u64,
+    total_operations: AtomicU64,
+    total_errors: AtomicU64,
+    start_time: u64,
 }
 
 impl Logger {
@@ -571,10 +557,10 @@ impl Logger {
 /// Logging statistics
 #[derive(Debug, Clone)]
 pub struct LoggingStats {
-    pub total_operations:  u64,
-    pub total_errors:      u64,
-    pub error_rate:        f64,
-    pub uptime_us:         u64,
+    pub total_operations: u64,
+    pub total_errors: u64,
+    pub error_rate: f64,
+    pub uptime_us: u64,
     pub entries_in_buffer: usize,
 }
 
@@ -1003,10 +989,7 @@ fn error_event_description(event: &ErrorEvent) -> String {
 fn get_current_time_us() -> u64 {
     #[cfg(feature = "std")]
     {
-        use std::time::{
-            SystemTime,
-            UNIX_EPOCH,
-        };
+        use std::time::{SystemTime, UNIX_EPOCH};
         SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_micros() as u64
     }
     #[cfg(not(feature = "std"))]
@@ -1019,11 +1002,7 @@ fn get_current_time_us() -> u64 {
 fn format_timestamp(timestamp_us: u64) -> String {
     #[cfg(feature = "std")]
     {
-        use std::time::{
-            Duration,
-            SystemTime,
-            UNIX_EPOCH,
-        };
+        use std::time::{Duration, SystemTime, UNIX_EPOCH};
         let datetime = SystemTime::UNIX_EPOCH + Duration::from_micros(timestamp_us);
         // For simplicity, just show microseconds since epoch
         // In production, you'd want proper datetime formatting
@@ -1042,7 +1021,7 @@ mod tests {
     #[test]
     fn test_log_entry_creation() {
         let event = SecurityEvent::RateLimitExceeded {
-            operation:  "load".to_string(),
+            operation: "load".to_string(),
             limit_type: "per_minute".to_string(),
         };
 
@@ -1059,9 +1038,9 @@ mod tests {
     #[test]
     fn test_json_formatting() {
         let event = PerformanceEvent::OperationTiming {
-            operation:   "inference".to_string(),
+            operation: "inference".to_string(),
             duration_us: 1500,
-            success:     true,
+            success: true,
         };
 
         let entry = LogEntry::new(LogLevel::Info, EventType::Performance(event), "wasi-nn");
@@ -1078,8 +1057,8 @@ mod tests {
         let logger = Logger::new();
 
         let error_event = ErrorEvent::ValidationError {
-            field:    "model_size".to_string(),
-            value:    "too_large".to_string(),
+            field: "model_size".to_string(),
+            value: "too_large".to_string(),
             expected: "< 100MB".to_string(),
         };
 

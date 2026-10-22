@@ -3,25 +3,15 @@
 //! This module contains the remaining SIMD operation implementations that
 //! complete the WebAssembly SIMD specification coverage.
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
-use kiln_foundation::values::{
-    Value,
-    V128,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
+use kiln_foundation::values::{V128, Value};
 
 /// Extract v128 bytes from a Value with validation
 #[inline]
 fn extract_v128(value: &Value) -> Result<[u8; 16]> {
     match value {
         Value::V128(v128) => Ok(v128.bytes),
-        _ => Err(Error::runtime_execution_error(
-            "Expected v128 value",
-        )),
+        _ => Err(Error::runtime_execution_error("Expected v128 value")),
     }
 }
 

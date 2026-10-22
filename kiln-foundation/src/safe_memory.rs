@@ -17,24 +17,13 @@
 
 use core::{
     fmt,
-    sync::atomic::{
-        AtomicUsize,
-        Ordering,
-    },
+    sync::atomic::{AtomicUsize, Ordering},
 };
 
 use crate::{
-    codes,
-    operations::{
-        record_global_operation,
-        Type as OperationType,
-    },
-    verification::{
-        Checksum,
-        VerificationLevel,
-    },
-    Error,
-    ErrorCategory,
+    Error, ErrorCategory, codes,
+    operations::{Type as OperationType, record_global_operation},
+    verification::{Checksum, VerificationLevel},
 };
 // Result is imported through the prelude
 
@@ -59,7 +48,7 @@ pub type DefaultNoStdProvider = NoStdProvider<DEFAULT_MEMORY_PROVIDER_CAPACITY>;
 use std::collections::HashSet;
 #[cfg(feature = "std")]
 use std::sync::Mutex; /* Note: std::sync::Mutex might be an issue if a no_std mutex is
-                       * needed elsewhere. */
+ * needed elsewhere. */
 #[cfg(feature = "std")]
 use std::vec::Vec;
 
@@ -72,11 +61,11 @@ pub use crate::prelude::*;
 #[derive(Clone)]
 pub struct Slice<'a> {
     /// The underlying data slice
-    data:               &'a [u8],
+    data: &'a [u8],
     /// Checksum for data integrity verification
-    checksum:           Checksum,
+    checksum: Checksum,
     /// Length of the slice for redundant verification
-    length:             usize,
+    length: usize,
     /// Verification level for this slice
     verification_level: VerificationLevel,
 }
@@ -286,11 +275,11 @@ impl fmt::Debug for Slice<'_> {
 /// verification
 pub struct SliceMut<'a> {
     /// The underlying mutable data slice
-    data:               &'a mut [u8],
+    data: &'a mut [u8],
     /// Checksum for data integrity verification
-    checksum:           Checksum,
+    checksum: Checksum,
     /// Length of the slice for redundant verification
-    length:             usize,
+    length: usize,
     /// Verification level for this slice
     verification_level: VerificationLevel,
 }
@@ -527,7 +516,7 @@ impl fmt::Debug for SliceMut<'_> {
             .field("verification_level", &self.verification_level)
             // Do not print mutable data content in debug
             .finish_non_exhaustive() // If SliceMut has private fields or for
-                                     // future-proofing
+        // future-proofing
     }
 }
 
@@ -660,11 +649,11 @@ pub trait Provider: Send + Sync + fmt::Debug + Clone + Default + PartialEq + Eq 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Stats {
     /// Total memory size in bytes
-    pub total_size:      usize,
+    pub total_size: usize,
     /// Number of memory accesses
-    pub access_count:    usize,
+    pub access_count: usize,
     /// Number of unique memory regions accessed
-    pub unique_regions:  usize,
+    pub unique_regions: usize,
     /// Maximum size of any access
     pub max_access_size: usize,
 }
@@ -672,17 +661,17 @@ pub struct Stats {
 #[cfg(feature = "std")]
 pub struct StdProvider {
     /// The underlying data buffer
-    data:               Vec<u8>,
+    data: Vec<u8>,
     /// Track memory accesses for safety monitoring
-    access_log:         Mutex<Vec<(usize, usize)>>,
+    access_log: Mutex<Vec<(usize, usize)>>,
     /// Counter for access operations
-    access_count:       AtomicUsize,
+    access_count: AtomicUsize,
     /// Maximum size of any access seen
-    max_access_size:    AtomicUsize,
+    max_access_size: AtomicUsize,
     /// Number of unique regions accessed
-    unique_regions:     AtomicUsize,
+    unique_regions: AtomicUsize,
     /// Regions hash (for uniqueness tracking)
-    regions_hash:       Mutex<HashSet<usize>>,
+    regions_hash: Mutex<HashSet<usize>>,
     /// Verification level for memory operations
     verification_level: VerificationLevel,
 }
@@ -691,12 +680,12 @@ pub struct StdProvider {
 impl Clone for StdProvider {
     fn clone(&self) -> Self {
         Self {
-            data:               self.data.clone(),
-            access_log:         Mutex::new(Vec::new()), // Create new empty access log
-            access_count:       AtomicUsize::new(0),
-            max_access_size:    AtomicUsize::new(0),
-            unique_regions:     AtomicUsize::new(0),
-            regions_hash:       Mutex::new(HashSet::new()),
+            data: self.data.clone(),
+            access_log: Mutex::new(Vec::new()), // Create new empty access log
+            access_count: AtomicUsize::new(0),
+            max_access_size: AtomicUsize::new(0),
+            unique_regions: AtomicUsize::new(0),
+            regions_hash: Mutex::new(HashSet::new()),
             verification_level: self.verification_level,
         }
     }
@@ -735,12 +724,12 @@ impl Eq for StdProvider {}
 impl Default for StdProvider {
     fn default() -> Self {
         Self {
-            data:               Vec::new(),
-            access_log:         Mutex::new(Vec::new()),
-            access_count:       AtomicUsize::new(0),
-            max_access_size:    AtomicUsize::new(0),
-            unique_regions:     AtomicUsize::new(0),
-            regions_hash:       Mutex::new(HashSet::new()),
+            data: Vec::new(),
+            access_log: Mutex::new(Vec::new()),
+            access_count: AtomicUsize::new(0),
+            max_access_size: AtomicUsize::new(0),
+            unique_regions: AtomicUsize::new(0),
+            regions_hash: Mutex::new(HashSet::new()),
             verification_level: VerificationLevel::default(),
         }
     }
@@ -764,12 +753,12 @@ impl StdProvider {
     /// Create a new `StdProvider` with a specific capacity.
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            data:               Vec::with_capacity(capacity),
-            access_log:         Mutex::new(Vec::new()),
-            access_count:       AtomicUsize::new(0),
-            max_access_size:    AtomicUsize::new(0),
-            unique_regions:     AtomicUsize::new(0),
-            regions_hash:       Mutex::new(HashSet::new()),
+            data: Vec::with_capacity(capacity),
+            access_log: Mutex::new(Vec::new()),
+            access_count: AtomicUsize::new(0),
+            max_access_size: AtomicUsize::new(0),
+            unique_regions: AtomicUsize::new(0),
+            regions_hash: Mutex::new(HashSet::new()),
             verification_level: VerificationLevel::default(),
         }
     }
@@ -1006,9 +995,9 @@ impl Provider for StdProvider {
 
     fn memory_stats(&self) -> Stats {
         Stats {
-            total_size:      self.data.capacity(),
-            access_count:    self.access_count.load(Ordering::Relaxed),
-            unique_regions:  self.unique_regions.load(Ordering::Relaxed),
+            total_size: self.data.capacity(),
+            access_count: self.access_count.load(Ordering::Relaxed),
+            unique_regions: self.unique_regions.load(Ordering::Relaxed),
             max_access_size: self.max_access_size.load(Ordering::Relaxed),
         }
     }
@@ -1121,11 +1110,11 @@ impl Allocator for StdProvider {
 /// Binary std/no_std choice
 pub struct NoStdProvider<const N: usize> {
     /// The underlying data buffer
-    data:               [u8; N],
+    data: [u8; N],
     /// Current usage of the buffer
-    used:               usize,
+    used: usize,
     /// Counter for access operations
-    access_count:       AtomicUsize,
+    access_count: AtomicUsize,
     /// Last access offset for validation
     last_access_offset: AtomicUsize,
     /// Last access length for validation
@@ -1204,9 +1193,9 @@ impl<const N: usize> core::hash::Hash for NoStdProvider<N> {
 impl<const N: usize> Clone for NoStdProvider<N> {
     fn clone(&self) -> Self {
         Self {
-            data:               self.data, // [u8; N] is Copy
-            used:               self.used,
-            access_count:       AtomicUsize::new(self.access_count.load(Ordering::Relaxed)),
+            data: self.data, // [u8; N] is Copy
+            used: self.used,
+            access_count: AtomicUsize::new(self.access_count.load(Ordering::Relaxed)),
             last_access_offset: AtomicUsize::new(self.last_access_offset.load(Ordering::Relaxed)),
             last_access_length: AtomicUsize::new(self.last_access_length.load(Ordering::Relaxed)),
             verification_level: self.verification_level, // VerificationLevel is Copy
@@ -1236,13 +1225,13 @@ impl<const N: usize> Default for NoStdProvider<N> {
             // Use heap allocation for large providers to avoid stack overflow
             return NoStdProvider::<N>::new_heap_allocated();
         }
-        
+
         // Safety: N must be such that [0u8; N] is valid and fits on stack.
         // For N <= 8192, this should be safe on most systems.
         Self {
-            data:               [0u8; N], /* Initialize with zeros. Safe for small N. */
-            used:               N, /* All bytes are initialized to zero, so all N bytes are usable */
-            access_count:       AtomicUsize::new(0),
+            data: [0u8; N], /* Initialize with zeros. Safe for small N. */
+            used: N,        /* All bytes are initialized to zero, so all N bytes are usable */
+            access_count: AtomicUsize::new(0),
             last_access_offset: AtomicUsize::new(0),
             last_access_length: AtomicUsize::new(0),
             verification_level: VerificationLevel::default(),
@@ -1258,12 +1247,12 @@ impl<const N: usize> NoStdProvider<N> {
         // SIMPLE FIX: Use a Vec<u8> to allocate N bytes on heap, then convert to array
         // This avoids the complex unsafe pointer manipulation
         let mut heap_data = vec![0u8; N];
-        
+
         // Convert Vec to fixed-size array
         // SAFETY: Infallible - Vec was created with exactly N elements via vec![0u8; N]
-        let data_array: [u8; N] = heap_data.try_into()
-            .expect("Vec<u8> of size N must convert to [u8; N]");
-        
+        let data_array: [u8; N] =
+            heap_data.try_into().expect("Vec<u8> of size N must convert to [u8; N]");
+
         Self {
             data: data_array,
             used: N, // WebAssembly memory is fully zero-initialized, so all N bytes are valid to read
@@ -1273,12 +1262,15 @@ impl<const N: usize> NoStdProvider<N> {
             verification_level: VerificationLevel::default(),
         }
     }
-    
+
     /// Fallback for no_std environments - use smaller provider or panic
     #[cfg(not(feature = "std"))]
     pub fn new_heap_allocated() -> Self {
         // In no_std, we can't use heap allocation, so this is a critical error
-        panic!("Stack overflow: Provider size {} too large for stack allocation in no_std environment. Use smaller provider size <= 8192 bytes.", N);
+        panic!(
+            "Stack overflow: Provider size {} too large for stack allocation in no_std environment. Use smaller provider size <= 8192 bytes.",
+            N
+        );
     }
 }
 
@@ -1324,9 +1316,9 @@ impl<const N: usize> NoStdProvider<N> {
     /// Internal constructor that doesn't trigger deprecation warnings
     fn new_internal(level: VerificationLevel) -> Self {
         Self {
-            data:               [0; N],
-            used:               0,
-            access_count:       AtomicUsize::new(0),
+            data: [0; N],
+            used: 0,
+            access_count: AtomicUsize::new(0),
             last_access_offset: AtomicUsize::new(0),
             last_access_length: AtomicUsize::new(0),
             verification_level: level,
@@ -1452,9 +1444,9 @@ impl<const N: usize> NoStdProvider<N> {
     /// Get memory usage statistics
     pub fn memory_stats(&self) -> Stats {
         Stats {
-            total_size:      N,
-            access_count:    self.access_count(),
-            unique_regions:  1, // No-std can't track unique regions
+            total_size: N,
+            access_count: self.access_count(),
+            unique_regions: 1, // No-std can't track unique regions
             max_access_size: self.last_access_length.load(Ordering::Relaxed),
         }
     }
@@ -1607,9 +1599,9 @@ impl<const N: usize> Provider for NoStdProvider<N> {
 
     fn get_slice_mut(&mut self, offset: usize, len: usize) -> Result<SliceMut<'_>> {
         self.verify_access(offset, len)?; // Ensures offset+len is within self.used or N based on policy
-                                          // SliceMut implies modification, so it should be within 'used' or allow writing
-                                          // to extend 'used'. For now, ensure
-                                          // it's within capacity N for mutable access.
+        // SliceMut implies modification, so it should be within 'used' or allow writing
+        // to extend 'used'. For now, ensure
+        // it's within capacity N for mutable access.
         if offset + len > N {
             return Err(Error::memory_out_of_bounds(
                 "Offset + length exceeds capacity",
@@ -1976,4 +1968,3 @@ pub use Provider as MemoryProvider;
 pub use StdProvider as StdMemoryProvider;
 
 pub use crate::bounded::BoundedStack as SafeStack;
-

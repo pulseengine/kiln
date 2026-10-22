@@ -28,10 +28,7 @@ extern crate alloc;
 // Currently not needed at crate level - specific modules import as needed
 
 // Reexports for convenience
-pub use kiln_error::{
-    Error,
-    Result,
-};
+pub use kiln_error::{Error, Result};
 pub use kiln_host::CallbackRegistry;
 
 /// Logging handlers for processing log messages.
@@ -70,34 +67,18 @@ pub mod bounded_logging;
 // Reexport types
 // Re-export Agent C deliverables
 pub use bounded_logging::{
-    BoundedLogBuffer,
-    BoundedLogEntry,
-    BoundedLogger,
-    BoundedLoggingLimits,
-    BoundedLoggingManager,
-    BoundedLoggingStatistics,
-    ComponentLoggingId,
-    LogMetadata,
-    LoggerId,
+    BoundedLogBuffer, BoundedLogEntry, BoundedLogger, BoundedLoggingLimits, BoundedLoggingManager,
+    BoundedLoggingStatistics, ComponentLoggingId, LogMetadata, LoggerId,
 };
-pub use handler::{
-    LogHandler,
-    LoggingExt,
-};
+pub use handler::{LogHandler, LoggingExt};
 pub use level::LogLevel;
 // Reexport minimal_handler types for pure no_std environments
 #[cfg(not(any(feature = "std",)))]
-pub use minimal_handler::{
-    MinimalLogHandler,
-    MinimalLogMessage,
-};
+pub use minimal_handler::{MinimalLogHandler, MinimalLogMessage};
 // Binary std/no_std choice
 #[cfg(feature = "std")]
 #[cfg_attr(docsrs, doc(cfg(any(feature = "std",))))]
-pub use minimal_handler::{
-    MinimalLogHandler,
-    MinimalLogMessage,
-};
+pub use minimal_handler::{MinimalLogHandler, MinimalLogMessage};
 pub use operation::LogOperation;
 
 // Include verification module when the kani feature is enabled

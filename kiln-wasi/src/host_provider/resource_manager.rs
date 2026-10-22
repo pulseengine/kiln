@@ -7,28 +7,19 @@
 use std::collections::HashMap;
 
 use kiln_error::Result;
+#[cfg(not(feature = "std"))]
+use kiln_foundation::budget_aware_provider::CrateId as BudgetCrateId;
 #[cfg(feature = "std")]
 use kiln_foundation::capabilities::CapabilityAwareProvider;
 #[cfg(not(feature = "std"))]
-use kiln_foundation::budget_aware_provider::CrateId as BudgetCrateId;
+use kiln_foundation::{BoundedMap, safe_managed_alloc};
 use kiln_foundation::{
-    resource::{
-        Resource,
-        ResourceOperation,
-    },
-    safe_memory::NoStdProvider,
-    traits::{
-        Checksummable,
-        FromBytes,
-        ReadStream,
-        ToBytes,
-        WriteStream,
-    },
-    verification::Checksum,
     BoundedString,
+    resource::{Resource, ResourceOperation},
+    safe_memory::NoStdProvider,
+    traits::{Checksummable, FromBytes, ReadStream, ToBytes, WriteStream},
+    verification::Checksum,
 };
-#[cfg(not(feature = "std"))]
-use kiln_foundation::{safe_managed_alloc, BoundedMap};
 
 use crate::prelude::*;
 
@@ -59,10 +50,10 @@ pub enum WasiResourceType {
     FileDescriptor {
         /// Path to the file being accessed.
         #[cfg(feature = "std")]
-        path:     BoundedString<256>,
+        path: BoundedString<256>,
         /// Path to the file being accessed.
         #[cfg(not(feature = "std"))]
-        path:     BoundedString<256>,
+        path: BoundedString<256>,
         /// Whether the file descriptor allows read operations.
         readable: bool,
         /// Whether the file descriptor allows write operations.
@@ -81,10 +72,10 @@ pub enum WasiResourceType {
     InputStream {
         /// Name identifier for the input stream.
         #[cfg(feature = "std")]
-        name:     BoundedString<64>,
+        name: BoundedString<64>,
         /// Name identifier for the input stream.
         #[cfg(not(feature = "std"))]
-        name:     BoundedString<64>,
+        name: BoundedString<64>,
         /// Current position in the stream for read operations.
         position: u64,
     },
@@ -92,22 +83,22 @@ pub enum WasiResourceType {
     OutputStream {
         /// Name identifier for the output stream.
         #[cfg(feature = "std")]
-        name:     BoundedString<64>,
+        name: BoundedString<64>,
         /// Name identifier for the output stream.
         #[cfg(not(feature = "std"))]
-        name:     BoundedString<64>,
+        name: BoundedString<64>,
         /// Current position in the stream for write operations.
         position: u64,
     },
     /// Clock handle
     ClockHandle {
         /// Type of clock being accessed.
-        clock_type: WasiClockType
+        clock_type: WasiClockType,
     },
     /// Random generator handle
     RandomHandle {
         /// Whether to use a cryptographically secure random generator.
-        secure: bool
+        secure: bool,
     },
 }
 
@@ -149,26 +140,26 @@ pub struct WasiResourceManager {
 pub struct WasiResource {
     /// Base Kiln resource
     #[cfg(feature = "std")]
-    base:          Resource<CapabilityAwareProvider<NoStdProvider<8192>>>,
+    base: Resource<CapabilityAwareProvider<NoStdProvider<8192>>>,
     #[cfg(not(feature = "std"))]
-    base:          Resource<NoStdProvider<8192>>,
+    base: Resource<NoStdProvider<8192>>,
     /// WASI-specific resource type
     resource_type: WasiResourceType,
     /// Resource capabilities
-    capabilities:  WasiResourceCapabilities,
+    capabilities: WasiResourceCapabilities,
 }
 
 impl Default for WasiResource {
     fn default() -> Self {
         Self {
-            base:          Resource::new(
+            base: Resource::new(
                 0, // default ID
                 kiln_foundation::resource::ResourceRepr::Opaque,
                 None,
                 kiln_foundation::verification::VerificationLevel::Standard,
             ),
             resource_type: WasiResourceType::Null,
-            capabilities:  WasiResourceCapabilities::default(),
+            capabilities: WasiResourceCapabilities::default(),
         }
     }
 }
@@ -176,15 +167,14 @@ impl Default for WasiResource {
 /// Capabilities for WASI resources
 // Multiple bool flags represent independent capability toggles.
 #[allow(clippy::struct_excessive_bools)]
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct WasiResourceCapabilities {
     /// Can read from this resource
-    pub readable:        bool,
+    pub readable: bool,
     /// Can write to this resource  
-    pub writable:        bool,
+    pub writable: bool,
     /// Can seek in this resource
-    pub seekable:        bool,
+    pub seekable: bool,
     /// Can get metadata from this resource
     pub metadata_access: bool,
 }
@@ -261,9 +251,9 @@ impl WasiResourceManager {
         }
         #[cfg(not(feature = "std"))]
         {
-            self.resources
-                .insert(handle, wasi_resource)
-                .map_err(|_| Error::runtime_execution_error("Failed to insert resource into map"))?;
+            self.resources.insert(handle, wasi_resource).map_err(|_| {
+                Error::runtime_execution_error("Failed to insert resource into map")
+            })?;
         }
 
         Ok(handle)
@@ -305,9 +295,10 @@ impl WasiResourceManager {
     pub fn get_resource_mut(&mut self, handle: WasiHandle) -> Result<WasiResource> {
         #[cfg(feature = "std")]
         {
-            self.resources.get(&handle).cloned().ok_or_else(|| {
-                Error::runtime_execution_error("Resource not found")
-            })
+            self.resources
+                .get(&handle)
+                .cloned()
+                .ok_or_else(|| Error::runtime_execution_error("Resource not found"))
         }
         #[cfg(not(feature = "std"))]
         {
@@ -416,9 +407,9 @@ impl WasiResourceManager {
         let resource_type = WasiResourceType::DirectoryHandle { path: path_string };
 
         let capabilities = WasiResourceCapabilities {
-            readable:        true,
-            writable:        false,
-            seekable:        false,
+            readable: true,
+            writable: false,
+            seekable: false,
             metadata_access: true,
         };
 
@@ -437,14 +428,14 @@ impl WasiResourceManager {
             .map_err(|_| Error::runtime_execution_error("Stream name too long"))?;
 
         let resource_type = WasiResourceType::InputStream {
-            name:     name_string,
+            name: name_string,
             position: 0,
         };
 
         let capabilities = WasiResourceCapabilities {
-            readable:        true,
-            writable:        false,
-            seekable:        false,
+            readable: true,
+            writable: false,
+            seekable: false,
             metadata_access: false,
         };
 
@@ -468,14 +459,14 @@ impl WasiResourceManager {
         })?;
 
         let resource_type = WasiResourceType::OutputStream {
-            name:     name_string,
+            name: name_string,
             position: 0,
         };
 
         let capabilities = WasiResourceCapabilities {
-            readable:        false,
-            writable:        true,
-            seekable:        false,
+            readable: false,
+            writable: true,
+            seekable: false,
             metadata_access: false,
         };
 
@@ -491,9 +482,9 @@ impl WasiResourceManager {
         let resource_type = WasiResourceType::ClockHandle { clock_type };
 
         let capabilities = WasiResourceCapabilities {
-            readable:        true,
-            writable:        false,
-            seekable:        false,
+            readable: true,
+            writable: false,
+            seekable: false,
             metadata_access: false,
         };
 
@@ -509,9 +500,9 @@ impl WasiResourceManager {
         let resource_type = WasiResourceType::RandomHandle { secure };
 
         let capabilities = WasiResourceCapabilities {
-            readable:        true,
-            writable:        false,
-            seekable:        false,
+            readable: true,
+            writable: false,
+            seekable: false,
             metadata_access: false,
         };
 
@@ -584,7 +575,6 @@ impl WasiResource {
     }
 }
 
-
 // Implement required traits for WasiResource to work with BoundedMap
 impl Checksummable for WasiResource {
     fn update_checksum(&self, checksum: &mut Checksum) {
@@ -654,7 +644,11 @@ impl ToBytes for WasiResource {
         // Write resource type discriminant and data
         match &self.resource_type {
             WasiResourceType::Null => writer.write_u8(0)?,
-            WasiResourceType::FileDescriptor { path, readable, writable } => {
+            WasiResourceType::FileDescriptor {
+                path,
+                readable,
+                writable,
+            } => {
                 writer.write_u8(1)?;
                 path.to_bytes_with_provider(writer, provider)?;
                 writer.write_u8(u8::from(*readable))?;
@@ -708,7 +702,11 @@ impl FromBytes for WasiResource {
                 let path = BoundedString::from_bytes_with_provider(reader, provider)?;
                 let readable = reader.read_u8()? != 0;
                 let writable = reader.read_u8()? != 0;
-                WasiResourceType::FileDescriptor { path, readable, writable }
+                WasiResourceType::FileDescriptor {
+                    path,
+                    readable,
+                    writable,
+                }
             },
             2 => {
                 let path = BoundedString::from_bytes_with_provider(reader, provider)?;

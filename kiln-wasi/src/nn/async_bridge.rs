@@ -4,15 +4,8 @@
 //! will work with WASI Preview3's async/await execution model.
 
 use super::{
-    get_context_store,
-    get_graph_store,
-    get_nn_capability,
-    with_nn_capability,
-    ExecutionTarget,
-    GraphEncoding,
-    NNOperation,
-    TensorType,
-    WitTypeConversion,
+    ExecutionTarget, GraphEncoding, NNOperation, TensorType, WitTypeConversion, get_context_store,
+    get_graph_store, get_nn_capability, with_nn_capability,
 };
 use crate::prelude::*;
 
@@ -26,7 +19,7 @@ pub async fn nn_load_async(data: Vec<u8>, encoding: u8, target: u8) -> Result<u3
 
     with_nn_capability(|capability| {
         capability.verify_operation(&NNOperation::Load {
-            size:   data.len(),
+            size: data.len(),
             format: encoding.to_model_format(),
         })?;
 
@@ -64,7 +57,7 @@ pub async fn nn_set_input_async(
 ) -> Result<()> {
     with_nn_capability(|capability| {
         capability.verify_operation(&NNOperation::SetInput {
-            size:       tensor_data.len(),
+            size: tensor_data.len(),
             dimensions: dimensions.clone(),
         })?;
 

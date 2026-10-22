@@ -957,9 +957,9 @@ impl ComponentInstance {
         // Map: (export_kind, export_idx) -> source_instance_idx
         #[cfg(not(feature = "std"))]
         use alloc::collections::BTreeMap as HashMap;
+        use kiln_format::component::{AliasTarget, CoreSort};
         #[cfg(feature = "std")]
         use std::collections::HashMap;
-        use kiln_format::component::{AliasTarget, CoreSort};
 
         #[cfg(feature = "tracing")]
         trace!("from_parsed: About to build alias map");
@@ -1008,21 +1008,26 @@ impl ComponentInstance {
         // Map: core_instance_idx -> runtime instance handle
         #[cfg(not(feature = "std"))]
         use alloc::collections::BTreeMap;
+        use kiln_runtime::engine::InstanceHandle;
         #[cfg(feature = "std")]
         use std::collections::BTreeMap;
-        use kiln_runtime::engine::InstanceHandle;
         let mut core_instances_map: BTreeMap<usize, InstanceHandle> = BTreeMap::new();
         // Track InlineExports export names for later use when linking instance imports
         // Map: core_instance_idx -> Vec of (semantic_name, actual_export_name, sort)
         // The semantic_name is used for import matching, the actual_export_name is used for calling
         #[cfg(feature = "std")]
-        let mut inline_exports_map: BTreeMap<usize, Vec<(String, String, CoreSort, Option<usize>)>> =
-            BTreeMap::new();
+        let mut inline_exports_map: BTreeMap<
+            usize,
+            Vec<(String, String, CoreSort, Option<usize>)>,
+        > = BTreeMap::new();
         // Deferred InlineExports: (core_instance_idx, source_idx, export_mappings)
         // For WAC-composed components where source instance is instantiated after InlineExports
         #[cfg(feature = "std")]
-        let mut deferred_inline_exports: Vec<(usize, usize, Vec<(String, String, CoreSort, Option<usize>)>)> =
-            Vec::new();
+        let mut deferred_inline_exports: Vec<(
+            usize,
+            usize,
+            Vec<(String, String, CoreSort, Option<usize>)>,
+        )> = Vec::new();
         // Track which core instance index exports _start (the main executable module)
         // This is the GENERIC way to find the main module - it's the one that exports _start
         let mut start_export_instance_idx: Option<u32> = None;
@@ -1050,8 +1055,8 @@ impl ComponentInstance {
             // This maps each aliased item to its source instance
             // The index now comes from alias.dest_idx which was computed during parsing
             // to account for intermixed canon definitions
-            use std::collections::HashMap;
             use kiln_format::component::{AliasTarget, CoreSort};
+            use std::collections::HashMap;
             let mut alias_map: HashMap<(CoreSort, u32), (u32, String)> = HashMap::new();
 
             #[cfg(feature = "tracing")]
@@ -1231,7 +1236,6 @@ impl ComponentInstance {
                     .map(|((_, idx), _)| *idx)
                     .collect();
 
-
                 // Count canon.lower and canon.resource operations to know how many core functions they create
                 let mut canon_creates_count = 0u32;
                 for canon in &parsed.canonicals {
@@ -1313,9 +1317,7 @@ impl ComponentInstance {
             // Used to detect canon-lowered functions in MIXED InlineExports
             let lowered_by_name: HashMap<String, (String, String)> = canon_lower_map
                 .values()
-                .map(|(_comp_func_idx, iface, func)| {
-                    (func.clone(), (iface.clone(), func.clone()))
-                })
+                .map(|(_comp_func_idx, iface, func)| (func.clone(), (iface.clone(), func.clone())))
                 .collect();
 
             // Find which core instance exports _start - this is the main executable module
@@ -1369,8 +1371,10 @@ impl ComponentInstance {
             // Track which core instances have canon-lowered function exports
             // Maps: core_instance_idx -> Vec<(export_name, core_func_idx, interface, function, position_in_export_list)>
             // Used after module instantiation to register lowered functions with the engine
-            let mut canon_lowered_for_instance: HashMap<usize, Vec<(String, u32, String, String, usize)>> =
-                HashMap::new();
+            let mut canon_lowered_for_instance: HashMap<
+                usize,
+                Vec<(String, u32, String, String, usize)>,
+            > = HashMap::new();
 
             // Instantiate modules according to core_instances order
             // core_instances describes WHAT to instantiate and HOW to link imports
@@ -1418,7 +1422,6 @@ impl ComponentInstance {
                         // Load module into engine
                         match engine.load_module(binary) {
                             Ok(module_handle) => {
-
                                 // Get the import namespaces from the loaded module
                                 let import_namespaces =
                                     engine.get_module_import_namespaces(module_handle);
@@ -1494,21 +1497,31 @@ impl ComponentInstance {
                                                     ) in export_mappings
                                                     {
                                                         // Resolve the provider handle for this specific export
-                                                        let provider_handle = if let Some(src_idx) = source_instance {
-                                                            core_instances_map.get(src_idx).copied().unwrap_or(handle)
+                                                        let provider_handle = if let Some(src_idx) =
+                                                            source_instance
+                                                        {
+                                                            core_instances_map
+                                                                .get(src_idx)
+                                                                .copied()
+                                                                .unwrap_or(handle)
                                                         } else {
                                                             handle
                                                         };
                                                         // If this export is a known canon-lowered function,
                                                         // replace the export name with __canon_lower_ prefix
                                                         // so the engine dispatches to WASI at call time.
-                                                        let resolved_export_name = if let Some((iface, func_name)) =
-                                                            lowered_by_name.get(semantic_name.as_str())
-                                                        {
-                                                            format!("__canon_lower_{}::{}", iface, func_name)
-                                                        } else {
-                                                            actual_export_name.clone()
-                                                        };
+                                                        let resolved_export_name =
+                                                            if let Some((iface, func_name)) =
+                                                                lowered_by_name
+                                                                    .get(semantic_name.as_str())
+                                                            {
+                                                                format!(
+                                                                    "__canon_lower_{}::{}",
+                                                                    iface, func_name
+                                                                )
+                                                            } else {
+                                                                actual_export_name.clone()
+                                                            };
                                                         match engine.link_import(
                                                             module_handle,
                                                             &arg_ref.name, // import module name (e.g., "wasi:io/streams@0.2.4")
@@ -1516,8 +1529,7 @@ impl ComponentInstance {
                                                             provider_handle,
                                                             &resolved_export_name, // resolved export name (e.g., "__canon_lower_wasi:io/error@0.2.6::[method]error.to-debug-string")
                                                         ) {
-                                                            Ok(()) => {
-                                                            },
+                                                            Ok(()) => {},
                                                             Err(_e) => {
                                                                 #[cfg(feature = "tracing")]
                                                                 trace!(error = ?_e, "Import link note");
@@ -1617,7 +1629,6 @@ impl ComponentInstance {
                                         String::new()
                                     };
 
-
                                     // Register the import link
                                     match engine.link_import(
                                         module_handle,
@@ -1627,15 +1638,13 @@ impl ComponentInstance {
                                         &export_name,
                                     ) {
                                         Ok(()) => {
-
                                             // Track aliased functions for cross-instance calls
                                             if arg_ref.name == "_initialize"
                                                 || arg_ref.name.starts_with("__wasm_call_")
                                             {
                                             }
                                         },
-                                        Err(e) => {
-                                        },
+                                        Err(e) => {},
                                     }
                                 }
 
@@ -1660,29 +1669,58 @@ impl ComponentInstance {
                                         // imports by namespace, which may differ from arg_ref ordering.
                                         {
                                             // Collect all lowered export names → (interface, function) from arg_ref instances
-                                            let mut lowered_by_export_name: HashMap<String, (String, String)> = HashMap::new();
+                                            let mut lowered_by_export_name: HashMap<
+                                                String,
+                                                (String, String),
+                                            > = HashMap::new();
                                             for arg_ref in arg_refs {
                                                 if arg_ref.kind == 0x12 {
-                                                    if let Some(exports) = inline_exports_map.get(&(arg_ref.idx as usize)) {
-                                                        for (semantic_name, actual_name, sort, _) in exports {
-                                                            if *sort == CoreSort::Function && actual_name.starts_with("__canon_lower_") {
-                                                                let suffix = &actual_name["__canon_lower_".len()..];
-                                                                if let Some(sep) = suffix.rfind("::") {
+                                                    if let Some(exports) = inline_exports_map
+                                                        .get(&(arg_ref.idx as usize))
+                                                    {
+                                                        for (semantic_name, actual_name, sort, _) in
+                                                            exports
+                                                        {
+                                                            if *sort == CoreSort::Function
+                                                                && actual_name
+                                                                    .starts_with("__canon_lower_")
+                                                            {
+                                                                let suffix = &actual_name
+                                                                    ["__canon_lower_".len()..];
+                                                                if let Some(sep) =
+                                                                    suffix.rfind("::")
+                                                                {
                                                                     let iface = &suffix[..sep];
                                                                     let func = &suffix[sep + 2..];
                                                                     lowered_by_export_name.insert(
                                                                         semantic_name.clone(),
-                                                                        (iface.to_string(), func.to_string()),
+                                                                        (
+                                                                            iface.to_string(),
+                                                                            func.to_string(),
+                                                                        ),
                                                                     );
                                                                 }
                                                             }
                                                         }
                                                     }
-                                                    if let Some(lowered_exports) = canon_lowered_for_instance.get(&(arg_ref.idx as usize)) {
-                                                        for (name, _idx, interface, function, _pos) in lowered_exports {
+                                                    if let Some(lowered_exports) =
+                                                        canon_lowered_for_instance
+                                                            .get(&(arg_ref.idx as usize))
+                                                    {
+                                                        for (
+                                                            name,
+                                                            _idx,
+                                                            interface,
+                                                            function,
+                                                            _pos,
+                                                        ) in lowered_exports
+                                                        {
                                                             lowered_by_export_name.insert(
                                                                 name.clone(),
-                                                                (interface.clone(), function.clone()),
+                                                                (
+                                                                    interface.clone(),
+                                                                    function.clone(),
+                                                                ),
                                                             );
                                                         }
                                                     }
@@ -1690,10 +1728,15 @@ impl ComponentInstance {
                                             }
 
                                             // Use the module's actual import order to find correct indices
-                                            let func_imports = engine.get_module_function_imports(module_handle);
-                                            for (func_idx, (module_name, field_name)) in func_imports.iter().enumerate() {
+                                            let func_imports =
+                                                engine.get_module_function_imports(module_handle);
+                                            for (func_idx, (module_name, field_name)) in
+                                                func_imports.iter().enumerate()
+                                            {
                                                 // Check if this import matches a canon-lowered function
-                                                if let Some((interface, function)) = lowered_by_export_name.get(field_name) {
+                                                if let Some((interface, function)) =
+                                                    lowered_by_export_name.get(field_name)
+                                                {
                                                     engine.register_lowered_function(
                                                         instance_handle.index(),
                                                         func_idx,
@@ -1718,7 +1761,6 @@ impl ComponentInstance {
                                                 "Main module (_start exporter) instantiated"
                                             );
                                         }
-
                                     },
                                     Err(e) => {
                                         #[cfg(feature = "tracing")]
@@ -1734,10 +1776,8 @@ impl ComponentInstance {
                         }
                     },
                     CoreInstanceExpr::InlineExports(exports) => {
-
                         // Debug: show what's in the exports
-                        for export in exports {
-                        }
+                        for export in exports {}
 
                         // InlineExports re-export items from other instances via aliases
                         // Use the alias_map to find where these exports come from
@@ -1745,7 +1785,8 @@ impl ComponentInstance {
                         // source_instance tracks which core instance each export comes from,
                         // since InlineExports can aggregate exports from MULTIPLE instances
                         let mut source_instance_idx: Option<u32> = None;
-                        let mut export_mappings: Vec<(String, String, CoreSort, Option<usize>)> = Vec::new();
+                        let mut export_mappings: Vec<(String, String, CoreSort, Option<usize>)> =
+                            Vec::new();
 
                         // Track canon-lowered function exports separately
                         // These need special handling via canonical executor
@@ -1826,12 +1867,15 @@ impl ComponentInstance {
                                 // Source instance not yet instantiated — defer resolution.
                                 // This handles WAC-composed components where InlineExports
                                 // references an instance instantiated later in the section order.
-                                deferred_inline_exports.push((core_instance_idx, src_idx as usize, export_mappings));
+                                deferred_inline_exports.push((
+                                    core_instance_idx,
+                                    src_idx as usize,
+                                    export_mappings,
+                                ));
                             }
                         } else if !canon_lowered_exports.is_empty() {
                             // All exports are canon-lowered functions - this is a canonical function provider
                             for (name, idx, interface, function, _pos) in &canon_lowered_exports {
-
                                 // Register this lowered function with the engine for canonical execution
                                 // The engine will route calls to these functions through the canonical executor
                                 #[cfg(feature = "std")]
@@ -1898,7 +1942,6 @@ impl ComponentInstance {
             use crate::types::{NestedComponentInstance, NestedExportKind, NestedExportRef};
             use kiln_format::component::{InstanceExpr, Sort};
 
-
             // Track nested component instances - will be stored in the final ComponentInstance
             let mut nested_instances: Vec<NestedComponentInstance> = Vec::new();
 
@@ -1915,7 +1958,6 @@ impl ComponentInstance {
                         component_idx,
                         arg_refs,
                     } => {
-
                         let comp_idx = *component_idx as usize;
 
                         // Check if component exists
@@ -1930,11 +1972,9 @@ impl ComponentInstance {
                         // Get the nested component definition
                         let nested_component = &parsed.components[comp_idx];
 
-
                         // Resolve arguments from arg_refs
                         // These reference exports from the parent component's index spaces
-                        for arg_ref in arg_refs {
-                        }
+                        for arg_ref in arg_refs {}
 
                         // Check if this is a "passthrough" component with no core modules
                         // These are typically wrapper components created by wit-component to satisfy
@@ -1943,7 +1983,6 @@ impl ComponentInstance {
                         // Pattern: (component (import "x" (func)) (export "y" (func 0)))
                         // This just wraps the imported function, no actual execution needed.
                         if nested_component.modules.is_empty() {
-
                             // For passthrough components, create a synthetic instance that maps
                             // the nested component's exports to the parent's provided functions
                             let mut instance_export_map: std::collections::HashMap<
@@ -1995,10 +2034,8 @@ impl ComponentInstance {
 
                             // Check for sub-components that could create circular dependencies
                             if !nested_component.components.is_empty() {
-
                                 // Warn about potential deep nesting
-                                if current_depth + 1 >= MAX_COMPONENT_NESTING_DEPTH / 2 {
-                                }
+                                if current_depth + 1 >= MAX_COMPONENT_NESTING_DEPTH / 2 {}
                             }
 
                             // Create a unique ID for the nested instance
@@ -2010,9 +2047,13 @@ impl ComponentInstance {
                             // Recursively instantiate the nested component
                             // Pass the parent's host_registry so nested components can resolve WASI imports
 
-                            match Self::from_parsed_library(nested_id, &mut nested_component_clone, host_registry.clone(), None) {
+                            match Self::from_parsed_library(
+                                nested_id,
+                                &mut nested_component_clone,
+                                host_registry.clone(),
+                                None,
+                            ) {
                                 Ok(child_instance) => {
-
                                     // Build exports map for this nested instance
                                     let mut exports_map: std::collections::HashMap<
                                         String,
@@ -2071,13 +2112,13 @@ impl ComponentInstance {
                                         "Nested component instantiation failed, continuing"
                                     );
                                     // Store empty exports for this instance so alias resolution doesn't crash
-                                    component_instance_exports.insert(inst_idx, std::collections::HashMap::new());
+                                    component_instance_exports
+                                        .insert(inst_idx, std::collections::HashMap::new());
                                 },
                             }
                         }
                     },
                     InstanceExpr::InlineExports(exports) => {
-
                         // Inline exports create a synthetic instance from explicit exports
                         // These exports reference items from the parent's index spaces
                         let mut instance_export_map: std::collections::HashMap<
@@ -2095,7 +2136,6 @@ impl ComponentInstance {
                     },
                 }
             }
-
 
             nested_instances
         };
@@ -2143,10 +2183,14 @@ impl ComponentInstance {
         // Check if any nested component has _start (for WAC-composed P3 components)
         // Must happen BEFORE storing nested_instances since we may take the engine.
         #[cfg(feature = "std")]
-        let mut nested_engine_for_start: Option<(Box<CapabilityAwareEngine>, InstanceHandle)> = None;
+        let mut nested_engine_for_start: Option<(
+            Box<CapabilityAwareEngine>,
+            InstanceHandle,
+        )> = None;
         #[cfg(feature = "std")]
         {
-            let core_entry_points_for_nested = ["_start", "wasi:cli/run@0.2.3#run", "wasi:cli/run@0.2.6#run"];
+            let core_entry_points_for_nested =
+                ["_start", "wasi:cli/run@0.2.3#run", "wasi:cli/run@0.2.6#run"];
             for nested in nested_instances.iter_mut() {
                 if let Some(ref nested_engine) = nested.instance.runtime_engine {
                     // Search ALL instance handles (0..16) to find _start
@@ -2177,7 +2221,6 @@ impl ComponentInstance {
         // Execute start functions immediately (Step 12) - DEFERRED
         #[cfg(feature = "std")]
         {
-
             // Update instance state to Running
             instance.state = ComponentInstanceState::Running;
         }
@@ -2193,8 +2236,7 @@ impl ComponentInstance {
                     Ok(ty) => {
                         let type_name = Self::get_type_name(ty);
                     },
-                    Err(e) => {
-                    },
+                    Err(e) => {},
                 }
             }
         }
@@ -2207,18 +2249,15 @@ impl ComponentInstance {
                     Ok(ty) => {
                         let type_name = Self::get_type_name(ty);
                     },
-                    Err(e) => {
-                    },
+                    Err(e) => {},
                 }
             }
 
             // Test error handling for out-of-bounds
             let invalid_idx = instance.type_index.len() as u32 + 10;
             match instance.resolve_type_safe(invalid_idx) {
-                Ok(_) => {
-                },
-                Err(_) => {
-                },
+                Ok(_) => {},
+                Err(_) => {},
             }
         }
 
@@ -2242,200 +2281,206 @@ impl ComponentInstance {
                     instance.main_instance_handle = Some(handle);
                     handle
                 }
-            } else { match start_export_instance_idx {
-                Some(start_idx) => match core_instances_map.get(&(start_idx as usize)) {
-                    Some(&handle) => {
-                        #[cfg(feature = "tracing")]
-                        tracing::info!(
-                            ?handle,
-                            core_instance_idx = start_idx,
-                            "Found main module instance - exports _start"
-                        );
-                        instance.main_instance_handle = Some(handle);
-                        handle
+            } else {
+                match start_export_instance_idx {
+                    Some(start_idx) => match core_instances_map.get(&(start_idx as usize)) {
+                        Some(&handle) => {
+                            #[cfg(feature = "tracing")]
+                            tracing::info!(
+                                ?handle,
+                                core_instance_idx = start_idx,
+                                "Found main module instance - exports _start"
+                            );
+                            instance.main_instance_handle = Some(handle);
+                            handle
+                        },
+                        None => {
+                            #[cfg(feature = "tracing")]
+                            tracing::error!(
+                                start_idx = start_idx,
+                                available = ?core_instances_map.keys().collect::<Vec<_>>(),
+                                "Instance exporting _start not found in map"
+                            );
+                            return Err(Error::runtime_execution_error(
+                                "Cannot find main module instance (the one exporting _start)",
+                            ));
+                        },
                     },
                     None => {
-                        #[cfg(feature = "tracing")]
-                        tracing::error!(
-                            start_idx = start_idx,
-                            available = ?core_instances_map.keys().collect::<Vec<_>>(),
-                            "Instance exporting _start not found in map"
-                        );
-                        return Err(Error::runtime_execution_error(
-                            "Cannot find main module instance (the one exporting _start)",
-                        ));
-                    },
-                },
-                None => {
-                    if is_interface_style {
-                        let mut return_main_handle: Option<kiln_runtime::engine::InstanceHandle> =
-                            None;
-                        // Command component (exports `wasi:cli/run@*`). Drive the
-                        // CANONICAL command entry (#364, REQ_COMPONENT_RUN): resolve
-                        // the `wasi:cli/run@*` interface export's `run` function to
-                        // its backing core export + core instance and use THAT as the
-                        // main handle, regardless of how the core modules are
-                        // decomposed. A meld-fused multi-core command component has
-                        // no single core module exporting `_start` (the start is
-                        // deferred to a caller/fixup module), so searching core
-                        // instances for `_start` is not a Component-Model guarantee.
-                        // Only fall through to the legacy `_start` search for command
-                        // shapes this resolver does not (yet) cover.
-                        #[cfg(feature = "std")]
-                        if let Some((export_name, core_export_name, core_instance_idx)) =
-                            Self::resolve_command_entry(parsed)?
-                        {
-                            match core_instances_map.get(&core_instance_idx) {
-                                Some(&handle) => {
+                        if is_interface_style {
+                            let mut return_main_handle: Option<
+                                kiln_runtime::engine::InstanceHandle,
+                            > = None;
+                            // Command component (exports `wasi:cli/run@*`). Drive the
+                            // CANONICAL command entry (#364, REQ_COMPONENT_RUN): resolve
+                            // the `wasi:cli/run@*` interface export's `run` function to
+                            // its backing core export + core instance and use THAT as the
+                            // main handle, regardless of how the core modules are
+                            // decomposed. A meld-fused multi-core command component has
+                            // no single core module exporting `_start` (the start is
+                            // deferred to a caller/fixup module), so searching core
+                            // instances for `_start` is not a Component-Model guarantee.
+                            // Only fall through to the legacy `_start` search for command
+                            // shapes this resolver does not (yet) cover.
+                            #[cfg(feature = "std")]
+                            if let Some((export_name, core_export_name, core_instance_idx)) =
+                                Self::resolve_command_entry(parsed)?
+                            {
+                                match core_instances_map.get(&core_instance_idx) {
+                                    Some(&handle) => {
+                                        #[cfg(feature = "tracing")]
+                                        tracing::info!(
+                                            ?handle,
+                                            %core_export_name,
+                                            core_instance_idx,
+                                            "Command component - driving wasi:cli/run canonical entry"
+                                        );
+                                        instance.main_instance_handle = Some(handle);
+                                        instance.command_entry = Some(crate::types::CommandEntry {
+                                            export_name,
+                                            core_export_name,
+                                        });
+                                        return_main_handle = Some(handle);
+                                    },
+                                    None => {
+                                        return Err(Error::runtime_execution_error(
+                                            "wasi:cli/run backing core export resolved to a core \
+                                         instance that is not present in the instance map",
+                                        ));
+                                    },
+                                }
+                            }
+
+                            if let Some(handle) = return_main_handle {
+                                handle
+                            } else {
+                                // Legacy fallback: the CORE module still exports _start -
+                                // search for it. NOTE: wasi:cli/run@*#run are COMPONENT-level
+                                // export names, not core module exports.
+                                let mut found_handle = None;
+                                // For Rust component model, entry point is often wasi:cli/run@VERSION#run
+                                // For C/TinyGo, entry point is _start
+                                let core_entry_points = [
+                                    "_start",
+                                    "wasi:cli/run@0.2.3#run",
+                                    "wasi:cli/run@0.2.6#run",
+                                    "wasi:cli/run@0.2.0#run",
+                                    "run",
+                                    "main",
+                                ];
+
+                                for (&idx, &handle) in &core_instances_map {
+                                    if let Some(engine_ref) = &instance.runtime_engine {
+                                        // Debug: list what exports this instance has
+                                        for entry_point in &[
+                                            "_start",
+                                            "_initialize",
+                                            "run",
+                                            "main",
+                                            "memory",
+                                            "cabi_realloc",
+                                            "wasi:cli/run@0.2.3#run",
+                                            "wasi:cli/run@0.2.6#run",
+                                        ] {
+                                            let has = engine_ref
+                                                .has_function(handle, entry_point)
+                                                .unwrap_or(false);
+                                            if has {}
+                                        }
+
+                                        for entry_point in &core_entry_points {
+                                            if engine_ref
+                                                .has_function(handle, entry_point)
+                                                .unwrap_or(false)
+                                            {
+                                                found_handle = Some(handle);
+                                                break;
+                                            }
+                                        }
+                                        if found_handle.is_some() {
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                // If not found in parent's core instances, check nested components.
+                                // WAC-composed P3 components have _start inside nested components.
+                                #[cfg(feature = "std")]
+                                if found_handle.is_none() {
+                                    if let Some((nested_eng, nested_handle)) =
+                                        nested_engine_for_start.take()
+                                    {
+                                        engine = *nested_eng;
+                                        found_handle = Some(nested_handle);
+                                    }
+                                }
+
+                                if let Some(handle) = found_handle {
                                     #[cfg(feature = "tracing")]
                                     tracing::info!(
                                         ?handle,
-                                        %core_export_name,
-                                        core_instance_idx,
-                                        "Command component - driving wasi:cli/run canonical entry"
+                                        "Interface-style component - found instance with core entry point"
                                     );
                                     instance.main_instance_handle = Some(handle);
-                                    instance.command_entry = Some(crate::types::CommandEntry {
-                                        export_name,
-                                        core_export_name,
-                                    });
-                                    return_main_handle = Some(handle);
-                                },
-                                None => {
+                                    handle
+                                } else {
                                     return Err(Error::runtime_execution_error(
-                                        "wasi:cli/run backing core export resolved to a core \
-                                         instance that is not present in the instance map",
+                                        "No core instance exports _start - module exports not properly loaded",
                                     ));
-                                },
-                            }
-                        }
-
-                        if let Some(handle) = return_main_handle {
-                            handle
-                        } else {
-                        // Legacy fallback: the CORE module still exports _start -
-                        // search for it. NOTE: wasi:cli/run@*#run are COMPONENT-level
-                        // export names, not core module exports.
-                        let mut found_handle = None;
-                        // For Rust component model, entry point is often wasi:cli/run@VERSION#run
-                        // For C/TinyGo, entry point is _start
-                        let core_entry_points = [
-                            "_start",
-                            "wasi:cli/run@0.2.3#run",
-                            "wasi:cli/run@0.2.6#run",
-                            "wasi:cli/run@0.2.0#run",
-                            "run",
-                            "main",
-                        ];
-
-                        for (&idx, &handle) in &core_instances_map {
-                            if let Some(engine_ref) = &instance.runtime_engine {
-                                // Debug: list what exports this instance has
-                                for entry_point in &[
-                                    "_start",
-                                    "_initialize",
-                                    "run",
-                                    "main",
-                                    "memory",
-                                    "cabi_realloc",
-                                    "wasi:cli/run@0.2.3#run",
-                                    "wasi:cli/run@0.2.6#run",
-                                ] {
-                                    let has = engine_ref
-                                        .has_function(handle, entry_point)
-                                        .unwrap_or(false);
-                                    if has {
-                                    }
                                 }
-
-                                for entry_point in &core_entry_points {
-                                    if engine_ref.has_function(handle, entry_point).unwrap_or(false)
-                                    {
+                            }
+                        } else if !instance.direct_export_targets.is_empty() {
+                            // Direct Component-Model hosting (#344, AD-COMPONENT-HOST-001):
+                            // the component has no `_start` but exports directly
+                            // `canon lift`-ed functions. Pick the core instance whose
+                            // module backs one of those exports as the main handle, so
+                            // the lifted core export can be invoked. No fallback/guess:
+                            // the backing core export name must actually be present.
+                            //
+                            // The live engine is the local `engine` here (it is not
+                            // moved into `instance.runtime_engine` until after this
+                            // main-handle selection).
+                            let backing_core_exports: Vec<String> = instance
+                                .direct_export_targets
+                                .values()
+                                .map(|t| t.core_export_name.clone())
+                                .collect();
+                            let mut found_handle = None;
+                            'outer: for core_export in &backing_core_exports {
+                                for (&_idx, &handle) in &core_instances_map {
+                                    if engine.has_function(handle, core_export).unwrap_or(false) {
                                         found_handle = Some(handle);
-                                        break;
+                                        break 'outer;
                                     }
                                 }
-                                if found_handle.is_some() {
-                                    break;
-                                }
                             }
-                        }
 
-                        // If not found in parent's core instances, check nested components.
-                        // WAC-composed P3 components have _start inside nested components.
-                        #[cfg(feature = "std")]
-                        if found_handle.is_none() {
-                            if let Some((nested_eng, nested_handle)) = nested_engine_for_start.take() {
-                                engine = *nested_eng;
-                                found_handle = Some(nested_handle);
-                            }
-                        }
-
-                        if let Some(handle) = found_handle {
-                            #[cfg(feature = "tracing")]
-                            tracing::info!(
-                                ?handle,
-                                "Interface-style component - found instance with core entry point"
-                            );
-                            instance.main_instance_handle = Some(handle);
-                            handle
-                        } else {
-                            return Err(Error::runtime_execution_error(
-                                "No core instance exports _start - module exports not properly loaded",
-                            ));
-                        }
-                        }
-                    } else if !instance.direct_export_targets.is_empty() {
-                        // Direct Component-Model hosting (#344, AD-COMPONENT-HOST-001):
-                        // the component has no `_start` but exports directly
-                        // `canon lift`-ed functions. Pick the core instance whose
-                        // module backs one of those exports as the main handle, so
-                        // the lifted core export can be invoked. No fallback/guess:
-                        // the backing core export name must actually be present.
-                        //
-                        // The live engine is the local `engine` here (it is not
-                        // moved into `instance.runtime_engine` until after this
-                        // main-handle selection).
-                        let backing_core_exports: Vec<String> = instance
-                            .direct_export_targets
-                            .values()
-                            .map(|t| t.core_export_name.clone())
-                            .collect();
-                        let mut found_handle = None;
-                        'outer: for core_export in &backing_core_exports {
-                            for (&_idx, &handle) in &core_instances_map {
-                                if engine.has_function(handle, core_export).unwrap_or(false) {
-                                    found_handle = Some(handle);
-                                    break 'outer;
-                                }
-                            }
-                        }
-
-                        if let Some(handle) = found_handle {
-                            #[cfg(feature = "tracing")]
-                            tracing::info!(
-                                ?handle,
-                                "Direct-hosting component - main instance backs a lifted export"
-                            );
-                            instance.main_instance_handle = Some(handle);
-                            handle
-                        } else {
-                            return Err(Error::runtime_execution_error(
-                                "Direct-hosting component: no core instance exports the \
+                            if let Some(handle) = found_handle {
+                                #[cfg(feature = "tracing")]
+                                tracing::info!(
+                                    ?handle,
+                                    "Direct-hosting component - main instance backs a lifted export"
+                                );
+                                instance.main_instance_handle = Some(handle);
+                                handle
+                            } else {
+                                return Err(Error::runtime_execution_error(
+                                    "Direct-hosting component: no core instance exports the \
                                  lifted function's backing core export",
+                                ));
+                            }
+                        } else {
+                            #[cfg(feature = "tracing")]
+                            tracing::error!(
+                                "No _start export found - component does not export an entry point"
+                            );
+                            return Err(Error::runtime_execution_error(
+                                "No _start export found - command components must export _start",
                             ));
                         }
-                    } else {
-                        #[cfg(feature = "tracing")]
-                        tracing::error!(
-                            "No _start export found - component does not export an entry point"
-                        );
-                        return Err(Error::runtime_execution_error(
-                            "No _start export found - command components must export _start",
-                        ));
-                    }
-                },
-            } }; // close match + close else
+                    },
+                }
+            }; // close match + close else
 
             #[cfg(feature = "tracing")]
             if is_interface_style {
@@ -2649,7 +2694,9 @@ impl ComponentInstance {
     ///
     /// **Memory**: After this call, parsed.modules is empty - memory is transferred.
     /// **Step 4**: Now shows detailed validation output for each module
-    fn extract_core_modules(parsed: &mut kiln_format::component::Component) -> Result<Vec<Vec<u8>>> {
+    fn extract_core_modules(
+        parsed: &mut kiln_format::component::Component,
+    ) -> Result<Vec<Vec<u8>>> {
         use kiln_error::{ErrorCategory, codes};
 
         let mut module_binaries = Vec::with_capacity(parsed.modules.len());
@@ -2702,7 +2749,6 @@ impl ComponentInstance {
     /// - Resource: Resource lifecycle operations (new/drop/rep)
     #[cfg(feature = "std")]
     fn parse_canonical_operations(canonicals: &[kiln_format::component::Canon]) -> Result<()> {
-
         if canonicals.is_empty() {
             return Ok(());
         }
@@ -2716,36 +2762,27 @@ impl ComponentInstance {
             match &canon.operation {
                 CanonOperation::Lift {
                     func_idx, type_idx, ..
-                } => {
-                },
-                CanonOperation::Lower { func_idx, .. } => {
-                },
+                } => {},
+                CanonOperation::Lower { func_idx, .. } => {},
                 CanonOperation::Resource(res_op) => {
                     use kiln_format::component::FormatResourceOperation;
                     match res_op {
-                        FormatResourceOperation::New(res_new) => {
-                        },
-                        FormatResourceOperation::Drop(res_drop) => {
-                        },
-                        FormatResourceOperation::Rep(res_rep) => {
-                        },
+                        FormatResourceOperation::New(res_new) => {},
+                        FormatResourceOperation::Drop(res_drop) => {},
+                        FormatResourceOperation::Rep(res_rep) => {},
                     }
                 },
                 CanonOperation::Realloc {
                     alloc_func_idx,
                     memory_idx,
-                } => {
-                },
-                CanonOperation::PostReturn { func_idx } => {
-                },
+                } => {},
+                CanonOperation::PostReturn { func_idx } => {},
                 CanonOperation::MemoryCopy {
                     src_memory_idx,
                     dst_memory_idx,
                     ..
-                } => {
-                },
-                CanonOperation::Async { func_idx, .. } => {
-                },
+                } => {},
+                CanonOperation::Async { func_idx, .. } => {},
             }
         }
 
@@ -2761,14 +2798,12 @@ impl ComponentInstance {
     /// Parse and display component exports (Step 6a)
     #[cfg(feature = "std")]
     fn parse_exports(exports: &[kiln_format::component::Export]) -> Result<()> {
-
         if exports.is_empty() {
             return Ok(());
         }
 
         for (idx, export) in exports.iter().enumerate() {
             use kiln_format::component::Sort;
-
 
             // Show sort (Function, Instance, etc.)
             let sort_name = match &export.sort {
@@ -2797,26 +2832,18 @@ impl ComponentInstance {
                 match ty {
                     ExternType::Function {
                         params, results, ..
-                    } => {
-                    },
-                    ExternType::Module { type_idx } => {
-                    },
-                    ExternType::Component { type_idx } => {
-                    },
-                    ExternType::Instance { exports } => {
-                    },
-                    ExternType::Value(value_type) => {
-                    },
-                    ExternType::Type(bounds) => {
-                    },
+                    } => {},
+                    ExternType::Module { type_idx } => {},
+                    ExternType::Component { type_idx } => {},
+                    ExternType::Instance { exports } => {},
+                    ExternType::Value(value_type) => {},
+                    ExternType::Type(bounds) => {},
                 }
             }
 
             // Show additional metadata
-            if let Some(ref semver) = export.name.semver {
-            }
-            if let Some(ref integrity) = export.name.integrity {
-            }
+            if let Some(ref semver) = export.name.semver {}
+            if let Some(ref integrity) = export.name.integrity {}
         }
 
         Ok(())
@@ -2831,7 +2858,6 @@ impl ComponentInstance {
     /// Parse and display component imports (Step 6b)
     #[cfg(feature = "std")]
     fn parse_imports(imports: &[kiln_format::component::Import]) -> Result<()> {
-
         if imports.is_empty() {
             return Ok(());
         }
@@ -2851,34 +2877,25 @@ impl ComponentInstance {
                 )
             };
 
-
             // Show type information
             match &import.ty {
                 ExternType::Function {
                     params, results, ..
                 } => {
                     for (pidx, (pname, _ptype)) in params.iter().enumerate() {
-                        if pidx < 3 {
-                        }
+                        if pidx < 3 {}
                     }
-                    if params.len() > 3 {
-                    }
+                    if params.len() > 3 {}
                 },
-                ExternType::Module { type_idx } => {
-                },
-                ExternType::Component { type_idx } => {
-                },
-                ExternType::Instance { exports } => {
-                },
-                ExternType::Value(value_type) => {
-                },
-                ExternType::Type(bounds) => {
-                },
+                ExternType::Module { type_idx } => {},
+                ExternType::Component { type_idx } => {},
+                ExternType::Instance { exports } => {},
+                ExternType::Value(value_type) => {},
+                ExternType::Type(bounds) => {},
             }
 
             // Show package reference if present
-            if let Some(ref pkg) = import.name.package {
-            }
+            if let Some(ref pkg) = import.name.package {}
         }
 
         Ok(())
@@ -2899,7 +2916,6 @@ impl ComponentInstance {
     ) -> Result<()> {
         use crate::instantiation::{ExportValue, FunctionExport, ResolvedExport};
         use kiln_format::component::Sort;
-
 
         for (idx, export) in parsed_exports.iter().enumerate() {
             let export_name = if export.name.nested.is_empty() {
@@ -2946,11 +2962,8 @@ impl ComponentInstance {
             };
 
             if let Some(target) = direct_target {
-                instance
-                    .direct_export_targets
-                    .insert(export_name.clone(), target);
+                instance.direct_export_targets.insert(export_name.clone(), target);
             }
-
 
             // Create an export value based on the sort
             let export_value = match &export.sort {
@@ -2966,8 +2979,9 @@ impl ComponentInstance {
                     // `direct_export_targets` and the callable function signature),
                     // so use the `Default` value, which constructs an empty
                     // component type without that zero-size rejection.
-                    let signature =
-                        kiln_foundation::ComponentType::<crate::bounded_component_infra::ComponentProvider>::default();
+                    let signature = kiln_foundation::ComponentType::<
+                        crate::bounded_component_infra::ComponentProvider,
+                    >::default();
 
                     let func_export = FunctionExport {
                         signature,
@@ -3100,10 +3114,8 @@ impl ComponentInstance {
                             .map_err(|_| Error::validation_error("Too many functions"))?;
                     }
                 },
-                _ => {
-                },
+                _ => {},
             }
-
         }
 
         Ok(())
@@ -3125,7 +3137,7 @@ impl ComponentInstance {
         export_func_idx: u32,
     ) -> Result<Option<crate::types::DirectExportTarget>> {
         use kiln_format::component::{
-            AliasTarget, CanonOperation, CoreSort, ComponentTypeDefinition, ExternType, Sort,
+            AliasTarget, CanonOperation, ComponentTypeDefinition, CoreSort, ExternType, Sort,
         };
 
         // Component function index space is populated in order:
@@ -3461,7 +3473,6 @@ impl ComponentInstance {
     fn instantiate_core_modules(
         module_binaries: &[Vec<u8>],
     ) -> Result<Vec<kiln_runtime::module::Module>> {
-
         if module_binaries.is_empty() {
             return Ok(Vec::new());
         }
@@ -3472,7 +3483,6 @@ impl ComponentInstance {
         let mut instantiated_modules = Vec::with_capacity(module_binaries.len());
 
         for (idx, binary) in module_binaries.iter().enumerate() {
-
             // Parse the module using kiln-decoder
             use kiln_decoder::load_wasm_unified;
             let wasm_info = load_wasm_unified(binary).map_err(|_| {
@@ -3501,13 +3511,11 @@ impl ComponentInstance {
             // Show memory requirements if present
             if let Some((min_pages, max_pages)) = module_info.memory_pages {
                 print!("    ├─ Memory: {} pages", min_pages);
-                if let Some(max) = max_pages {
-                }
+                if let Some(max) = max_pages {}
             }
 
             // Show start function if present
-            if let Some(start_idx) = module_info.start_function {
-            }
+            if let Some(start_idx) = module_info.start_function {}
 
             // Instantiate the module using kiln-runtime
 
@@ -3539,7 +3547,6 @@ impl ComponentInstance {
                     kiln_error::codes::RUNTIME_ERROR,
                     "Module loader thread panicked"
                 ))??;
-
 
             instantiated_modules.push(runtime_module);
         }
@@ -3587,7 +3594,10 @@ impl ComponentInstance {
 
     /// Instantiate a single module (helper for parallel processing)
     #[cfg(feature = "std")]
-    fn instantiate_single_module(idx: usize, binary: &[u8]) -> Result<kiln_runtime::module::Module> {
+    fn instantiate_single_module(
+        idx: usize,
+        binary: &[u8],
+    ) -> Result<kiln_runtime::module::Module> {
         use kiln_decoder::load_wasm_unified;
 
         // Parse the module
@@ -3646,11 +3656,9 @@ impl ComponentInstance {
     fn link_core_modules(modules: &[kiln_runtime::module::Module]) -> Result<()> {
         use std::collections::{HashMap, HashSet};
 
-
         if modules.is_empty() {
             return Ok(());
         }
-
 
         // Build export map: (export_name) -> module_idx
         let mut export_map: HashMap<String, usize> = HashMap::new();
@@ -3658,7 +3666,6 @@ impl ComponentInstance {
         for (idx, module) in modules.iter().enumerate() {
             let export_count = module.exports.len();
             if export_count > 0 {
-
                 // Iterate over exports
                 for (export_name, _export_val) in module.exports.iter() {
                     // BoundedString::as_str() returns Result<&str, BoundedError>
@@ -3668,7 +3675,6 @@ impl ComponentInstance {
                 }
             }
         }
-
 
         // Analyze each module's imports
         let mut dependencies: Vec<HashSet<usize>> = vec![HashSet::new(); modules.len()];
@@ -3688,7 +3694,6 @@ impl ComponentInstance {
             }
         }
 
-
         // Build dependency graph visualization
         for (idx, deps) in dependencies.iter().enumerate() {
             if deps.is_empty() && host_imports[idx].is_empty() {
@@ -3702,14 +3707,11 @@ impl ComponentInstance {
                 for &dep_idx in deps {
                     dep_list.push(format!("Module[{}]", dep_idx));
                 }
-
             }
         }
 
-
         // Compute instantiation order (topological sort)
         let instantiation_order = Self::topological_sort(&dependencies)?;
-
 
         // Report summary
 
@@ -3779,11 +3781,9 @@ impl ComponentInstance {
     fn prepare_module_execution(
         modules: &[kiln_runtime::module::Module],
     ) -> Result<Vec<(usize, String, u32, bool)>> {
-
         if modules.is_empty() {
             return Ok(Vec::new());
         }
-
 
         let mut total_start_functions = 0;
         let mut total_exported_functions = 0;
@@ -3791,7 +3791,6 @@ impl ComponentInstance {
 
         // Analyze each module for execution
         for (idx, module) in modules.iter().enumerate() {
-
             // Check for start function
             if let Some(start_idx) = module.start {
                 total_start_functions += 1;
@@ -3821,7 +3820,6 @@ impl ComponentInstance {
             let func_count = module.functions.len();
         }
 
-
         Ok(execution_plan)
     }
 
@@ -3837,11 +3835,9 @@ impl ComponentInstance {
         modules: &[kiln_runtime::module::Module],
         execution_plan: &[(usize, String, u32, bool)],
     ) -> Result<()> {
-
         if execution_plan.is_empty() {
             return Ok(());
         }
-
 
         // Separate start functions from regular exports
         let start_functions: Vec<_> =
@@ -3862,12 +3858,9 @@ impl ComponentInstance {
         if !export_functions.is_empty() {
             for (idx, (module_idx, func_name, func_idx, _is_start)) in
                 export_functions.iter().enumerate().take(5)
-            {
-            }
-            if export_functions.len() > 5 {
-            }
+            {}
+            if export_functions.len() > 5 {}
         }
-
 
         Ok(())
     }
@@ -3889,7 +3882,6 @@ impl ComponentInstance {
             EngineConfig, EngineFactory, EngineType, MemoryProviderType,
         };
 
-
         // Calculate memory requirements based on module count
         // Default to 64KB per module (1 page = 64KB)
         let total_memory = if modules.is_empty() {
@@ -3898,14 +3890,12 @@ impl ComponentInstance {
             modules.len() * 65536 // 64KB per module
         };
 
-
         // Configure engine
         let config = EngineConfig::new(EngineType::CapabilityAware)
             .with_memory_provider(MemoryProviderType::CapabilityAware)
             .with_memory_budget(total_memory * 2) // 2x for safety margin
             .with_max_call_depth(1024)
             .with_debug_mode(true);
-
 
         // Create engine
         let mut engine = EngineFactory::create(config)?;
@@ -3941,7 +3931,6 @@ impl ComponentInstance {
     ) -> Result<std::collections::HashMap<u32, kiln_format::component::ComponentType>> {
         use std::collections::HashMap;
 
-
         let mut index = HashMap::new();
 
         for (idx, ty) in types.iter().enumerate() {
@@ -3950,8 +3939,7 @@ impl ComponentInstance {
             // Additional detail for function types (most common)
             if let kiln_format::component::ComponentTypeDefinition::Function { params, results } =
                 &ty.definition
-            {
-            }
+            {}
 
             index.insert(idx as u32, ty.clone());
         }
@@ -4536,19 +4524,26 @@ impl ComponentInstance {
             (F::F32, Value::F32(v)) => ComponentValue::F32(v.to_f32()),
             (F::F64, Value::F64(v)) => ComponentValue::F64(v.to_f64()),
             (F::Char, Value::I32(v)) => {
-                let c = u32::try_from(*v)
-                    .ok()
-                    .and_then(char::from_u32)
-                    .ok_or_else(|| {
-                        Error::runtime_execution_error(
-                            "direct-hosting char result is not a valid Unicode scalar value",
-                        )
-                    })?;
+                let c = u32::try_from(*v).ok().and_then(char::from_u32).ok_or_else(|| {
+                    Error::runtime_execution_error(
+                        "direct-hosting char result is not a valid Unicode scalar value",
+                    )
+                })?;
                 ComponentValue::Char(c)
             },
             (
-                F::Bool | F::S8 | F::U8 | F::S16 | F::U16 | F::S32 | F::U32 | F::S64 | F::U64
-                | F::F32 | F::F64 | F::Char,
+                F::Bool
+                | F::S8
+                | F::U8
+                | F::S16
+                | F::U16
+                | F::S32
+                | F::U32
+                | F::S64
+                | F::U64
+                | F::F32
+                | F::F64
+                | F::Char,
                 _,
             ) => return Err(mismatch()),
             _ => {
@@ -4568,7 +4563,6 @@ impl ComponentInstance {
         module_index: u32,
         args: &[ComponentValue],
     ) -> Result<Vec<ComponentValue>> {
-
         // This is a canonical function that needs to be executed through the runtime
         // The func_index refers to a function in the already-instantiated module
 
@@ -4576,7 +4570,6 @@ impl ComponentInstance {
         // 1. Lower the component values to WASM values
         // 2. Call the underlying core WASM function
         // 3. Lift the result back to component values
-
 
         // Use the stored engine and instance handle from component instantiation
         // This preserves all the import linkages established during instantiation
@@ -4674,7 +4667,6 @@ impl ComponentInstance {
             .modules
             .get(module_index as usize)
             .ok_or_else(|| Error::runtime_execution_error("Module index out of bounds"))?;
-
 
         let binary_clone = module_binary.clone();
         let result = std::thread::Builder::new()
@@ -5465,8 +5457,7 @@ mod e5dc2_tests {
             "#,
         )
         .expect("instance-import command fixture must build as a component");
-        let parsed =
-            kiln_decoder::component::decode_component(&wasm).expect("fixture must decode");
+        let parsed = kiln_decoder::component::decode_component(&wasm).expect("fixture must decode");
 
         let resolved = ComponentInstance::resolve_command_entry(&parsed).expect(
             "resolve_command_entry must offset by the instance-import count, not fail \

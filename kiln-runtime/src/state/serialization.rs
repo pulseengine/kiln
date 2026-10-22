@@ -3,27 +3,13 @@
 //! This module provides utilities for serializing and deserializing WebAssembly
 //! runtime state using custom sections.
 
-use alloc::{
-    string::String,
-    vec::Vec,
-};
+use alloc::{string::String, vec::Vec};
 
-use kiln_error::{
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result};
 use kiln_format::{
-    compression::{
-        rle_decode,
-        rle_encode,
-        CompressionType,
-    },
+    compression::{CompressionType, rle_decode, rle_encode},
     section::CustomSection,
-    version::{
-        STATE_MAGIC,
-        STATE_VERSION,
-    },
+    version::{STATE_MAGIC, STATE_VERSION},
 };
 
 /// Constants for state section names
@@ -33,15 +19,15 @@ pub const STATE_SECTION_PREFIX: &str = "kiln-state";
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StateSection {
     /// Metadata section
-    Meta    = 0,
+    Meta = 0,
     /// Stack state section
-    Stack   = 1,
+    Stack = 1,
     /// Frame state section
-    Frames  = 2,
+    Frames = 2,
     /// Global variables section
     Globals = 3,
     /// Memory section
-    Memory  = 4,
+    Memory = 4,
 }
 
 impl StateSection {
@@ -85,11 +71,11 @@ impl StateSection {
 #[derive(Debug, Clone)]
 pub struct StateHeader {
     /// Section type
-    pub section_type:      StateSection,
+    pub section_type: StateSection,
     /// Compression type
-    pub compression_type:  CompressionType,
+    pub compression_type: CompressionType,
     /// Data size
-    pub data_size:         u32,
+    pub data_size: u32,
     /// Original uncompressed size
     pub uncompressed_size: u32,
 }
@@ -232,9 +218,9 @@ pub fn extract_state_section(section: &CustomSection) -> Result<(StateHeader, Ve
 ///
 /// `true` if the module contains at least one state section
 pub fn has_state_sections(custom_sections: &[CustomSection]) -> bool {
-    custom_sections.iter().any(|section| {
-        section.name.starts_with(STATE_SECTION_PREFIX)
-    })
+    custom_sections
+        .iter()
+        .any(|section| section.name.starts_with(STATE_SECTION_PREFIX))
 }
 
 /// Checks if a given section name corresponds to a known `StateSection`.

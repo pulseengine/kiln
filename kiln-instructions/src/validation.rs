@@ -4,21 +4,10 @@
 //! instructions. It focuses on basic type checking without requiring
 //! complex trait implementations.
 
-use kiln_error::{
-    Error,
-    Result,
-};
-use kiln_foundation::types::{
-    BlockType,
-    ValueType,
-};
+use kiln_error::{Error, Result};
+use kiln_foundation::types::{BlockType, ValueType};
 
-use crate::prelude::{
-    str,
-    Debug,
-    Eq,
-    PartialEq,
-};
+use crate::prelude::{Debug, Eq, PartialEq, str};
 
 /// Validation context for type checking
 pub struct ValidationContext {
@@ -27,9 +16,9 @@ pub struct ValidationContext {
     /// Whether code is currently unreachable
     pub unreachable: bool,
     /// Number of available memories
-    pub memories:    u32,
+    pub memories: u32,
     /// Number of available tables  
-    pub tables:      u32,
+    pub tables: u32,
 }
 
 impl Default for ValidationContext {
@@ -45,8 +34,8 @@ impl ValidationContext {
         Self {
             stack_depth: 0,
             unreachable: false,
-            memories:    1,
-            tables:      1,
+            memories: 1,
+            tables: 1,
         }
     }
 
@@ -146,9 +135,9 @@ impl ValidationContext {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ControlFrame {
     /// Type of control structure
-    pub kind:        ControlKind,
+    pub kind: ControlKind,
     /// Stack height when entering frame
-    pub height:      usize,
+    pub height: usize,
     /// Whether this frame is unreachable
     pub unreachable: bool,
 }

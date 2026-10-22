@@ -6,19 +6,13 @@
 #[cfg(all(feature = "std", feature = "wasi-nn", feature = "tract"))]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use kiln_wasi::nn::{
-        backend::{
-            initialize_backends,
-            BackendRegistry,
-        },
-        capabilities::{
-            create_nn_capability,
-            NNVerificationLevel as VerificationLevel,
-        },
+        GraphEncoding,
+        backend::{BackendRegistry, initialize_backends},
+        capabilities::{NNVerificationLevel as VerificationLevel, create_nn_capability},
         execution::initialize_context_store,
         graph::initialize_graph_store,
         initialize_nn,
         tract_backend::TractBackendProvider,
-        GraphEncoding,
     };
 
     println!("Initializing WASI-NN with Tract backend...");

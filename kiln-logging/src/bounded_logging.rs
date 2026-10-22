@@ -2,36 +2,19 @@
 // This is the bounded logging implementation for the component module
 
 extern crate alloc;
-use alloc::{
-    string::String,
-    vec::Vec,
-};
+use alloc::{string::String, vec::Vec};
 
 // Always import Error and Result regardless of feature flags
-use kiln_error::{
-    Error,
-    Result,
-};
+use kiln_error::{Error, Result};
 use kiln_foundation::{
-    traits::{
-        Checksummable,
-        FromBytes,
-        ReadStream,
-        ToBytes,
-        WriteStream,
-    },
-    verification::Checksum,
     BoundedCapacity, // Import required trait for BoundedVec methods
     MemoryProvider,
+    traits::{Checksummable, FromBytes, ReadStream, ToBytes, WriteStream},
+    verification::Checksum,
 };
 
 use crate::{
-    bounded_log_infra::{
-        new_log_entry_vec,
-        new_logger_vec,
-        BoundedLogEntryVec,
-        BoundedLoggerVec,
-    },
+    bounded_log_infra::{BoundedLogEntryVec, BoundedLoggerVec, new_log_entry_vec, new_logger_vec},
     level::LogLevel,
 };
 
@@ -43,28 +26,28 @@ use crate::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BoundedLoggingLimits {
     /// Maximum total size of the log buffer in bytes
-    pub max_log_buffer_size:    usize,
+    pub max_log_buffer_size: usize,
     /// Maximum size of a single log message in bytes
-    pub max_log_message_size:   usize,
+    pub max_log_message_size: usize,
     /// Maximum number of concurrent loggers allowed
     pub max_concurrent_loggers: usize,
     /// Maximum number of log entries that can be stored
-    pub max_log_entries:        usize,
+    pub max_log_entries: usize,
     /// Log entry retention time in milliseconds before automatic cleanup
-    pub retention_time_ms:      u64,
+    pub retention_time_ms: u64,
     /// Number of entries that trigger automatic buffer flush
-    pub flush_threshold:        usize,
+    pub flush_threshold: usize,
 }
 
 impl Default for BoundedLoggingLimits {
     fn default() -> Self {
         Self {
-            max_log_buffer_size:    64 * 1024, // 64KB
-            max_log_message_size:   1024,      // 1KB per message
-            max_concurrent_loggers: 16,        // 16 concurrent loggers
-            max_log_entries:        1000,      // 1000 log entries
-            retention_time_ms:      300_000,   // 5 minutes
-            flush_threshold:        100,       // Flush after 100 entries
+            max_log_buffer_size: 64 * 1024, // 64KB
+            max_log_message_size: 1024,     // 1KB per message
+            max_concurrent_loggers: 16,     // 16 concurrent loggers
+            max_log_entries: 1000,          // 1000 log entries
+            retention_time_ms: 300_000,     // 5 minutes
+            flush_threshold: 100,           // Flush after 100 entries
         }
     }
 }
@@ -74,12 +57,12 @@ impl BoundedLoggingLimits {
     #[must_use]
     pub fn embedded() -> Self {
         Self {
-            max_log_buffer_size:    8 * 1024, // 8KB
-            max_log_message_size:   256,      // 256B per message
-            max_concurrent_loggers: 4,        // 4 concurrent loggers
-            max_log_entries:        100,      // 100 log entries
-            retention_time_ms:      60_000,   // 1 minute
-            flush_threshold:        20,       // Flush after 20 entries
+            max_log_buffer_size: 8 * 1024, // 8KB
+            max_log_message_size: 256,     // 256B per message
+            max_concurrent_loggers: 4,     // 4 concurrent loggers
+            max_log_entries: 100,          // 100 log entries
+            retention_time_ms: 60_000,     // 1 minute
+            flush_threshold: 20,           // Flush after 20 entries
         }
     }
 
@@ -87,12 +70,12 @@ impl BoundedLoggingLimits {
     #[must_use]
     pub fn qnx() -> Self {
         Self {
-            max_log_buffer_size:    32 * 1024, // 32KB
-            max_log_message_size:   512,       // 512B per message
-            max_concurrent_loggers: 8,         // 8 concurrent loggers
-            max_log_entries:        500,       // 500 log entries
-            retention_time_ms:      180_000,   // 3 minutes
-            flush_threshold:        50,        // Flush after 50 entries
+            max_log_buffer_size: 32 * 1024, // 32KB
+            max_log_message_size: 512,      // 512B per message
+            max_concurrent_loggers: 8,      // 8 concurrent loggers
+            max_log_entries: 500,           // 500 log entries
+            retention_time_ms: 180_000,     // 3 minutes
+            flush_threshold: 50,            // Flush after 50 entries
         }
     }
 
@@ -130,32 +113,32 @@ pub struct ComponentLoggingId(pub u32);
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct BoundedLogEntry {
     /// Unique identifier for this log entry
-    pub id:           u64,
+    pub id: u64,
     /// Timestamp when this entry was created
-    pub timestamp:    u64,
+    pub timestamp: u64,
     /// Log level for this entry
-    pub level:        LogLevel,
+    pub level: LogLevel,
     /// Logger that created this entry
-    pub logger_id:    LoggerId,
+    pub logger_id: LoggerId,
     /// Component that generated this entry
     pub component_id: ComponentLoggingId,
     /// Log message content
-    pub message:      String,
+    pub message: String,
     /// Additional metadata for this entry
-    pub metadata:     LogMetadata,
+    pub metadata: LogMetadata,
 }
 
 /// Log metadata for tracking and filtering
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LogMetadata {
     /// Module path where the log originated
-    pub module:       Option<String>,
+    pub module: Option<String>,
     /// Source file where the log originated
-    pub file:         Option<String>,
+    pub file: Option<String>,
     /// Line number where the log originated
-    pub line:         Option<u32>,
+    pub line: Option<u32>,
     /// Thread ID that generated this log
-    pub thread_id:    Option<u32>,
+    pub thread_id: Option<u32>,
     /// Safety level (0-255, higher is more critical)
     pub safety_level: u8,
 }
@@ -476,11 +459,11 @@ impl FromBytes for LogMetadata {
 
 /// Bounded log buffer for storing log entries
 pub struct BoundedLogBuffer {
-    entries:         BoundedLogEntryVec,
-    max_entries:     usize,
-    buffer_size:     usize,
+    entries: BoundedLogEntryVec,
+    max_entries: usize,
+    buffer_size: usize,
     max_buffer_size: usize,
-    next_entry_id:   u64,
+    next_entry_id: u64,
 }
 
 impl BoundedLogBuffer {
@@ -630,15 +613,15 @@ impl BoundedLogBuffer {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BoundedLogger {
     /// Unique identifier for this logger
-    pub id:            LoggerId,
+    pub id: LoggerId,
     /// Component this logger belongs to
-    pub component_id:  ComponentLoggingId,
+    pub component_id: ComponentLoggingId,
     /// Human-readable name for this logger
-    pub name:          String,
+    pub name: String,
     /// Minimum log level for this logger
-    pub min_level:     LogLevel,
+    pub min_level: LogLevel,
     /// Whether this logger is enabled
-    pub enabled:       bool,
+    pub enabled: bool,
     /// Number of messages logged by this instance
     pub message_count: u64,
 }
@@ -683,11 +666,11 @@ impl BoundedLogger {
 impl Default for BoundedLogger {
     fn default() -> Self {
         Self {
-            id:            LoggerId(0),
-            component_id:  ComponentLoggingId(0),
-            name:          String::new(),
-            min_level:     LogLevel::Info,
-            enabled:       false,
+            id: LoggerId(0),
+            component_id: ComponentLoggingId(0),
+            name: String::new(),
+            min_level: LogLevel::Info,
+            enabled: false,
             message_count: 0,
         }
     }
@@ -780,13 +763,13 @@ impl FromBytes for BoundedLogger {
 
 /// Bounded logging manager
 pub struct BoundedLoggingManager {
-    limits:           BoundedLoggingLimits,
-    buffer:           BoundedLogBuffer,
-    loggers:          BoundedLoggerVec<BoundedLogger>,
-    next_logger_id:   u32,
-    total_messages:   u64,
+    limits: BoundedLoggingLimits,
+    buffer: BoundedLogBuffer,
+    loggers: BoundedLoggerVec<BoundedLogger>,
+    next_logger_id: u32,
+    total_messages: u64,
     dropped_messages: u64,
-    flush_pending:    bool,
+    flush_pending: bool,
 }
 
 impl BoundedLoggingManager {
@@ -1066,19 +1049,19 @@ pub struct BoundedLoggingStatistics {
     /// Number of registered loggers
     pub registered_loggers: usize,
     /// Number of active loggers
-    pub active_loggers:     usize,
+    pub active_loggers: usize,
     /// Total number of log entries stored
-    pub total_log_entries:  usize,
+    pub total_log_entries: usize,
     /// Memory used in bytes
-    pub memory_used:        usize,
+    pub memory_used: usize,
     /// Memory utilization as percentage (0.0-100.0)
     pub memory_utilization: f64,
     /// Total number of messages processed
-    pub total_messages:     u64,
+    pub total_messages: u64,
     /// Number of messages dropped due to limits
-    pub dropped_messages:   u64,
+    pub dropped_messages: u64,
     /// Whether there are pending flush operations
-    pub flush_pending:      bool,
+    pub flush_pending: bool,
 }
 
 /// Convenience macros for logging (only available with alloc)

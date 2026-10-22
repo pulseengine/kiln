@@ -5,21 +5,11 @@
 use std::format;
 
 use kiln_foundation::{
-    types::{
-        GlobalType as KilnGlobalType,
-        ValueType as KilnValueType,
-    },
+    types::{GlobalType as KilnGlobalType, ValueType as KilnValueType},
     values::Value as KilnValue,
 };
 
-use crate::prelude::{
-    Debug,
-    Eq,
-    Error,
-    ErrorCategory,
-    PartialEq,
-    Result,
-};
+use crate::prelude::{Debug, Eq, Error, ErrorCategory, PartialEq, Result};
 
 /// Represents a WebAssembly global variable in the runtime
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,7 +17,7 @@ pub struct Global {
     /// The global type (`value_type` and mutability).
     /// The `initial_value` from `KilnGlobalType` is used to set the runtime
     /// `value` field upon creation.
-    ty:    KilnGlobalType,
+    ty: KilnGlobalType,
     /// The current runtime value of the global variable.
     value: KilnValue,
 }
@@ -47,7 +37,7 @@ impl Global {
 
         // The runtime `value` starts as the provided `initial_value`.
         Ok(Self {
-            ty:    global_ty_descriptor,
+            ty: global_ty_descriptor,
             value: initial_value,
         })
     }
@@ -109,10 +99,7 @@ impl Global {
 )]
 impl Default for Global {
     fn default() -> Self {
-        use kiln_foundation::{
-            types::ValueType,
-            values::Value,
-        };
+        use kiln_foundation::{types::ValueType, values::Value};
         Self::new(ValueType::I32, false, Value::I32(0))
             .expect("Critical: Unable to create default global")
     }

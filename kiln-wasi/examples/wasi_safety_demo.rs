@@ -1,6 +1,5 @@
 //! Demonstration of safety feature enforcement in kiln-wasi
 
-
 fn main() {
     #[cfg(feature = "qm")]
     println!("Running with QM feature - No safety limits");

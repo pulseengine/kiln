@@ -17,18 +17,8 @@
 use kiln_math as math;
 
 use crate::{
-    prelude::{
-        Debug,
-        Error,
-        PureInstruction,
-        Result,
-        Value,
-        ValueType,
-    },
-    validation::{
-        Validate,
-        ValidationContext,
-    },
+    prelude::{Debug, Error, PureInstruction, Result, Value, ValueType},
+    validation::{Validate, ValidationContext},
 };
 
 /// Represents a pure comparison operation for WebAssembly.

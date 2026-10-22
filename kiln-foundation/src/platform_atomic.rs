@@ -4,20 +4,9 @@
 //! unsafe code in safety-critical paths. It uses platform-specific
 //! implementations that guarantee safety through type system constraints.
 
-use core::sync::atomic::{
-    AtomicU16,
-    AtomicU32,
-    AtomicU64,
-    AtomicU8,
-    Ordering,
-};
+use core::sync::atomic::{AtomicU8, AtomicU16, AtomicU32, AtomicU64, Ordering};
 
-use crate::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
+use crate::{Error, ErrorCategory, Result, codes};
 
 /// Safe atomic memory view that provides bounds-checked atomic operations
 #[derive(Debug)]
@@ -227,7 +216,7 @@ pub fn get_platform_atomic_provider() -> &'static dyn PlatformAtomicProvider {
 #[derive(Debug)]
 pub struct SafeAtomicOps<'a> {
     provider: &'a dyn PlatformAtomicProvider,
-    view:     SafeAtomicMemory,
+    view: SafeAtomicMemory,
 }
 
 impl<'a> SafeAtomicOps<'a> {

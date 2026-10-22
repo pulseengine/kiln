@@ -158,7 +158,9 @@ impl TryFrom<ComponentTypeDefinition> for FormatComponentType {
 
     fn try_from(type_def: ComponentTypeDefinition) -> Result<Self> {
         match type_def {
-            ComponentTypeDefinition::Component { imports, exports } => Ok(Self::new(imports, exports)),
+            ComponentTypeDefinition::Component { imports, exports } => {
+                Ok(Self::new(imports, exports))
+            },
             _ => Err(Error::validation_error(
                 "Expected Component type definition in FormatComponentType conversion",
             )),

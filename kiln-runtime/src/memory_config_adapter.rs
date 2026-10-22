@@ -4,24 +4,15 @@
 //! into runtime-specific memory provider configurations, replacing all
 //! hardcoded memory sizes with platform-aware dynamic sizing.
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-};
+use kiln_error::{Error, ErrorCategory, codes};
 use kiln_foundation::capabilities::{
-    factory::CapabilityGuardedProvider,
-    MemoryCapabilityContext,
-    MemoryFactory,
+    MemoryCapabilityContext, MemoryFactory, factory::CapabilityGuardedProvider,
 };
 use kiln_foundation::{
     budget_aware_provider::CrateId,
     capabilities::CapabilityAwareProvider,
     capability_context,
-    memory_init::{
-        get_global_capability_context,
-        MemoryInitializer,
-    },
+    memory_init::{MemoryInitializer, get_global_capability_context},
     prelude::*,
     safe_capability_alloc,
     safe_memory::NoStdProvider,
@@ -35,13 +26,13 @@ type AllocatedProvider<const N: usize> = CapabilityAwareProvider<NoStdProvider<N
 /// Runtime memory configuration that replaces hardcoded sizes
 pub struct RuntimeMemoryConfig {
     /// String buffer size based on platform limits
-    pub string_buffer_size:   usize,
+    pub string_buffer_size: usize,
     /// Vector capacity based on platform limits  
-    pub vector_capacity:      usize,
+    pub vector_capacity: usize,
     /// Provider buffer size based on platform limits
     pub provider_buffer_size: usize,
     /// Maximum function parameters based on platform limits
-    pub max_function_params:  usize,
+    pub max_function_params: usize,
 }
 
 impl RuntimeMemoryConfig {
@@ -67,7 +58,7 @@ impl RuntimeMemoryConfig {
         // Use fractions of runtime budget for different components
         let string_buffer_size = if runtime_budget > 0 {
             core::cmp::min(512, runtime_budget / 1024) // Max 512, scaled by
-                                                       // runtime budget
+        // runtime budget
         } else {
             256 // Default fallback
         };
@@ -80,14 +71,14 @@ impl RuntimeMemoryConfig {
 
         let provider_buffer_size = if runtime_budget > 0 {
             core::cmp::min(4096, runtime_budget / 256) // Conservative
-                                                       // allocation
+        // allocation
         } else {
             1024 // Default fallback
         };
 
         let max_function_params = if total_budget > 0 {
             core::cmp::min(256, total_budget / (1024 * 1024)) // Scale with
-                                                              // total budget
+        // total budget
         } else {
             128 // Default fallback
         };
@@ -138,20 +129,17 @@ pub fn initialize_runtime_memory_config() -> Result<()> {
 pub fn runtime_memory_config() -> &'static RuntimeMemoryConfig {
     // Return a static default configuration for no_std mode
     static DEFAULT_CONFIG: RuntimeMemoryConfig = RuntimeMemoryConfig {
-        string_buffer_size:   256,
-        vector_capacity:      256,
+        string_buffer_size: 256,
+        vector_capacity: 256,
         provider_buffer_size: 1024,
-        max_function_params:  32,
+        max_function_params: 32,
     };
     &DEFAULT_CONFIG
 }
 
 /// Platform-aware type aliases that replace hardcoded sizes
 pub mod platform_types {
-    use kiln_foundation::{
-        bounded::*,
-        safe_memory::NoStdProvider,
-    };
+    use kiln_foundation::{bounded::*, safe_memory::NoStdProvider};
 
     use super::*;
 
@@ -263,8 +251,8 @@ impl RuntimeMemoryManager {
         // In no_std mode, return simplified stats based on provider count
         RuntimeMemoryStats {
             total_allocated: 0, // Would need tracking in real implementation
-            total_capacity:  0, // Would need tracking in real implementation
-            provider_count:  self.allocation_count,
+            total_capacity: 0,  // Would need tracking in real implementation
+            provider_count: self.allocation_count,
         }
     }
 }
@@ -281,9 +269,9 @@ pub struct RuntimeMemoryStats {
     /// Total allocated memory across all providers
     pub total_allocated: usize,
     /// Total capacity across all providers
-    pub total_capacity:  usize,
+    pub total_capacity: usize,
     /// Number of active providers
-    pub provider_count:  usize,
+    pub provider_count: usize,
 }
 
 #[cfg(test)]

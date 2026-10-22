@@ -55,7 +55,9 @@ fn convert_module_provider(source: KilnModule) -> KilnModule {
 
 /// Convert a module from one provider to another (no_std version)
 #[cfg(not(feature = "std"))]
-fn convert_module_provider(_source: KilnModule<NoStdProvider<8192>>) -> KilnModule<DecoderProvider> {
+fn convert_module_provider(
+    _source: KilnModule<NoStdProvider<8192>>,
+) -> KilnModule<DecoderProvider> {
     // For now, create a new empty module
     // In a real implementation, we would copy all fields
     let provider = DecoderProvider::default();

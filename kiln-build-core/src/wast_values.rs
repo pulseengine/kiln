@@ -7,11 +7,11 @@
 #![cfg(feature = "std")]
 
 use anyhow::Result;
+use kiln_foundation::values::{ExternRef, FloatBits32, FloatBits64, FuncRef, V128, Value};
 use wast::{
     WastArg, WastRet,
     core::{NanPattern, V128Pattern, WastArgCore, WastRetCore},
 };
-use kiln_foundation::values::{ExternRef, FloatBits32, FloatBits64, FuncRef, V128, Value};
 
 /// Convert WAST arguments to Kiln values
 pub fn convert_wast_args_to_values(args: &[WastArg]) -> Result<Vec<Value>> {
@@ -64,7 +64,10 @@ pub fn convert_wast_results_to_values(results: &[WastRet]) -> Result<Vec<Value>>
 /// Check if actual results match expected results, handling `either` alternatives.
 /// Returns true if all actual results match the corresponding expected results.
 /// For `either` results, the actual value must match at least one alternative.
-pub fn results_match_with_either(actual_results: &[Value], expected_results: &[WastRet]) -> Result<bool> {
+pub fn results_match_with_either(
+    actual_results: &[Value],
+    expected_results: &[WastRet],
+) -> Result<bool> {
     if actual_results.len() != expected_results.len() {
         return Ok(false);
     }
@@ -95,12 +98,12 @@ fn value_matches_wast_ret_core(actual: &Value, expected: &WastRetCore) -> Result
                 }
             }
             Ok(false)
-        }
+        },
         other => {
             // Convert to Value and use standard comparison
             let expected_value = convert_wast_ret_core_to_value(other)?;
             Ok(values_equal(actual, &expected_value))
-        }
+        },
     }
 }
 
@@ -205,11 +208,15 @@ pub fn convert_wast_ret_core_to_value(ret: &WastRetCore) -> Result<Value> {
         },
         WastRetCore::RefArray => {
             // (ref.array) - any non-null array reference
-            Ok(Value::ArrayRef(Some(kiln_foundation::values::GcArrayRef::sentinel())))
+            Ok(Value::ArrayRef(Some(
+                kiln_foundation::values::GcArrayRef::sentinel(),
+            )))
         },
         WastRetCore::RefStruct => {
             // (ref.struct) - any non-null struct reference
-            Ok(Value::StructRef(Some(kiln_foundation::values::GcStructRef::sentinel())))
+            Ok(Value::StructRef(Some(
+                kiln_foundation::values::GcStructRef::sentinel(),
+            )))
         },
         WastRetCore::RefAny => {
             // (ref.any) - any non-null reference (anyref)
@@ -362,37 +369,71 @@ pub fn values_equal(actual: &Value, expected: &Value) -> bool {
             let b_bytes = &b.bytes;
             // Try f32x4 interpretation
             let f32_match = (0..4).all(|i| {
-                let a_val = f32::from_le_bytes([a_bytes[i*4], a_bytes[i*4+1], a_bytes[i*4+2], a_bytes[i*4+3]]);
-                let b_val = f32::from_le_bytes([b_bytes[i*4], b_bytes[i*4+1], b_bytes[i*4+2], b_bytes[i*4+3]]);
+                let a_val = f32::from_le_bytes([
+                    a_bytes[i * 4],
+                    a_bytes[i * 4 + 1],
+                    a_bytes[i * 4 + 2],
+                    a_bytes[i * 4 + 3],
+                ]);
+                let b_val = f32::from_le_bytes([
+                    b_bytes[i * 4],
+                    b_bytes[i * 4 + 1],
+                    b_bytes[i * 4 + 2],
+                    b_bytes[i * 4 + 3],
+                ]);
                 if a_val.is_nan() && b_val.is_nan() {
                     true
                 } else {
-                    a_bytes[i*4..i*4+4] == b_bytes[i*4..i*4+4]
+                    a_bytes[i * 4..i * 4 + 4] == b_bytes[i * 4..i * 4 + 4]
                 }
             });
-            if f32_match { return true; }
+            if f32_match {
+                return true;
+            }
             // Try f64x2 interpretation
             (0..2).all(|i| {
                 let a_val = f64::from_le_bytes([
-                    a_bytes[i*8], a_bytes[i*8+1], a_bytes[i*8+2], a_bytes[i*8+3],
-                    a_bytes[i*8+4], a_bytes[i*8+5], a_bytes[i*8+6], a_bytes[i*8+7],
+                    a_bytes[i * 8],
+                    a_bytes[i * 8 + 1],
+                    a_bytes[i * 8 + 2],
+                    a_bytes[i * 8 + 3],
+                    a_bytes[i * 8 + 4],
+                    a_bytes[i * 8 + 5],
+                    a_bytes[i * 8 + 6],
+                    a_bytes[i * 8 + 7],
                 ]);
                 let b_val = f64::from_le_bytes([
-                    b_bytes[i*8], b_bytes[i*8+1], b_bytes[i*8+2], b_bytes[i*8+3],
-                    b_bytes[i*8+4], b_bytes[i*8+5], b_bytes[i*8+6], b_bytes[i*8+7],
+                    b_bytes[i * 8],
+                    b_bytes[i * 8 + 1],
+                    b_bytes[i * 8 + 2],
+                    b_bytes[i * 8 + 3],
+                    b_bytes[i * 8 + 4],
+                    b_bytes[i * 8 + 5],
+                    b_bytes[i * 8 + 6],
+                    b_bytes[i * 8 + 7],
                 ]);
                 if a_val.is_nan() && b_val.is_nan() {
                     true
                 } else {
-                    a_bytes[i*8..i*8+8] == b_bytes[i*8..i*8+8]
+                    a_bytes[i * 8..i * 8 + 8] == b_bytes[i * 8..i * 8 + 8]
                 }
             })
         },
         (Value::Ref(a), Value::Ref(b)) => a == b,
         // FuncRef comparison
         // Handle "any funcref" pattern (u32::MAX sentinel)
-        (Value::FuncRef(Some(_)), Value::FuncRef(Some(FuncRef { index: u32::MAX, .. }))) => true,
-        (Value::FuncRef(None), Value::FuncRef(Some(FuncRef { index: u32::MAX, .. }))) => false,
+        (
+            Value::FuncRef(Some(_)),
+            Value::FuncRef(Some(FuncRef {
+                index: u32::MAX, ..
+            })),
+        ) => true,
+        (
+            Value::FuncRef(None),
+            Value::FuncRef(Some(FuncRef {
+                index: u32::MAX, ..
+            })),
+        ) => false,
         (Value::FuncRef(a), Value::FuncRef(b)) => a == b,
         // ExternRef comparison
         // Handle "any externref" pattern (u32::MAX sentinel)
@@ -416,12 +457,18 @@ pub fn values_equal(actual: &Value, expected: &Value) -> bool {
         (Value::I31Ref(None), Value::I31Ref(Some(sentinel))) if *sentinel == i32::MAX => false,
         (Value::I31Ref(a), Value::I31Ref(b)) => a == b,
         // ArrayRef: sentinel means "any non-null arrayref" (from (ref.array) in WAST)
-        (Value::ArrayRef(Some(_)), Value::ArrayRef(Some(sentinel))) if sentinel.is_sentinel() => true,
+        (Value::ArrayRef(Some(_)), Value::ArrayRef(Some(sentinel))) if sentinel.is_sentinel() => {
+            true
+        },
         (Value::ArrayRef(None), Value::ArrayRef(Some(sentinel))) if sentinel.is_sentinel() => false,
         (Value::ArrayRef(a), Value::ArrayRef(b)) => a == b,
         // StructRef: sentinel means "any non-null structref" (from (ref.struct) in WAST)
-        (Value::StructRef(Some(_)), Value::StructRef(Some(sentinel))) if sentinel.is_sentinel() => true,
-        (Value::StructRef(None), Value::StructRef(Some(sentinel))) if sentinel.is_sentinel() => false,
+        (Value::StructRef(Some(_)), Value::StructRef(Some(sentinel))) if sentinel.is_sentinel() => {
+            true
+        },
+        (Value::StructRef(None), Value::StructRef(Some(sentinel))) if sentinel.is_sentinel() => {
+            false
+        },
         (Value::StructRef(a), Value::StructRef(b)) => a == b,
         // Any non-null GC ref matches (ref.any) sentinel (I32(MAX))
         (Value::ArrayRef(Some(_)), Value::I32(sentinel)) if *sentinel == i32::MAX => true,

@@ -248,7 +248,9 @@ mod std_parsing {
                         binary::COMPONENT_CORE_SORT_FUNC => {
                             kiln_format::component::CoreSort::Function
                         },
-                        binary::COMPONENT_CORE_SORT_TABLE => kiln_format::component::CoreSort::Table,
+                        binary::COMPONENT_CORE_SORT_TABLE => {
+                            kiln_format::component::CoreSort::Table
+                        },
                         binary::COMPONENT_CORE_SORT_MEMORY => {
                             kiln_format::component::CoreSort::Memory
                         },
@@ -1819,7 +1821,10 @@ mod std_parsing {
                     fields.push((name, field_type));
                 }
 
-                Ok((kiln_format::component::FormatValType::Record(fields), offset))
+                Ok((
+                    kiln_format::component::FormatValType::Record(fields),
+                    offset,
+                ))
             },
             0x71 => {
                 // Variant type: 0x71 case*:vec(<case>) => (variant case+)
@@ -1863,7 +1868,10 @@ mod std_parsing {
                     cases.push((name, case_type));
                 }
 
-                Ok((kiln_format::component::FormatValType::Variant(cases), offset))
+                Ok((
+                    kiln_format::component::FormatValType::Variant(cases),
+                    offset,
+                ))
             },
             0x70 => {
                 // List type: 0x70 t:<valtype> => (list t)
@@ -1991,8 +1999,8 @@ mod std_parsing {
                 // FormatValType::Result expects a single Box<FormatValType>
                 // We'll use a tuple or variant to represent both ok/error
                 // For now, simplify to just the ok type
-                let result_type =
-                    ok_type.unwrap_or_else(|| Box::new(kiln_format::component::FormatValType::Void));
+                let result_type = ok_type
+                    .unwrap_or_else(|| Box::new(kiln_format::component::FormatValType::Void));
 
                 Ok((
                     kiln_format::component::FormatValType::Result(result_type),
@@ -2021,7 +2029,10 @@ mod std_parsing {
                 offset += bytes_read;
 
                 Ok((
-                    kiln_format::component::FormatValType::FixedList(Box::new(element_type), length),
+                    kiln_format::component::FormatValType::FixedList(
+                        Box::new(element_type),
+                        length,
+                    ),
                     offset,
                 ))
             },
@@ -2740,14 +2751,30 @@ mod std_parsing {
             },
             kiln_format::component::FormatValType::S8 => kiln_format::component::FormatValType::S8,
             kiln_format::component::FormatValType::U8 => kiln_format::component::FormatValType::U8,
-            kiln_format::component::FormatValType::S16 => kiln_format::component::FormatValType::S16,
-            kiln_format::component::FormatValType::U16 => kiln_format::component::FormatValType::U16,
-            kiln_format::component::FormatValType::S32 => kiln_format::component::FormatValType::S32,
-            kiln_format::component::FormatValType::U32 => kiln_format::component::FormatValType::U32,
-            kiln_format::component::FormatValType::S64 => kiln_format::component::FormatValType::S64,
-            kiln_format::component::FormatValType::U64 => kiln_format::component::FormatValType::U64,
-            kiln_format::component::FormatValType::F32 => kiln_format::component::FormatValType::F32,
-            kiln_format::component::FormatValType::F64 => kiln_format::component::FormatValType::F64,
+            kiln_format::component::FormatValType::S16 => {
+                kiln_format::component::FormatValType::S16
+            },
+            kiln_format::component::FormatValType::U16 => {
+                kiln_format::component::FormatValType::U16
+            },
+            kiln_format::component::FormatValType::S32 => {
+                kiln_format::component::FormatValType::S32
+            },
+            kiln_format::component::FormatValType::U32 => {
+                kiln_format::component::FormatValType::U32
+            },
+            kiln_format::component::FormatValType::S64 => {
+                kiln_format::component::FormatValType::S64
+            },
+            kiln_format::component::FormatValType::U64 => {
+                kiln_format::component::FormatValType::U64
+            },
+            kiln_format::component::FormatValType::F32 => {
+                kiln_format::component::FormatValType::F32
+            },
+            kiln_format::component::FormatValType::F64 => {
+                kiln_format::component::FormatValType::F64
+            },
             kiln_format::component::FormatValType::Char => {
                 kiln_format::component::FormatValType::Char
             },
@@ -2774,14 +2801,14 @@ mod std_parsing {
                 )
             },
             kiln_format::component::FormatValType::Option(inner) => {
-                kiln_format::component::FormatValType::Option(Box::new(val_type_to_format_val_type(
-                    *inner,
-                )))
+                kiln_format::component::FormatValType::Option(Box::new(
+                    val_type_to_format_val_type(*inner),
+                ))
             },
             kiln_format::component::FormatValType::Result(ok) => {
-                kiln_format::component::FormatValType::Result(Box::new(val_type_to_format_val_type(
-                    *ok,
-                )))
+                kiln_format::component::FormatValType::Result(Box::new(
+                    val_type_to_format_val_type(*ok),
+                ))
             },
             // TODO: Fix FormatValType enum to support ResultErr and ResultBoth variants
             // kiln_format::component::FormatValType::ResultErr(err) => {

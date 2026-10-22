@@ -3,12 +3,7 @@
 //! This example shows how the allocator system is now integrated directly
 //! into kiln-foundation without external dependencies.
 
-use kiln_foundation::allocator::{
-    CapacityError,
-    CrateId,
-    KilnHashMap,
-    KilnVec,
-};
+use kiln_foundation::allocator::{CapacityError, CrateId, KilnHashMap, KilnVec};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Kiln Internal Allocator System Demo");

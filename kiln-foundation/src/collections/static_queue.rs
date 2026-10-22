@@ -276,7 +276,9 @@ impl<T: Clone, const N: usize> Clone for StaticQueue<T, N> {
 }
 
 // Checksummable implementation for verifiable data integrity
-impl<T: crate::traits::Checksummable, const N: usize> crate::traits::Checksummable for StaticQueue<T, N> {
+impl<T: crate::traits::Checksummable, const N: usize> crate::traits::Checksummable
+    for StaticQueue<T, N>
+{
     fn update_checksum(&self, checksum: &mut crate::verification::Checksum) {
         // Update checksum with length
         self.len().update_checksum(checksum);
@@ -291,9 +293,7 @@ impl<T: crate::traits::Checksummable, const N: usize> crate::traits::Checksummab
 impl<T: crate::traits::ToBytes, const N: usize> crate::traits::ToBytes for StaticQueue<T, N> {
     fn serialized_size(&self) -> usize {
         let len_size = core::mem::size_of::<usize>();
-        let items_size: usize = self.iter()
-            .map(|item| item.serialized_size())
-            .sum();
+        let items_size: usize = self.iter().map(|item| item.serialized_size()).sum();
         len_size + items_size
     }
 

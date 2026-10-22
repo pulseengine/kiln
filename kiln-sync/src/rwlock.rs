@@ -1,20 +1,14 @@
 #![allow(clippy::missing_fields_in_debug)] // Added to allow for now
 #![allow(clippy::uninlined_format_args)] // Added to allow for now
-                                         // #![allow(unsafe_code)] // Allow unsafe for UnsafeCell, atomics, and Send/Sync
-                                         // impls
+// #![allow(unsafe_code)] // Allow unsafe for UnsafeCell, atomics, and Send/Sync
+// impls
 
 use core::{
     cell::UnsafeCell,
     fmt,
     hint::spin_loop,
-    ops::{
-        Deref,
-        DerefMut,
-    },
-    sync::atomic::{
-        AtomicUsize,
-        Ordering,
-    },
+    ops::{Deref, DerefMut},
+    sync::atomic::{AtomicUsize, Ordering},
 };
 // REMOVED: #[cfg(feature = "std")]
 // REMOVED: use std::borrow::Cow; // Unused import
@@ -29,12 +23,7 @@ use std::sync::Arc;
 use std::vec::Vec;
 
 #[cfg(feature = "std")] // Gate this import as it's only used by parking_impl (std-gated)
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-}; // Keep this top-level import
+use kiln_error::{Error, ErrorCategory, Result, codes}; // Keep this top-level import
 
 /// A simple, `no_std` compatible Read-Write Lock using atomics.
 ///
@@ -83,7 +72,7 @@ pub struct KilnRwLock<T: ?Sized> {
     /// - `usize::MAX`: Write-locked
     /// - n (`1..usize::MAX - 1`): Read-locked by n readers
     state: AtomicUsize,
-    data:  UnsafeCell<T>,
+    data: UnsafeCell<T>,
 }
 
 /// A guard that provides read access to the data protected by a `KilnRwLock`.
@@ -120,7 +109,7 @@ impl<T> KilnRwLock<T> {
     pub const fn new(data: T) -> Self {
         KilnRwLock {
             state: AtomicUsize::new(0), // Start unlocked
-            data:  UnsafeCell::new(data),
+            data: UnsafeCell::new(data),
         }
     }
 }
@@ -309,33 +298,17 @@ impl<T: ?Sized + fmt::Debug> fmt::Debug for KilnRwLock<T> {
 pub mod parking_impl {
     // Replace wildcard import with explicit imports
     // Removed Cow from this list as it is no longer used.
-    use core::sync::atomic::{
-        AtomicUsize,
-        Ordering,
-    }; // Use Ordering directly
+    use core::sync::atomic::{AtomicUsize, Ordering}; // Use Ordering directly
     use core::{
         cell::UnsafeCell as CoreUnsafeCell,
         fmt as CoreFmt,
-        ops::{
-            Deref as CoreDeref,
-            DerefMut as CoreDerefMut,
-        },
+        ops::{Deref as CoreDeref, DerefMut as CoreDerefMut},
     };
     // std specific items, now directly used because of cfg(feature = "std") on the module
     use std::sync::RwLock as StdRwLock;
-    use std::thread::{
-        self,
-        Thread,
-    };
+    use std::thread::{self, Thread};
 
-    use super::{
-        codes,
-        Arc,
-        Error,
-        ErrorCategory,
-        Result,
-        Vec,
-    }; // Keep alias for clarity if preferred
+    use super::{Arc, Error, ErrorCategory, Result, Vec, codes}; // Keep alias for clarity if preferred
 
     const UNLOCKED: usize = 0;
     // REMOVED: const WRITE_LOCKED as it was unused and outer module's
@@ -344,14 +317,14 @@ pub mod parking_impl {
 
     /// A `RwLock` that uses `std::thread::park` for blocking.
     pub struct KilnParkingRwLock<T: ?Sized> {
-        state:           AtomicUsize,
+        state: AtomicUsize,
         /// Number of `write()` calls currently trying to acquire the lock.
         /// New readers defer to them. It is a count, incremented before the
         /// first acquire attempt and decremented once `write()` returns, so
         /// it is back to zero whenever no writer is waiting.
         writers_waiting: AtomicUsize,
-        waiters:         Arc<WaitQueue>,
-        data:            CoreUnsafeCell<T>,
+        waiters: Arc<WaitQueue>,
+        data: CoreUnsafeCell<T>,
     }
 
     #[derive(CoreFmt::Debug)] // Add Debug derive for WaitQueue
@@ -509,10 +482,10 @@ pub mod parking_impl {
         /// ```
         pub fn new(data: T) -> Self {
             KilnParkingRwLock {
-                state:           AtomicUsize::new(UNLOCKED),
+                state: AtomicUsize::new(UNLOCKED),
                 writers_waiting: AtomicUsize::new(0),
-                waiters:         Arc::new(WaitQueue::new()),
-                data:            CoreUnsafeCell::new(data),
+                waiters: Arc::new(WaitQueue::new()),
+                data: CoreUnsafeCell::new(data),
             }
         }
     }
@@ -696,16 +669,10 @@ pub mod parking_impl {
 
     #[cfg(test)]
     mod internal_parking_tests {
-        use std::{
-            sync::Arc,
-            thread,
-        };
+        use std::{sync::Arc, thread};
 
         use super::KilnParkingRwLock;
-        use crate::prelude::{
-            AtomicBool,
-            Ordering,
-        };
+        use crate::prelude::{AtomicBool, Ordering};
 
         #[test]
         fn test_parking_rwlock_basic() {

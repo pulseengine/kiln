@@ -3,18 +3,9 @@
 #[cfg(not(feature = "std"))]
 use kiln_foundation::safe_memory::NoStdProvider;
 #[cfg(not(feature = "std"))]
-use kiln_foundation::{
-    BoundedStack,
-    BoundedVec,
-};
+use kiln_foundation::{BoundedStack, BoundedVec};
 
-use crate::prelude::{
-    Debug,
-    Eq,
-    Error,
-    PartialEq,
-    Value,
-};
+use crate::prelude::{Debug, Eq, Error, PartialEq, Value};
 
 // CFI-specific types
 /// Maximum number of CFI targets

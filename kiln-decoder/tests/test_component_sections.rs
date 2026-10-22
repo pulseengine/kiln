@@ -9,8 +9,8 @@ fn test_parse_file_ops_component() {
     let bytes = fs::read("../kiln-tests/fixtures/file_ops_component.wasm")
         .expect("Failed to read component file");
 
-    let component =
-        kiln_decoder::component::decode_component_binary(&bytes).expect("Failed to parse component");
+    let component = kiln_decoder::component::decode_component_binary(&bytes)
+        .expect("Failed to parse component");
 
     // Print section counts for debugging
     println!("\n✓ Component parsed successfully");

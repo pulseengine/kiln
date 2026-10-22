@@ -6,14 +6,7 @@
 pub mod serialization;
 
 // Re-export functions
+pub use serialization::{STATE_SECTION_PREFIX, StateHeader, StateSection};
 pub use serialization::{
-    create_state_section,
-    extract_state_section,
-    has_state_sections,
-    is_state_section_name,
-};
-pub use serialization::{
-    StateHeader,
-    StateSection,
-    STATE_SECTION_PREFIX,
+    create_state_section, extract_state_section, has_state_sections, is_state_section_name,
 };

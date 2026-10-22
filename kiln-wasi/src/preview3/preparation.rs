@@ -7,10 +7,7 @@
 use core::{
     future::Future,
     pin::Pin,
-    task::{
-        Context,
-        Poll,
-    },
+    task::{Context, Poll},
 };
 
 use crate::prelude::*;
@@ -140,11 +137,11 @@ pub trait WasiStreamingCodec {
 #[derive(Debug, Clone, PartialEq)]
 pub struct WasiPreview3Limits {
     /// Maximum number of threads
-    pub max_threads:       u32,
+    pub max_threads: u32,
     /// Maximum shared memory size
     pub max_shared_memory: usize,
     /// Maximum async I/O operations
-    pub max_async_io_ops:  u32,
+    pub max_async_io_ops: u32,
     /// Maximum stream buffer size
     pub max_stream_buffer: usize,
 }
@@ -152,9 +149,9 @@ pub struct WasiPreview3Limits {
 impl Default for WasiPreview3Limits {
     fn default() -> Self {
         Self {
-            max_threads:       16,
+            max_threads: 16,
             max_shared_memory: 16 * 1024 * 1024, // 16MB
-            max_async_io_ops:  256,
+            max_async_io_ops: 256,
             max_stream_buffer: 1024 * 1024, // 1MB
         }
     }
@@ -166,25 +163,25 @@ impl Default for WasiPreview3Limits {
 #[derive(Debug, Clone, PartialEq)]
 pub struct WasiPreview3Capabilities {
     /// Allow thread spawning
-    pub threading_enabled:     bool,
+    pub threading_enabled: bool,
     /// Allow shared memory
     pub shared_memory_enabled: bool,
     /// Allow async I/O
-    pub async_io_enabled:      bool,
+    pub async_io_enabled: bool,
     /// Allow streaming codecs
-    pub streaming_enabled:     bool,
+    pub streaming_enabled: bool,
     /// Resource limits
-    pub limits:                WasiPreview3Limits,
+    pub limits: WasiPreview3Limits,
 }
 
 impl Default for WasiPreview3Capabilities {
     fn default() -> Self {
         Self {
-            threading_enabled:     false,
+            threading_enabled: false,
             shared_memory_enabled: false,
-            async_io_enabled:      true,
-            streaming_enabled:     true,
-            limits:                WasiPreview3Limits::default(),
+            async_io_enabled: true,
+            streaming_enabled: true,
+            limits: WasiPreview3Limits::default(),
         }
     }
 }
@@ -221,7 +218,7 @@ pub mod streaming_patterns {
 
     /// Stream processor for data transformation
     pub struct StreamProcessor<C: WasiStreamingCodec> {
-        codec:       C,
+        codec: C,
         buffer_size: usize,
     }
 

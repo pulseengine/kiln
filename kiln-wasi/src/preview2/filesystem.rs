@@ -14,10 +14,7 @@ use std::{
     sync::RwLock,
 };
 
-use crate::{
-    prelude::*,
-    Value,
-};
+use crate::{Value, prelude::*};
 
 /// File descriptor table for tracking open files
 #[cfg(feature = "std")]
@@ -96,7 +93,8 @@ pub struct OpenFile {
 /// Initialize the file descriptor table
 #[cfg(feature = "std")]
 fn ensure_file_table() -> Result<()> {
-    let mut table = FILE_TABLE.write()
+    let mut table = FILE_TABLE
+        .write()
         .map_err(|_| Error::wasi_capability_unavailable("Failed to acquire file table lock"))?;
     if table.is_none() {
         *table = Some(FileDescriptorTable::new());
@@ -157,13 +155,14 @@ pub fn wasi_filesystem_open_at(_target: &mut dyn Any, args: &[Value]) -> Result<
         }
 
         // Open the file
-        let file = options.open(path)
-            .map_err(|e| map_io_error(&e, "Failed to open file"))?;
+        let file = options.open(path).map_err(|e| map_io_error(&e, "Failed to open file"))?;
 
         // Register in file table
-        let mut table = FILE_TABLE.write()
+        let mut table = FILE_TABLE
+            .write()
             .map_err(|_| Error::wasi_capability_unavailable("Failed to acquire file table lock"))?;
-        let table = table.as_mut()
+        let table = table
+            .as_mut()
             .ok_or_else(|| Error::wasi_capability_unavailable("File table not initialized"))?;
 
         let open_file = OpenFile {
@@ -182,7 +181,7 @@ pub fn wasi_filesystem_open_at(_target: &mut dyn Any, args: &[Value]) -> Result<
     #[cfg(not(feature = "std"))]
     {
         // In no_std environment, filesystem operations are not available
-        Ok(vec![Value::Result(Err(Box::new(Value::U32(76))))])  // ENOSYS
+        Ok(vec![Value::Result(Err(Box::new(Value::U32(76))))]) // ENOSYS
     }
 }
 
@@ -205,33 +204,39 @@ pub fn wasi_filesystem_read(_target: &mut dyn Any, args: &[Value]) -> Result<Vec
 
         let fd = extract_file_descriptor(args)?;
         let len = extract_length(args, 1)? as usize;
-        let offset = args.get(2)
-            .and_then(|v| match v {
-                Value::U64(o) => Some(*o),
-                _ => None,
-            });
+        let offset = args.get(2).and_then(|v| match v {
+            Value::U64(o) => Some(*o),
+            _ => None,
+        });
 
-        let mut table = FILE_TABLE.write()
+        let mut table = FILE_TABLE
+            .write()
             .map_err(|_| Error::wasi_capability_unavailable("Failed to acquire file table lock"))?;
-        let table = table.as_mut()
+        let table = table
+            .as_mut()
             .ok_or_else(|| Error::wasi_capability_unavailable("File table not initialized"))?;
 
-        let open_file = table.get_mut(fd)
+        let open_file = table
+            .get_mut(fd)
             .ok_or_else(|| Error::wasi_invalid_fd("Invalid file descriptor"))?;
 
         if !open_file.readable {
-            return Ok(vec![Value::Result(Err(Box::new(Value::U32(8))))]);  // EBADF
+            return Ok(vec![Value::Result(Err(Box::new(Value::U32(8))))]); // EBADF
         }
 
         // Seek if offset provided
         if let Some(off) = offset {
-            open_file.file.seek(SeekFrom::Start(off))
+            open_file
+                .file
+                .seek(SeekFrom::Start(off))
                 .map_err(|e| map_io_error(&e, "Failed to seek"))?;
         }
 
         // Read data
         let mut buffer = vec![0u8; len.min(65536)];
-        let bytes_read = open_file.file.read(&mut buffer)
+        let bytes_read = open_file
+            .file
+            .read(&mut buffer)
             .map_err(|e| map_io_error(&e, "Failed to read file"))?;
 
         buffer.truncate(bytes_read);
@@ -241,17 +246,15 @@ pub fn wasi_filesystem_read(_target: &mut dyn Any, args: &[Value]) -> Result<Vec
 
         // Return tuple of (data, eof)
         let eof = bytes_read == 0;
-        Ok(vec![
-            Value::Result(Ok(Box::new(Value::Tuple(vec![
-                Value::List(data),
-                Value::Bool(eof),
-            ]))))
-        ])
+        Ok(vec![Value::Result(Ok(Box::new(Value::Tuple(vec![
+            Value::List(data),
+            Value::Bool(eof),
+        ]))))])
     }
 
     #[cfg(not(feature = "std"))]
     {
-        Ok(vec![Value::Result(Err(Box::new(Value::U32(76))))])  // ENOSYS
+        Ok(vec![Value::Result(Err(Box::new(Value::U32(76))))]) // ENOSYS
     }
 }
 
@@ -274,40 +277,48 @@ pub fn wasi_filesystem_write(_target: &mut dyn Any, args: &[Value]) -> Result<Ve
 
         let fd = extract_file_descriptor(args)?;
         let data = extract_byte_data(args, 1)?;
-        let offset = args.get(2)
-            .and_then(|v| match v {
-                Value::U64(o) => Some(*o),
-                _ => None,
-            });
+        let offset = args.get(2).and_then(|v| match v {
+            Value::U64(o) => Some(*o),
+            _ => None,
+        });
 
-        let mut table = FILE_TABLE.write()
+        let mut table = FILE_TABLE
+            .write()
             .map_err(|_| Error::wasi_capability_unavailable("Failed to acquire file table lock"))?;
-        let table = table.as_mut()
+        let table = table
+            .as_mut()
             .ok_or_else(|| Error::wasi_capability_unavailable("File table not initialized"))?;
 
-        let open_file = table.get_mut(fd)
+        let open_file = table
+            .get_mut(fd)
             .ok_or_else(|| Error::wasi_invalid_fd("Invalid file descriptor"))?;
 
         if !open_file.writable {
-            return Ok(vec![Value::Result(Err(Box::new(Value::U32(8))))]);  // EBADF
+            return Ok(vec![Value::Result(Err(Box::new(Value::U32(8))))]); // EBADF
         }
 
         // Seek if offset provided
         if let Some(off) = offset {
-            open_file.file.seek(SeekFrom::Start(off))
+            open_file
+                .file
+                .seek(SeekFrom::Start(off))
                 .map_err(|e| map_io_error(&e, "Failed to seek"))?;
         }
 
         // Write data
-        let bytes_written = open_file.file.write(&data)
+        let bytes_written = open_file
+            .file
+            .write(&data)
             .map_err(|e| map_io_error(&e, "Failed to write file"))?;
 
-        Ok(vec![Value::Result(Ok(Box::new(Value::U64(bytes_written as u64))))])
+        Ok(vec![Value::Result(Ok(Box::new(Value::U64(
+            bytes_written as u64,
+        ))))])
     }
 
     #[cfg(not(feature = "std"))]
     {
-        Ok(vec![Value::Result(Err(Box::new(Value::U32(76))))])  // ENOSYS
+        Ok(vec![Value::Result(Err(Box::new(Value::U32(76))))]) // ENOSYS
     }
 }
 
@@ -329,9 +340,11 @@ pub fn wasi_filesystem_close(_target: &mut dyn Any, args: &[Value]) -> Result<Ve
 
         let fd = extract_file_descriptor(args)?;
 
-        let mut table = FILE_TABLE.write()
+        let mut table = FILE_TABLE
+            .write()
             .map_err(|_| Error::wasi_capability_unavailable("Failed to acquire file table lock"))?;
-        let table = table.as_mut()
+        let table = table
+            .as_mut()
             .ok_or_else(|| Error::wasi_capability_unavailable("File table not initialized"))?;
 
         if table.remove(fd).is_some() {
@@ -343,7 +356,9 @@ pub fn wasi_filesystem_close(_target: &mut dyn Any, args: &[Value]) -> Result<Ve
 
     #[cfg(not(feature = "std"))]
     {
-        Err(Error::wasi_capability_unavailable("Filesystem not available in no_std"))
+        Err(Error::wasi_capability_unavailable(
+            "Filesystem not available in no_std",
+        ))
     }
 }
 
@@ -366,15 +381,19 @@ pub fn wasi_filesystem_stat(_target: &mut dyn Any, args: &[Value]) -> Result<Vec
 
         let fd = extract_file_descriptor(args)?;
 
-        let table = FILE_TABLE.read()
+        let table = FILE_TABLE
+            .read()
             .map_err(|_| Error::wasi_capability_unavailable("Failed to acquire file table lock"))?;
-        let table = table.as_ref()
+        let table = table
+            .as_ref()
             .ok_or_else(|| Error::wasi_capability_unavailable("File table not initialized"))?;
 
-        let open_file = table.get(fd)
-            .ok_or_else(|| Error::wasi_invalid_fd("Invalid file descriptor"))?;
+        let open_file =
+            table.get(fd).ok_or_else(|| Error::wasi_invalid_fd("Invalid file descriptor"))?;
 
-        let metadata = open_file.file.metadata()
+        let metadata = open_file
+            .file
+            .metadata()
             .map_err(|e| map_io_error(&e, "Failed to get file metadata"))?;
 
         // Build descriptor-stat record
@@ -385,7 +404,7 @@ pub fn wasi_filesystem_stat(_target: &mut dyn Any, args: &[Value]) -> Result<Vec
 
     #[cfg(not(feature = "std"))]
     {
-        Ok(vec![Value::Result(Err(Box::new(Value::U32(76))))])  // ENOSYS
+        Ok(vec![Value::Result(Err(Box::new(Value::U32(76))))]) // ENOSYS
     }
 }
 
@@ -406,8 +425,8 @@ pub fn wasi_filesystem_stat_at(_target: &mut dyn Any, args: &[Value]) -> Result<
         let _dir_fd = extract_file_descriptor(args)?;
         let path = extract_string(args, 2)?;
 
-        let metadata = std::fs::metadata(path)
-            .map_err(|e| map_io_error(&e, "Failed to get file metadata"))?;
+        let metadata =
+            std::fs::metadata(path).map_err(|e| map_io_error(&e, "Failed to get file metadata"))?;
 
         let stat = build_descriptor_stat(&metadata);
 
@@ -416,7 +435,7 @@ pub fn wasi_filesystem_stat_at(_target: &mut dyn Any, args: &[Value]) -> Result<
 
     #[cfg(not(feature = "std"))]
     {
-        Ok(vec![Value::Result(Err(Box::new(Value::U32(76))))])  // ENOSYS
+        Ok(vec![Value::Result(Err(Box::new(Value::U32(76))))]) // ENOSYS
     }
 }
 
@@ -439,23 +458,24 @@ pub fn wasi_filesystem_sync(_target: &mut dyn Any, args: &[Value]) -> Result<Vec
 
         let fd = extract_file_descriptor(args)?;
 
-        let table = FILE_TABLE.read()
+        let table = FILE_TABLE
+            .read()
             .map_err(|_| Error::wasi_capability_unavailable("Failed to acquire file table lock"))?;
-        let table = table.as_ref()
+        let table = table
+            .as_ref()
             .ok_or_else(|| Error::wasi_capability_unavailable("File table not initialized"))?;
 
-        let open_file = table.get(fd)
-            .ok_or_else(|| Error::wasi_invalid_fd("Invalid file descriptor"))?;
+        let open_file =
+            table.get(fd).ok_or_else(|| Error::wasi_invalid_fd("Invalid file descriptor"))?;
 
-        open_file.file.sync_all()
-            .map_err(|e| map_io_error(&e, "Failed to sync file"))?;
+        open_file.file.sync_all().map_err(|e| map_io_error(&e, "Failed to sync file"))?;
 
         Ok(vec![Value::Result(Ok(Box::new(Value::Tuple(vec![]))))])
     }
 
     #[cfg(not(feature = "std"))]
     {
-        Ok(vec![Value::Result(Err(Box::new(Value::U32(76))))])  // ENOSYS
+        Ok(vec![Value::Result(Err(Box::new(Value::U32(76))))]) // ENOSYS
     }
 }
 
@@ -478,16 +498,20 @@ pub fn wasi_filesystem_sync_data(_target: &mut dyn Any, args: &[Value]) -> Resul
 
         let fd = extract_file_descriptor(args)?;
 
-        let table = FILE_TABLE.read()
+        let table = FILE_TABLE
+            .read()
             .map_err(|_| Error::wasi_capability_unavailable("Failed to acquire file table lock"))?;
-        let table = table.as_ref()
+        let table = table
+            .as_ref()
             .ok_or_else(|| Error::wasi_capability_unavailable("File table not initialized"))?;
 
-        let open_file = table.get(fd)
-            .ok_or_else(|| Error::wasi_invalid_fd("Invalid file descriptor"))?;
+        let open_file =
+            table.get(fd).ok_or_else(|| Error::wasi_invalid_fd("Invalid file descriptor"))?;
 
         // sync_data() syncs data without metadata (more efficient than sync_all)
-        open_file.file.sync_data()
+        open_file
+            .file
+            .sync_data()
             .map_err(|e| map_io_error(&e, "Failed to sync file data"))?;
 
         Ok(vec![Value::Result(Ok(Box::new(Value::Tuple(vec![]))))])
@@ -495,7 +519,7 @@ pub fn wasi_filesystem_sync_data(_target: &mut dyn Any, args: &[Value]) -> Resul
 
     #[cfg(not(feature = "std"))]
     {
-        Ok(vec![Value::Result(Err(Box::new(Value::U32(76))))])  // ENOSYS
+        Ok(vec![Value::Result(Err(Box::new(Value::U32(76))))]) // ENOSYS
     }
 }
 
@@ -528,16 +552,20 @@ pub fn wasi_filesystem_set_times(_target: &mut dyn Any, args: &[Value]) -> Resul
         let atime = extract_timestamp(args, 1)?;
         let mtime = extract_timestamp(args, 2)?;
 
-        let table = FILE_TABLE.read()
+        let table = FILE_TABLE
+            .read()
             .map_err(|_| Error::wasi_capability_unavailable("Failed to acquire file table lock"))?;
-        let table = table.as_ref()
+        let table = table
+            .as_ref()
             .ok_or_else(|| Error::wasi_capability_unavailable("File table not initialized"))?;
 
-        let open_file = table.get(fd)
-            .ok_or_else(|| Error::wasi_invalid_fd("Invalid file descriptor"))?;
+        let open_file =
+            table.get(fd).ok_or_else(|| Error::wasi_invalid_fd("Invalid file descriptor"))?;
 
         // Get current timestamps for NoChange cases
-        let metadata = open_file.file.metadata()
+        let metadata = open_file
+            .file
+            .metadata()
             .map_err(|e| map_io_error(&e, "Failed to get metadata"))?;
 
         let current_atime = metadata.accessed().unwrap_or(SystemTime::now());
@@ -557,11 +585,11 @@ pub fn wasi_filesystem_set_times(_target: &mut dyn Any, args: &[Value]) -> Resul
         };
 
         // Build FileTimes and set on the file
-        let times = FileTimes::new()
-            .set_accessed(atime_system)
-            .set_modified(mtime_system);
+        let times = FileTimes::new().set_accessed(atime_system).set_modified(mtime_system);
 
-        open_file.file.set_times(times)
+        open_file
+            .file
+            .set_times(times)
             .map_err(|e| map_io_error(&e, "Failed to set file times"))?;
 
         Ok(vec![Value::Result(Ok(Box::new(Value::Tuple(vec![]))))])
@@ -569,7 +597,7 @@ pub fn wasi_filesystem_set_times(_target: &mut dyn Any, args: &[Value]) -> Resul
 
     #[cfg(not(feature = "std"))]
     {
-        Ok(vec![Value::Result(Err(Box::new(Value::U32(76))))])  // ENOSYS
+        Ok(vec![Value::Result(Err(Box::new(Value::U32(76))))]) // ENOSYS
     }
 }
 
@@ -591,21 +619,23 @@ pub fn wasi_filesystem_get_flags(_target: &mut dyn Any, args: &[Value]) -> Resul
 
         let fd = extract_file_descriptor(args)?;
 
-        let table = FILE_TABLE.read()
+        let table = FILE_TABLE
+            .read()
             .map_err(|_| Error::wasi_capability_unavailable("Failed to acquire file table lock"))?;
-        let table = table.as_ref()
+        let table = table
+            .as_ref()
             .ok_or_else(|| Error::wasi_capability_unavailable("File table not initialized"))?;
 
-        let open_file = table.get(fd)
-            .ok_or_else(|| Error::wasi_invalid_fd("Invalid file descriptor"))?;
+        let open_file =
+            table.get(fd).ok_or_else(|| Error::wasi_invalid_fd("Invalid file descriptor"))?;
 
         // Build flags from our tracked state
         let mut flags = 0u32;
         if open_file.readable {
-            flags |= 0x01;  // read
+            flags |= 0x01; // read
         }
         if open_file.writable {
-            flags |= 0x02;  // write
+            flags |= 0x02; // write
         }
         // Note: sync and nonblocking would require additional tracking in OpenFile
 
@@ -614,7 +644,7 @@ pub fn wasi_filesystem_get_flags(_target: &mut dyn Any, args: &[Value]) -> Resul
 
     #[cfg(not(feature = "std"))]
     {
-        Ok(vec![Value::Result(Err(Box::new(Value::U32(76))))])  // ENOSYS
+        Ok(vec![Value::Result(Err(Box::new(Value::U32(76))))]) // ENOSYS
     }
 }
 
@@ -643,12 +673,15 @@ pub fn wasi_filesystem_set_flags(_target: &mut dyn Any, args: &[Value]) -> Resul
         let fd = extract_file_descriptor(args)?;
         let new_flags = extract_descriptor_flags(args, 1)?;
 
-        let mut table = FILE_TABLE.write()
+        let mut table = FILE_TABLE
+            .write()
             .map_err(|_| Error::wasi_capability_unavailable("Failed to acquire file table lock"))?;
-        let table = table.as_mut()
+        let table = table
+            .as_mut()
             .ok_or_else(|| Error::wasi_capability_unavailable("File table not initialized"))?;
 
-        let open_file = table.get_mut(fd)
+        let open_file = table
+            .get_mut(fd)
             .ok_or_else(|| Error::wasi_invalid_fd("Invalid file descriptor"))?;
 
         // Update our tracked flags
@@ -665,7 +698,7 @@ pub fn wasi_filesystem_set_flags(_target: &mut dyn Any, args: &[Value]) -> Resul
 
     #[cfg(not(feature = "std"))]
     {
-        Ok(vec![Value::Result(Err(Box::new(Value::U32(76))))])  // ENOSYS
+        Ok(vec![Value::Result(Err(Box::new(Value::U32(76))))]) // ENOSYS
     }
 }
 
@@ -696,13 +729,15 @@ pub fn wasi_filesystem_advise(_target: &mut dyn Any, args: &[Value]) -> Result<V
         let _advice = extract_advice(args, 3)?;
 
         // Verify the fd is valid
-        let table = FILE_TABLE.read()
+        let table = FILE_TABLE
+            .read()
             .map_err(|_| Error::wasi_capability_unavailable("Failed to acquire file table lock"))?;
-        let table = table.as_ref()
+        let table = table
+            .as_ref()
             .ok_or_else(|| Error::wasi_capability_unavailable("File table not initialized"))?;
 
-        let _open_file = table.get(fd)
-            .ok_or_else(|| Error::wasi_invalid_fd("Invalid file descriptor"))?;
+        let _open_file =
+            table.get(fd).ok_or_else(|| Error::wasi_invalid_fd("Invalid file descriptor"))?;
 
         // Advisory operations are hints to the OS kernel about expected access patterns.
         // Without unsafe FFI to call posix_fadvise (Linux) or fcntl F_RDADVISE (macOS),
@@ -715,7 +750,7 @@ pub fn wasi_filesystem_advise(_target: &mut dyn Any, args: &[Value]) -> Result<V
 
     #[cfg(not(feature = "std"))]
     {
-        Ok(vec![Value::Result(Err(Box::new(Value::U32(76))))])  // ENOSYS
+        Ok(vec![Value::Result(Err(Box::new(Value::U32(76))))]) // ENOSYS
     }
 }
 
@@ -793,18 +828,17 @@ fn extract_byte_data(args: &[Value], index: usize) -> Result<Vec<u8>> {
 
 /// Extract open flags from arguments
 fn extract_open_flags(args: &[Value], index: usize) -> Result<OpenFlags> {
-    let flags_val = args.get(index)
+    let flags_val = args
+        .get(index)
         .ok_or_else(|| Error::parameter_wasi_invalid_fd("Missing open flags"))?;
 
     match flags_val {
-        Value::U32(bits) => {
-            Ok(OpenFlags {
-                create: (bits & 0x01) != 0,
-                directory: (bits & 0x02) != 0,
-                exclusive: (bits & 0x04) != 0,
-                truncate: (bits & 0x08) != 0,
-            })
-        },
+        Value::U32(bits) => Ok(OpenFlags {
+            create: (bits & 0x01) != 0,
+            directory: (bits & 0x02) != 0,
+            exclusive: (bits & 0x04) != 0,
+            truncate: (bits & 0x08) != 0,
+        }),
         Value::Record(fields) => {
             // Handle record-style flags
             let mut flags = OpenFlags::default();
@@ -814,7 +848,7 @@ fn extract_open_flags(args: &[Value], index: usize) -> Result<OpenFlags> {
                     ("directory", Value::Bool(b)) => flags.directory = *b,
                     ("exclusive", Value::Bool(b)) => flags.exclusive = *b,
                     ("truncate", Value::Bool(b)) => flags.truncate = *b,
-                    _ => {}
+                    _ => {},
                 }
             }
             Ok(flags)
@@ -825,18 +859,17 @@ fn extract_open_flags(args: &[Value], index: usize) -> Result<OpenFlags> {
 
 /// Extract descriptor flags from arguments
 fn extract_descriptor_flags(args: &[Value], index: usize) -> Result<DescriptorFlags> {
-    let flags_val = args.get(index)
+    let flags_val = args
+        .get(index)
         .ok_or_else(|| Error::parameter_wasi_invalid_fd("Missing descriptor flags"))?;
 
     match flags_val {
-        Value::U32(bits) => {
-            Ok(DescriptorFlags {
-                read: (bits & 0x01) != 0,
-                write: (bits & 0x02) != 0,
-                sync: (bits & 0x04) != 0,
-                nonblocking: (bits & 0x10) != 0,
-            })
-        },
+        Value::U32(bits) => Ok(DescriptorFlags {
+            read: (bits & 0x01) != 0,
+            write: (bits & 0x02) != 0,
+            sync: (bits & 0x04) != 0,
+            nonblocking: (bits & 0x10) != 0,
+        }),
         Value::Record(fields) => {
             let mut flags = DescriptorFlags::default();
             for (name, value) in fields {
@@ -845,12 +878,15 @@ fn extract_descriptor_flags(args: &[Value], index: usize) -> Result<DescriptorFl
                     ("write", Value::Bool(b)) => flags.write = *b,
                     ("sync", Value::Bool(b)) => flags.sync = *b,
                     ("nonblocking", Value::Bool(b)) => flags.nonblocking = *b,
-                    _ => {}
+                    _ => {},
                 }
             }
             Ok(flags)
         },
-        _ => Ok(DescriptorFlags { read: true, ..Default::default() }),
+        _ => Ok(DescriptorFlags {
+            read: true,
+            ..Default::default()
+        }),
     }
 }
 
@@ -885,7 +921,8 @@ enum Advice {
 /// Extract timestamp value from WASI arguments
 #[cfg(feature = "std")]
 fn extract_timestamp(args: &[Value], index: usize) -> Result<TimestampValue> {
-    let val = args.get(index)
+    let val = args
+        .get(index)
         .ok_or_else(|| Error::parameter_wasi_invalid_fd("Missing timestamp argument"))?;
 
     match val {
@@ -901,7 +938,7 @@ fn extract_timestamp(args: &[Value], index: usize) -> Result<TimestampValue> {
                     ("no-change", Value::Tuple(_)) => return Ok(TimestampValue::NoChange),
                     ("now", Value::Tuple(_)) => return Ok(TimestampValue::Now),
                     ("timestamp", Value::U64(ns)) => return Ok(TimestampValue::Timestamp(*ns)),
-                    _ => {}
+                    _ => {},
                 }
             }
             Ok(TimestampValue::NoChange)
@@ -911,11 +948,9 @@ fn extract_timestamp(args: &[Value], index: usize) -> Result<TimestampValue> {
             // Some(Value::U32(0)) falls through to wildcard which returns NoChange
             match items.first() {
                 Some(Value::U32(1)) => Ok(TimestampValue::Now),
-                Some(Value::U32(2)) => {
-                    match items.get(1) {
-                        Some(Value::U64(ns)) => Ok(TimestampValue::Timestamp(*ns)),
-                        _ => Ok(TimestampValue::NoChange),
-                    }
+                Some(Value::U32(2)) => match items.get(1) {
+                    Some(Value::U64(ns)) => Ok(TimestampValue::Timestamp(*ns)),
+                    _ => Ok(TimestampValue::NoChange),
                 },
                 _ => Ok(TimestampValue::NoChange),
             }
@@ -927,7 +962,8 @@ fn extract_timestamp(args: &[Value], index: usize) -> Result<TimestampValue> {
 /// Extract advice value from WASI arguments
 #[cfg(feature = "std")]
 fn extract_advice(args: &[Value], index: usize) -> Result<Advice> {
-    let val = args.get(index)
+    let val = args
+        .get(index)
         .ok_or_else(|| Error::parameter_wasi_invalid_fd("Missing advice argument"))?;
 
     match val {
@@ -967,25 +1003,27 @@ fn build_descriptor_stat(metadata: &std::fs::Metadata) -> Value {
     use std::time::UNIX_EPOCH;
 
     let file_type = if metadata.is_dir() {
-        3u8  // directory
+        3u8 // directory
     } else if metadata.is_file() {
-        4u8  // regular-file
+        4u8 // regular-file
     } else if metadata.is_symlink() {
-        7u8  // symbolic-link
+        7u8 // symbolic-link
     } else {
-        0u8  // unknown
+        0u8 // unknown
     };
 
     let size = metadata.len();
 
     // Get timestamps (nanoseconds since UNIX epoch)
-    let atime = metadata.accessed()
+    let atime = metadata
+        .accessed()
         .ok()
         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
         .map(|d| d.as_nanos() as u64)
         .unwrap_or(0);
 
-    let mtime = metadata.modified()
+    let mtime = metadata
+        .modified()
         .ok()
         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
         .map(|d| d.as_nanos() as u64)
@@ -1048,7 +1086,12 @@ mod tests {
     #[test]
     fn test_open_flags_extraction() {
         // Test bit-based flags
-        let args = vec![Value::U32(0), Value::U32(0), Value::String("test".to_string()), Value::U32(0x05)];
+        let args = vec![
+            Value::U32(0),
+            Value::U32(0),
+            Value::String("test".to_string()),
+            Value::U32(0x05),
+        ];
         let flags = extract_open_flags(&args, 3).unwrap();
         assert!(flags.create);
         assert!(!flags.directory);
@@ -1058,7 +1101,13 @@ mod tests {
 
     #[test]
     fn test_descriptor_flags_extraction() {
-        let args = vec![Value::U32(0), Value::U32(0), Value::String("test".to_string()), Value::U32(0), Value::U32(0x03)];
+        let args = vec![
+            Value::U32(0),
+            Value::U32(0),
+            Value::String("test".to_string()),
+            Value::U32(0),
+            Value::U32(0x03),
+        ];
         let flags = extract_descriptor_flags(&args, 4).unwrap();
         assert!(flags.read);
         assert!(flags.write);

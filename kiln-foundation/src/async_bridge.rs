@@ -8,25 +8,15 @@ use core::{
     future::Future,
     marker::Unpin,
     pin::Pin,
-    task::{
-        Context,
-        Poll,
-    },
+    task::{Context, Poll},
 };
 
 #[cfg(feature = "component-model-async")]
 use crate::async_types::{
-    ComponentFuture,
-    ComponentFutureStatus,
-    ComponentStream,
-    FutureHandle,
-    StreamHandle,
+    ComponentFuture, ComponentFutureStatus, ComponentStream, FutureHandle, StreamHandle,
 };
 use crate::{
-    async_executor_simple::{
-        with_async as block_on,
-        ExecutorError,
-    },
+    async_executor_simple::{ExecutorError, with_async as block_on},
     types::ValueType as ValType,
     values::Value,
 };

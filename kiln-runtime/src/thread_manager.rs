@@ -8,39 +8,18 @@
 
 use core::sync::atomic::AtomicU32;
 
-use kiln_error::{
-    Error,
-    ErrorCategory,
-    Result,
-};
-use kiln_platform::threading::{
-    Thread,
-    ThreadHandle,
-    ThreadSpawnOptions,
-};
+use kiln_error::{Error, ErrorCategory, Result};
+use kiln_platform::threading::{Thread, ThreadHandle, ThreadSpawnOptions};
 
 use crate::{
     bounded_runtime_infra::{
-        new_thread_map,
+        BoundedThreadMap, BoundedThreadVec, MAX_MANAGED_THREADS, RuntimeProvider, new_thread_map,
         new_thread_vec,
-        BoundedThreadMap,
-        BoundedThreadVec,
-        RuntimeProvider,
-        MAX_MANAGED_THREADS,
     },
-    prelude::{
-        str,
-        BoundedCapacity,
-        Debug,
-        Eq,
-        PartialEq,
-    },
+    prelude::{BoundedCapacity, Debug, Eq, PartialEq, str},
 };
 
-use std::{
-    sync::Arc,
-    thread,
-};
+use std::{sync::Arc, thread};
 
 /// Thread identifier for WebAssembly threads
 pub type ThreadId = u32;
@@ -77,25 +56,25 @@ impl ThreadState {
 #[derive(Debug, Clone)]
 pub struct ThreadConfig {
     /// Maximum number of threads that can be spawned
-    pub max_threads:        usize,
+    pub max_threads: usize,
     /// Default stack size for new threads (in bytes)
     pub default_stack_size: usize,
     /// Maximum stack size allowed (in bytes)
-    pub max_stack_size:     usize,
+    pub max_stack_size: usize,
     /// Thread priority (0-100, higher is more priority)
-    pub priority:           u8,
+    pub priority: u8,
     /// Enable thread-local storage
-    pub enable_tls:         bool,
+    pub enable_tls: bool,
 }
 
 impl Default for ThreadConfig {
     fn default() -> Self {
         Self {
-            max_threads:        128,
-            default_stack_size: 1024 * 1024,     // 1MB
-            max_stack_size:     8 * 1024 * 1024, // 8MB
-            priority:           50,
-            enable_tls:         true,
+            max_threads: 128,
+            default_stack_size: 1024 * 1024, // 1MB
+            max_stack_size: 8 * 1024 * 1024, // 8MB
+            priority: 50,
+            enable_tls: true,
         }
     }
 }
@@ -104,21 +83,21 @@ impl Default for ThreadConfig {
 #[derive(Debug, Clone)]
 pub struct ThreadInfo {
     /// Unique thread identifier
-    pub thread_id:      ThreadId,
+    pub thread_id: ThreadId,
     /// Current thread state
-    pub state:          ThreadState,
+    pub state: ThreadState,
     /// Function index being executed
     pub function_index: u32,
     /// Thread stack size
-    pub stack_size:     usize,
+    pub stack_size: usize,
     /// Thread priority
-    pub priority:       u8,
+    pub priority: u8,
     /// Parent thread ID (if spawned by another thread)
-    pub parent_thread:  Option<ThreadId>,
+    pub parent_thread: Option<ThreadId>,
     /// Thread creation timestamp (nanoseconds since epoch)
-    pub created_at:     u64,
+    pub created_at: u64,
     /// Thread completion timestamp (if completed)
-    pub completed_at:   Option<u64>,
+    pub completed_at: Option<u64>,
 }
 
 impl ThreadInfo {
@@ -172,15 +151,15 @@ impl ThreadInfo {
 #[derive(Debug)]
 pub struct ThreadExecutionContext {
     /// Thread information
-    pub info:          ThreadInfo,
+    pub info: ThreadInfo,
     /// Platform thread handle (not cloneable, so optional)
-    pub handle:        Option<ThreadHandle>,
+    pub handle: Option<ThreadHandle>,
     /// Thread-local memory state
-    pub local_memory:  Option<crate::Memory>,
+    pub local_memory: Option<crate::Memory>,
     /// Thread-local global state using bounded collections
     pub local_globals: BoundedThreadVec<crate::Global>,
     /// Execution statistics
-    pub stats:         ThreadExecutionStats,
+    pub stats: ThreadExecutionStats,
 }
 
 impl ThreadExecutionContext {
@@ -215,15 +194,15 @@ pub struct ThreadExecutionStats {
     /// Number of instructions executed
     pub instructions_executed: u64,
     /// Number of function calls made
-    pub function_calls:        u64,
+    pub function_calls: u64,
     /// Number of memory operations performed
-    pub memory_operations:     u64,
+    pub memory_operations: u64,
     /// Number of atomic operations performed
-    pub atomic_operations:     u64,
+    pub atomic_operations: u64,
     /// Peak memory usage (bytes)
-    pub peak_memory_usage:     usize,
+    pub peak_memory_usage: usize,
     /// Number of context switches
-    pub context_switches:      u64,
+    pub context_switches: u64,
 }
 
 impl ThreadExecutionStats {
@@ -232,11 +211,11 @@ impl ThreadExecutionStats {
     pub fn new() -> Self {
         Self {
             instructions_executed: 0,
-            function_calls:        0,
-            memory_operations:     0,
-            atomic_operations:     0,
-            peak_memory_usage:     0,
-            context_switches:      0,
+            function_calls: 0,
+            memory_operations: 0,
+            atomic_operations: 0,
+            peak_memory_usage: 0,
+            context_switches: 0,
         }
     }
 
@@ -283,13 +262,13 @@ impl Default for ThreadExecutionStats {
 #[derive(Debug)]
 pub struct ThreadManager {
     /// Thread configuration
-    pub config:     ThreadConfig,
+    pub config: ThreadConfig,
     /// Active thread contexts
     threads: Vec<Option<ThreadExecutionContext>>,
     /// Next thread ID to assign
     next_thread_id: ThreadId,
     /// Thread manager statistics
-    pub stats:      ThreadManagerStats,
+    pub stats: ThreadManagerStats,
 }
 
 impl ThreadManager {
@@ -371,8 +350,8 @@ impl ThreadManager {
 
         let spawn_options = ThreadSpawnOptions {
             stack_size: Some(context.info.stack_size),
-            priority:   Some(thread_priority),
-            name:       Some("wasm-thread".to_string()),
+            priority: Some(thread_priority),
+            name: Some("wasm-thread".to_string()),
         };
 
         // Spawn platform thread
@@ -456,11 +435,7 @@ impl ThreadManager {
             .enumerate()
             .filter_map(|(index, context_opt)| {
                 if let Some(context) = context_opt {
-                    if context.info.is_active() {
-                        Some(context.info.thread_id)
-                    } else {
-                        None
-                    }
+                    if context.info.is_active() { Some(context.info.thread_id) } else { None }
                 } else {
                     None
                 }
@@ -525,16 +500,16 @@ impl Default for ThreadManager {
         Self::new(ThreadConfig::default()).unwrap_or_else(|_| {
             // Create a minimal thread manager with very limited resources
             Self {
-                threads:        (0..MAX_MANAGED_THREADS).map(|_| None).collect(),
+                threads: (0..MAX_MANAGED_THREADS).map(|_| None).collect(),
                 next_thread_id: 1,
-                config:         ThreadConfig {
-                    max_threads:        1,
+                config: ThreadConfig {
+                    max_threads: 1,
                     default_stack_size: 64 * 1024,
-                    max_stack_size:     64 * 1024,
-                    priority:           50,
-                    enable_tls:         false,
+                    max_stack_size: 64 * 1024,
+                    priority: 50,
+                    enable_tls: false,
                 },
-                stats:          ThreadManagerStats::new(),
+                stats: ThreadManagerStats::new(),
             }
         })
     }
@@ -544,15 +519,15 @@ impl Default for ThreadManager {
 #[derive(Debug, Clone)]
 pub struct ThreadManagerStats {
     /// Total number of threads spawned
-    pub threads_spawned:         u64,
+    pub threads_spawned: u64,
     /// Total number of threads started
-    pub threads_started:         u64,
+    pub threads_started: u64,
     /// Total number of threads completed successfully
-    pub threads_completed:       u64,
+    pub threads_completed: u64,
     /// Total number of threads that failed
-    pub threads_failed:          u64,
+    pub threads_failed: u64,
     /// Total number of threads terminated
-    pub threads_terminated:      u64,
+    pub threads_terminated: u64,
     /// Peak concurrent thread count
     pub peak_concurrent_threads: usize,
 }
@@ -560,11 +535,11 @@ pub struct ThreadManagerStats {
 impl ThreadManagerStats {
     fn new() -> Self {
         Self {
-            threads_spawned:         0,
-            threads_started:         0,
-            threads_completed:       0,
-            threads_failed:          0,
-            threads_terminated:      0,
+            threads_spawned: 0,
+            threads_started: 0,
+            threads_completed: 0,
+            threads_failed: 0,
+            threads_terminated: 0,
             peak_concurrent_threads: 0,
         }
     }

@@ -8,46 +8,24 @@
 extern crate alloc;
 
 #[cfg(not(feature = "std"))]
-use alloc::{
-    string::String,
-    vec,
-    vec::Vec,
-};
+use alloc::{string::String, vec, vec::Vec};
 #[cfg(feature = "std")]
-use std::{
-    string::String,
-    vec,
-    vec::Vec,
-};
+use std::{string::String, vec, vec::Vec};
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 #[cfg(not(any(feature = "std")))]
 use kiln_foundation::traits::BoundedCapacity;
 use kiln_foundation::{
+    RefType, ValueType,
     types::{
-        FuncType,
-        Import as KilnImport,
-        ImportDesc as KilnImportDesc,
-        MemoryType as KilnMemoryType,
-        TableType as KilnTableType,
-        TagType,
+        FuncType, Import as KilnImport, ImportDesc as KilnImportDesc, MemoryType as KilnMemoryType,
+        TableType as KilnTableType, TagType,
     },
-    RefType,
-    ValueType,
 };
 
 use crate::{
     section::CustomSection,
-    types::{
-        CoreWasmVersion,
-        FormatGlobalType,
-        Limits,
-    },
+    types::{CoreWasmVersion, FormatGlobalType, Limits},
     validation::Validatable,
 };
 
@@ -59,9 +37,9 @@ pub struct Function {
     /// Type index referring to function signature
     pub type_idx: u32,
     /// Local variables (types and counts) - clean type
-    pub locals:   alloc::vec::Vec<ValueType>,
+    pub locals: alloc::vec::Vec<ValueType>,
     /// Function body (WebAssembly bytecode instructions) - clean type  
-    pub code:     alloc::vec::Vec<u8>,
+    pub code: alloc::vec::Vec<u8>,
 }
 
 #[cfg(not(feature = "std"))]
@@ -69,8 +47,8 @@ impl Function {
     fn new() -> Self {
         Function {
             type_idx: 0,
-            locals:   alloc::vec::Vec::new(),
-            code:     alloc::vec::Vec::new(),
+            locals: alloc::vec::Vec::new(),
+            code: alloc::vec::Vec::new(),
         }
     }
 }
@@ -80,8 +58,8 @@ impl Default for Function {
     fn default() -> Self {
         Function {
             type_idx: 0,
-            locals:   alloc::vec::Vec::new(),
-            code:     alloc::vec::Vec::new(),
+            locals: alloc::vec::Vec::new(),
+            code: alloc::vec::Vec::new(),
         }
     }
 }
@@ -166,9 +144,9 @@ pub struct Function {
     /// Type index referring to function signature
     pub type_idx: u32,
     /// Local variables (types and counts)
-    pub locals:   Vec<ValueType>,
+    pub locals: Vec<ValueType>,
     /// Function body (WebAssembly bytecode instructions)
-    pub code:     Vec<u8>,
+    pub code: Vec<u8>,
 }
 
 /// WebAssembly memory definition
@@ -188,12 +166,14 @@ pub type Table = KilnTableType;
 #[cfg(not(any(feature = "std")))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Global<
-    P: kiln_foundation::MemoryProvider + Clone + Default + Eq = kiln_foundation::NoStdProvider<1024>,
+    P: kiln_foundation::MemoryProvider + Clone + Default + Eq = kiln_foundation::NoStdProvider<
+        1024,
+    >,
 > {
     /// Global type
     pub global_type: FormatGlobalType,
     /// Initialization expression
-    pub init:        crate::WasmVec<u8, P>,
+    pub init: crate::WasmVec<u8, P>,
 }
 
 #[cfg(not(any(feature = "std")))]
@@ -201,7 +181,7 @@ impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq> Global<P> {
     fn new() -> kiln_error::Result<Self> {
         Ok(Global {
             global_type: FormatGlobalType::default(),
-            init:        crate::WasmVec::new(P::default())?,
+            init: crate::WasmVec::new(P::default())?,
         })
     }
 }
@@ -211,14 +191,14 @@ impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq> Default for Glob
     fn default() -> Self {
         Global {
             global_type: FormatGlobalType::default(),
-            init:        Default::default(),
+            init: Default::default(),
         }
     }
 }
 
 #[cfg(not(any(feature = "std")))]
-impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq> kiln_foundation::traits::Checksummable
-    for Global<P>
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq>
+    kiln_foundation::traits::Checksummable for Global<P>
 {
     fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.global_type.update_checksum(checksum);
@@ -269,7 +249,7 @@ pub struct Global {
     /// Global type
     pub global_type: FormatGlobalType,
     /// Initialization expression
-    pub init:        Vec<u8>,
+    pub init: Vec<u8>,
 }
 
 /// WebAssembly data segment types (DEPRECATED: Use
@@ -324,11 +304,11 @@ pub struct Data<
 impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq> Default for Data<P> {
     fn default() -> Self {
         Self {
-            mode:       DataMode::Passive,
+            mode: DataMode::Passive,
             memory_idx: 0,
-            offset:     crate::WasmVec::new(P::default())
+            offset: crate::WasmVec::new(P::default())
                 .unwrap_or_else(|_| crate::WasmVec::new(P::default()).unwrap()),
-            init:       crate::WasmVec::new(P::default())
+            init: crate::WasmVec::new(P::default())
                 .unwrap_or_else(|_| crate::WasmVec::new(P::default()).unwrap()),
         }
     }
@@ -339,10 +319,10 @@ impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq> Defa
 impl Default for Data {
     fn default() -> Self {
         Self {
-            mode:       DataMode::Passive,
+            mode: DataMode::Passive,
             memory_idx: 0,
-            offset:     Vec::new(),
-            init:       Vec::new(),
+            offset: Vec::new(),
+            init: Vec::new(),
         }
     }
 }
@@ -443,7 +423,7 @@ impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
             _ => {
                 return Err(kiln_error::Error::runtime_execution_error(
                     "Invalid data mode byte",
-                ))
+                ));
             },
         };
 
@@ -478,7 +458,7 @@ impl kiln_foundation::traits::FromBytes for Data {
             _ => {
                 return Err(kiln_error::Error::runtime_execution_error(
                     "Invalid data mode byte",
-                ))
+                ));
             },
         };
 
@@ -561,13 +541,13 @@ impl kiln_foundation::traits::FromBytes for DataMode {
 #[deprecated(note = "Use pure_format_types::PureDataSegment for clean separation")]
 pub struct Data {
     /// Data mode (active or passive)
-    pub mode:       DataMode,
+    pub mode: DataMode,
     /// Memory index (for active data segments)
     pub memory_idx: u32,
     /// Offset expression (for active data segments)
-    pub offset:     Vec<u8>,
+    pub offset: Vec<u8>,
     /// Initial data
-    pub init:       Vec<u8>,
+    pub init: Vec<u8>,
 }
 
 /// Migration functions for Data (std version)
@@ -610,6 +590,9 @@ impl Data {
 /// Version
 #[cfg(not(any(feature = "std")))]
 #[derive(Debug, Clone, PartialEq, Eq)]
+// rustfmt 1.10.0 panics (items.rs:557, unwrap on None) formatting an enum whose
+// generic parameter has a long default; skip it so `cargo fmt` completes.
+#[rustfmt::skip]
 pub enum ElementInit<
     P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq = kiln_foundation::NoStdProvider<1024>,
 > {
@@ -840,6 +823,8 @@ impl Default for ElementInit {
 /// Version
 #[cfg(not(any(feature = "std")))]
 #[derive(Debug, Clone, PartialEq, Eq)]
+// rustfmt 1.10.0 panics on this enum's long generic default too; see ElementInit.
+#[rustfmt::skip]
 pub enum ElementMode<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq = kiln_foundation::NoStdProvider<1024>>
 {
     /// Active segment: associated with a table and an offset.
@@ -1025,7 +1010,7 @@ impl ElementMode {
                 table_index,
                 offset_expr,
             } => crate::pure_format_types::PureElementMode::Active {
-                table_index:     *table_index,
+                table_index: *table_index,
                 offset_expr_len: offset_expr.len() as u32,
             },
             ElementMode::Passive => crate::pure_format_types::PureElementMode::Passive,
@@ -1053,8 +1038,8 @@ impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq> Defa
     fn default() -> Self {
         Self {
             element_type: RefType::Funcref,
-            init:         ElementInit::default(),
-            mode:         ElementMode::default(),
+            init: ElementInit::default(),
+            mode: ElementMode::default(),
         }
     }
 }
@@ -1141,11 +1126,11 @@ pub struct Element {
     /// The type of elements in this segment (funcref or externref).
     pub element_type: RefType,
     /// Initialization items for the segment.
-    pub init:         ElementInit,
+    pub init: ElementInit,
     /// The mode of the element segment.
-    pub mode:         crate::pure_format_types::PureElementMode,
+    pub mode: crate::pure_format_types::PureElementMode,
     /// Offset expression bytes (for active segments)
-    pub offset_expr:  Vec<u8>,
+    pub offset_expr: Vec<u8>,
 }
 
 #[cfg(feature = "std")]
@@ -1153,9 +1138,9 @@ impl Default for Element {
     fn default() -> Self {
         Self {
             element_type: RefType::Funcref,
-            init:         ElementInit::default(),
-            mode:         crate::pure_format_types::PureElementMode::default(),
-            offset_expr:  Vec::new(),
+            init: ElementInit::default(),
+            mode: crate::pure_format_types::PureElementMode::default(),
+            offset_expr: Vec::new(),
         }
     }
 }
@@ -1165,9 +1150,9 @@ impl Default for Element {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Export {
     /// Export name (visible external name)
-    pub name:  crate::WasmString,
+    pub name: crate::WasmString,
     /// Export kind (what type of item is being exported)
-    pub kind:  ExportKind,
+    pub kind: ExportKind,
     /// Export index (index into the corresponding space)
     pub index: u32,
 }
@@ -1176,17 +1161,15 @@ pub struct Export {
 impl Default for Export {
     fn default() -> Self {
         Export {
-            name:  crate::WasmString::default(),
-            kind:  ExportKind::Function,
+            name: crate::WasmString::default(),
+            kind: ExportKind::Function,
             index: 0,
         }
     }
 }
 
 #[cfg(not(any(feature = "std")))]
-impl kiln_foundation::traits::Checksummable
-    for Export
-{
+impl kiln_foundation::traits::Checksummable for Export {
     fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.name.update_checksum(checksum);
         checksum.update_slice(&[self.kind as u8]);
@@ -1195,9 +1178,7 @@ impl kiln_foundation::traits::Checksummable
 }
 
 #[cfg(not(any(feature = "std")))]
-impl kiln_foundation::traits::ToBytes
-    for Export
-{
+impl kiln_foundation::traits::ToBytes for Export {
     fn to_bytes_with_provider<PStream>(
         &self,
         stream: &mut kiln_foundation::traits::WriteStream,
@@ -1214,9 +1195,7 @@ impl kiln_foundation::traits::ToBytes
 }
 
 #[cfg(not(any(feature = "std")))]
-impl kiln_foundation::traits::FromBytes
-    for Export
-{
+impl kiln_foundation::traits::FromBytes for Export {
     fn from_bytes_with_provider<PStream>(
         stream: &mut kiln_foundation::traits::ReadStream,
         provider: &PStream,
@@ -1248,9 +1227,9 @@ impl kiln_foundation::traits::FromBytes
 #[derive(Debug, Clone)]
 pub struct Export {
     /// Export name (visible external name)
-    pub name:  String,
+    pub name: String,
     /// Export kind (what type of item is being exported)
-    pub kind:  ExportKind,
+    pub kind: ExportKind,
     /// Export index (index into the corresponding space)
     pub index: u32,
 }
@@ -1274,14 +1253,16 @@ pub enum ExportKind {
 #[cfg(not(any(feature = "std")))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Import<
-    P: kiln_foundation::MemoryProvider + Clone + Default + Eq = kiln_foundation::NoStdProvider<1024>,
+    P: kiln_foundation::MemoryProvider + Clone + Default + Eq = kiln_foundation::NoStdProvider<
+        1024,
+    >,
 > {
     /// Module name (where to import from)
     pub module: crate::WasmString,
     /// Import name (specific item name)
-    pub name:   crate::WasmString,
+    pub name: crate::WasmString,
     /// Import description (what type of item)
-    pub desc:   ImportDesc<P>,
+    pub desc: ImportDesc<P>,
 }
 
 /// WebAssembly import - With Allocation
@@ -1291,9 +1272,9 @@ pub struct Import {
     /// Module name (where to import from)
     pub module: String,
     /// Import name (specific item name)
-    pub name:   String,
+    pub name: String,
     /// Import description (what type of item)
-    pub desc:   ImportDesc,
+    pub desc: ImportDesc,
 }
 
 /// WebAssembly import description - Pure No_std Version
@@ -1324,15 +1305,15 @@ impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq> Default for Impo
     fn default() -> Self {
         Import {
             module: crate::WasmString::default(),
-            name:   crate::WasmString::default(),
-            desc:   ImportDesc::default(),
+            name: crate::WasmString::default(),
+            desc: ImportDesc::default(),
         }
     }
 }
 
 #[cfg(not(any(feature = "std")))]
-impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq> kiln_foundation::traits::Checksummable
-    for ImportDesc<P>
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq>
+    kiln_foundation::traits::Checksummable for ImportDesc<P>
 {
     fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         match self {
@@ -1356,8 +1337,8 @@ impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq> kiln_foundation:
 }
 
 #[cfg(not(any(feature = "std")))]
-impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq> kiln_foundation::traits::Checksummable
-    for Import<P>
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq>
+    kiln_foundation::traits::Checksummable for Import<P>
 {
     fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.module.update_checksum(checksum);
@@ -1454,7 +1435,7 @@ impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq> kiln_foundation:
                 // FAIL LOUD: Memory imports must have explicit types parsed from binary
                 // Per CLAUDE.md NO FALLBACK LOGIC rule, we must not use defaults
                 Err(kiln_error::Error::parse_error(
-                    "Memory import parsing not yet implemented - must parse limits from binary"
+                    "Memory import parsing not yet implemented - must parse limits from binary",
                 ))
             },
             0x03 => {
@@ -1519,7 +1500,7 @@ pub enum ImportDesc {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypeInformationEntry {
     pub type_index: u32, // Assuming TypeIdx is u32
-    pub name:       crate::WasmString,
+    pub name: crate::WasmString,
 }
 
 #[cfg(not(any(feature = "std")))]
@@ -1527,15 +1508,13 @@ impl Default for TypeInformationEntry {
     fn default() -> Self {
         TypeInformationEntry {
             type_index: 0,
-            name:       crate::WasmString::default(),
+            name: crate::WasmString::default(),
         }
     }
 }
 
 #[cfg(not(any(feature = "std")))]
-impl kiln_foundation::traits::Checksummable
-    for TypeInformationEntry
-{
+impl kiln_foundation::traits::Checksummable for TypeInformationEntry {
     fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         checksum.update_slice(&self.type_index.to_le_bytes());
         self.name.update_checksum(checksum);
@@ -1543,9 +1522,7 @@ impl kiln_foundation::traits::Checksummable
 }
 
 #[cfg(not(any(feature = "std")))]
-impl kiln_foundation::traits::ToBytes
-    for TypeInformationEntry
-{
+impl kiln_foundation::traits::ToBytes for TypeInformationEntry {
     fn to_bytes_with_provider<PStream>(
         &self,
         stream: &mut kiln_foundation::traits::WriteStream,
@@ -1561,9 +1538,7 @@ impl kiln_foundation::traits::ToBytes
 }
 
 #[cfg(not(any(feature = "std")))]
-impl kiln_foundation::traits::FromBytes
-    for TypeInformationEntry
-{
+impl kiln_foundation::traits::FromBytes for TypeInformationEntry {
     fn from_bytes_with_provider<PStream>(
         stream: &mut kiln_foundation::traits::ReadStream,
         provider: &PStream,
@@ -1655,7 +1630,7 @@ pub struct RecGroup {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypeInformationEntry {
     pub type_index: u32, // Assuming TypeIdx is u32
-    pub name:       String,
+    pub name: String,
 }
 
 /// Hypothetical Finding F5: Represents the custom TypeInformation section -
@@ -1663,7 +1638,9 @@ pub struct TypeInformationEntry {
 #[cfg(not(any(feature = "std")))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypeInformationSection<
-    P: kiln_foundation::MemoryProvider + Clone + Default + Eq = kiln_foundation::NoStdProvider<1024>,
+    P: kiln_foundation::MemoryProvider + Clone + Default + Eq = kiln_foundation::NoStdProvider<
+        1024,
+    >,
 > {
     pub entries: crate::WasmVec<TypeInformationEntry, P>,
 }
@@ -1680,40 +1657,42 @@ pub struct TypeInformationSection {
 #[cfg(not(any(feature = "std")))]
 #[derive(Debug, Clone)]
 pub struct Module<
-    P: kiln_foundation::MemoryProvider + Clone + Default + Eq = kiln_foundation::NoStdProvider<1024>,
+    P: kiln_foundation::MemoryProvider + Clone + Default + Eq = kiln_foundation::NoStdProvider<
+        1024,
+    >,
 > {
     /// Function type signatures
-    pub types:             crate::WasmVec<FuncType, P>,
+    pub types: crate::WasmVec<FuncType, P>,
     /// Function definitions (code)
-    pub functions:         crate::WasmVec<Function, P>,
+    pub functions: crate::WasmVec<Function, P>,
     /// Table definitions
-    pub tables:            crate::WasmVec<Table, P>,
+    pub tables: crate::WasmVec<Table, P>,
     /// Memory definitions  
-    pub memories:          crate::WasmVec<Memory, P>,
+    pub memories: crate::WasmVec<Memory, P>,
     /// Global definitions
-    pub globals:           crate::WasmVec<Global<P>, P>,
+    pub globals: crate::WasmVec<Global<P>, P>,
     /// Exception tag definitions (exception handling proposal)
-    pub tags:              crate::WasmVec<TagType, P>,
+    pub tags: crate::WasmVec<TagType, P>,
     /// Element segments (table initializers) - using pure format internally
-    pub elements:          crate::WasmVec<crate::pure_format_types::PureElementSegment, P>,
+    pub elements: crate::WasmVec<crate::pure_format_types::PureElementSegment, P>,
     /// Data segments (memory initializers) - using pure format internally
-    pub data:              crate::WasmVec<crate::pure_format_types::PureDataSegment, P>,
+    pub data: crate::WasmVec<crate::pure_format_types::PureDataSegment, P>,
     /// Module exports (visible functions/globals/etc)
-    pub exports:           crate::WasmVec<Export, P>,
+    pub exports: crate::WasmVec<Export, P>,
     /// Module imports (external dependencies)
-    pub imports:           crate::WasmVec<Import<P>, P>,
+    pub imports: crate::WasmVec<Import<P>, P>,
     /// Start function index (entry point)
-    pub start:             Option<u32>,
+    pub start: Option<u32>,
     /// Custom sections (metadata)
-    pub custom_sections:   crate::WasmVec<CustomSection, P>,
+    pub custom_sections: crate::WasmVec<CustomSection, P>,
     /// Original binary data (for round-trip preservation)
-    pub binary:            Option<crate::WasmVec<u8, P>>,
+    pub binary: Option<crate::WasmVec<u8, P>>,
     /// WebAssembly core version
-    pub core_version:      CoreWasmVersion,
+    pub core_version: CoreWasmVersion,
     /// Type information section (if present)
     pub type_info_section: Option<TypeInformationSection<P>>,
     /// GC proposal: recursive type groups with sub type declarations
-    pub rec_groups:        Vec<RecGroup>,
+    pub rec_groups: Vec<RecGroup>,
 }
 
 #[cfg(not(any(feature = "std")))]
@@ -1729,22 +1708,22 @@ impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq> Module<P> {
     /// Returns an error if memory allocation fails.
     pub fn try_new() -> Result<Self> {
         Ok(Self {
-            types:             crate::WasmVec::new(P::default())?,
-            functions:         crate::WasmVec::new(P::default())?,
-            tables:            crate::WasmVec::new(P::default())?,
-            memories:          crate::WasmVec::new(P::default())?,
-            globals:           crate::WasmVec::new(P::default())?,
-            tags:              crate::WasmVec::new(P::default())?,
-            elements:          crate::WasmVec::new(P::default())?,
-            data:              crate::WasmVec::new(P::default())?,
-            exports:           crate::WasmVec::new(P::default())?,
-            imports:           crate::WasmVec::new(P::default())?,
-            start:             None,
-            custom_sections:   crate::WasmVec::new(P::default())?,
-            binary:            None,
-            core_version:      CoreWasmVersion::default(),
+            types: crate::WasmVec::new(P::default())?,
+            functions: crate::WasmVec::new(P::default())?,
+            tables: crate::WasmVec::new(P::default())?,
+            memories: crate::WasmVec::new(P::default())?,
+            globals: crate::WasmVec::new(P::default())?,
+            tags: crate::WasmVec::new(P::default())?,
+            elements: crate::WasmVec::new(P::default())?,
+            data: crate::WasmVec::new(P::default())?,
+            exports: crate::WasmVec::new(P::default())?,
+            imports: crate::WasmVec::new(P::default())?,
+            start: None,
+            custom_sections: crate::WasmVec::new(P::default())?,
+            binary: None,
+            core_version: CoreWasmVersion::default(),
             type_info_section: None,
-            rec_groups:        Vec::new(),
+            rec_groups: Vec::new(),
         })
     }
 
@@ -1760,41 +1739,41 @@ impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq> Module<P> {
 #[derive(Debug, Clone)]
 pub struct Module {
     /// Function type signatures
-    pub types:             Vec<kiln_foundation::CleanCoreFuncType>,
+    pub types: Vec<kiln_foundation::CleanCoreFuncType>,
     /// Function definitions (code)
-    pub functions:         Vec<Function>,
+    pub functions: Vec<Function>,
     /// Table definitions
-    pub tables:            Vec<Table>,
+    pub tables: Vec<Table>,
     /// Memory definitions
-    pub memories:          Vec<Memory>,
+    pub memories: Vec<Memory>,
     /// Global definitions
-    pub globals:           Vec<Global>,
+    pub globals: Vec<Global>,
     /// Exception tag definitions (exception handling proposal)
-    pub tags:              Vec<TagType>,
+    pub tags: Vec<TagType>,
     /// Element segments (table initializers) - using pure format internally
-    pub elements:          Vec<crate::pure_format_types::PureElementSegment>,
+    pub elements: Vec<crate::pure_format_types::PureElementSegment>,
     /// Data segments (memory initializers) - using pure format internally
-    pub data:              Vec<crate::pure_format_types::PureDataSegment>,
+    pub data: Vec<crate::pure_format_types::PureDataSegment>,
     /// Module exports (visible functions/globals/etc)
-    pub exports:           Vec<Export>,
+    pub exports: Vec<Export>,
     /// Module imports (external dependencies)
-    pub imports:           Vec<Import>,
+    pub imports: Vec<Import>,
     /// Start function index (entry point)
-    pub start:             Option<u32>,
+    pub start: Option<u32>,
     /// Custom sections (metadata)
-    pub custom_sections:   Vec<CustomSection>,
+    pub custom_sections: Vec<CustomSection>,
     /// Original binary data (for round-trip preservation)
-    pub binary:            Option<Vec<u8>>,
+    pub binary: Option<Vec<u8>>,
     /// WebAssembly core version
-    pub core_version:      CoreWasmVersion,
+    pub core_version: CoreWasmVersion,
     /// Type information section (if present)
     pub type_info_section: Option<TypeInformationSection>,
     /// GC proposal: recursive type groups with sub type declarations
-    pub rec_groups:        Vec<RecGroup>,
+    pub rec_groups: Vec<RecGroup>,
     /// Init expression bytes for tables that have an init expression.
     /// Indexed by table definition index (not including imported tables).
     /// None means the table uses the default null value for its element type.
-    pub table_init_exprs:  Vec<Option<Vec<u8>>>,
+    pub table_init_exprs: Vec<Option<Vec<u8>>>,
 }
 
 #[cfg(feature = "std")]
@@ -1809,23 +1788,23 @@ impl Module {
     /// Create a new empty module
     pub fn new() -> Self {
         Self {
-            types:             Vec::new(),
-            functions:         Vec::new(),
-            tables:            Vec::new(),
-            memories:          Vec::new(),
-            globals:           Vec::new(),
-            tags:              Vec::new(),
-            elements:          Vec::new(),
-            data:              Vec::new(),
-            exports:           Vec::new(),
-            imports:           Vec::new(),
-            start:             None,
-            custom_sections:   Vec::new(),
-            binary:            None,
-            core_version:      CoreWasmVersion::default(),
+            types: Vec::new(),
+            functions: Vec::new(),
+            tables: Vec::new(),
+            memories: Vec::new(),
+            globals: Vec::new(),
+            tags: Vec::new(),
+            elements: Vec::new(),
+            data: Vec::new(),
+            exports: Vec::new(),
+            imports: Vec::new(),
+            start: None,
+            custom_sections: Vec::new(),
+            binary: None,
+            core_version: CoreWasmVersion::default(),
             type_info_section: None,
-            rec_groups:        Vec::new(),
-            table_init_exprs:  Vec::new(),
+            rec_groups: Vec::new(),
+            table_init_exprs: Vec::new(),
         }
     }
 

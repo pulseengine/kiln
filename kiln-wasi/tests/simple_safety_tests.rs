@@ -2,17 +2,11 @@
 //! dependency
 
 use kiln_foundation::{
-    memory_init::{
-        init_crate_memory,
-        init_kiln_memory,
-    },
-    safe_managed_alloc,
     CrateId,
+    memory_init::{init_crate_memory, init_kiln_memory},
+    safe_managed_alloc,
 };
-use kiln_wasi::{
-    wasi_max_allocation_size,
-    wasi_safety_level,
-};
+use kiln_wasi::{wasi_max_allocation_size, wasi_safety_level};
 
 #[test]
 fn test_safety_level_detection() {

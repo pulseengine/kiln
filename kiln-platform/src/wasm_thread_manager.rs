@@ -5,44 +5,19 @@
 
 extern crate alloc;
 
-use alloc::{
-    boxed::Box,
-    collections::BTreeMap,
-    string::String,
-    sync::Arc,
-    vec::Vec,
-};
+use alloc::{boxed::Box, collections::BTreeMap, string::String, sync::Arc, vec::Vec};
 use core::{
-    sync::atomic::{
-        AtomicU64,
-        Ordering,
-    },
+    sync::atomic::{AtomicU64, Ordering},
     time::Duration,
 };
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
-use kiln_sync::{
-    KilnMutex,
-    KilnRwLock,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
+use kiln_sync::{KilnMutex, KilnRwLock};
 
 use crate::threading::{
+    ExecutionMonitor, PlatformThreadPool, ResourceTracker, ThreadHandle, ThreadHealth,
+    ThreadPoolConfig, ThreadPriority, ThreadSpawnRequest, ThreadingLimits, WasmTask,
     create_thread_pool,
-    ExecutionMonitor,
-    PlatformThreadPool,
-    ResourceTracker,
-    ThreadHandle,
-    ThreadHealth,
-    ThreadPoolConfig,
-    ThreadPriority,
-    ThreadSpawnRequest,
-    ThreadingLimits,
-    WasmTask,
 };
 
 /// Type alias for complex executor function type
@@ -52,15 +27,15 @@ type ExecutorFn = Arc<dyn Fn(u32, Vec<u8>) -> Result<Vec<u8>> + Send + Sync>;
 #[derive(Debug, Clone)]
 pub struct WasmModuleInfo {
     /// Module ID
-    pub id:               u64,
+    pub id: u64,
     /// Module name
-    pub name:             String,
+    pub name: String,
     /// Maximum allowed threads
-    pub max_threads:      usize,
+    pub max_threads: usize,
     /// Memory limit for all threads
-    pub memory_limit:     usize,
+    pub memory_limit: usize,
     /// CPU quota per thread
-    pub cpu_quota:        Duration,
+    pub cpu_quota: Duration,
     /// Default thread priority
     pub default_priority: ThreadPriority,
 }
@@ -82,17 +57,17 @@ pub enum ThreadExecutionResult {
 #[derive(Debug)]
 struct ThreadInfo {
     /// Thread handle
-    handle:      ThreadHandle,
+    handle: ThreadHandle,
     /// Module that spawned this thread
-    module_id:   u64,
+    module_id: u64,
     /// Function being executed
     function_id: u32,
     /// Thread spawn time
-    spawn_time:  std::time::Instant,
+    spawn_time: std::time::Instant,
     /// Deadline if any
-    deadline:    Option<std::time::Instant>,
+    deadline: Option<std::time::Instant>,
     /// Binary std/no_std choice
-    stack_size:  usize,
+    stack_size: usize,
 }
 
 /// Simple execution monitor implementation
@@ -105,11 +80,11 @@ pub struct SimpleExecutionMonitor {
 
 #[derive(Debug, Clone)]
 struct ThreadMonitorInfo {
-    spawn_time:     std::time::Instant,
-    deadline:       Option<std::time::Instant>,
+    spawn_time: std::time::Instant,
+    deadline: Option<std::time::Instant>,
     last_heartbeat: std::time::Instant,
-    cpu_quota:      Duration,
-    cpu_used:       Duration,
+    cpu_quota: Duration,
+    cpu_used: Duration,
 }
 
 impl SimpleExecutionMonitor {
@@ -129,11 +104,11 @@ impl ExecutionMonitor for SimpleExecutionMonitor {
         }
 
         let info = ThreadMonitorInfo {
-            spawn_time:     std::time::Instant::now(),
-            deadline:       None,
+            spawn_time: std::time::Instant::now(),
+            deadline: None,
             last_heartbeat: std::time::Instant::now(),
-            cpu_quota:      Duration::from_secs(60), // Default 1 minute
-            cpu_used:       Duration::from_secs(0),
+            cpu_quota: Duration::from_secs(60), // Default 1 minute
+            cpu_used: Duration::from_secs(0),
         };
 
         self.threads.write().insert(handle.id(), info);
@@ -180,21 +155,21 @@ impl ExecutionMonitor for SimpleExecutionMonitor {
 /// Safe WebAssembly thread manager
 pub struct WasmThreadManager {
     /// Platform-specific thread pool
-    pool:             Box<dyn PlatformThreadPool>,
+    pool: Box<dyn PlatformThreadPool>,
     /// Resource tracker for quotas
     resource_tracker: Arc<ResourceTracker>,
     /// Execution monitor
-    monitor:          Arc<dyn ExecutionMonitor>,
+    monitor: Arc<dyn ExecutionMonitor>,
     /// Active threads
-    threads:          Arc<KilnRwLock<BTreeMap<u64, ThreadInfo>>>,
+    threads: Arc<KilnRwLock<BTreeMap<u64, ThreadInfo>>>,
     /// Module registry
-    modules:          Arc<KilnRwLock<BTreeMap<u64, WasmModuleInfo>>>,
+    modules: Arc<KilnRwLock<BTreeMap<u64, WasmModuleInfo>>>,
     /// Next thread ID
-    next_thread_id:   AtomicU64,
+    next_thread_id: AtomicU64,
     /// Shutdown flag
-    shutdown:         KilnMutex<bool>,
+    shutdown: KilnMutex<bool>,
     /// Task executor function
-    executor:         ExecutorFn,
+    executor: ExecutorFn,
 }
 
 impl core::fmt::Debug for WasmThreadManager {
@@ -487,9 +462,9 @@ impl WasmThreadManager {
 #[derive(Debug, Clone)]
 pub struct ThreadManagerStats {
     /// Total active threads
-    pub total_threads:      usize,
+    pub total_threads: usize,
     /// Thread pool statistics
-    pub pool_stats:         crate::threading::ThreadPoolStats,
+    pub pool_stats: crate::threading::ThreadPoolStats,
     /// Number of registered modules
     pub modules_registered: usize,
 }
@@ -521,11 +496,11 @@ mod tests {
         let manager = WasmThreadManager::new(config, limits, executor).unwrap();
 
         let module = WasmModuleInfo {
-            id:               1,
-            name:             "test_module".to_string(),
-            max_threads:      4,
-            memory_limit:     64 * 1024 * 1024,
-            cpu_quota:        Duration::from_secs(60),
+            id: 1,
+            name: "test_module".to_string(),
+            max_threads: 4,
+            memory_limit: 64 * 1024 * 1024,
+            cpu_quota: Duration::from_secs(60),
             default_priority: ThreadPriority::Normal,
         };
 

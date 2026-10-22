@@ -4,11 +4,7 @@
 
 use crate::{
     memory_coordinator::CrateIdentifier,
-    traits::{
-        Checksummable,
-        FromBytes,
-        ToBytes,
-    },
+    traits::{Checksummable, FromBytes, ToBytes},
     verification::Checksum,
 };
 

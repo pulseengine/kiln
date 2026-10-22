@@ -349,15 +349,20 @@ impl TextSearcher {
             }
 
             // Track #[test] attribute for next function
-            if trimmed == "#[test]" || trimmed.starts_with("#[test]")
-                || trimmed == "#[tokio::test]" || trimmed.starts_with("#[tokio::test]")
+            if trimmed == "#[test]"
+                || trimmed.starts_with("#[test]")
+                || trimmed == "#[tokio::test]"
+                || trimmed.starts_with("#[tokio::test]")
             {
                 next_fn_is_test = true;
             }
 
             // Track function starts after #[test]
-            if next_fn_is_test && (trimmed.starts_with("fn ") || trimmed.starts_with("pub fn ")
-                || trimmed.starts_with("async fn ") || trimmed.starts_with("pub async fn "))
+            if next_fn_is_test
+                && (trimmed.starts_with("fn ")
+                    || trimmed.starts_with("pub fn ")
+                    || trimmed.starts_with("async fn ")
+                    || trimmed.starts_with("pub async fn "))
             {
                 in_test_fn = true;
                 test_fn_depth = current_depth;
@@ -399,8 +404,10 @@ impl TextSearcher {
         let path_str = path.to_string_lossy();
 
         // Files in tests/, examples/, benches/ directories
-        if path_str.contains("/tests/") || path_str.contains("/test/")
-            || path_str.contains("/examples/") || path_str.contains("/benches/")
+        if path_str.contains("/tests/")
+            || path_str.contains("/test/")
+            || path_str.contains("/examples/")
+            || path_str.contains("/benches/")
         {
             return true;
         }
@@ -417,8 +424,10 @@ impl TextSearcher {
 
         // Test helper files (suffix-based detection)
         if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-            if name.ends_with("_test.rs") || name.ends_with("_tests.rs")
-                || name == "test_lib.rs" || name == "test_utils.rs"
+            if name.ends_with("_test.rs")
+                || name.ends_with("_tests.rs")
+                || name == "test_lib.rs"
+                || name == "test_utils.rs"
             {
                 return true;
             }
@@ -446,10 +455,8 @@ pub fn count_production_matches(matches: &[SearchMatch]) -> usize {
 
 /// Format only production (non-test, non-comment) matches for display
 pub fn format_production_matches(matches: &[SearchMatch], max_display: usize) -> String {
-    let production: Vec<_> = matches
-        .iter()
-        .filter(|m| !m.is_comment && !m.is_test_context)
-        .collect();
+    let production: Vec<_> =
+        matches.iter().filter(|m| !m.is_comment && !m.is_test_context).collect();
     let mut output = String::new();
     for (i, m) in production.iter().take(max_display).enumerate() {
         output.push_str(&format!(
@@ -459,7 +466,10 @@ pub fn format_production_matches(matches: &[SearchMatch], max_display: usize) ->
             m.line_content.trim()
         ));
         if i >= max_display - 1 && production.len() > max_display {
-            output.push_str(&format!("  ... and {} more\n", production.len() - max_display));
+            output.push_str(&format!(
+                "  ... and {} more\n",
+                production.len() - max_display
+            ));
             break;
         }
     }

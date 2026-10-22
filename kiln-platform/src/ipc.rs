@@ -7,27 +7,12 @@
 extern crate alloc;
 
 #[cfg(not(feature = "std"))]
-use alloc::{
-    boxed::Box,
-    string::String,
-    vec::Vec,
-};
+use alloc::{boxed::Box, string::String, vec::Vec};
 #[cfg(feature = "std")]
-use alloc::{
-    boxed::Box,
-    string::String,
-    vec::Vec,
-};
-use core::{
-    fmt::Debug,
-    time::Duration,
-};
+use alloc::{boxed::Box, string::String, vec::Vec};
+use core::{fmt::Debug, time::Duration};
 
-use kiln_error::{
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result};
 use kiln_sync::KilnMutex;
 
 /// IPC message types
@@ -49,9 +34,9 @@ pub enum MessageType {
 #[derive(Debug, Clone)]
 pub struct Message {
     /// Message type
-    pub msg_type:       MessageType,
+    pub msg_type: MessageType,
     /// Message payload
-    pub data:           Vec<u8>,
+    pub data: Vec<u8>,
     /// Optional correlation ID for request/response
     pub correlation_id: Option<u64>,
 }
@@ -97,20 +82,20 @@ pub struct ChannelId(pub u64);
 
 /// Generic IPC server builder
 pub struct IpcServerBuilder {
-    name:             String,
+    name: String,
     max_message_size: usize,
-    max_clients:      usize,
-    timeout:          Duration,
+    max_clients: usize,
+    timeout: Duration,
 }
 
 impl IpcServerBuilder {
     /// Create new IPC server builder
     pub fn new(name: impl Into<String>) -> Self {
         Self {
-            name:             name.into(),
+            name: name.into(),
             max_message_size: 64 * 1024, // 64KB default
-            max_clients:      100,
-            timeout:          Duration::from_secs(30),
+            max_clients: 100,
+            timeout: Duration::from_secs(30),
         }
     }
 
@@ -239,8 +224,8 @@ impl IpcServer {
                         Err(e) => {
                             // Send error reply
                             let error_msg = Message {
-                                msg_type:       MessageType::Custom(0xFFFF), // Error type
-                                data:           e.to_string().into_bytes(),
+                                msg_type: MessageType::Custom(0xFFFF), // Error type
+                                data: e.to_string().into_bytes(),
                                 correlation_id: None,
                             };
                             let _ = self.channel.reply(client, &error_msg);
@@ -272,8 +257,8 @@ mod tests {
     #[test]
     fn test_message_creation() {
         let msg = Message {
-            msg_type:       MessageType::LoadModule,
-            data:           vec![1, 2, 3, 4],
+            msg_type: MessageType::LoadModule,
+            data: vec![1, 2, 3, 4],
             correlation_id: Some(12345),
         };
 

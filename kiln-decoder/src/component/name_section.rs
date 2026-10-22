@@ -220,7 +220,8 @@ pub struct NameMap {
     #[cfg(feature = "std")]
     pub entries: alloc::vec::Vec<NameMapEntry>,
     #[cfg(not(feature = "std"))]
-    pub entries: kiln_foundation::BoundedVec<NameMapEntry, 256, kiln_foundation::NoStdProvider<4096>>,
+    pub entries:
+        kiln_foundation::BoundedVec<NameMapEntry, 256, kiln_foundation::NoStdProvider<4096>>,
 }
 
 impl NameMap {
@@ -1048,9 +1049,7 @@ mod tests {
                 name: "func1".to_string(),
             });
 
-            name_section
-                .sort_names
-                .push((SortIdentifier::Function, name_map));
+            name_section.sort_names.push((SortIdentifier::Function, name_map));
 
             let bytes = generate_component_name_section(&name_section).unwrap();
             let parsed = parse_component_name_section(bytes.as_slice()).unwrap();

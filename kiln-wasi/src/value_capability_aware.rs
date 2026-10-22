@@ -5,15 +5,9 @@
 
 extern crate alloc;
 
-use kiln_error::{
-    Error,
-    Result,
-};
+use kiln_error::{Error, Result};
 use kiln_foundation::{
-    bounded::{
-        BoundedString,
-        BoundedVec,
-    },
+    bounded::{BoundedString, BoundedVec},
     budget_aware_provider::CrateId,
     capabilities::MemoryOperation,
     memory_init::get_global_capability_context,
@@ -106,13 +100,13 @@ impl WasiValueBox {
     }
 
     /// Get the inner value
-    #[must_use] 
+    #[must_use]
     pub fn into_inner(self) -> CapabilityAwareValue {
         *self.inner
     }
 
     /// Get a reference to the inner value
-    #[must_use] 
+    #[must_use]
     pub fn as_inner(&self) -> &CapabilityAwareValue {
         &self.inner
     }
@@ -226,7 +220,7 @@ impl CapabilityAwareValue {
 /// Value extraction methods with capability awareness
 impl CapabilityAwareValue {
     /// Extract a u32 from the value, returning 0 if not possible
-    #[must_use] 
+    #[must_use]
     pub fn as_u32(&self) -> u32 {
         match self {
             CapabilityAwareValue::U32(v) => *v,
@@ -237,7 +231,7 @@ impl CapabilityAwareValue {
     }
 
     /// Extract a u64 from the value, returning 0 if not possible
-    #[must_use] 
+    #[must_use]
     pub fn as_u64(&self) -> u64 {
         match self {
             CapabilityAwareValue::U64(v) => *v,
@@ -254,14 +248,16 @@ impl CapabilityAwareValue {
     ///
     /// Returns an error if bounded string creation fails.
     pub fn as_bounded_string(&self) -> Result<WasiBoundedString> {
-        if let CapabilityAwareValue::String(s) = self { Ok(s.clone()) } else {
+        if let CapabilityAwareValue::String(s) = self {
+            Ok(s.clone())
+        } else {
             let _provider = create_wasi_value_provider()?;
             Ok(WasiBoundedString::try_from_str("")?)
         }
     }
 
     /// Extract a string as &str, returning empty string if not possible
-    #[must_use] 
+    #[must_use]
     pub fn as_str(&self) -> &str {
         match self {
             CapabilityAwareValue::String(s) => s.as_str().unwrap_or(""),
@@ -270,7 +266,7 @@ impl CapabilityAwareValue {
     }
 
     /// Extract a boolean from the value, returning false if not possible
-    #[must_use] 
+    #[must_use]
     pub fn as_bool(&self) -> bool {
         match self {
             CapabilityAwareValue::Bool(b) => *b,
@@ -281,7 +277,7 @@ impl CapabilityAwareValue {
     }
 
     /// Get the list values if this is a list
-    #[must_use] 
+    #[must_use]
     pub fn as_list(&self) -> Option<&WasiBoundedVec<CapabilityAwareValue>> {
         match self {
             CapabilityAwareValue::List(list) => Some(list.as_ref()),
@@ -290,7 +286,7 @@ impl CapabilityAwareValue {
     }
 
     /// Get the record pairs if this is a record
-    #[must_use] 
+    #[must_use]
     pub fn as_record(&self) -> Option<&WasiBoundedVec<(WasiBoundedString, CapabilityAwareValue)>> {
         match self {
             CapabilityAwareValue::Record(record) => Some(record.as_ref()),

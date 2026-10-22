@@ -14,14 +14,14 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use kiln_foundation::capabilities::memory_factory::MemoryFactory;
+use kiln_foundation::values::Value;
 use serde::{Deserialize, Serialize};
 use wast::{
     Wast, WastArg, WastDirective, WastExecute, WastInvoke, WastRet,
     core::{NanPattern, V128Const, V128Pattern, WastArgCore, WastRetCore},
     parser::{self, ParseBuffer},
 };
-use kiln_foundation::capabilities::memory_factory::MemoryFactory;
-use kiln_foundation::values::Value;
 
 use crate::{
     diagnostics::{Diagnostic, Position, Range, Severity},
@@ -577,12 +577,17 @@ impl WastTestRunner {
                             requires_module_state: false,
                             modifies_engine_state: false,
                             result: TestResult::Failed,
-                            error_message: Some(format!("Module definition encoding failed: {}", e)),
+                            error_message: Some(format!(
+                                "Module definition encoding failed: {}",
+                                e
+                            )),
                         })
                     },
                 }
             },
-            WastDirective::ModuleInstance { instance, module, .. } => {
+            WastDirective::ModuleInstance {
+                instance, module, ..
+            } => {
                 // Module instance: (module instance $inst $def) — instantiate from a definition
                 let def_name = module.map(|id| id.name().to_string());
                 let inst_name = instance.map(|id| id.name().to_string());
@@ -624,7 +629,8 @@ impl WastTestRunner {
                                     modifies_engine_state: true,
                                     result: TestResult::Failed,
                                     error_message: Some(format!(
-                                        "Module instance instantiation failed: {:#}", e
+                                        "Module instance instantiation failed: {:#}",
+                                        e
                                     )),
                                 })
                             },
@@ -747,7 +753,7 @@ impl WastTestRunner {
                                 result: TestResult::Passed,
                                 error_message: None,
                             })
-                        }
+                        },
                         Ok(false) => {
                             self.stats.failed += 1;
                             let func_name = match exec {
@@ -766,7 +772,7 @@ impl WastTestRunner {
                                     func_name, actual_results
                                 )),
                             })
-                        }
+                        },
                         Err(e) => {
                             self.stats.failed += 1;
                             Ok(WastDirectiveInfo {
@@ -780,7 +786,7 @@ impl WastTestRunner {
                                     e
                                 )),
                             })
-                        }
+                        },
                     }
                 } else {
                     // Standard comparison without `either`
@@ -810,7 +816,9 @@ impl WastTestRunner {
                                     self.stats.failed += 1;
                                     let func_name = match exec {
                                         WastExecute::Invoke(invoke) => invoke.name.to_string(),
-                                        WastExecute::Get { global, .. } => format!("get {}", global),
+                                        WastExecute::Get { global, .. } => {
+                                            format!("get {}", global)
+                                        },
                                         _ => "unknown".to_string(),
                                     };
                                     Ok(WastDirectiveInfo {
@@ -1808,7 +1816,8 @@ Memory Statistics:
             self.stats.modules_loaded_bytes as f64 / 1024.0,
             self.stats.peak_module_bytes as f64 / 1024.0,
             if self.stats.modules_loaded_count > 0 {
-                (self.stats.modules_loaded_bytes as f64 / self.stats.modules_loaded_count as f64) / 1024.0
+                (self.stats.modules_loaded_bytes as f64 / self.stats.modules_loaded_count as f64)
+                    / 1024.0
             } else {
                 0.0
             },
@@ -2134,5 +2143,4 @@ mod tests {
         assert!(contains_linking_keyword("unknown import module", ""));
         assert!(contains_exhaustion_keyword("stack overflow detected", ""));
     }
-
 }

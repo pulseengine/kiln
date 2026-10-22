@@ -16,10 +16,10 @@ use std::fs;
 
 /// WASM binary format constants
 const WASM_MAGIC: [u8; 4] = [0x00, 0x61, 0x73, 0x6D];
-const WASM_VERSION_CORE: [u8; 4] = [0x01, 0x00, 0x00, 0x00];  // Core WASM version 1
-const WASM_VERSION_COMPONENT: [u8; 4] = [0x0D, 0x00, 0x01, 0x00];  // Component Model layer 1, v13
+const WASM_VERSION_CORE: [u8; 4] = [0x01, 0x00, 0x00, 0x00]; // Core WASM version 1
+const WASM_VERSION_COMPONENT: [u8; 4] = [0x0D, 0x00, 0x01, 0x00]; // Component Model layer 1, v13
 const CUSTOM_SECTION_ID: u8 = 0x00;
-const CORE_MODULE_SECTION_ID: u8 = 0x01;  // Component model section ID for core modules
+const CORE_MODULE_SECTION_ID: u8 = 0x01; // Component model section ID for core modules
 
 /// Read an unsigned LEB128 integer from bytes at position
 fn read_leb128_u32(bytes: &[u8], pos: usize) -> Result<(u32, usize), &'static str> {
@@ -83,8 +83,10 @@ fn parse_custom_sections(wasm_bytes: &[u8]) -> Result<Vec<CustomSection>, String
     #[allow(unused_variables)]
     let is_component_model = is_component;
     if is_component {
-        println!("Note: Parsing Component Model WASM (version 0x{:02x}{:02x}{:02x}{:02x})",
-            wasm_bytes[7], wasm_bytes[6], wasm_bytes[5], wasm_bytes[4]);
+        println!(
+            "Note: Parsing Component Model WASM (version 0x{:02x}{:02x}{:02x}{:02x})",
+            wasm_bytes[7], wasm_bytes[6], wasm_bytes[5], wasm_bytes[4]
+        );
     }
 
     let mut sections = Vec::new();
@@ -149,7 +151,10 @@ fn parse_custom_sections(wasm_bytes: &[u8]) -> Result<Vec<CustomSection>, String
 }
 
 /// Parse custom sections from a core WASM module (used for nested modules in components)
-fn parse_core_module_sections(module_bytes: &[u8], base_offset: usize) -> Result<Vec<CustomSection>, String> {
+fn parse_core_module_sections(
+    module_bytes: &[u8],
+    base_offset: usize,
+) -> Result<Vec<CustomSection>, String> {
     // Core module starts with magic + version (8 bytes)
     if module_bytes.len() < 8 {
         return Err("Core module too small".to_string());
@@ -193,7 +198,7 @@ fn parse_core_module_sections(module_bytes: &[u8], base_offset: usize) -> Result
                 Err(_) => {
                     pos = section_end;
                     continue;
-                }
+                },
             };
 
             let data_start = name_end;
@@ -222,7 +227,10 @@ fn test_extract_dwarf_sections() {
         .join("calculator.wasm");
 
     if !wasm_path.exists() {
-        println!("Skipping test: calculator.wasm not found at {:?}", wasm_path);
+        println!(
+            "Skipping test: calculator.wasm not found at {:?}",
+            wasm_path
+        );
         return;
     }
 
@@ -246,7 +254,10 @@ fn test_extract_dwarf_sections() {
         println!("  {}: {} bytes", section.name, section.data.len());
     }
 
-    assert!(!dwarf_sections.is_empty(), "No DWARF sections found in calculator.wasm");
+    assert!(
+        !dwarf_sections.is_empty(),
+        "No DWARF sections found in calculator.wasm"
+    );
 
     // Check for essential debug sections
     let has_debug_line = dwarf_sections.iter().any(|s| s.name == ".debug_line");
@@ -256,7 +267,10 @@ fn test_extract_dwarf_sections() {
     println!("  .debug_line: {}", has_debug_line);
     println!("  .debug_info: {}", has_debug_info);
 
-    assert!(has_debug_line, "Missing .debug_line section - required for line number info");
+    assert!(
+        has_debug_line,
+        "Missing .debug_line section - required for line number info"
+    );
 }
 
 /// Test using DwarfDebugInfo to resolve PC to source location
@@ -297,11 +311,18 @@ fn test_dwarf_line_number_resolution() {
                 section.offset,
                 section.data.len()
             );
-            debug_info.add_section(&section.name, section.offset as u32, section.data.len() as u32);
+            debug_info.add_section(
+                &section.name,
+                section.offset as u32,
+                section.data.len() as u32,
+            );
         }
     }
 
-    assert!(debug_info.has_debug_info(), "DwarfDebugInfo should have debug info after registration");
+    assert!(
+        debug_info.has_debug_info(),
+        "DwarfDebugInfo should have debug info after registration"
+    );
 
     println!("\nDWARF debug info registered successfully!");
     println!("Ready for PC to source location resolution");
@@ -344,7 +365,11 @@ fn test_simulated_source_level_debug() {
     let mut debug_info = DwarfDebugInfo::new(&wasm_bytes).expect("Failed to create DwarfDebugInfo");
 
     // Register the debug_line section
-    debug_info.add_section(".debug_line", debug_line.offset as u32, debug_line.data.len() as u32);
+    debug_info.add_section(
+        ".debug_line",
+        debug_line.offset as u32,
+        debug_line.data.len() as u32,
+    );
 
     // Simulate execution at various PC values
     println!("\nSimulating execution with source location resolution:");
@@ -361,13 +386,13 @@ fn test_simulated_source_level_debug() {
                     "PC 0x{:04x}: file={}, line={}, column={}, is_stmt={}",
                     pc, line_info.file_index, line_info.line, line_info.column, line_info.is_stmt
                 );
-            }
+            },
             Ok(None) => {
                 // No line info at this PC - common for addresses before code section
-            }
+            },
             Err(e) => {
                 println!("PC 0x{:04x}: Error: {:?}", pc, e);
-            }
+            },
         }
     }
 
@@ -379,11 +404,11 @@ fn test_simulated_source_level_debug() {
 #[test]
 #[cfg(feature = "std")]
 fn test_debugger_callback_simulation() {
-    use std::sync::atomic::{AtomicU32, Ordering};
-    use std::sync::Arc;
     use kiln_debug::runtime_traits::{
         Breakpoint, BreakpointId, DebugAction, RuntimeDebugger, RuntimeState,
     };
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicU32, Ordering};
 
     /// A debugger that prints source locations during execution
     struct SourceLevelDebugger {
@@ -429,11 +454,19 @@ fn test_debugger_callback_simulation() {
         }
 
         fn on_function_entry(&mut self, func_idx: u32, state: &dyn RuntimeState) {
-            println!("[CALL] Entering function {} at PC=0x{:04x}", func_idx, state.pc());
+            println!(
+                "[CALL] Entering function {} at PC=0x{:04x}",
+                func_idx,
+                state.pc()
+            );
         }
 
         fn on_function_exit(&mut self, func_idx: u32, state: &dyn RuntimeState) {
-            println!("[RET] Exiting function {} at PC=0x{:04x}", func_idx, state.pc());
+            println!(
+                "[RET] Exiting function {} at PC=0x{:04x}",
+                func_idx,
+                state.pc()
+            );
         }
 
         fn on_trap(&mut self, trap_code: u32, state: &dyn RuntimeState) {
@@ -506,7 +539,10 @@ fn test_debugger_callback_simulation() {
     };
     dbg.on_function_exit(1, &exit_state);
 
-    println!("\nTotal instructions: {}", dbg.instruction_count.load(Ordering::SeqCst));
+    println!(
+        "\nTotal instructions: {}",
+        dbg.instruction_count.load(Ordering::SeqCst)
+    );
     println!("\nDebugger callback simulation complete!");
 }
 
@@ -540,7 +576,11 @@ fn test_full_integration_demo() {
     // Register DWARF sections
     for section in &sections {
         if section.name.starts_with(".debug_") {
-            debug_info.add_section(&section.name, section.offset as u32, section.data.len() as u32);
+            debug_info.add_section(
+                &section.name,
+                section.offset as u32,
+                section.data.len() as u32,
+            );
         }
     }
 
@@ -570,13 +610,19 @@ fn test_full_integration_demo() {
                     "│ 0x{:06x} │ {:>6} │ {:>6} │ {:<34} │",
                     pc, info.line, info.column, location
                 );
-            }
+            },
             Ok(None) => {
-                println!("│ 0x{:06x} │   -    │   -    │ (no debug info)                    │", pc);
-            }
+                println!(
+                    "│ 0x{:06x} │   -    │   -    │ (no debug info)                    │",
+                    pc
+                );
+            },
             Err(_) => {
-                println!("│ 0x{:06x} │   -    │   -    │ (parse error)                      │", pc);
-            }
+                println!(
+                    "│ 0x{:06x} │   -    │   -    │ (parse error)                      │",
+                    pc
+                );
+            },
         }
     }
 
@@ -589,13 +635,25 @@ fn test_full_integration_demo() {
 
     println!("\n📊 Debug Section Statistics:");
     if let Some(s) = debug_line {
-        println!("   .debug_line: {} bytes ({:.1} KB)", s.data.len(), s.data.len() as f64 / 1024.0);
+        println!(
+            "   .debug_line: {} bytes ({:.1} KB)",
+            s.data.len(),
+            s.data.len() as f64 / 1024.0
+        );
     }
     if let Some(s) = debug_info_section {
-        println!("   .debug_info: {} bytes ({:.1} KB)", s.data.len(), s.data.len() as f64 / 1024.0);
+        println!(
+            "   .debug_info: {} bytes ({:.1} KB)",
+            s.data.len(),
+            s.data.len() as f64 / 1024.0
+        );
     }
     if let Some(s) = debug_str {
-        println!("   .debug_str:  {} bytes ({:.1} KB)", s.data.len(), s.data.len() as f64 / 1024.0);
+        println!(
+            "   .debug_str:  {} bytes ({:.1} KB)",
+            s.data.len(),
+            s.data.len() as f64 / 1024.0
+        );
     }
 
     println!("\n✅ Source-level debugging infrastructure is operational!");
@@ -651,7 +709,10 @@ fn test_dwarf_section_structure() {
                 let line_range = debug_line.data[if version >= 4 { 14 } else { 13 }];
 
                 println!("  Minimum instruction length: {}", min_instr_len);
-                println!("  Maximum operations per instruction: {}", max_ops_per_instr);
+                println!(
+                    "  Maximum operations per instruction: {}",
+                    max_ops_per_instr
+                );
                 println!("  Default is_stmt: {}", default_is_stmt);
                 println!("  Line base: {}", line_base);
                 println!("  Line range: {}", line_range);

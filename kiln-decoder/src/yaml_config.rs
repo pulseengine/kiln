@@ -12,10 +12,10 @@ use std::fs;
 #[cfg(feature = "std")]
 use std::path::Path;
 
-#[cfg(feature = "std")]
-use serde::{Deserialize, Serialize};
 use kiln_error::{Error, ErrorCategory, codes};
 use kiln_foundation::{BoundedString, CrateId, NoStdProvider, safe_managed_alloc};
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
 
 use crate::resource_limits_section::{
     MAX_ASIL_STRING_LEN, MAX_CUSTOM_LIMITS_PER_TYPE, MAX_RESOURCE_NAME_LEN, MAX_RESOURCE_TYPES,

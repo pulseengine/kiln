@@ -6,39 +6,21 @@
 
 extern crate alloc;
 
-use alloc::{
-    collections::BTreeMap,
-    sync::Arc,
-};
+use alloc::{collections::BTreeMap, sync::Arc};
 use core::time::Duration;
 
-use kiln_error::{
-    ErrorCategory,
-    ErrorSource,
-    Result,
-    ToErrorCategory,
-};
+use kiln_error::{ErrorCategory, ErrorSource, Result, ToErrorCategory};
 use kiln_sync::KilnRwLock;
 
 #[cfg(target_os = "linux")]
-use crate::linux_sync::{
-    LinuxFutex,
-    LinuxFutexBuilder,
-};
+use crate::linux_sync::{LinuxFutex, LinuxFutexBuilder};
 use crate::{
     sync::FutexLike,
     threading::{
-        ThreadHandle,
-        ThreadPoolConfig,
-        ThreadPriority,
-        ThreadSpawnRequest,
-        ThreadingLimits,
+        ThreadHandle, ThreadPoolConfig, ThreadPriority, ThreadSpawnRequest, ThreadingLimits,
         WasmTask,
     },
-    wasm_thread_manager::{
-        WasmModuleInfo,
-        WasmThreadManager,
-    },
+    wasm_thread_manager::{WasmModuleInfo, WasmThreadManager},
 };
 
 /// Type alias for complex executor function type
@@ -47,9 +29,9 @@ type ExecutorFn = Arc<dyn Fn(u32, Vec<u8>) -> Result<Vec<u8>> + Send + Sync>;
 /// Atomic wait/notify coordinator that manages futex objects per memory address
 pub struct AtomicCoordinator {
     /// Map of memory addresses to futex objects
-    futex_map:        Arc<KilnRwLock<BTreeMap<u64, Arc<dyn FutexLike + Send + Sync>>>>,
+    futex_map: Arc<KilnRwLock<BTreeMap<u64, Arc<dyn FutexLike + Send + Sync>>>>,
     /// Thread manager for spawning atomic operation threads
-    thread_manager:   Arc<WasmThreadManager>,
+    thread_manager: Arc<WasmThreadManager>,
     /// Module registered for atomic operations
     atomic_module_id: u64,
 }
@@ -59,11 +41,11 @@ impl AtomicCoordinator {
     pub fn new(thread_manager: Arc<WasmThreadManager>) -> Result<Self> {
         // Register a special module for atomic operations
         let atomic_module = WasmModuleInfo {
-            id:               u64::MAX, // Special ID for atomic operations
-            name:             "atomic_operations".to_string(),
-            max_threads:      1024,             // Allow many atomic waiters
-            memory_limit:     64 * 1024 * 1024, // 64MB for atomic operations
-            cpu_quota:        Duration::from_secs(3600), // Long-running waits allowed
+            id: u64::MAX, // Special ID for atomic operations
+            name: "atomic_operations".to_string(),
+            max_threads: 1024,                    // Allow many atomic waiters
+            memory_limit: 64 * 1024 * 1024,       // 64MB for atomic operations
+            cpu_quota: Duration::from_secs(3600), // Long-running waits allowed
             default_priority: ThreadPriority::Normal,
         };
 
@@ -133,9 +115,9 @@ impl AtomicCoordinator {
         timeout_ns: Option<u64>,
     ) -> Result<u64> {
         let request = ThreadSpawnRequest {
-            module_id:   self.atomic_module_id,
+            module_id: self.atomic_module_id,
             function_id: 0xFFFF, // Special function ID for atomic operations
-            args:        {
+            args: {
                 let mut args = Vec::new();
                 args.extend_from_slice(&addr.to_le_bytes());
                 args.extend_from_slice(&expected.to_le_bytes());
@@ -144,8 +126,8 @@ impl AtomicCoordinator {
                 }
                 args
             },
-            priority:    Some(ThreadPriority::Normal),
-            stack_size:  Some(64 * 1024), // Small stack for atomic operations
+            priority: Some(ThreadPriority::Normal),
+            stack_size: Some(64 * 1024), // Small stack for atomic operations
         };
 
         self.thread_manager.spawn_thread(&request)
@@ -164,7 +146,7 @@ impl AtomicCoordinator {
     pub fn get_atomic_stats(&self) -> AtomicStats {
         let map = self.futex_map.read();
         AtomicStats {
-            active_futexes:       map.len(),
+            active_futexes: map.len(),
             thread_manager_stats: self.thread_manager.get_stats(),
         }
     }
@@ -174,7 +156,7 @@ impl AtomicCoordinator {
 #[derive(Debug, Clone)]
 pub struct AtomicStats {
     /// Number of active futex objects
-    pub active_futexes:       usize,
+    pub active_futexes: usize,
     /// Thread manager statistics
     pub thread_manager_stats: crate::wasm_thread_manager::ThreadManagerStats,
 }
@@ -182,7 +164,7 @@ pub struct AtomicStats {
 /// Enhanced WebAssembly thread manager with atomic operations support
 pub struct AtomicAwareThreadManager {
     /// Base thread manager
-    base_manager:       Arc<WasmThreadManager>,
+    base_manager: Arc<WasmThreadManager>,
     /// Atomic coordinator
     atomic_coordinator: AtomicCoordinator,
 }
@@ -234,7 +216,7 @@ impl AtomicAwareThreadManager {
     /// Get comprehensive statistics
     pub fn get_stats(&self) -> AtomicAwareStats {
         AtomicAwareStats {
-            base_stats:   self.base_manager.get_stats(),
+            base_stats: self.base_manager.get_stats(),
             atomic_stats: self.atomic_coordinator.get_atomic_stats(),
         }
     }
@@ -255,7 +237,7 @@ impl AtomicAwareThreadManager {
 #[derive(Debug, Clone)]
 pub struct AtomicAwareStats {
     /// Base thread manager statistics
-    pub base_stats:   crate::wasm_thread_manager::ThreadManagerStats,
+    pub base_stats: crate::wasm_thread_manager::ThreadManagerStats,
     /// Atomic operations statistics
     pub atomic_stats: AtomicStats,
 }

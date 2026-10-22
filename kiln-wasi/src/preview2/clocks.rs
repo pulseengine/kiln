@@ -8,10 +8,8 @@ use core::any::Any;
 use kiln_platform::time::PlatformTime;
 
 use crate::{
-    capabilities::WasiClockCapabilities,
-    host_provider::resource_manager::WasiClockType,
+    Value, capabilities::WasiClockCapabilities, host_provider::resource_manager::WasiClockType,
     prelude::*,
-    Value,
 };
 
 /// WASI monotonic clock now operation
@@ -119,7 +117,7 @@ pub fn wasi_thread_cpu_time_now(_target: &mut dyn Any, _args: &[Value]) -> Resul
 /// Convert nanoseconds to WASI datetime record
 ///
 /// Helper function to convert nanoseconds since Unix epoch to WASI datetime
-#[must_use] 
+#[must_use]
 pub fn nanoseconds_to_datetime(nanoseconds: u64) -> Value {
     let seconds = nanoseconds / 1_000_000_000;
     let nanos = (nanoseconds % 1_000_000_000) as u32;
@@ -323,10 +321,10 @@ mod tests {
 
         // Test with allowed access
         let capabilities = WasiClockCapabilities {
-            realtime_access:        true,
-            monotonic_access:       true,
+            realtime_access: true,
+            monotonic_access: true,
             process_cputime_access: false,
-            thread_cputime_access:  false,
+            thread_cputime_access: false,
         };
 
         // Should succeed for allowed clocks

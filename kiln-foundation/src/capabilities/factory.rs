@@ -17,22 +17,13 @@ use alloc::boxed::Box;
 use std::boxed::Box;
 
 #[cfg(any(feature = "std", feature = "alloc"))]
-use super::{
-    context::MemoryCapabilityContext,
-    MemoryCapability,
-    MemoryOperation,
-};
+use super::{MemoryCapability, MemoryOperation, context::MemoryCapabilityContext};
 #[cfg(any(feature = "std", feature = "alloc"))]
 use crate::{
+    Error, ErrorCategory, Result,
     budget_aware_provider::CrateId,
     codes,
-    safe_memory::{
-        NoStdProvider,
-        Provider,
-    },
-    Error,
-    ErrorCategory,
-    Result,
+    safe_memory::{NoStdProvider, Provider},
 };
 
 /// A memory provider that is protected by capability verification
@@ -41,8 +32,8 @@ use crate::{
 #[cfg(any(feature = "std", feature = "alloc"))]
 pub struct CapabilityGuardedProvider<const N: usize> {
     capability: Box<dyn super::AnyMemoryCapability>,
-    provider:   Option<NoStdProvider<N>>,
-    _phantom:   PhantomData<[u8; N]>,
+    provider: Option<NoStdProvider<N>>,
+    _phantom: PhantomData<[u8; N]>,
 }
 
 #[cfg(any(feature = "std", feature = "alloc"))]
@@ -70,10 +61,7 @@ impl<const N: usize> CapabilityGuardedProvider<N> {
     fn ensure_provider(&mut self) -> Result<&mut NoStdProvider<N>> {
         if self.provider.is_none() {
             // Create the underlying provider using safe_managed_alloc
-            use crate::{
-                budget_aware_provider::CrateId,
-                safe_managed_alloc,
-            };
+            use crate::{budget_aware_provider::CrateId, safe_managed_alloc};
             let provider = safe_managed_alloc!(N, CrateId::Foundation)
                 .map_err(|_| Error::memory_error("Failed to allocate provider"))?;
             self.provider = Some(provider);
@@ -144,10 +132,7 @@ impl<const N: usize> CapabilityGuardedProvider<N> {
 
     /// Get a mutable slice of the entire buffer
     pub fn as_slice_mut(&mut self) -> Result<crate::safe_memory::SliceMut<'_>> {
-        let operation = MemoryOperation::Write {
-            offset: 0,
-            len:    N,
-        };
+        let operation = MemoryOperation::Write { offset: 0, len: N };
         self.capability.verify_access(&operation)?;
 
         let provider = self.ensure_provider()?;

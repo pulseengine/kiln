@@ -4,14 +4,11 @@
 //! Designed for no_std compatibility with fixed-size allocation.
 
 use kiln_error::{Error, Result};
-use kiln_foundation::{
-    bounded::BoundedVec,
-    safe_memory::NoStdProvider,
-};
+use kiln_foundation::{bounded::BoundedVec, safe_memory::NoStdProvider};
 
 use super::{
-    object::{GcObjectMut, GcObjectRef, ObjectHeader, ObjectKind, HEADER_SIZE},
-    GcRef, GC_OBJECT_ALIGNMENT,
+    GC_OBJECT_ALIGNMENT, GcRef,
+    object::{GcObjectMut, GcObjectRef, HEADER_SIZE, ObjectHeader, ObjectKind},
 };
 
 /// Default heap size (256KB for embedded systems)
@@ -158,9 +155,7 @@ impl<const SIZE: usize> GcHeap<SIZE> {
 
     /// Get an immutable reference to an object
     pub fn get(&self, gc_ref: GcRef) -> Result<GcObjectRef<'_>> {
-        let offset = gc_ref
-            .offset()
-            .ok_or_else(|| Error::memory_error("Null GC reference"))?;
+        let offset = gc_ref.offset().ok_or_else(|| Error::memory_error("Null GC reference"))?;
 
         let offset = offset as usize;
         if offset + HEADER_SIZE > SIZE {
@@ -187,9 +182,7 @@ impl<const SIZE: usize> GcHeap<SIZE> {
 
     /// Get a mutable reference to an object
     pub fn get_mut(&mut self, gc_ref: GcRef) -> Result<GcObjectMut<'_>> {
-        let offset = gc_ref
-            .offset()
-            .ok_or_else(|| Error::memory_error("Null GC reference"))?;
+        let offset = gc_ref.offset().ok_or_else(|| Error::memory_error("Null GC reference"))?;
 
         let offset = offset as usize;
         if offset + HEADER_SIZE > SIZE {
@@ -223,9 +216,7 @@ impl<const SIZE: usize> GcHeap<SIZE> {
         field_offset: usize,
         field_size: usize,
     ) -> Result<&[u8]> {
-        let offset = gc_ref
-            .offset()
-            .ok_or_else(|| Error::memory_error("Null GC reference"))?;
+        let offset = gc_ref.offset().ok_or_else(|| Error::memory_error("Null GC reference"))?;
 
         let obj_offset = offset as usize;
         if obj_offset + HEADER_SIZE > SIZE {
@@ -258,9 +249,7 @@ impl<const SIZE: usize> GcHeap<SIZE> {
         field_offset: usize,
         data: &[u8],
     ) -> Result<()> {
-        let offset = gc_ref
-            .offset()
-            .ok_or_else(|| Error::memory_error("Null GC reference"))?;
+        let offset = gc_ref.offset().ok_or_else(|| Error::memory_error("Null GC reference"))?;
 
         let obj_offset = offset as usize;
         let payload_start = obj_offset + HEADER_SIZE;
@@ -293,10 +282,7 @@ impl<const SIZE: usize> GcHeap<SIZE> {
         }
 
         Ok(u32::from_le_bytes([
-            payload[0],
-            payload[1],
-            payload[2],
-            payload[3],
+            payload[0], payload[1], payload[2], payload[3],
         ]))
     }
 
@@ -312,9 +298,7 @@ impl<const SIZE: usize> GcHeap<SIZE> {
             return Err(Error::memory_error("Array index out of bounds"));
         }
 
-        let offset = gc_ref
-            .offset()
-            .ok_or_else(|| Error::memory_error("Null GC reference"))?;
+        let offset = gc_ref.offset().ok_or_else(|| Error::memory_error("Null GC reference"))?;
         let obj_offset = offset as usize;
 
         // Get object size for bounds check
@@ -349,9 +333,7 @@ impl<const SIZE: usize> GcHeap<SIZE> {
             return Err(Error::memory_error("Array index out of bounds"));
         }
 
-        let offset = gc_ref
-            .offset()
-            .ok_or_else(|| Error::memory_error("Null GC reference"))?;
+        let offset = gc_ref.offset().ok_or_else(|| Error::memory_error("Null GC reference"))?;
         let obj_offset = offset as usize;
 
         // Skip header (8 bytes) + length (4 bytes)
@@ -478,12 +460,10 @@ mod tests {
         let gc_ref = heap.alloc_struct(0, &[4, 4]).unwrap();
 
         // Write first field
-        heap.write_struct_field(gc_ref, 0, &42i32.to_le_bytes())
-            .unwrap();
+        heap.write_struct_field(gc_ref, 0, &42i32.to_le_bytes()).unwrap();
 
         // Write second field
-        heap.write_struct_field(gc_ref, 4, &100i32.to_le_bytes())
-            .unwrap();
+        heap.write_struct_field(gc_ref, 4, &100i32.to_le_bytes()).unwrap();
 
         // Read fields back
         let field1 = heap.read_struct_field(gc_ref, 0, 4).unwrap();

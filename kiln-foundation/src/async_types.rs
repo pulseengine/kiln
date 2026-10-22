@@ -8,10 +8,7 @@
 
 use core::task::Waker;
 
-use crate::{
-    types::ValueType as ValType,
-    values::Value,
-};
+use crate::{types::ValueType as ValType, values::Value};
 
 /// Maximum number of buffered values in a stream
 pub const MAX_STREAM_BUFFER: usize = 64;
@@ -35,10 +32,10 @@ pub enum ComponentFutureStatus<T> {
 
 /// Component Model future type
 pub struct ComponentFuture<T> {
-    handle:     FutureHandle,
+    handle: FutureHandle,
     value_type: ValType,
-    status:     ComponentFutureStatus<T>,
-    waker:      Option<Waker>,
+    status: ComponentFutureStatus<T>,
+    waker: Option<Waker>,
 }
 
 impl<T> ComponentFuture<T> {
@@ -93,13 +90,13 @@ pub enum StreamState {
 
 /// Component Model stream type (simplified for basic functionality)
 pub struct ComponentStream<T> {
-    handle:       StreamHandle,
+    handle: StreamHandle,
     element_type: ValType,
-    state:        StreamState,
+    state: StreamState,
     // Simplified: single item buffer for basic functionality
-    buffer_item:  Option<T>,
-    read_waker:   Option<Waker>,
-    write_waker:  Option<Waker>,
+    buffer_item: Option<T>,
+    read_waker: Option<Waker>,
+    write_waker: Option<Waker>,
 }
 
 impl<T> ComponentStream<T> {
@@ -175,9 +172,9 @@ pub struct ErrorContext {
     /// Error message
     pub message: &'static str,
     /// Optional error code
-    pub code:    Option<u32>,
+    pub code: Option<u32>,
     /// Stack trace or additional context
-    pub trace:   Option<&'static str>,
+    pub trace: Option<&'static str>,
 }
 
 impl ErrorContext {

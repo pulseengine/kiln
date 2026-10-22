@@ -81,63 +81,31 @@ pub mod branch_hinting;
 // Re-export commonly used types
 pub use control_ops::BranchTarget;
 // Test module for arithmetic operations
+pub use kiln_error::{Error, Result};
+pub use kiln_foundation::{BlockType, RefType, types::ValueType, values::Value};
 #[cfg(test)]
 // arithmetic tests moved to arithmetic_ops.rs
 
 // Re-exports for convenience
 // Re-export prelude for convenience
 pub use prelude::*;
-pub use kiln_error::{
-    Error,
-    Result,
-};
-pub use kiln_foundation::{
-    types::ValueType,
-    values::Value,
-    BlockType,
-    RefType,
-};
 
 // Re-export Aggregate operations
 pub use crate::aggregate_ops::{
-    AggregateOp,
-    AggregateOperations,
-    ArrayGet,
-    ArrayLen,
-    ArrayNew,
-    ArraySet,
-    StructGet,
-    StructNew,
+    AggregateOp, AggregateOperations, ArrayGet, ArrayLen, ArrayNew, ArraySet, StructGet, StructNew,
     StructSet,
 };
 // Re-export Atomic operations
 pub use crate::atomic_ops::{
-    AtomicCmpxchgInstr,
-    AtomicFence,
-    AtomicLoadOp,
-    AtomicOp,
-    AtomicRMWInstr,
-    AtomicRMWOp,
-    AtomicStoreOp,
-    AtomicWaitNotifyOp,
+    AtomicCmpxchgInstr, AtomicFence, AtomicLoadOp, AtomicOp, AtomicRMWInstr, AtomicRMWOp,
+    AtomicStoreOp, AtomicWaitNotifyOp,
 };
 // Re-export Branch Hinting operations
-pub use crate::branch_hinting::{
-    BrOnNonNull,
-    BrOnNull,
-    BranchHintOp,
-    BranchHintingContext,
-};
+pub use crate::branch_hinting::{BrOnNonNull, BrOnNull, BranchHintOp, BranchHintingContext};
 // Re-export CFI control flow operations
 pub use crate::cfi_control_ops::{
-    CfiControlFlowOps,
-    CfiControlFlowProtection,
-    CfiExecutionContext,
-    CfiLandingPad,
-    CfiProtectedBranchTarget,
-    CfiProtectionLevel,
-    CfiTargetProtection,
-    CfiTargetType,
+    CfiControlFlowOps, CfiControlFlowProtection, CfiExecutionContext, CfiLandingPad,
+    CfiProtectedBranchTarget, CfiProtectionLevel, CfiTargetProtection, CfiTargetType,
     DefaultCfiControlFlowOps,
 };
 pub use crate::control_ops::{
@@ -152,58 +120,23 @@ pub use crate::control_ops::{
     Return,
 };
 pub use crate::memory_ops::{
-    MemoryContext,
-    MemoryGrow,
-    MemoryLoad,
-    MemoryOp,
-    MemorySize,
-    MemoryStore,
+    MemoryContext, MemoryGrow, MemoryLoad, MemoryOp, MemorySize, MemoryStore,
 }; // Removed MemoryArg
 // Re-export Reference operations
 pub use crate::reference_ops::{
-    RefAsNonNull,
-    RefEq,
-    RefFunc,
-    RefIsNull,
-    RefNull,
-    ReferenceOp,
-    ReferenceOperations,
+    RefAsNonNull, RefEq, RefFunc, RefIsNull, RefNull, ReferenceOp, ReferenceOperations,
 };
 // Re-export SIMD operations
-pub use crate::simd_ops::{
-    SimdContext,
-    SimdExecutionContext,
-    SimdInstruction,
-    SimdOp,
-};
+pub use crate::simd_ops::{SimdContext, SimdExecutionContext, SimdInstruction, SimdOp};
 pub use crate::{
-    arithmetic_ops::{
-        ArithmeticContext,
-        ArithmeticOp,
-    },
-    comparison_ops::{
-        ComparisonContext,
-        ComparisonOp,
-    },
-    conversion_ops::{
-        ConversionContext,
-        ConversionOp,
-    },
+    arithmetic_ops::{ArithmeticContext, ArithmeticOp},
+    comparison_ops::{ComparisonContext, ComparisonOp},
+    conversion_ops::{ConversionContext, ConversionOp},
     instruction_traits::PureInstruction,
     parametric_ops::ParametricOp,
     table_ops::{
-        ElemDrop,
-        ElementSegmentOperations,
-        TableContext,
-        TableCopy,
-        TableFill,
-        TableGet,
-        TableGrow,
-        TableInit,
-        TableOp,
-        TableOperations,
-        TableSet,
-        TableSize,
+        ElemDrop, ElementSegmentOperations, TableContext, TableCopy, TableFill, TableGet,
+        TableGrow, TableInit, TableOp, TableOperations, TableSet, TableSize,
     },
     variable_ops::VariableOp,
 };

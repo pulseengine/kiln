@@ -5,22 +5,15 @@
 
 #[cfg(feature = "std")]
 use std::{
-    sync::{
-        Arc,
-        Mutex,
-    },
+    sync::{Arc, Mutex},
     time::Instant,
 };
 
 use kiln_error::Result;
 
 // Import the prelude for unified access to standard types
-use crate::prelude::{
-    str,
-    Debug,
-    Value,
-};
 use crate::LinkInterceptorStrategy;
+use crate::prelude::{Debug, Value, str};
 
 /// Trait for formatting values in logging output
 #[cfg(feature = "std")]
@@ -59,13 +52,13 @@ pub trait LogSink: Send + Sync {
 #[derive(Debug, Clone)]
 pub struct LoggingConfig {
     /// Whether to log arguments
-    pub log_args:    bool,
+    pub log_args: bool,
     /// Whether to log results
     pub log_results: bool,
     /// Whether to log timing information
-    pub log_timing:  bool,
+    pub log_timing: bool,
     /// Maximum number of arguments to log (0 for unlimited)
-    pub max_args:    usize,
+    pub max_args: usize,
     /// Maximum number of results to log (0 for unlimited)
     pub max_results: usize,
 }
@@ -73,10 +66,10 @@ pub struct LoggingConfig {
 impl Default for LoggingConfig {
     fn default() -> Self {
         Self {
-            log_args:    true,
+            log_args: true,
             log_results: true,
-            log_timing:  true,
-            max_args:    10,
+            log_timing: true,
+            max_args: 10,
             max_results: 10,
         }
     }
@@ -86,14 +79,14 @@ impl Default for LoggingConfig {
 #[cfg(feature = "std")]
 pub struct LoggingStrategy<S: LogSink, F: ValueFormatter = DefaultValueFormatter> {
     /// Log sink to write logs to
-    sink:      Arc<S>,
+    sink: Arc<S>,
     /// Value formatter
     formatter: F,
     /// Configuration
-    config:    LoggingConfig,
+    config: LoggingConfig,
     /// Thread-local storage for timing information
     #[cfg(feature = "std")]
-    timing:    Arc<Mutex<Option<Instant>>>,
+    timing: Arc<Mutex<Option<Instant>>>,
 }
 
 /// A simple logging strategy for `no_std` environments
@@ -255,10 +248,10 @@ impl<S: LogSink + 'static, F: ValueFormatter + 'static> LinkInterceptorStrategy
 
     fn clone_strategy(&self) -> Arc<dyn LinkInterceptorStrategy> {
         Arc::new(Self {
-            sink:      self.sink.clone(),
+            sink: self.sink.clone(),
             formatter: self.formatter.clone(),
-            config:    self.config.clone(),
-            timing:    self.timing.clone(),
+            config: self.config.clone(),
+            timing: self.timing.clone(),
         })
     }
 }
@@ -381,10 +374,7 @@ impl LogSink for LogCrateSink {
 
 #[cfg(all(test, feature = "std"))]
 mod tests {
-    use std::sync::{
-        Arc,
-        Mutex,
-    };
+    use std::sync::{Arc, Mutex};
 
     use super::*;
 
@@ -448,10 +438,10 @@ mod tests {
             logs: Mutex::new(Vec::new()),
         });
         let config = LoggingConfig {
-            log_args:    false,
+            log_args: false,
             log_results: true,
-            log_timing:  false,
-            max_args:    5,
+            log_timing: false,
+            max_args: 5,
             max_results: 5,
         };
         let strategy = LoggingStrategy::new(sink.clone()).with_config(config);

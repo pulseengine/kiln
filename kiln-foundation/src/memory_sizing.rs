@@ -80,7 +80,7 @@ pub mod recommendations {
     /// Debug information
     pub const DEBUG_ABBREV: usize = size_classes::MEDIUM; // 4KB for DWARF abbreviations
     pub const DEBUG_INFO: usize = size_classes::LARGE; // 16KB for debug
-                                                       // sections
+    // sections
 }
 
 /// Calculate required size based on expected usage

@@ -79,12 +79,12 @@ pub enum FeatureStatus {
 #[derive(Debug)]
 pub struct VersionInfo {
     /// The detected version
-    pub version:           ComponentModelVersion,
+    pub version: ComponentModelVersion,
     /// Map of features to their support status
     #[cfg(feature = "std")]
-    features:              HashMap<ComponentModelFeature, FeatureStatus>,
+    features: HashMap<ComponentModelFeature, FeatureStatus>,
     #[cfg(not(feature = "std"))]
-    features:              crate::HashMap<ComponentModelFeature, FeatureStatus>,
+    features: crate::HashMap<ComponentModelFeature, FeatureStatus>,
     /// Whether this binary uses any experimental features
     pub uses_experimental: bool,
 }
@@ -314,11 +314,7 @@ impl VersionInfo {
 }
 
 // Manual trait implementations for no_std compatibility with BoundedMap
-use kiln_foundation::traits::{
-    Checksummable,
-    FromBytes,
-    ToBytes,
-};
+use kiln_foundation::traits::{Checksummable, FromBytes, ToBytes};
 
 impl Checksummable for ComponentModelFeature {
     fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {

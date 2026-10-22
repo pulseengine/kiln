@@ -14,22 +14,12 @@ use alloc::boxed::Box;
 #[cfg(feature = "std")]
 use std::boxed::Box;
 
-use super::{
-    AnyMemoryCapability,
-    MemoryOperation,
-    MemoryOperationType,
-};
+use super::{AnyMemoryCapability, MemoryOperation, MemoryOperationType};
 use crate::{
+    Error, Result,
     budget_aware_provider::CrateId,
-    safe_memory::{
-        Provider,
-        Slice,
-        SliceMut,
-        Stats,
-    },
+    safe_memory::{Provider, Slice, SliceMut, Stats},
     verification::VerificationLevel,
-    Error,
-    Result,
 };
 
 /// A capability-aware wrapper around any Provider implementation
@@ -38,9 +28,9 @@ use crate::{
 /// before delegating to the underlying provider implementation.
 pub struct CapabilityAwareProvider<P: Provider> {
     /// The underlying provider implementation
-    provider:    P,
+    provider: P,
     /// The capability that guards access to this provider
-    capability:  Box<dyn AnyMemoryCapability>,
+    capability: Box<dyn AnyMemoryCapability>,
     /// The crate that owns this provider
     owner_crate: CrateId,
 }
@@ -48,8 +38,8 @@ pub struct CapabilityAwareProvider<P: Provider> {
 impl<P: Provider + Clone> Clone for CapabilityAwareProvider<P> {
     fn clone(&self) -> Self {
         Self {
-            provider:    self.provider.clone(),
-            capability:  self.capability.clone_capability(),
+            provider: self.provider.clone(),
+            capability: self.capability.clone_capability(),
             owner_crate: self.owner_crate,
         }
     }
@@ -69,10 +59,7 @@ impl<P: Provider + Default> Default for CapabilityAwareProvider<P> {
     fn default() -> Self {
         use alloc::boxed::Box;
 
-        use crate::capabilities::{
-            DynamicMemoryCapability,
-            VerificationLevel,
-        };
+        use crate::capabilities::{DynamicMemoryCapability, VerificationLevel};
 
         let provider = P::default();
         let capability = Box::new(DynamicMemoryCapability::new(
@@ -117,10 +104,7 @@ impl<P: Provider> CapabilityAwareProvider<P> {
     /// check)
     pub fn inner_mut(&mut self) -> Result<&mut P> {
         // Verify the capability allows write access
-        let operation = MemoryOperation::Write {
-            offset: 0,
-            len:    1,
-        };
+        let operation = MemoryOperation::Write { offset: 0, len: 1 };
         self.capability.verify_access(&operation)?;
         Ok(&mut self.provider)
     }
@@ -232,7 +216,7 @@ impl<P: Provider> Provider for CapabilityAwareProvider<P> {
         // Verify capability allows write access to the entire range
         let operation = MemoryOperation::Write {
             offset: 0,
-            len:    byte_offset,
+            len: byte_offset,
         };
         self.verify_capability_access(&operation)?;
 
@@ -363,10 +347,7 @@ impl<P: Provider> ProviderCapabilityExt for P {}
 mod tests {
     use super::*;
     use crate::{
-        capabilities::{
-            CapabilityMask,
-            DynamicMemoryCapability,
-        },
+        capabilities::{CapabilityMask, DynamicMemoryCapability},
         safe_managed_alloc,
         safe_memory::NoStdProvider,
         verification::VerificationLevel,

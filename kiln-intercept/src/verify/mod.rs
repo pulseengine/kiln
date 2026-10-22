@@ -9,18 +9,12 @@
 // coverage testing.
 #[cfg(all(feature = "kani", feature = "std"))]
 pub mod proofs {
-    use std::{
-        sync::Arc,
-        vec::Vec,
-    };
+    use std::{sync::Arc, vec::Vec};
 
     use kiln_error::Result;
     use kiln_foundation::values::Value;
 
-    use crate::{
-        LinkInterceptor,
-        LinkInterceptorStrategy,
-    };
+    use crate::{LinkInterceptor, LinkInterceptorStrategy};
 
     /// A simple strategy for verification
     struct TestStrategy {
@@ -35,11 +29,7 @@ pub mod proofs {
             _function: &str,
             args: &[Value],
         ) -> Result<Vec<Value>> {
-            if self.modify_args {
-                Ok(vec![Value::I32(42)])
-            } else {
-                Ok(args.to_vec())
-            }
+            if self.modify_args { Ok(vec![Value::I32(42)]) } else { Ok(args.to_vec()) }
         }
 
         fn after_call(

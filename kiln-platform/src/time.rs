@@ -3,12 +3,7 @@
 //! This module provides platform-specific time functionality including
 //! wall clock time, monotonic time, and high-resolution timing.
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 
 /// Platform time provider
 pub struct PlatformTime;
@@ -17,10 +12,7 @@ impl PlatformTime {
     /// Get current wall clock time in nanoseconds since Unix epoch
     #[cfg(feature = "std")]
     pub fn wall_clock_ns() -> Result<u64> {
-        use std::time::{
-            SystemTime,
-            UNIX_EPOCH,
-        };
+        use std::time::{SystemTime, UNIX_EPOCH};
 
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -66,7 +58,7 @@ impl PlatformTime {
 
         #[repr(C)]
         struct Timespec {
-            tv_sec:  i64,
+            tv_sec: i64,
             tv_nsec: i64,
         }
 
@@ -225,7 +217,7 @@ impl PlatformTime {
 
         #[repr(C)]
         struct Timespec {
-            tv_sec:  i64,
+            tv_sec: i64,
             tv_nsec: i64,
         }
 
@@ -253,7 +245,7 @@ impl PlatformTime {
 
         #[repr(C)]
         struct Timespec {
-            tv_sec:  i64,
+            tv_sec: i64,
             tv_nsec: i64,
         }
 
@@ -282,15 +274,15 @@ impl PlatformTime {
 
         #[repr(C)]
         struct Timeval {
-            tv_sec:  i64,
+            tv_sec: i64,
             tv_usec: i32,
         }
 
         #[repr(C)]
         struct Rusage {
-            ru_utime:    Timeval,  // user time used
-            ru_stime:    Timeval,  // system time used
-            _padding:    [i64; 14], // other fields we don't need
+            ru_utime: Timeval,   // user time used
+            ru_stime: Timeval,   // system time used
+            _padding: [i64; 14], // other fields we don't need
         }
 
         // SAFETY: getrusage is a POSIX system call
@@ -320,19 +312,19 @@ impl PlatformTime {
     fn macos_thread_cpu_time_ns() -> Result<u64> {
         #[repr(C)]
         struct ThreadBasicInfo {
-            user_time:      TimeValue,
-            system_time:    TimeValue,
-            cpu_usage:      i32,
-            policy:         i32,
-            run_state:      i32,
-            flags:          i32,
-            suspend_count:  i32,
-            sleep_time:     i32,
+            user_time: TimeValue,
+            system_time: TimeValue,
+            cpu_usage: i32,
+            policy: i32,
+            run_state: i32,
+            flags: i32,
+            suspend_count: i32,
+            sleep_time: i32,
         }
 
         #[repr(C)]
         struct TimeValue {
-            seconds:      i32,
+            seconds: i32,
             microseconds: i32,
         }
 
@@ -381,7 +373,7 @@ impl PlatformTime {
 
         #[repr(C)]
         struct FileTime {
-            low:  u32,
+            low: u32,
             high: u32,
         }
 
@@ -405,10 +397,8 @@ impl PlatformTime {
 
             if GetProcessTimes(process, &mut creation, &mut exit, &mut kernel, &mut user) != 0 {
                 // FILETIME is in 100-nanosecond intervals
-                let kernel_100ns =
-                    ((kernel.high as u64) << 32) | (kernel.low as u64);
-                let user_100ns =
-                    ((user.high as u64) << 32) | (user.low as u64);
+                let kernel_100ns = ((kernel.high as u64) << 32) | (kernel.low as u64);
+                let user_100ns = ((user.high as u64) << 32) | (user.low as u64);
                 Ok((kernel_100ns + user_100ns) * 100)
             } else {
                 Err(Error::system_io_error("Failed to get process CPU time"))
@@ -423,7 +413,7 @@ impl PlatformTime {
 
         #[repr(C)]
         struct FileTime {
-            low:  u32,
+            low: u32,
             high: u32,
         }
 
@@ -447,10 +437,8 @@ impl PlatformTime {
 
             if GetThreadTimes(thread, &mut creation, &mut exit, &mut kernel, &mut user) != 0 {
                 // FILETIME is in 100-nanosecond intervals
-                let kernel_100ns =
-                    ((kernel.high as u64) << 32) | (kernel.low as u64);
-                let user_100ns =
-                    ((user.high as u64) << 32) | (user.low as u64);
+                let kernel_100ns = ((kernel.high as u64) << 32) | (kernel.low as u64);
+                let user_100ns = ((user.high as u64) << 32) | (user.low as u64);
                 Ok((kernel_100ns + user_100ns) * 100)
             } else {
                 Err(Error::system_io_error("Failed to get thread CPU time"))
@@ -470,10 +458,7 @@ impl PlatformTime {
 
     /// Get monotonic time (no_std version)
     pub fn monotonic_ns() -> u64 {
-        use core::sync::atomic::{
-            AtomicU64,
-            Ordering,
-        };
+        use core::sync::atomic::{AtomicU64, Ordering};
 
         static COUNTER: AtomicU64 = AtomicU64::new(1_000_000_000); // Start at 1 second
         COUNTER.fetch_add(1_000_000, Ordering::Relaxed) // Increment by 1ms

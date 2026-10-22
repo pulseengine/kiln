@@ -10,12 +10,7 @@
 //! Module representing WASM module sections with built-in
 //! safety verification built in.
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 
 use crate::SafeSlice;
 
@@ -24,29 +19,29 @@ use crate::SafeSlice;
 #[repr(u8)]
 pub enum SectionId {
     /// Custom section (0)
-    Custom    = 0,
+    Custom = 0,
     /// Type section (1)
-    Type      = 1,
+    Type = 1,
     /// Import section (2)
-    Import    = 2,
+    Import = 2,
     /// Function section (3)
-    Function  = 3,
+    Function = 3,
     /// Table section (4)
-    Table     = 4,
+    Table = 4,
     /// Memory section (5)
-    Memory    = 5,
+    Memory = 5,
     /// Global section (6)
-    Global    = 6,
+    Global = 6,
     /// Export section (7)
-    Export    = 7,
+    Export = 7,
     /// Start section (8)
-    Start     = 8,
+    Start = 8,
     /// Element section (9)
-    Element   = 9,
+    Element = 9,
     /// Code section (10)
-    Code      = 10,
+    Code = 10,
     /// Data section (11)
-    Data      = 11,
+    Data = 11,
     /// Data count section (12)
     DataCount = 12,
 }
@@ -148,11 +143,11 @@ impl From<SectionType> for SectionId {
 #[derive(Clone)]
 pub struct Section<'a> {
     /// Section id
-    pub id:     SectionId,
+    pub id: SectionId,
     /// Section data
-    pub data:   SafeSlice<'a>,
+    pub data: SafeSlice<'a>,
     /// Size of the section in bytes
-    pub size:   u32,
+    pub size: u32,
     /// Offset of the section in the module
     pub offset: u32,
 }

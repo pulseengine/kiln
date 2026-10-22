@@ -7,10 +7,7 @@
 extern crate alloc;
 
 use kiln_foundation::{
-    bounded::{
-        BoundedString,
-        BoundedVec,
-    },
+    bounded::{BoundedString, BoundedVec},
     bounded_collections::BoundedMap,
     safe_memory::NoStdProvider,
 };

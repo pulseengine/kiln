@@ -19,32 +19,16 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 
-use kiln_error::{
-    Error,
-    Result,
-};
+use kiln_error::{Error, Result};
 use kiln_foundation::{
     traits::DefaultMemoryProvider,
     types::ValueType,
-    values::{
-        ArrayRef,
-        GcArrayRef,
-        GcStructRef,
-        StructRef,
-        Value,
-    },
+    values::{ArrayRef, GcArrayRef, GcStructRef, StructRef, Value},
 };
 
 use crate::{
-    prelude::{
-        Debug,
-        Eq,
-        PartialEq,
-    },
-    validation::{
-        Validate,
-        ValidationContext,
-    },
+    prelude::{Debug, Eq, PartialEq},
+    validation::{Validate, ValidationContext},
 };
 
 /// Struct new operation - creates a new struct instance
@@ -83,7 +67,7 @@ impl StructNew {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StructGet {
     /// Type index of the struct
-    pub type_index:  u32,
+    pub type_index: u32,
     /// Field index to get
     pub field_index: u32,
 }
@@ -126,7 +110,7 @@ impl StructGet {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StructSet {
     /// Type index of the struct
-    pub type_index:  u32,
+    pub type_index: u32,
     /// Field index to set
     pub field_index: u32,
 }
@@ -629,20 +613,12 @@ mod tests {
     impl AggregateOperations for MockAggregateContext {
         fn get_struct_type(&self, type_index: u32) -> Result<Option<u32>> {
             // Mock: struct types 0-9 exist
-            if type_index < 10 {
-                Ok(Some(type_index))
-            } else {
-                Ok(None)
-            }
+            if type_index < 10 { Ok(Some(type_index)) } else { Ok(None) }
         }
 
         fn get_array_type(&self, type_index: u32) -> Result<Option<u32>> {
             // Mock: array types 0-9 exist
-            if type_index < 10 {
-                Ok(Some(type_index))
-            } else {
-                Ok(None)
-            }
+            if type_index < 10 { Ok(Some(type_index)) } else { Ok(None) }
         }
 
         fn validate_struct_type(&self, type_index: u32) -> Result<()> {

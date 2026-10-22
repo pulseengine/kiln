@@ -86,29 +86,29 @@ pub struct VxWorksThread {
     context: VxWorksContext,
     task_id: Option<usize>,   // For LKM context (VxWorks task)
     pthread: Option<PThread>, // For RTP context (POSIX thread)
-    name:    Option<String>,
+    name: Option<String>,
 }
 
 /// Configuration for VxWorks threads
 #[derive(Debug, Clone)]
 pub struct VxWorksThreadConfig {
-    pub context:        VxWorksContext,
-    pub stack_size:     usize,
-    pub priority:       Option<i32>,
-    pub name:           Option<String>,
+    pub context: VxWorksContext,
+    pub stack_size: usize,
+    pub priority: Option<i32>,
+    pub name: Option<String>,
     pub floating_point: bool,
-    pub detached:       bool,
+    pub detached: bool,
 }
 
 impl Default for VxWorksThreadConfig {
     fn default() -> Self {
         Self {
-            context:        VxWorksContext::Rtp,
-            stack_size:     8192, // 8KB stack
-            priority:       None, // Use default priority
-            name:           None,
+            context: VxWorksContext::Rtp,
+            stack_size: 8192, // 8KB stack
+            priority: None,   // Use default priority
+            name: None,
             floating_point: false,
-            detached:       false,
+            detached: false,
         }
     }
 }
@@ -126,7 +126,7 @@ impl VxWorksThread {
             context: config.context,
             task_id: None,
             pthread: None,
-            name:    config.name.clone(),
+            name: config.name.clone(),
         };
 
         let entry_point = Box::new(f);
@@ -160,7 +160,8 @@ impl VxWorksThread {
             }
 
             let closure_ptr = Box::into_raw(Box::new(f)) as *mut c_void;
-            let name_ptr = config.name.as_ref().map(|n| n.as_ptr()).unwrap_or(b"kiln_task\0".as_ptr());
+            let name_ptr =
+                config.name.as_ref().map(|n| n.as_ptr()).unwrap_or(b"kiln_task\0".as_ptr());
 
             let priority = config.priority.unwrap_or(100); // Default VxWorks priority
             let mut options = 0;

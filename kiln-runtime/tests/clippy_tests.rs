@@ -14,11 +14,7 @@
 #[cfg(all(test, any(feature = "std", feature = "alloc")))]
 mod tests {
     use kiln_foundation::budget_aware_provider::CrateId;
-    use kiln_runtime::engine::{
-        CapabilityAwareEngine,
-        CapabilityEngine,
-        EnginePreset,
-    };
+    use kiln_runtime::engine::{CapabilityAwareEngine, CapabilityEngine, EnginePreset};
 
     #[test]
     fn test_capability_engine_clippy_clean() {
@@ -35,10 +31,7 @@ mod tests {
 
     #[test]
     fn test_handle_types_clippy_clean() {
-        use kiln_runtime::engine::{
-            InstanceHandle,
-            ModuleHandle,
-        };
+        use kiln_runtime::engine::{InstanceHandle, ModuleHandle};
 
         // Create handles
         let module = ModuleHandle::new();

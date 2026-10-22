@@ -18,17 +18,9 @@
 
 use core::ptr::NonNull;
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 
-use crate::memory::{
-    PageAllocator,
-    WASM_PAGE_SIZE,
-};
+use crate::memory::{PageAllocator, WASM_PAGE_SIZE};
 
 /// Zephyr kernel timeout values
 const K_NO_WAIT: i32 = 0;
@@ -48,15 +40,15 @@ const EINVAL: i32 = -22;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ZephyrMemoryFlags {
     /// Read access
-    Read      = 0x01,
+    Read = 0x01,
     /// Write access  
-    Write     = 0x02,
+    Write = 0x02,
     /// Execute access
-    Execute   = 0x04,
+    Execute = 0x04,
     /// Cacheable memory
     Cacheable = 0x08,
     /// Device memory (uncacheable)
-    Device    = 0x10,
+    Device = 0x10,
 }
 
 /// Zephyr heap handle (opaque pointer to k_heap structure)
@@ -76,8 +68,8 @@ struct ZephyrMemDomain {
 #[derive(Debug)]
 struct ZephyrMemPartition {
     start: usize,
-    size:  usize,
-    attr:  u32,
+    size: usize,
+    attr: u32,
 }
 
 // FFI declarations for Zephyr kernel APIs
@@ -125,20 +117,20 @@ pub struct ZephyrAllocatorConfig {
     /// Whether to use memory domains for isolation
     pub use_memory_domains: bool,
     /// Memory protection attributes
-    pub memory_attributes:  ZephyrMemoryFlags,
+    pub memory_attributes: ZephyrMemoryFlags,
     /// Whether to use guard regions
-    pub use_guard_regions:  bool,
+    pub use_guard_regions: bool,
     /// Custom heap to use (None = system heap)
-    pub custom_heap:        bool,
+    pub custom_heap: bool,
 }
 
 impl Default for ZephyrAllocatorConfig {
     fn default() -> Self {
         Self {
             use_memory_domains: true,
-            memory_attributes:  ZephyrMemoryFlags::Read,
-            use_guard_regions:  true,
-            custom_heap:        false,
+            memory_attributes: ZephyrMemoryFlags::Read,
+            use_guard_regions: true,
+            custom_heap: false,
         }
     }
 }
@@ -146,14 +138,14 @@ impl Default for ZephyrAllocatorConfig {
 /// A `PageAllocator` implementation for Zephyr RTOS.
 #[derive(Debug)]
 pub struct ZephyrAllocator {
-    config:                  ZephyrAllocatorConfig,
-    heap:                    *mut ZephyrHeap,
-    memory_domain:           Option<NonNull<ZephyrMemDomain>>,
-    base_ptr:                Option<NonNull<u8>>,
-    total_reserved_bytes:    usize,
+    config: ZephyrAllocatorConfig,
+    heap: *mut ZephyrHeap,
+    memory_domain: Option<NonNull<ZephyrMemDomain>>,
+    base_ptr: Option<NonNull<u8>>,
+    total_reserved_bytes: usize,
     current_committed_bytes: usize,
-    max_capacity_bytes:      usize,
-    current_partition:       Option<ZephyrMemPartition>,
+    max_capacity_bytes: usize,
+    current_partition: Option<ZephyrMemPartition>,
 }
 
 // Safety: ZephyrAllocator only contains pointers to Zephyr kernel objects which
@@ -247,7 +239,9 @@ impl ZephyrAllocator {
         if let Some(domain) = self.memory_domain.take() {
             if let Some(partition) = self.current_partition.take() {
                 // Remove partition from domain
-                unsafe { k_mem_domain_remove_partition(domain.as_ptr(), &partition as *const _ as *mut _) };
+                unsafe {
+                    k_mem_domain_remove_partition(domain.as_ptr(), &partition as *const _ as *mut _)
+                };
             }
 
             // In real Zephyr implementation, static domains don't need explicit
@@ -272,14 +266,14 @@ impl ZephyrAllocator {
 /// Builder for `ZephyrAllocator` to provide a fluent configuration API.
 #[derive(Debug)]
 pub struct ZephyrAllocatorBuilder {
-    config:        ZephyrAllocatorConfig,
+    config: ZephyrAllocatorConfig,
     maximum_pages: Option<u32>,
 }
 
 impl Default for ZephyrAllocatorBuilder {
     fn default() -> Self {
         Self {
-            config:        ZephyrAllocatorConfig::default(),
+            config: ZephyrAllocatorConfig::default(),
             maximum_pages: None,
         }
     }

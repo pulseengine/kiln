@@ -16,10 +16,7 @@
 #![allow(clippy::cast_abs_to_unsigned)] // SIMD absolute value operations
 #![allow(clippy::too_many_lines)] // Test functions need comprehensive test cases
 
-use super::{
-    SimdLevel,
-    SimdProvider,
-};
+use super::{SimdLevel, SimdProvider};
 
 // Simple sqrt implementation for no_std environments
 #[cfg(not(feature = "std"))]
@@ -1780,7 +1777,7 @@ impl SimdProvider for ScalarSimdProvider {
             ]);
             let abs_val = if val == i64::MIN {
                 9_223_372_036_854_775_808u64 // abs(i64::MIN) =
-                                             // 9223372036854775808 (as u64)
+            // 9223372036854775808 (as u64)
             } else {
                 val.abs() as u64
             };
@@ -1817,11 +1814,7 @@ impl SimdProvider for ScalarSimdProvider {
             let min_val = if a_val.is_nan() || b_val.is_nan() {
                 f32::NAN
             } else if a_val == 0.0 && b_val == 0.0 {
-                if a_val.is_sign_negative() {
-                    a_val
-                } else {
-                    b_val
-                }
+                if a_val.is_sign_negative() { a_val } else { b_val }
             } else {
                 a_val.min(b_val)
             };
@@ -1846,11 +1839,7 @@ impl SimdProvider for ScalarSimdProvider {
             let max_val = if a_val.is_nan() || b_val.is_nan() {
                 f32::NAN
             } else if a_val == 0.0 && b_val == 0.0 {
-                if a_val.is_sign_positive() {
-                    a_val
-                } else {
-                    b_val
-                }
+                if a_val.is_sign_positive() { a_val } else { b_val }
             } else {
                 a_val.max(b_val)
             };
@@ -1962,11 +1951,7 @@ impl SimdProvider for ScalarSimdProvider {
             let min_val = if a_val.is_nan() || b_val.is_nan() {
                 f64::NAN
             } else if a_val == 0.0 && b_val == 0.0 {
-                if a_val.is_sign_negative() {
-                    a_val
-                } else {
-                    b_val
-                }
+                if a_val.is_sign_negative() { a_val } else { b_val }
             } else {
                 a_val.min(b_val)
             };
@@ -2007,11 +1992,7 @@ impl SimdProvider for ScalarSimdProvider {
             let max_val = if a_val.is_nan() || b_val.is_nan() {
                 f64::NAN
             } else if a_val == 0.0 && b_val == 0.0 {
-                if a_val.is_sign_positive() {
-                    a_val
-                } else {
-                    b_val
-                }
+                if a_val.is_sign_positive() { a_val } else { b_val }
             } else {
                 a_val.max(b_val)
             };

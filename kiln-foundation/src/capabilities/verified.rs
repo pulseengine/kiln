@@ -3,11 +3,7 @@
 //! This capability type provides formally verified memory allocation suitable
 //! for ASIL-D safety levels where formal verification is required.
 
-use core::{
-    fmt,
-    marker::PhantomData,
-    ptr::NonNull,
-};
+use core::{fmt, marker::PhantomData, ptr::NonNull};
 
 #[cfg(any(feature = "std", feature = "alloc"))]
 extern crate alloc;
@@ -21,21 +17,16 @@ use std::boxed::Box;
 #[cfg(feature = "formal-verification")]
 use crate::formal_verification::FormalProof;
 use crate::{
+    Error, ErrorCategory, Result,
     budget_aware_provider::CrateId,
     codes,
-    verification::{
-        Checksum,
-        VerificationLevel,
-    },
-    Error,
-    ErrorCategory,
-    Result,
+    verification::{Checksum, VerificationLevel},
 };
 
 #[cfg(not(feature = "formal-verification"))]
 #[derive(Debug, Clone)]
 pub struct FormalProof {
-    name:   &'static str,
+    name: &'static str,
     #[allow(dead_code)]
     axioms: &'static [&'static str],
 }
@@ -53,11 +44,7 @@ impl FormalProof {
 }
 
 use super::{
-    CapabilityMask,
-    MemoryCapability,
-    MemoryGuard,
-    MemoryOperation,
-    MemoryOperationType,
+    CapabilityMask, MemoryCapability, MemoryGuard, MemoryOperation, MemoryOperationType,
     MemoryRegion,
 };
 
@@ -70,7 +57,7 @@ struct SafeMemoryReference<const N: usize> {
     /// Static buffer offset (safe alternative to raw pointer)
     buffer_offset: Option<usize>,
     /// Compile-time size guarantee  
-    _phantom:      core::marker::PhantomData<[u8; N]>,
+    _phantom: core::marker::PhantomData<[u8; N]>,
 }
 
 impl<const N: usize> SafeMemoryReference<N> {
@@ -78,7 +65,7 @@ impl<const N: usize> SafeMemoryReference<N> {
     fn new() -> Self {
         Self {
             buffer_offset: None,
-            _phantom:      core::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
         }
     }
 
@@ -86,7 +73,7 @@ impl<const N: usize> SafeMemoryReference<N> {
     fn with_offset(offset: usize) -> Self {
         Self {
             buffer_offset: Some(offset),
-            _phantom:      core::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
         }
     }
 
@@ -123,34 +110,34 @@ impl<const N: usize> SafeMemoryReference<N> {
 #[derive(Debug, Clone)]
 pub struct VerifiedMemoryCapability<const N: usize> {
     /// Fixed memory region size (compile-time constant)
-    region_size:          usize,
+    region_size: usize,
     /// Safe memory reference for the verified region
-    region_base:          SafeMemoryReference<N>,
+    region_base: SafeMemoryReference<N>,
     /// Operations allowed by this capability
-    allowed_operations:   CapabilityMask,
+    allowed_operations: CapabilityMask,
     /// Verification level (always Critical for ASIL-D)
-    verification_level:   VerificationLevel,
+    verification_level: VerificationLevel,
     /// Crate that owns this capability
-    owner_crate:          CrateId,
+    owner_crate: CrateId,
     /// Formal proofs for memory safety
-    safety_proofs:        VerificationProofs,
+    safety_proofs: VerificationProofs,
     /// Runtime verification enabled
     runtime_verification: bool,
     /// Static buffer for the memory region
-    _phantom:             PhantomData<[u8; N]>,
+    _phantom: PhantomData<[u8; N]>,
 }
 
 /// Formal verification proofs for memory safety
 #[derive(Debug, Clone)]
 pub struct VerificationProofs {
     /// Proof that all memory accesses are within bounds
-    pub bounds_proof:      Option<FormalProof>,
+    pub bounds_proof: Option<FormalProof>,
     /// Proof that no memory corruption can occur
-    pub corruption_proof:  Option<FormalProof>,
+    pub corruption_proof: Option<FormalProof>,
     /// Proof that concurrent access is safe
     pub concurrency_proof: Option<FormalProof>,
     /// Proof that temporal properties are satisfied
-    pub temporal_proof:    Option<FormalProof>,
+    pub temporal_proof: Option<FormalProof>,
 }
 
 impl VerificationProofs {
@@ -158,10 +145,10 @@ impl VerificationProofs {
     /// tools)
     pub fn empty() -> Self {
         Self {
-            bounds_proof:      None,
-            corruption_proof:  None,
+            bounds_proof: None,
+            corruption_proof: None,
             concurrency_proof: None,
-            temporal_proof:    None,
+            temporal_proof: None,
         }
     }
 
@@ -173,10 +160,10 @@ impl VerificationProofs {
         temporal: FormalProof,
     ) -> Self {
         Self {
-            bounds_proof:      Some(bounds),
-            corruption_proof:  Some(corruption),
+            bounds_proof: Some(bounds),
+            corruption_proof: Some(corruption),
             concurrency_proof: Some(concurrency),
-            temporal_proof:    Some(temporal),
+            temporal_proof: Some(temporal),
         }
     }
 
@@ -252,12 +239,12 @@ impl<const N: usize> VerifiedMemoryCapability<N> {
             region_size: N,
             region_base: SafeMemoryReference::new(),
             allowed_operations: CapabilityMask {
-                read:       true,
-                write:      true,
-                allocate:   true,
+                read: true,
+                write: true,
+                allocate: true,
                 deallocate: true,
-                delegate:   false, // ASIL-D typically doesn't allow delegation
-                max_size:   N,
+                delegate: false, // ASIL-D typically doesn't allow delegation
+                max_size: N,
             },
             verification_level: VerificationLevel::Redundant,
             owner_crate,
@@ -445,12 +432,12 @@ impl<const N: usize> MemoryCapability for VerifiedMemoryCapability<N> {
 /// Verified memory region with formal safety guarantees
 #[derive(Debug)]
 pub struct VerifiedMemoryRegion<const N: usize> {
-    size:                 usize,
-    buffer:               [u8; N],
-    buffer_offset:        Option<usize>,
-    safety_proofs:        VerificationProofs,
+    size: usize,
+    buffer: [u8; N],
+    buffer_offset: Option<usize>,
+    safety_proofs: VerificationProofs,
     runtime_verification: bool,
-    integrity_checksum:   Checksum,
+    integrity_checksum: Checksum,
 }
 
 impl<const N: usize> VerifiedMemoryRegion<N> {
@@ -534,7 +521,7 @@ impl<const N: usize> MemoryRegion for VerifiedMemoryRegion<N> {
 
 /// Verified memory guard with formal safety guarantees
 pub struct VerifiedMemoryGuard<const N: usize> {
-    region:        VerifiedMemoryRegion<N>,
+    region: VerifiedMemoryRegion<N>,
     capability_id: usize, // Safe alternative to raw pointer
 }
 

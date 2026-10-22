@@ -298,7 +298,7 @@ mod component_binary_parser {
                     // Unknown sections are skipped per the component model spec
                     self.offset = section_end;
                     return Ok(());
-                }
+                },
             };
 
             // Parse section based on type

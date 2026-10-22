@@ -4,30 +4,12 @@
 //! works with WASI Preview2's synchronous execution model.
 
 use super::{
-    execute_inference,
-    get_backend_registry,
-    get_context_store,
-    get_graph_store,
-    get_nn_capability,
-    initialize_context_store,
-    initialize_graph_store,
-    with_nn_capability,
-    ErrorCode,
-    ExecutionContext,
-    ExecutionTarget,
-    Graph,
-    GraphEncoding,
-    NNOperation,
-    Tensor,
-    TensorBuilder,
-    TensorDimensions,
-    TensorType,
-    WitTypeConversion,
+    ErrorCode, ExecutionContext, ExecutionTarget, Graph, GraphEncoding, NNOperation, Tensor,
+    TensorBuilder, TensorDimensions, TensorType, WitTypeConversion, execute_inference,
+    get_backend_registry, get_context_store, get_graph_store, get_nn_capability,
+    initialize_context_store, initialize_graph_store, with_nn_capability,
 };
-use crate::{
-    prelude::*,
-    Value,
-};
+use crate::{Value, prelude::*};
 
 /// Load a neural network graph
 ///
@@ -86,7 +68,7 @@ pub fn nn_load(data: Vec<u8>, encoding: u8, target: u8) -> Result<u32> {
         // Verify operation against capability limits (includes rate limiting and
         // quotas)
         capability.verify_operation(&NNOperation::Load {
-            size:   data.len(),
+            size: data.len(),
             format: encoding.to_model_format(),
         })?;
 
@@ -133,9 +115,9 @@ pub fn nn_load(data: Vec<u8>, encoding: u8, target: u8) -> Result<u32> {
 
                 logger.log_performance(
                     crate::nn::monitoring::PerformanceEvent::OperationTiming {
-                        operation:   "load".to_string(),
+                        operation: "load".to_string(),
                         duration_us: duration,
-                        success:     true,
+                        success: true,
                     },
                     "sync_bridge",
                 );
@@ -143,8 +125,8 @@ pub fn nn_load(data: Vec<u8>, encoding: u8, target: u8) -> Result<u32> {
                 logger.log_resource(
                     crate::nn::monitoring::ResourceEvent::Allocated {
                         resource_type: "model".to_string(),
-                        amount:        data.len(),
-                        total_used:    data.len(), // Simplified for now
+                        amount: data.len(),
+                        total_used: data.len(), // Simplified for now
                     },
                     "sync_bridge",
                 );
@@ -162,9 +144,9 @@ pub fn nn_load(data: Vec<u8>, encoding: u8, target: u8) -> Result<u32> {
 
                 logger.log_performance(
                     crate::nn::monitoring::PerformanceEvent::OperationTiming {
-                        operation:   "load".to_string(),
+                        operation: "load".to_string(),
                         duration_us: duration,
-                        success:     false,
+                        success: false,
                     },
                     "sync_bridge",
                 );
@@ -267,7 +249,7 @@ pub fn nn_set_input(
 
     with_nn_capability(|capability| {
         capability.verify_operation(&NNOperation::SetInput {
-            size:       tensor_data.len(),
+            size: tensor_data.len(),
             dimensions: dimensions.clone(),
         })?;
 
@@ -335,9 +317,9 @@ pub fn nn_compute(context_id: u32) -> Result<()> {
 
             logger.log_performance(
                 crate::nn::monitoring::PerformanceEvent::OperationTiming {
-                    operation:   "compute".to_string(),
+                    operation: "compute".to_string(),
                     duration_us: duration,
-                    success:     true,
+                    success: true,
                 },
                 "sync_bridge",
             );
@@ -362,9 +344,9 @@ pub fn nn_compute(context_id: u32) -> Result<()> {
 
             logger.log_performance(
                 crate::nn::monitoring::PerformanceEvent::OperationTiming {
-                    operation:   "compute".to_string(),
+                    operation: "compute".to_string(),
                     duration_us: duration,
-                    success:     false,
+                    success: false,
                 },
                 "sync_bridge",
             );
@@ -689,10 +671,7 @@ fn validate_model_format(data: &[u8], encoding: GraphEncoding) -> Result<()> {
 fn get_current_time_us() -> u64 {
     #[cfg(feature = "std")]
     {
-        use std::time::{
-            SystemTime,
-            UNIX_EPOCH,
-        };
+        use std::time::{SystemTime, UNIX_EPOCH};
         SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_micros() as u64
     }
     #[cfg(not(feature = "std"))]

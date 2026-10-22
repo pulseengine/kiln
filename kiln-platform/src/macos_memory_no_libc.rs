@@ -11,21 +11,11 @@
 //! macOS-specific `PageAllocator` implementation using direct syscalls without
 //! libc.
 
-use core::ptr::{
-    self,
-    NonNull,
-};
+use core::ptr::{self, NonNull};
 
-use kiln_error::{
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result};
 
-use crate::memory::{
-    PageAllocator,
-    WASM_PAGE_SIZE,
-};
+use crate::memory::{PageAllocator, WASM_PAGE_SIZE};
 
 /// Constants for macOS mmap syscall
 const SYSCALL_MMAP: usize = 197;
@@ -42,10 +32,10 @@ const MAP_ANON: usize = 0x1000;
 /// A `PageAllocator` implementation for macOS using direct syscalls.
 #[derive(Debug)]
 pub struct MacOsAllocator {
-    base_ptr:                Option<NonNull<u8>>,
-    total_reserved_bytes:    usize, // Total bytes reserved
+    base_ptr: Option<NonNull<u8>>,
+    total_reserved_bytes: usize,    // Total bytes reserved
     current_committed_bytes: usize, // Bytes currently committed
-    max_capacity_bytes:      usize, // Maximum bytes this instance can manage
+    max_capacity_bytes: usize,      // Maximum bytes this instance can manage
 }
 
 // Safety: MacOsAllocator can be shared between threads safely because:
@@ -154,16 +144,16 @@ impl MacOsAllocator {
 /// Builder for `MacOsAllocator` to provide a fluent configuration API.
 #[derive(Debug)]
 pub struct MacOsAllocatorBuilder {
-    maximum_pages:  Option<u32>,
-    guard_pages:    bool,
+    maximum_pages: Option<u32>,
+    guard_pages: bool,
     memory_tagging: bool,
 }
 
 impl Default for MacOsAllocatorBuilder {
     fn default() -> Self {
         Self {
-            maximum_pages:  None,
-            guard_pages:    false,
+            maximum_pages: None,
+            guard_pages: false,
             memory_tagging: false,
         }
     }

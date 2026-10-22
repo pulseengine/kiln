@@ -19,18 +19,18 @@ use crate::Error;
 /// Platform capacity configuration for unified types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlatformCapacities {
-    pub small_capacity:       usize,
-    pub medium_capacity:      usize,
-    pub large_capacity:       usize,
+    pub small_capacity: usize,
+    pub medium_capacity: usize,
+    pub large_capacity: usize,
     pub memory_provider_size: usize,
 }
 
 impl Default for PlatformCapacities {
     fn default() -> Self {
         Self {
-            small_capacity:       64,
-            medium_capacity:      1024,
-            large_capacity:       65536,
+            small_capacity: 64,
+            medium_capacity: 1024,
+            large_capacity: 65536,
             memory_provider_size: 8192,
         }
     }
@@ -39,27 +39,27 @@ impl Default for PlatformCapacities {
 impl PlatformCapacities {
     pub const fn embedded() -> Self {
         Self {
-            small_capacity:       16,
-            medium_capacity:      128,
-            large_capacity:       1024,
+            small_capacity: 16,
+            medium_capacity: 128,
+            large_capacity: 1024,
             memory_provider_size: 2048,
         }
     }
 
     pub const fn desktop() -> Self {
         Self {
-            small_capacity:       256,
-            medium_capacity:      4096,
-            large_capacity:       1048576,
+            small_capacity: 256,
+            medium_capacity: 4096,
+            large_capacity: 1048576,
             memory_provider_size: 65536,
         }
     }
 
     pub const fn safety_critical() -> Self {
         Self {
-            small_capacity:       32,
-            medium_capacity:      256,
-            large_capacity:       8192,
+            small_capacity: 32,
+            medium_capacity: 256,
+            large_capacity: 8192,
             memory_provider_size: 4096,
         }
     }
@@ -87,9 +87,9 @@ impl<const SMALL: usize, const MEDIUM: usize, const LARGE: usize>
 
     pub const fn capacities() -> PlatformCapacities {
         PlatformCapacities {
-            small_capacity:       SMALL,
-            medium_capacity:      MEDIUM,
-            large_capacity:       LARGE,
+            small_capacity: SMALL,
+            medium_capacity: MEDIUM,
+            large_capacity: LARGE,
             memory_provider_size: 8192,
         }
     }
@@ -111,9 +111,9 @@ mod tests {
         assert!(valid_caps.validate());
 
         let invalid_caps = PlatformCapacities {
-            small_capacity:       100,
-            medium_capacity:      50,
-            large_capacity:       200,
+            small_capacity: 100,
+            medium_capacity: 50,
+            large_capacity: 200,
             memory_provider_size: 1024,
         };
         assert!(!invalid_caps.validate());

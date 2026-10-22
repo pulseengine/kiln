@@ -1,16 +1,8 @@
 use core::ptr::NonNull;
 
-use kiln_error::{
-    Error,
-    ErrorCategory,
-    Result,
-    codes,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 
-use crate::memory::{
-    PageAllocator,
-    WASM_PAGE_SIZE,
-};
+use crate::memory::{PageAllocator, WASM_PAGE_SIZE};
 
 #[cfg(target_os = "vxworks")]
 unsafe extern "C" {
@@ -38,21 +30,21 @@ pub enum VxWorksContext {
 /// Configuration for VxWorks memory allocation
 #[derive(Debug, Clone)]
 pub struct VxWorksMemoryConfig {
-    pub context:                 VxWorksContext,
-    pub max_pages:               u32,
+    pub context: VxWorksContext,
+    pub max_pages: u32,
     pub use_dedicated_partition: bool,
-    pub partition_size:          Option<usize>,
-    pub enable_guard_pages:      bool,
+    pub partition_size: Option<usize>,
+    pub enable_guard_pages: bool,
 }
 
 impl Default for VxWorksMemoryConfig {
     fn default() -> Self {
         Self {
-            context:                 VxWorksContext::Rtp,
-            max_pages:               1024,
+            context: VxWorksContext::Rtp,
+            max_pages: 1024,
             use_dedicated_partition: false,
-            partition_size:          None,
-            enable_guard_pages:      false,
+            partition_size: None,
+            enable_guard_pages: false,
         }
     }
 }
@@ -60,14 +52,14 @@ impl Default for VxWorksMemoryConfig {
 /// VxWorks page allocator supporting both LKM and RTP contexts
 #[derive(Debug)]
 pub struct VxWorksAllocator {
-    config:             VxWorksMemoryConfig,
-    mem_part_id:        Option<usize>,
+    config: VxWorksMemoryConfig,
+    mem_part_id: Option<usize>,
     current_allocation: Option<NonNull<u8>>,
-    current_size:       usize,
-    current_pages:      u32,
-    maximum_pages:      Option<u32>,
+    current_size: usize,
+    current_pages: u32,
+    maximum_pages: Option<u32>,
     #[cfg(target_os = "vxworks")]
-    _pool_memory:       Option<Vec<u8>>,
+    _pool_memory: Option<Vec<u8>>,
 }
 
 // Safety: VxWorksAllocator only contains pointers to VxWorks kernel objects
@@ -79,14 +71,14 @@ impl VxWorksAllocator {
     /// Create a new VxWorks allocator with the given configuration
     pub fn new(config: VxWorksMemoryConfig) -> Result<Self> {
         let mut allocator = Self {
-            config:             config.clone(),
-            mem_part_id:        None,
+            config: config.clone(),
+            mem_part_id: None,
             current_allocation: None,
-            current_size:       0,
-            current_pages:      0,
-            maximum_pages:      None,
+            current_size: 0,
+            current_pages: 0,
+            maximum_pages: None,
             #[cfg(target_os = "vxworks")]
-            _pool_memory:       None,
+            _pool_memory: None,
         };
 
         // Create dedicated memory partition if requested
@@ -217,9 +209,7 @@ impl PageAllocator for VxWorksAllocator {
             return Err(Error::memory_error("Initial pages cannot be zero"));
         }
 
-        let max_pages = maximum_pages
-            .unwrap_or(self.config.max_pages)
-            .min(self.config.max_pages);
+        let max_pages = maximum_pages.unwrap_or(self.config.max_pages).min(self.config.max_pages);
 
         if initial_pages > max_pages {
             return Err(Error::memory_error(
@@ -349,9 +339,7 @@ pub struct VxWorksAllocatorBuilder {
 
 impl core::fmt::Debug for VxWorksAllocatorBuilder {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("VxWorksAllocatorBuilder")
-            .field("config", &self.config)
-            .finish()
+        f.debug_struct("VxWorksAllocatorBuilder").field("config", &self.config).finish()
     }
 }
 

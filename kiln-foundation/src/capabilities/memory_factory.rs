@@ -5,26 +5,15 @@
 
 #[cfg(any(feature = "std", feature = "alloc"))]
 use super::provider_bridge::CapabilityAwareProvider;
-use super::{
-    context::MemoryCapabilityContext,
-    MemoryOperation,
-};
+use super::{MemoryOperation, context::MemoryCapabilityContext};
 use crate::{
+    Result,
     budget_aware_provider::CrateId,
     memory_init::get_global_capability_context,
     monitoring::MEMORY_MONITOR,
-    safe_memory::{
-        NoStdProvider,
-        Provider,
-    },
+    safe_memory::{NoStdProvider, Provider},
     safety_monitor::with_safety_monitor,
-    telemetry::{
-        self,
-        event_codes,
-        Category,
-        Severity,
-    },
-    Result,
+    telemetry::{self, Category, Severity, event_codes},
 };
 
 /// Unified memory provider factory
@@ -518,10 +507,7 @@ mod tests {
         });
 
         // Create a capability context for testing
-        use crate::{
-            capabilities::MemoryCapabilityContext,
-            verification::VerificationLevel,
-        };
+        use crate::{capabilities::MemoryCapabilityContext, verification::VerificationLevel};
         let mut context = MemoryCapabilityContext::new(VerificationLevel::Standard, false);
 
         // Register a capability for testing
@@ -553,10 +539,7 @@ mod tests {
         });
 
         // Create a capability context with no capabilities
-        use crate::{
-            capabilities::MemoryCapabilityContext,
-            verification::VerificationLevel,
-        };
+        use crate::{capabilities::MemoryCapabilityContext, verification::VerificationLevel};
         let context = MemoryCapabilityContext::new(VerificationLevel::Standard, false);
 
         // Test failed allocation tracking
@@ -583,10 +566,7 @@ mod tests {
         });
 
         // Create a capability context with low verification level
-        use crate::{
-            capabilities::MemoryCapabilityContext,
-            verification::VerificationLevel,
-        };
+        use crate::{capabilities::MemoryCapabilityContext, verification::VerificationLevel};
         let mut context = MemoryCapabilityContext::new(VerificationLevel::Basic, false);
 
         // Register a basic capability
@@ -624,10 +604,7 @@ mod tests {
         assert_eq!(stats.current_usage, 0);
 
         // Create a capability context for testing
-        use crate::{
-            capabilities::MemoryCapabilityContext,
-            verification::VerificationLevel,
-        };
+        use crate::{capabilities::MemoryCapabilityContext, verification::VerificationLevel};
         let mut context = MemoryCapabilityContext::new(VerificationLevel::Standard, false);
         let _ = context.register_dynamic_capability(CrateId::Foundation, 8192);
 
@@ -655,10 +632,7 @@ mod tests {
         });
 
         // Create a capability context for testing
-        use crate::{
-            capabilities::MemoryCapabilityContext,
-            verification::VerificationLevel,
-        };
+        use crate::{capabilities::MemoryCapabilityContext, verification::VerificationLevel};
         let mut context = MemoryCapabilityContext::new(VerificationLevel::Standard, false);
         let _ = context.register_dynamic_capability(CrateId::Foundation, 8192);
 
@@ -692,10 +666,7 @@ mod tests {
         });
 
         // Create a capability context with no capabilities registered
-        use crate::{
-            capabilities::MemoryCapabilityContext,
-            verification::VerificationLevel,
-        };
+        use crate::{capabilities::MemoryCapabilityContext, verification::VerificationLevel};
         let context = MemoryCapabilityContext::new(VerificationLevel::Standard, false);
 
         // Attempt allocation that should fail
@@ -722,10 +693,7 @@ mod tests {
         });
 
         // Create a capability context for testing
-        use crate::{
-            capabilities::MemoryCapabilityContext,
-            verification::VerificationLevel,
-        };
+        use crate::{capabilities::MemoryCapabilityContext, verification::VerificationLevel};
         let mut context = MemoryCapabilityContext::new(VerificationLevel::Standard, false);
         let _ = context.register_dynamic_capability(CrateId::Foundation, 8192);
 

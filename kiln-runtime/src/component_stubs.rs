@@ -54,16 +54,16 @@ impl ComponentType {
 #[derive(Debug, Clone)]
 pub struct ComponentRequirements {
     pub component_count: usize,
-    pub resource_count:  usize,
-    pub memory_usage:    usize,
+    pub resource_count: usize,
+    pub memory_usage: usize,
 }
 
 impl Default for ComponentRequirements {
     fn default() -> Self {
         Self {
             component_count: 1,
-            resource_count:  0,
-            memory_usage:    4096, // 4KB default
+            resource_count: 0,
+            memory_usage: 4096, // 4KB default
         }
     }
 }
@@ -71,9 +71,9 @@ impl Default for ComponentRequirements {
 /// Component memory budget stub
 #[derive(Debug, Clone)]
 pub struct ComponentMemoryBudget {
-    pub total_memory:       usize,
+    pub total_memory: usize,
     pub component_overhead: usize,
-    pub available_memory:   usize,
+    pub available_memory: usize,
 }
 
 impl ComponentMemoryBudget {

@@ -8,15 +8,7 @@
 //! that can be called from WebAssembly components.
 
 // Use the prelude for consistent imports
-use crate::prelude::{
-    Any,
-    Eq,
-    Error,
-    ErrorCategory,
-    PartialEq,
-    Result,
-    Value,
-};
+use crate::prelude::{Any, Eq, Error, ErrorCategory, PartialEq, Result, Value};
 
 // Value vectors for function parameters/returns
 #[cfg(feature = "std")]
@@ -286,11 +278,7 @@ mod tests {
     #[cfg(not(feature = "std"))]
     use alloc::vec;
 
-    use kiln_foundation::{
-        allocator::CrateId,
-        safe_managed_alloc,
-        safe_memory::NoStdProvider,
-    };
+    use kiln_foundation::{allocator::CrateId, safe_managed_alloc, safe_memory::NoStdProvider};
 
     use super::*;
 

@@ -12,12 +12,7 @@
 //! - ASIL-C: Saturating arithmetic as default
 //! - ASIL-D: Formal verification hooks for arithmetic
 
-use kiln_error::{
-    codes::TrapCode,
-    Error as KilnError,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error as KilnError, ErrorCategory, Result, codes::TrapCode};
 
 // Import from libm for no_std math functions
 #[cfg(not(feature = "std"))]
@@ -123,14 +118,7 @@ mod math_helpers {
 }
 
 use math_helpers::{
-    ceil_f32,
-    ceil_f64,
-    floor_f32,
-    floor_f64,
-    round_f32,
-    round_f64,
-    trunc_f32,
-    trunc_f64,
+    ceil_f32, ceil_f64, floor_f32, floor_f64, round_f32, round_f64, trunc_f32, trunc_f64,
 };
 
 /// Safe arithmetic operations trait for integer types
@@ -191,11 +179,7 @@ impl SafeArithmetic for i32 {
         {
             // ASIL-A: Runtime bounds checking
             let (result, overflow) = self.overflowing_add(rhs);
-            if overflow {
-                Err(TrapCode::IntegerOverflow.into())
-            } else {
-                Ok(result)
-            }
+            if overflow { Err(TrapCode::IntegerOverflow.into()) } else { Ok(result) }
         }
 
         #[cfg(not(feature = "asil-a"))]
@@ -228,11 +212,7 @@ impl SafeArithmetic for i32 {
         #[cfg(all(feature = "asil-a", not(feature = "asil-b")))]
         {
             let (result, overflow) = self.overflowing_sub(rhs);
-            if overflow {
-                Err(TrapCode::IntegerOverflow.into())
-            } else {
-                Ok(result)
-            }
+            if overflow { Err(TrapCode::IntegerOverflow.into()) } else { Ok(result) }
         }
 
         #[cfg(not(feature = "asil-a"))]
@@ -264,11 +244,7 @@ impl SafeArithmetic for i32 {
         #[cfg(all(feature = "asil-a", not(feature = "asil-b")))]
         {
             let (result, overflow) = self.overflowing_mul(rhs);
-            if overflow {
-                Err(TrapCode::IntegerOverflow.into())
-            } else {
-                Ok(result)
-            }
+            if overflow { Err(TrapCode::IntegerOverflow.into()) } else { Ok(result) }
         }
 
         #[cfg(not(feature = "asil-a"))]
@@ -335,11 +311,7 @@ impl SafeArithmetic for i64 {
         #[cfg(all(feature = "asil-a", not(feature = "asil-b")))]
         {
             let (result, overflow) = self.overflowing_add(rhs);
-            if overflow {
-                Err(TrapCode::IntegerOverflow.into())
-            } else {
-                Ok(result)
-            }
+            if overflow { Err(TrapCode::IntegerOverflow.into()) } else { Ok(result) }
         }
 
         #[cfg(not(feature = "asil-a"))]
@@ -371,11 +343,7 @@ impl SafeArithmetic for i64 {
         #[cfg(all(feature = "asil-a", not(feature = "asil-b")))]
         {
             let (result, overflow) = self.overflowing_sub(rhs);
-            if overflow {
-                Err(TrapCode::IntegerOverflow.into())
-            } else {
-                Ok(result)
-            }
+            if overflow { Err(TrapCode::IntegerOverflow.into()) } else { Ok(result) }
         }
 
         #[cfg(not(feature = "asil-a"))]
@@ -407,11 +375,7 @@ impl SafeArithmetic for i64 {
         #[cfg(all(feature = "asil-a", not(feature = "asil-b")))]
         {
             let (result, overflow) = self.overflowing_mul(rhs);
-            if overflow {
-                Err(TrapCode::IntegerOverflow.into())
-            } else {
-                Ok(result)
-            }
+            if overflow { Err(TrapCode::IntegerOverflow.into()) } else { Ok(result) }
         }
 
         #[cfg(not(feature = "asil-a"))]

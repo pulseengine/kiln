@@ -14,20 +14,12 @@
 use alloc::vec::Vec;
 use core::{
     // cmp::Ordering, // Unused import
-    hash::{
-        Hash,
-        Hasher,
-    },
+    hash::{Hash, Hasher},
 };
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-}; /* Changed ErrorKind to
-    * ErrorCategory, Added
-    * Error */
+use kiln_error::{Error, ErrorCategory, Result, codes}; /* Changed ErrorKind to
+ * ErrorCategory, Added
+ * Error */
 
 use crate::traits::LittleEndian; // Import the trait
 

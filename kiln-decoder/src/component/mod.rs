@@ -44,6 +44,7 @@ pub use component_name_section::{
 pub use decode::decode_component as decode_component_internal;
 #[cfg(feature = "std")]
 pub use encode::encode_component;
+use kiln_error::{Error, ErrorCategory, Result, codes};
 #[cfg(feature = "std")]
 pub use name_section::{NameMap, NameMapEntry, SortIdentifier};
 #[cfg(feature = "std")]
@@ -59,7 +60,6 @@ pub use val_type::encode_val_type;
 pub use validation::{ValidationConfig, validate_component};
 #[cfg(feature = "std")]
 pub use validation::{ValidationConfig, validate_component, validate_component_with_config};
-use kiln_error::{Error, ErrorCategory, Result, codes};
 
 #[cfg(not(feature = "std"))]
 use crate::prelude::*;

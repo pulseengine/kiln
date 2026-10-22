@@ -6,33 +6,17 @@
 //! not-implemented error rather than silently succeeding. Wiring up real
 //! named-pipe transport is tracked separately.
 
-use core::{
-    fmt,
-    time::Duration,
-};
-use std::{
-    boxed::Box,
-    string::String,
-};
+use core::{fmt, time::Duration};
+use std::{boxed::Box, string::String};
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 
-use crate::ipc::{
-    ChannelId,
-    ClientId,
-    IpcChannel,
-    Message,
-};
+use crate::ipc::{ChannelId, ClientId, IpcChannel, Message};
 
 /// Windows named-pipe implementation of IPC channel (not yet implemented).
 pub struct WindowsNamedPipe {
     /// Pipe name for this channel
-    pipe_name:  String,
+    pipe_name: String,
     /// Channel ID
     channel_id: ChannelId,
 }
@@ -122,10 +106,7 @@ impl IpcChannel for WindowsNamedPipe {
 
 // Simple counter-based ID generation, mirroring linux_ipc.
 mod rand {
-    use std::sync::atomic::{
-        AtomicU64,
-        Ordering,
-    };
+    use std::sync::atomic::{AtomicU64, Ordering};
 
     static COUNTER: AtomicU64 = AtomicU64::new(1);
 

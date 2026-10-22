@@ -23,8 +23,8 @@
 //! - **ASIL-D compliant**: Deterministic WCET
 
 use core::cmp::Ordering;
-use core::mem::MaybeUninit;
 use core::marker::PhantomData;
+use core::mem::MaybeUninit;
 
 use kiln_error::Result;
 
@@ -123,7 +123,7 @@ impl<K: Ord, V, const N: usize> StaticMap<K, V, N> {
                 let entry = unsafe { self.entries[index].assume_init_mut() };
                 let old_value = core::mem::replace(&mut entry.1, value);
                 Ok(Some(old_value))
-            }
+            },
             Err(index) => {
                 // Key doesn't exist, insert at index
                 if self.len >= N {
@@ -147,7 +147,7 @@ impl<K: Ord, V, const N: usize> StaticMap<K, V, N> {
                 self.len += 1;
 
                 Ok(None)
-            }
+            },
         }
     }
 
@@ -190,7 +190,7 @@ impl<K: Ord, V, const N: usize> StaticMap<K, V, N> {
             Ok(index) => {
                 // SAFETY: index is valid (from binary_search on len)
                 Some(unsafe { &mut self.entries[index].assume_init_mut().1 })
-            }
+            },
             Err(_) => None,
         }
     }
@@ -230,7 +230,7 @@ impl<K: Ord, V, const N: usize> StaticMap<K, V, N> {
 
                 self.len -= 1;
                 Some(value)
-            }
+            },
             Err(_) => None,
         }
     }
@@ -455,7 +455,7 @@ impl<'a, K: Ord, V, const N: usize> Entry<'a, K, V, N> {
             Entry::Occupied(mut entry) => {
                 f(entry.get_mut());
                 Entry::Occupied(entry)
-            }
+            },
             Entry::Vacant(entry) => Entry::Vacant(entry),
         }
     }
@@ -583,7 +583,9 @@ impl<K: Ord + Clone, V: Clone, const N: usize> Clone for StaticMap<K, V, N> {
 }
 
 // Checksummable implementation for verifiable data integrity
-impl<K: crate::traits::Checksummable + Ord, V: crate::traits::Checksummable, const N: usize> crate::traits::Checksummable for StaticMap<K, V, N> {
+impl<K: crate::traits::Checksummable + Ord, V: crate::traits::Checksummable, const N: usize>
+    crate::traits::Checksummable for StaticMap<K, V, N>
+{
     fn update_checksum(&self, checksum: &mut crate::verification::Checksum) {
         // Update checksum with length
         self.len().update_checksum(checksum);
@@ -596,12 +598,13 @@ impl<K: crate::traits::Checksummable + Ord, V: crate::traits::Checksummable, con
 }
 
 // ToBytes implementation for serialization
-impl<K: crate::traits::ToBytes + Ord, V: crate::traits::ToBytes, const N: usize> crate::traits::ToBytes for StaticMap<K, V, N> {
+impl<K: crate::traits::ToBytes + Ord, V: crate::traits::ToBytes, const N: usize>
+    crate::traits::ToBytes for StaticMap<K, V, N>
+{
     fn serialized_size(&self) -> usize {
         let len_size = core::mem::size_of::<usize>();
-        let entries_size: usize = self.iter()
-            .map(|(k, v)| k.serialized_size() + v.serialized_size())
-            .sum();
+        let entries_size: usize =
+            self.iter().map(|(k, v)| k.serialized_size() + v.serialized_size()).sum();
         len_size + entries_size
     }
 
@@ -622,7 +625,9 @@ impl<K: crate::traits::ToBytes + Ord, V: crate::traits::ToBytes, const N: usize>
 }
 
 // FromBytes implementation for deserialization
-impl<K: crate::traits::FromBytes + Ord, V: crate::traits::FromBytes, const N: usize> crate::traits::FromBytes for StaticMap<K, V, N> {
+impl<K: crate::traits::FromBytes + Ord, V: crate::traits::FromBytes, const N: usize>
+    crate::traits::FromBytes for StaticMap<K, V, N>
+{
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut crate::traits::ReadStream<'a>,
         provider: &PStream,
@@ -645,7 +650,9 @@ impl<K: crate::traits::FromBytes + Ord, V: crate::traits::FromBytes, const N: us
 }
 
 // Hash implementation for use in hash-based collections
-impl<K: core::hash::Hash + Ord, V: core::hash::Hash, const N: usize> core::hash::Hash for StaticMap<K, V, N> {
+impl<K: core::hash::Hash + Ord, V: core::hash::Hash, const N: usize> core::hash::Hash
+    for StaticMap<K, V, N>
+{
     fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         // Hash length
         self.len().hash(state);

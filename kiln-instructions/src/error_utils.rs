@@ -3,10 +3,7 @@
 // Error formatting may truncate large values for display - acceptable behavior.
 #![allow(clippy::cast_possible_truncation)]
 
-use kiln_error::{
-    Error,
-    ErrorCategory,
-};
+use kiln_error::{Error, ErrorCategory};
 
 /// Error context for instruction operations
 #[derive(Debug, Clone, Copy)]
@@ -16,12 +13,12 @@ pub enum InstructionErrorContext {
         /// Expected type
         expected: &'static str,
         /// Actual type found
-        actual:   &'static str,
+        actual: &'static str,
     },
     /// Stack underflow
     StackUnderflow {
         /// Required stack items
-        required:  usize,
+        required: usize,
         /// Available stack items
         available: usize,
     },
@@ -30,7 +27,7 @@ pub enum InstructionErrorContext {
         /// Memory offset
         offset: u32,
         /// Access size
-        size:   u32,
+        size: u32,
     },
     /// Division by zero
     DivisionByZero,
@@ -41,14 +38,14 @@ pub enum InstructionErrorContext {
         /// Source type
         from: &'static str,
         /// Target type
-        to:   &'static str,
+        to: &'static str,
     },
     /// Table out of bounds
     TableOutOfBounds {
         /// Table index
         index: u32,
         /// Table size
-        size:  u32,
+        size: u32,
     },
     /// Invalid reference
     InvalidReference,
@@ -66,7 +63,7 @@ pub enum InstructionErrorContext {
 
 /// Binary `std/no_std` choice
 #[cfg(feature = "std")]
-#[must_use] 
+#[must_use]
 pub fn format_error(category: ErrorCategory, code: u32, context: InstructionErrorContext) -> Error {
     use std::format;
 
@@ -78,14 +75,10 @@ pub fn format_error(category: ErrorCategory, code: u32, context: InstructionErro
             required,
             available,
         } => {
-            format!(
-                "Stack underflow: required {required}, available {available}"
-            )
+            format!("Stack underflow: required {required}, available {available}")
         },
         InstructionErrorContext::InvalidMemoryAccess { offset, size } => {
-            format!(
-                "Invalid memory access at offset {offset} with size {size}"
-            )
+            format!("Invalid memory access at offset {offset} with size {size}")
         },
         InstructionErrorContext::DivisionByZero => "Division by zero".into(),
         InstructionErrorContext::IntegerOverflow => "Integer overflow".into(),

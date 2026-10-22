@@ -4,24 +4,13 @@
 //! to work with the capability system.
 
 #[cfg(feature = "std")]
-use std::{
-    sync::Arc,
-    vec::Vec,
-};
+use std::{sync::Arc, vec::Vec};
 
-use crate::{
-    capabilities::AnyMemoryCapability,
-    Error,
-    Result,
-};
+use crate::{Error, Result, capabilities::AnyMemoryCapability};
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 #[cfg(not(feature = "std"))]
-use alloc::{
-    sync::Arc,
-    vec,
-    vec::Vec,
-};
+use alloc::{sync::Arc, vec, vec::Vec};
 
 /// Types of capabilities supported by the platform bridge
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,7 +26,7 @@ pub enum CapabilityType {
 /// Simple platform capability provider
 pub struct PlatformCapabilityProvider {
     allocator: Arc<dyn PlatformAllocator>,
-    max_size:  usize,
+    max_size: usize,
 }
 
 /// Trait for platform-specific allocators

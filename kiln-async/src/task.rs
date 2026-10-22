@@ -90,7 +90,7 @@ impl TaskState {
                 return Err(Error::invalid_state_error(
                     "kiln-async: illegal task lifecycle transition",
                 ));
-            }
+            },
         };
         Ok(next)
     }
@@ -168,11 +168,7 @@ impl<const N: usize> TaskTable<N> {
     #[must_use]
     pub fn state_of(&self, id: TaskId) -> Option<TaskState> {
         let slot = self.slots.get(id.index as usize)?;
-        if slot.generation == id.generation {
-            slot.state
-        } else {
-            None
-        }
+        if slot.generation == id.generation { slot.state } else { None }
     }
 
     /// Admit a new task into a free slot.
@@ -219,9 +215,7 @@ impl<const N: usize> TaskTable<N> {
         self.slots
             .get_mut(id.index as usize)
             .filter(|s| s.state.is_some() && s.generation == id.generation)
-            .ok_or_else(|| {
-                Error::validation_error("kiln-async: stale or unknown task handle")
-            })
+            .ok_or_else(|| Error::validation_error("kiln-async: stale or unknown task handle"))
     }
 
     /// Drive a task slot through one FSM transition, validating the handle.
@@ -238,9 +232,9 @@ impl<const N: usize> TaskTable<N> {
             .ok_or_else(|| {
                 Error::validation_error("kiln-async: transition on a stale or unknown task handle")
             })?;
-        let current = slot.state.ok_or_else(|| {
-            Error::validation_error("kiln-async: transition on a free task slot")
-        })?;
+        let current = slot
+            .state
+            .ok_or_else(|| Error::validation_error("kiln-async: transition on a free task slot"))?;
         // `step` validates the event; an illegal transition errors here and the
         // slot is left untouched (no partial write).
         let next = current.step(event)?;
@@ -278,9 +272,7 @@ mod tests {
 
     #[test]
     fn fsm_happy_path() {
-        let s = TaskState::Spawned
-            .step(TaskEvent::Admit)
-            .unwrap();
+        let s = TaskState::Spawned.step(TaskEvent::Admit).unwrap();
         assert_eq!(s, TaskState::Ready);
         let s = s.step(TaskEvent::Dispatch).unwrap();
         assert_eq!(s, TaskState::Running);
@@ -316,7 +308,13 @@ mod tests {
     #[test]
     fn taskid_none_is_sentinel() {
         assert!(TaskId::NONE.is_none());
-        assert!(!TaskId { index: 0, generation: 0 }.is_none());
+        assert!(
+            !TaskId {
+                index: 0,
+                generation: 0
+            }
+            .is_none()
+        );
     }
 
     #[test]

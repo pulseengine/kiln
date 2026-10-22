@@ -39,7 +39,7 @@
 //!
 //! This module implements Tier 2 (Verus) verification.
 
-pub mod static_vec_proofs;
+pub mod safe_memory_proofs;
 pub mod static_queue_proofs;
 pub mod static_string_proofs;
-pub mod safe_memory_proofs;
+pub mod static_vec_proofs;

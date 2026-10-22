@@ -6,10 +6,7 @@
 use core::{
     fmt,
     ptr::NonNull,
-    sync::atomic::{
-        AtomicUsize,
-        Ordering,
-    },
+    sync::atomic::{AtomicUsize, Ordering},
 };
 
 #[cfg(any(feature = "std", feature = "alloc"))]
@@ -21,22 +18,12 @@ use alloc::boxed::Box;
 use std::boxed::Box;
 
 use super::{
-    CapabilityMask,
-    MemoryCapability,
-    MemoryGuard,
-    MemoryOperation,
-    MemoryOperationType,
+    CapabilityMask, MemoryCapability, MemoryGuard, MemoryOperation, MemoryOperationType,
     MemoryRegion,
 };
 use crate::{
-    budget_aware_provider::CrateId,
-    codes,
-    safe_managed_alloc,
-    safe_memory::Provider,
-    verification::VerificationLevel,
-    Error,
-    ErrorCategory,
-    Result,
+    Error, ErrorCategory, Result, budget_aware_provider::CrateId, codes, safe_managed_alloc,
+    safe_memory::Provider, verification::VerificationLevel,
 };
 
 /// Dynamic memory capability that allows runtime allocation
@@ -46,15 +33,15 @@ use crate::{
 #[derive(Debug)]
 pub struct DynamicMemoryCapability {
     /// Maximum total allocation allowed
-    max_allocation:     usize,
+    max_allocation: usize,
     /// Currently allocated bytes (tracked atomically)
-    current_allocated:  AtomicUsize,
+    current_allocated: AtomicUsize,
     /// Operations allowed by this capability
     allowed_operations: CapabilityMask,
     /// Verification level for memory operations
     verification_level: VerificationLevel,
     /// Crate that owns this capability
-    owner_crate:        CrateId,
+    owner_crate: CrateId,
 }
 
 impl DynamicMemoryCapability {
@@ -131,11 +118,11 @@ impl DynamicMemoryCapability {
 impl Clone for DynamicMemoryCapability {
     fn clone(&self) -> Self {
         Self {
-            max_allocation:     self.max_allocation,
-            current_allocated:  AtomicUsize::new(self.current_allocated.load(Ordering::Acquire)),
+            max_allocation: self.max_allocation,
+            current_allocated: AtomicUsize::new(self.current_allocated.load(Ordering::Acquire)),
             allowed_operations: self.allowed_operations,
             verification_level: self.verification_level,
-            owner_crate:        self.owner_crate,
+            owner_crate: self.owner_crate,
         }
     }
 }
@@ -253,11 +240,11 @@ impl MemoryCapability for DynamicMemoryCapability {
         };
 
         let delegated = DynamicMemoryCapability {
-            max_allocation:     delegated_max,
-            current_allocated:  AtomicUsize::new(0),
+            max_allocation: delegated_max,
+            current_allocated: AtomicUsize::new(0),
             allowed_operations: self.allowed_operations.intersect(&subset),
             verification_level: self.verification_level,
-            owner_crate:        self.owner_crate,
+            owner_crate: self.owner_crate,
         };
 
         Ok(Box::new(delegated))
@@ -285,7 +272,7 @@ impl MemoryCapability for DynamicMemoryCapability {
 /// Dynamic memory region backed by NoStdProvider
 #[derive(Debug)]
 pub struct DynamicMemoryRegion {
-    size:     usize,
+    size: usize,
     provider: crate::safe_memory::NoStdProvider<65536>, // Fixed size for now
 }
 
@@ -314,8 +301,8 @@ impl MemoryRegion for DynamicMemoryRegion {
 
 /// Dynamic memory guard that protects access to dynamic memory regions
 pub struct DynamicMemoryGuard {
-    region:         DynamicMemoryRegion,
-    capability:     *const DynamicMemoryCapability, // Raw pointer to avoid lifetime issues
+    region: DynamicMemoryRegion,
+    capability: *const DynamicMemoryCapability, // Raw pointer to avoid lifetime issues
     allocated_size: usize,
 }
 

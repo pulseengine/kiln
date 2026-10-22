@@ -92,7 +92,11 @@ fn refuses_an_argument_for_an_indirectly_lowered_parameter() {
     let wasm = with_manifest(MODULE, &manifest(18, "\"cabi_realloc\""));
     let (code, out) = run(&wasm, "kilnd_sr62_indirect.wasm", &["99999"]);
 
-    assert_ne!(code, Some(0), "a pointer parameter must not accept a number\n{out}");
+    assert_ne!(
+        code,
+        Some(0),
+        "a pointer parameter must not accept a number\n{out}"
+    );
     assert!(
         out.contains("POINTER") && out.contains("18"),
         "the refusal must say the parameter is a pointer and how many values \
@@ -107,8 +111,15 @@ fn a_genuinely_flat_parameter_still_works_with_a_manifest_present() {
     let wasm = with_manifest(MODULE, &manifest(1, "\"cabi_realloc\""));
     let (code, out) = run(&wasm, "kilnd_sr62_flat.wasm", &["7"]);
 
-    assert_eq!(code, Some(0), "a genuine scalar must still be callable\n{out}");
-    assert!(out.contains('7'), "the call must return its argument\n{out}");
+    assert_eq!(
+        code,
+        Some(0),
+        "a genuine scalar must still be callable\n{out}"
+    );
+    assert!(
+        out.contains('7'),
+        "the call must return its argument\n{out}"
+    );
 }
 
 /// `needs.realloc: true` with `realloc: null` is meld stating a contradiction
@@ -132,12 +143,18 @@ fn refuses_when_the_required_allocator_is_unreachable() {
 #[test]
 fn refuses_when_the_manifest_disagrees_with_the_module() {
     // Manifest claims two core params; the module declares one.
-    let json = manifest(2, "\"cabi_realloc\"")
-        .replace(r#""params":["i32"],"results":["i32"]"#, r#""params":["i32","i32"],"results":["i32"]"#);
+    let json = manifest(2, "\"cabi_realloc\"").replace(
+        r#""params":["i32"],"results":["i32"]"#,
+        r#""params":["i32","i32"],"results":["i32"]"#,
+    );
     let wasm = with_manifest(MODULE, &json);
     let (code, out) = run(&wasm, "kilnd_sr62_disagree.wasm", &["1", "2"]);
 
-    assert_ne!(code, Some(0), "a manifest/module disagreement must refuse\n{out}");
+    assert_ne!(
+        code,
+        Some(0),
+        "a manifest/module disagreement must refuse\n{out}"
+    );
     assert!(
         out.contains("disagrees"),
         "the refusal must say the manifest disagrees with the module\n{out}"

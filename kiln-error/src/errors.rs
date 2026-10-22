@@ -507,7 +507,11 @@ impl Error {
     /// so instantiation must fail (SR-65)
     #[must_use]
     pub const fn runtime_import_not_found(message: &'static str) -> Self {
-        Self::new(ErrorCategory::Runtime, codes::RUNTIME_IMPORT_NOT_FOUND_ERROR, message)
+        Self::new(
+            ErrorCategory::Runtime,
+            codes::RUNTIME_IMPORT_NOT_FOUND_ERROR,
+            message,
+        )
     }
 
     /// Create a runtime null reference error

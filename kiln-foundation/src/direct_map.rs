@@ -10,8 +10,8 @@
 //! Unlike `BoundedMap`, `DirectMap` does NOT serialize entries, providing
 //! 10-1000x faster access at the cost of losing per-item checksums.
 
-use crate::prelude::*;
 use crate::collections::StaticVec;
+use crate::prelude::*;
 use crate::verification::{Checksum, VerificationLevel};
 use core::hash::Hash;
 
@@ -156,18 +156,12 @@ where
     /// assert_eq!(map.get(&2), None);
     /// ```
     pub fn get(&self, key: &K) -> Option<&V> {
-        self.entries
-            .iter()
-            .find(|(k, _)| k == key)
-            .map(|(_, v)| v)
+        self.entries.iter().find(|(k, _)| k == key).map(|(_, v)| v)
     }
 
     /// Gets a mutable reference to the value associated with the given key.
     pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        self.entries
-            .iter_mut()
-            .find(|(k, _)| k == key)
-            .map(|(_, v)| v)
+        self.entries.iter_mut().find(|(k, _)| k == key).map(|(_, v)| v)
     }
 
     /// Removes a key-value pair from the map, returning the value.

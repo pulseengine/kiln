@@ -28,14 +28,10 @@ use core::{
 };
 
 use crate::{
-    bounded::BoundedVec,
-    traits::{
-        Checksummable,
-        FromBytes,
-        ToBytes,
-    },
-    verification::Checksum,
     MemoryProvider,
+    bounded::BoundedVec,
+    traits::{Checksummable, FromBytes, ToBytes},
+    verification::Checksum,
 };
 
 /// A simple FNV-1a hasher for no_std environments.
@@ -84,8 +80,8 @@ pub struct SimpleHashMap<
     K: Hash + Eq + Clone + Default + Checksummable + ToBytes + FromBytes,
     V: Clone + Default + PartialEq + Eq + Checksummable + ToBytes + FromBytes,
 {
-    entries:  BoundedVec<Option<Entry<K, V>>, N, P>,
-    len:      usize,
+    entries: BoundedVec<Option<Entry<K, V>>, N, P>,
+    len: usize,
     _phantom: PhantomData<(K, V, P)>,
 }
 
@@ -99,9 +95,9 @@ where
     K: Clone + PartialEq + Eq,
     V: Clone + PartialEq + Eq,
 {
-    key:   K,
+    key: K,
     value: V,
-    hash:  u64,
+    hash: u64,
 }
 
 impl<K, V> Default for Entry<K, V>
@@ -111,9 +107,9 @@ where
 {
     fn default() -> Self {
         Self {
-            key:   K::default(),
+            key: K::default(),
             value: V::default(),
-            hash:  0,
+            hash: 0,
         }
     }
 }
@@ -425,13 +421,8 @@ pub struct SimpleHashMapIter<
     index: usize,
 }
 
-impl<
-        'a,
-        K,
-        V,
-        const N: usize,
-        P: MemoryProvider + Default + Clone + fmt::Debug + PartialEq + Eq,
-    > Iterator for SimpleHashMapIter<'a, K, V, N, P>
+impl<'a, K, V, const N: usize, P: MemoryProvider + Default + Clone + fmt::Debug + PartialEq + Eq>
+    Iterator for SimpleHashMapIter<'a, K, V, N, P>
 where
     K: Hash + Eq + Clone + Default + Checksummable + ToBytes + FromBytes,
     V: Clone + Default + PartialEq + Eq + Checksummable + ToBytes + FromBytes,
@@ -472,13 +463,8 @@ pub struct SimpleHashMapIterMut<
     index: usize,
 }
 
-impl<
-        'a,
-        K,
-        V,
-        const N: usize,
-        P: MemoryProvider + Default + Clone + fmt::Debug + PartialEq + Eq,
-    > SimpleHashMapIterMut<'a, K, V, N, P>
+impl<'a, K, V, const N: usize, P: MemoryProvider + Default + Clone + fmt::Debug + PartialEq + Eq>
+    SimpleHashMapIterMut<'a, K, V, N, P>
 where
     K: Hash + Eq + Clone + Default + Checksummable + ToBytes + FromBytes,
     V: Clone + Default + PartialEq + Eq + Checksummable + ToBytes + FromBytes,
@@ -487,7 +473,9 @@ where
     ///
     /// This returns an accessor that allows reading and writing values.
     /// Since the underlying storage is serialized, we can't return direct mutable references.
-    pub fn next_mut(&mut self) -> kiln_error::Result<Option<SimpleHashMapMutEntry<'_, K, V, N, P>>> {
+    pub fn next_mut(
+        &mut self,
+    ) -> kiln_error::Result<Option<SimpleHashMapMutEntry<'_, K, V, N, P>>> {
         while self.index < N {
             let current_index = self.index;
             self.index += 1;
@@ -533,7 +521,9 @@ where
         if let Some(entry) = self.map.entries.get(self.index)? {
             Ok(entry.value)
         } else {
-            Err(crate::Error::internal_error("Entry disappeared during iteration"))
+            Err(crate::Error::internal_error(
+                "Entry disappeared during iteration",
+            ))
         }
     }
 
@@ -544,7 +534,9 @@ where
             self.map.entries.set(self.index, Some(entry))?;
             Ok(())
         } else {
-            Err(crate::Error::internal_error("Entry disappeared during iteration"))
+            Err(crate::Error::internal_error(
+                "Entry disappeared during iteration",
+            ))
         }
     }
 
@@ -562,13 +554,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{budget_aware_provider::CrateId, safe_managed_alloc, safe_memory::NoStdProvider};
     #[allow(unused_imports)]
     use std::vec;
-    use crate::{
-        budget_aware_provider::CrateId,
-        safe_managed_alloc,
-        safe_memory::NoStdProvider,
-    };
 
     #[test]
     #[serial_test::serial]

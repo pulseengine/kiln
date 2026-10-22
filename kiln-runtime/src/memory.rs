@@ -108,29 +108,16 @@ use alloc::vec;
 use core::borrow::BorrowMut;
 use core::{
     alloc::Layout,
-    sync::atomic::{
-        AtomicBool,
-        AtomicU32,
-        AtomicU64,
-        AtomicUsize,
-        Ordering,
-    },
+    sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering},
     time::Duration,
 };
 
 // External crates
-use kiln_foundation::safe_memory::{
-    MemoryProvider,
-    SafeMemoryHandler,
-    SafeSlice,
-    SliceMut as SafeSliceMut,
-};
-use kiln_foundation::{
-    budget_aware_provider::CrateId,
-    types::MemoryType,
-    MemoryStats,
-};
 use kiln_foundation::MemoryAccessor;
+use kiln_foundation::safe_memory::{
+    MemoryProvider, SafeMemoryHandler, SafeSlice, SliceMut as SafeSliceMut,
+};
+use kiln_foundation::{MemoryStats, budget_aware_provider::CrateId, types::MemoryType};
 // Import atomic operations trait
 use kiln_instructions::atomic_ops::AtomicOperations;
 // Import the MemoryOperations trait from kiln-instructions
@@ -139,19 +126,8 @@ use kiln_instructions::memory_ops::MemoryOperations;
 // Temporarily disabled - memory_adapter module is disabled
 // use crate::memory_adapter::StdMemoryProvider;
 use crate::prelude::{
-    str,
-    Arc,
-    BoundedCapacity,
-    CoreMemoryType,
-    Debug,
-    Eq,
-    Error,
-    ErrorCategory,
-    Ord,
-    PartialEq,
-    Result,
-    TryFrom,
-    VerificationLevel,
+    Arc, BoundedCapacity, CoreMemoryType, Debug, Eq, Error, ErrorCategory, Ord, PartialEq, Result,
+    TryFrom, VerificationLevel, str,
 };
 
 // Use StdProvider which uses Vec<u8> for dynamically-sized memory
@@ -220,13 +196,13 @@ fn usize_to_wasm_u32(size: usize) -> Result<u32> {
 #[derive(Debug)]
 pub struct MemoryMetrics {
     /// Peak memory usage in bytes
-    peak_usage:         AtomicUsize,
+    peak_usage: AtomicUsize,
     /// Memory access counter for profiling
-    access_count:       AtomicU64,
+    access_count: AtomicU64,
     /// Maximum size of any access
-    max_access_size:    AtomicUsize,
+    max_access_size: AtomicUsize,
     /// Number of unique regions accessed
-    unique_regions:     AtomicUsize,
+    unique_regions: AtomicUsize,
     /// Last access offset for validation
     last_access_offset: AtomicUsize,
     /// Last access length for validation
@@ -236,16 +212,12 @@ pub struct MemoryMetrics {
 impl Clone for MemoryMetrics {
     fn clone(&self) -> Self {
         Self {
-            peak_usage:         AtomicUsize::new(self.peak_usage.load(Ordering::Relaxed)),
-            access_count:       AtomicU64::new(self.access_count.load(Ordering::Relaxed)),
-            max_access_size:    AtomicUsize::new(self.max_access_size.load(Ordering::Relaxed)),
-            unique_regions:     AtomicUsize::new(self.unique_regions.load(Ordering::Relaxed)),
-            last_access_offset: AtomicUsize::new(
-                self.last_access_offset.load(Ordering::Relaxed),
-            ),
-            last_access_length: AtomicUsize::new(
-                self.last_access_length.load(Ordering::Relaxed),
-            ),
+            peak_usage: AtomicUsize::new(self.peak_usage.load(Ordering::Relaxed)),
+            access_count: AtomicU64::new(self.access_count.load(Ordering::Relaxed)),
+            max_access_size: AtomicUsize::new(self.max_access_size.load(Ordering::Relaxed)),
+            unique_regions: AtomicUsize::new(self.unique_regions.load(Ordering::Relaxed)),
+            last_access_offset: AtomicUsize::new(self.last_access_offset.load(Ordering::Relaxed)),
+            last_access_length: AtomicUsize::new(self.last_access_length.load(Ordering::Relaxed)),
         }
     }
 }
@@ -253,10 +225,10 @@ impl Clone for MemoryMetrics {
 impl MemoryMetrics {
     fn new(size: usize) -> Self {
         Self {
-            peak_usage:         AtomicUsize::new(size),
-            access_count:       AtomicU64::new(0),
-            max_access_size:    AtomicUsize::new(0),
-            unique_regions:     AtomicUsize::new(0),
+            peak_usage: AtomicUsize::new(size),
+            access_count: AtomicU64::new(0),
+            max_access_size: AtomicUsize::new(0),
+            unique_regions: AtomicUsize::new(0),
             last_access_offset: AtomicUsize::new(0),
             last_access_length: AtomicUsize::new(0),
         }
@@ -267,20 +239,20 @@ impl MemoryMetrics {
 #[derive(Debug)]
 pub struct Memory {
     /// The memory type
-    pub ty:                 CoreMemoryType,
+    pub ty: CoreMemoryType,
     /// The memory data (Box + Mutex for ASIL-B: heap allocation + thread-safe writes)
-    pub data:               Box<std::sync::Mutex<SafeMemoryHandler<LargeMemoryProvider>>>,
+    pub data: Box<std::sync::Mutex<SafeMemoryHandler<LargeMemoryProvider>>>,
     /// Current number of pages
-    pub current_pages:      core::sync::atomic::AtomicU32,
+    pub current_pages: core::sync::atomic::AtomicU32,
     /// Runtime linear-memory cap in pages (0 = unlimited). Enforced in `grow`/
     /// `grow_shared` IN ADDITION TO the module-declared `ty.limits.max`, so a host
     /// (e.g. kilnd `--memory <bytes>`) can bound a guest below its declared max.
     /// SR-41. Set before execution; read on every grow.
-    pub runtime_max_pages:  core::sync::atomic::AtomicU32,
+    pub runtime_max_pages: core::sync::atomic::AtomicU32,
     /// Optional name for debugging
     pub debug_name: Option<kiln_foundation::bounded::BoundedString<128>>,
     /// Memory metrics for tracking access
-    pub metrics:            MemoryMetrics,
+    pub metrics: MemoryMetrics,
     /// Memory verification level
     pub verification_level: VerificationLevel,
 }
@@ -304,14 +276,10 @@ impl Clone for Memory {
 
         // Clone metrics
         let cloned_metrics = MemoryMetrics {
-            peak_usage:         AtomicUsize::new(self.metrics.peak_usage.load(Ordering::Relaxed)),
-            access_count:       AtomicU64::new(self.metrics.access_count.load(Ordering::Relaxed)),
-            max_access_size:    AtomicUsize::new(
-                self.metrics.max_access_size.load(Ordering::Relaxed),
-            ),
-            unique_regions:     AtomicUsize::new(
-                self.metrics.unique_regions.load(Ordering::Relaxed),
-            ),
+            peak_usage: AtomicUsize::new(self.metrics.peak_usage.load(Ordering::Relaxed)),
+            access_count: AtomicU64::new(self.metrics.access_count.load(Ordering::Relaxed)),
+            max_access_size: AtomicUsize::new(self.metrics.max_access_size.load(Ordering::Relaxed)),
+            unique_regions: AtomicUsize::new(self.metrics.unique_regions.load(Ordering::Relaxed)),
             last_access_offset: AtomicUsize::new(
                 self.metrics.last_access_offset.load(Ordering::Relaxed),
             ),
@@ -321,12 +289,12 @@ impl Clone for Memory {
         };
 
         Self {
-            ty:                 self.ty,
-            data:               new_data,
-            current_pages:      AtomicU32::new(self.current_pages.load(Ordering::Relaxed)),
-            runtime_max_pages:  AtomicU32::new(self.runtime_max_pages.load(Ordering::Relaxed)),
-            debug_name:         self.debug_name.clone(),
-            metrics:            cloned_metrics,
+            ty: self.ty,
+            data: new_data,
+            current_pages: AtomicU32::new(self.current_pages.load(Ordering::Relaxed)),
+            runtime_max_pages: AtomicU32::new(self.runtime_max_pages.load(Ordering::Relaxed)),
+            debug_name: self.debug_name.clone(),
+            metrics: cloned_metrics,
             verification_level: self.verification_level,
         }
     }
@@ -403,10 +371,7 @@ impl kiln_foundation::traits::FromBytes for Memory {
         reader.read_exact(&mut max_bytes)?;
         let max = u32::from_le_bytes(max_bytes);
 
-        use kiln_foundation::types::{
-            Limits,
-            MemoryType,
-        };
+        use kiln_foundation::types::{Limits, MemoryType};
         let memory_type = MemoryType {
             limits: Limits {
                 min,
@@ -475,8 +440,10 @@ impl Memory {
         #[cfg(feature = "tracing")]
         {
             use kiln_foundation::tracing::info;
-            info!("Creating memory with initial_pages={}, max_pages={:?}, page_size={} from CoreMemoryType",
-                  initial_pages, maximum_pages_opt, effective_page_size);
+            info!(
+                "Creating memory with initial_pages={}, max_pages={:?}, page_size={} from CoreMemoryType",
+                initial_pages, maximum_pages_opt, effective_page_size
+            );
         }
 
         let verification_level = VerificationLevel::Standard;
@@ -490,7 +457,7 @@ impl Memory {
         const MAX_INITIAL_ALLOC: u64 = 4 * 1024 * 1024 * 1024; // 4 GiB
         if current_size_bytes_raw > MAX_INITIAL_ALLOC {
             return Err(Error::memory_error(
-                "memory size exceeds implementation limit"
+                "memory size exceeds implementation limit",
             ));
         }
         let current_size_bytes = current_size_bytes_raw as usize;
@@ -533,7 +500,7 @@ impl Memory {
     ///
     /// Returns an error if the memory cannot be created
     pub fn new_with_name(ty: CoreMemoryType, name: &str) -> Result<Self> {
-        let mut memory = *Self::new(ty)?;  // Dereference Box<Memory>
+        let mut memory = *Self::new(ty)?; // Dereference Box<Memory>
         memory.debug_name = Some(
             kiln_foundation::bounded::BoundedString::try_from_str(name)
                 .map_err(|_| Error::memory_error("Debug name too long"))?,
@@ -932,15 +899,24 @@ impl Memory {
         #[cfg(feature = "tracing")]
         {
             use kiln_foundation::tracing::debug;
-            debug!("write_shared: offset={}, size={}, end={}, mem_size={}, pages={}",
-                   offset_usize, size, end, mem_size, self.current_pages.load(Ordering::Relaxed));
+            debug!(
+                "write_shared: offset={}, size={}, end={}, mem_size={}, pages={}",
+                offset_usize,
+                size,
+                end,
+                mem_size,
+                self.current_pages.load(Ordering::Relaxed)
+            );
         }
 
         if end > mem_size {
             #[cfg(feature = "tracing")]
             {
                 use kiln_foundation::tracing::error;
-                error!("write_shared bounds check FAILED: end {} > mem_size {}", end, mem_size);
+                error!(
+                    "write_shared bounds check FAILED: end {} > mem_size {}",
+                    end, mem_size
+                );
             }
             return Err(Error::memory_out_of_bounds("out of bounds memory access"));
         }
@@ -1114,7 +1090,9 @@ impl Memory {
         addr: u32,
         len: usize,
     ) -> Result<kiln_foundation::safe_memory::SafeSlice<'a>> {
-        Err(Error::runtime_execution_error("get_safe_slice disabled for ASIL-B compliance - use read() instead"))
+        Err(Error::runtime_execution_error(
+            "get_safe_slice disabled for ASIL-B compliance - use read() instead",
+        ))
     }
 
     /// Creates a copy of this memory instance and applies a mutation function
@@ -1226,7 +1204,7 @@ impl Memory {
             _ => {
                 return Err(Error::memory_error(
                     "Destination memory access out of bounds",
-                ))
+                ));
             },
         };
 
@@ -1883,8 +1861,8 @@ impl Memory {
 
         Ok(MemoryStats {
             total_size,
-            access_count:    self.access_count() as usize, // Convert u64 to usize
-            unique_regions:  self.unique_regions(),
+            access_count: self.access_count() as usize, // Convert u64 to usize
+            unique_regions: self.unique_regions(),
             max_access_size: self.max_access_size(),
         })
     }
@@ -1933,7 +1911,9 @@ impl Memory {
     /// This method has been disabled for ASIL-B compliance due to complex lifetime
     /// interactions with Mutex. Use read() method instead for thread-safe access.
     pub fn as_safe_slice<'a>(&'a self) -> Result<kiln_foundation::safe_memory::SafeSlice<'a>> {
-        Err(Error::runtime_execution_error("as_safe_slice disabled for ASIL-B compliance - use read() instead"))
+        Err(Error::runtime_execution_error(
+            "as_safe_slice disabled for ASIL-B compliance - use read() instead",
+        ))
     }
 
     /// Update the memory buffer through a callback function
@@ -2014,7 +1994,8 @@ impl MemoryAccessor for Memory {
 /// Helper to convert u64 offset to usize, checking for overflow on 32-bit platforms
 #[inline]
 fn u64_to_usize(value: u64) -> Result<usize> {
-    usize::try_from(value).map_err(|_| Error::memory_out_of_bounds("Address exceeds platform capacity"))
+    usize::try_from(value)
+        .map_err(|_| Error::memory_out_of_bounds("Address exceeds platform capacity"))
 }
 
 impl MemoryOperations for Memory {
@@ -2148,7 +2129,7 @@ impl AtomicOperations for Memory {
         // To use atomic.wait, integrate with kiln-platform's futex infrastructure.
         let _ = timeout_ns; // Acknowledge parameter to avoid warning
         Err(Error::runtime_unsupported_operation(
-            "atomic.wait32 requires platform futex support - integrate kiln-platform crate"
+            "atomic.wait32 requires platform futex support - integrate kiln-platform crate",
         ))
     }
 
@@ -2166,7 +2147,7 @@ impl AtomicOperations for Memory {
         // See atomic_wait32 for detailed explanation.
         let _ = timeout_ns; // Acknowledge parameter to avoid warning
         Err(Error::runtime_unsupported_operation(
-            "atomic.wait64 requires platform futex support - integrate kiln-platform crate"
+            "atomic.wait64 requires platform futex support - integrate kiln-platform crate",
         ))
     }
 
@@ -2343,7 +2324,6 @@ impl AtomicOperations for Memory {
     }
 }
 
-
 #[cfg(all(test, feature = "std"))]
 mod sr41_cap_tests {
     use super::*;
@@ -2385,7 +2365,10 @@ mod sr41_cap_tests {
     fn runtime_cap_zero_is_unlimited() {
         let m = mem(1, Some(5));
         // no set_runtime_max_pages (stays 0) → declared max (5) is the only bound.
-        assert!(m.grow_shared(4).is_ok(), "grow to declared max must succeed with no cap");
+        assert!(
+            m.grow_shared(4).is_ok(),
+            "grow to declared max must succeed with no cap"
+        );
         assert_eq!(m.size(), 5);
         assert!(m.grow_shared(1).is_err(), "declared max still enforced");
     }
@@ -2403,6 +2386,9 @@ mod sr41_cap_tests {
         m.grow_shared(4).unwrap(); // 1 -> 5 pages
         assert_eq!(m.size_in_bytes(), 5 * page, "current is real (5 pages)");
         assert_eq!(m.peak_memory(), 5 * page, "peak is real (5 pages)");
-        assert!(m.peak_memory() >= m.size_in_bytes(), "peak is a high-water mark");
+        assert!(
+            m.peak_memory() >= m.size_in_bytes(),
+            "peak is a high-water mark"
+        );
     }
 }

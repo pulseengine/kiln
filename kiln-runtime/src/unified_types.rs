@@ -7,41 +7,16 @@
 
 use core::marker::PhantomData;
 
-use kiln_error::{
-    Error,
-    ErrorCategory,
-};
+use kiln_error::{Error, ErrorCategory};
 use kiln_foundation::{
-    bounded::{
-        BoundedString,
-        BoundedVec,
-    },
+    bounded::{BoundedString, BoundedVec},
     bounded_collections::BoundedMap,
-    prelude::{
-        BoundedCapacity,
-        Clone,
-        Copy,
-        Debug,
-        Default,
-        Eq,
-        PartialEq,
-        Value,
-    },
-    safe_memory::{
-        MemoryProvider,
-        NoStdProvider,
-    },
-    traits::{
-        Checksummable,
-        FromBytes,
-        ToBytes,
-    },
+    prelude::{BoundedCapacity, Clone, Copy, Debug, Default, Eq, PartialEq, Value},
+    safe_memory::{MemoryProvider, NoStdProvider},
+    traits::{Checksummable, FromBytes, ToBytes},
 };
 
-use crate::bounded_runtime_infra::{
-    DefaultRuntimeProvider,
-    RuntimeProvider,
-};
+use crate::bounded_runtime_infra::{DefaultRuntimeProvider, RuntimeProvider};
 
 // =============================================================================
 // PLATFORM-AWARE CAPACITY CONSTANTS
@@ -55,12 +30,12 @@ use crate::bounded_runtime_infra::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlatformCapacities {
     /// Small collection capacity (default: 64) - for locals, small arrays
-    pub small_capacity:       usize,
+    pub small_capacity: usize,
     /// Medium collection capacity (default: 1024) - for instructions, values
-    pub medium_capacity:      usize,
+    pub medium_capacity: usize,
     /// Large collection capacity (default: 65536) - for memory buffers, large
     /// data
-    pub large_capacity:       usize,
+    pub large_capacity: usize,
     /// Memory provider size in bytes (default: 1MB)
     pub memory_provider_size: usize,
 }
@@ -70,9 +45,9 @@ impl PlatformCapacities {
     #[must_use]
     pub const fn default() -> Self {
         Self {
-            small_capacity:       64,
-            medium_capacity:      1024,
-            large_capacity:       65536,
+            small_capacity: 64,
+            medium_capacity: 1024,
+            large_capacity: 65536,
             memory_provider_size: 1048576, // 1MB
         }
     }
@@ -81,9 +56,9 @@ impl PlatformCapacities {
     #[must_use]
     pub const fn embedded() -> Self {
         Self {
-            small_capacity:       16,
-            medium_capacity:      256,
-            large_capacity:       8192,
+            small_capacity: 16,
+            medium_capacity: 256,
+            large_capacity: 8192,
             memory_provider_size: 32768, // 32KB
         }
     }
@@ -92,9 +67,9 @@ impl PlatformCapacities {
     #[must_use]
     pub const fn safety_critical() -> Self {
         Self {
-            small_capacity:       32,
-            medium_capacity:      512,
-            large_capacity:       16384,
+            small_capacity: 32,
+            medium_capacity: 512,
+            large_capacity: 16384,
             memory_provider_size: 65536, // 64KB
         }
     }
@@ -257,9 +232,9 @@ pub struct PlatformMemoryAdapter<Provider = DefaultRuntimeProvider>
 where
     Provider: MemoryProvider + Default,
 {
-    provider:        Provider,
+    provider: Provider,
     allocated_bytes: usize,
-    max_memory:      usize,
+    max_memory: usize,
 }
 
 impl<Provider> PlatformMemoryAdapter<Provider>
@@ -327,11 +302,7 @@ where
 
 /// Re-export commonly used types for easy migration
 pub mod compat {
-    use super::{
-        BoundedString,
-        BoundedVec,
-        DefaultRuntimeProvider,
-    };
+    use super::{BoundedString, BoundedVec, DefaultRuntimeProvider};
 
     /// Legacy vector type for backward compatibility (medium capacity)
     /// Note: T must implement Sized + Checksummable + `ToBytes` + `FromBytes` +

@@ -60,19 +60,10 @@ use kiln_error::Result;
 use kiln_foundation::Value;
 
 #[cfg(not(feature = "std"))]
-use crate::prelude::{
-    BoundedCapacity,
-    BoundedVec,
-};
+use crate::prelude::{BoundedCapacity, BoundedVec};
 use crate::{
-    prelude::{
-        str,
-        BlockType,
-        Debug,
-        Error,
-        PartialEq,
-    },
     PureInstruction,
+    prelude::{BlockType, Debug, Error, PartialEq, str},
 };
 // use crate::validation::{Validate, ValidationContext}; // Currently unused
 
@@ -80,7 +71,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct BranchTarget {
     /// The label index to branch to
-    pub label_idx:   u32,
+    pub label_idx: u32,
     /// The number of values to keep when branching
     pub keep_values: usize,
 }
@@ -102,8 +93,7 @@ pub enum Block {
 }
 
 /// Represents a pure control flow operation for WebAssembly.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum ControlOp {
     /// A basic block of instructions with a label that can be branched to
     Block(ControlBlockType),
@@ -123,10 +113,10 @@ pub enum ControlOp {
     BrTable {
         /// Table of branch target labels
         #[cfg(feature = "std")]
-        table:   Vec<u32>,
+        table: Vec<u32>,
         /// Table of branch target labels (`no_std`)
         #[cfg(not(feature = "std"))]
-        table:   BoundedVec<u32, 256, kiln_foundation::NoStdProvider<8192>>,
+        table: BoundedVec<u32, 256, kiln_foundation::NoStdProvider<8192>>,
         /// Default label to branch to if the index is out of bounds
         default: u32,
     },
@@ -139,7 +129,7 @@ pub enum ControlOp {
         /// Index of the table to use for the call
         table_idx: u32,
         /// Type index for the function signature
-        type_idx:  u32,
+        type_idx: u32,
     },
     /// Tail call a function by index (`return_call`)
     ReturnCall(u32),
@@ -148,7 +138,7 @@ pub enum ControlOp {
         /// Index of the table to use for the call
         table_idx: u32,
         /// Type index for the function signature
-        type_idx:  u32,
+        type_idx: u32,
     },
     /// Execute a nop instruction (no operation)
     #[default]
@@ -160,7 +150,6 @@ pub enum ControlOp {
     /// Branch if reference is not null (`br_on_non_null`)
     BrOnNonNull(u32),
 }
-
 
 /// Return operation (return)
 #[derive(Debug, Clone, PartialEq)]
@@ -203,7 +192,7 @@ pub struct CallIndirect {
     /// Table index to use for the indirect call
     pub table_idx: u32,
     /// Expected function type index
-    pub type_idx:  u32,
+    pub type_idx: u32,
 }
 
 impl CallIndirect {
@@ -254,7 +243,7 @@ pub struct ReturnCallIndirect {
     /// Table index to use for the indirect call
     pub table_idx: u32,
     /// Expected function type index
-    pub type_idx:  u32,
+    pub type_idx: u32,
 }
 
 impl ReturnCallIndirect {
@@ -322,7 +311,7 @@ pub struct BrTable {
 impl BrTable {
     /// Binary `std/no_std` choice
     #[cfg(feature = "std")]
-    #[must_use] 
+    #[must_use]
     pub fn new(table: Vec<u32>, default: u32) -> Self {
         Self { table, default }
     }
@@ -543,7 +532,7 @@ pub trait ControlContext {
     ///
     /// Returns an error if validation or call fails
     fn execute_call_indirect(&mut self, table_idx: u32, type_idx: u32, func_idx: i32)
-        -> Result<()>;
+    -> Result<()>;
 
     /// Execute branch table operation
     ///
@@ -601,7 +590,7 @@ impl<T: ControlContext> PureInstruction<T, Error> for ControlOp {
             },
             Self::Br(label_idx) => {
                 let target = BranchTarget {
-                    label_idx:   *label_idx,
+                    label_idx: *label_idx,
                     keep_values: 0, // The runtime will resolve this based on block types
                 };
                 context.branch(target)
@@ -614,7 +603,7 @@ impl<T: ControlContext> PureInstruction<T, Error> for ControlOp {
 
                 if condition != 0 {
                     let target = BranchTarget {
-                        label_idx:   *label_idx,
+                        label_idx: *label_idx,
                         keep_values: 0, // The runtime will resolve this based on block types
                     };
                     context.branch(target)
@@ -680,11 +669,7 @@ impl<T: ControlContext> PureInstruction<T, Error> for ControlOp {
                     },
                 };
 
-                if should_branch {
-                    context.execute_br_on_null(*label)
-                } else {
-                    Ok(())
-                }
+                if should_branch { context.execute_br_on_null(*label) } else { Ok(()) }
             },
             Self::BrOnNonNull(label) => {
                 // Pop reference from stack
@@ -705,16 +690,11 @@ impl<T: ControlContext> PureInstruction<T, Error> for ControlOp {
                     },
                 };
 
-                if should_branch {
-                    context.execute_br_on_non_null(*label)
-                } else {
-                    Ok(())
-                }
+                if should_branch { context.execute_br_on_non_null(*label) } else { Ok(()) }
             },
         }
     }
 }
-
 
 // Test module removed due to extensive API mismatches
 // TODO: Reimplement tests with correct control flow API

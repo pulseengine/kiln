@@ -5,13 +5,7 @@
 
 //! Demonstration of ASIL-specific safety features for mathematical operations.
 
-use kiln_math::{
-    check_simd_bounds,
-    RoundingMode,
-    SafeArithmetic,
-    SafeFloat,
-    SafeRounding,
-};
+use kiln_math::{RoundingMode, SafeArithmetic, SafeFloat, SafeRounding, check_simd_bounds};
 
 fn main() {
     println!("Kiln Math Safety Features Demo");

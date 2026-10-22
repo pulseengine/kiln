@@ -8,11 +8,8 @@
 use kiln_error::Result;
 use kiln_foundation::Value;
 use kiln_instructions::{
-    comparison_ops::ComparisonContext,
+    ComparisonOp, ParametricOp, PureInstruction, comparison_ops::ComparisonContext,
     parametric_ops::ParametricContext,
-    ComparisonOp,
-    ParametricOp,
-    PureInstruction,
 };
 
 // Mock contexts for demonstration
@@ -34,9 +31,9 @@ impl ParametricContext for SimpleContext {
     }
 
     fn pop_value(&mut self) -> Result<Value> {
-        self.stack.pop().ok_or_else(|| {
-            kiln_error::Error::runtime_execution_error("Stack underflow")
-        })
+        self.stack
+            .pop()
+            .ok_or_else(|| kiln_error::Error::runtime_execution_error("Stack underflow"))
     }
 
     fn peek_value(&self) -> Result<&Value> {

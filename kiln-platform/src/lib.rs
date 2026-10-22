@@ -191,235 +191,109 @@ pub mod vxworks_threading;
 // Export macOS specific implementations if enabled and on macOS
 // Export Linux specific implementations if enabled and on Linux
 pub use advanced_sync::{
-    AdvancedRwLock,
-    LockFreeAllocator,
-    Priority,
+    AdvancedRwLock, LockFreeAllocator, MAX_PRIORITY, MIN_PRIORITY, Priority,
     PriorityInheritanceMutex,
-    MAX_PRIORITY,
-    MIN_PRIORITY,
 };
 #[cfg(feature = "std")]
-pub use advanced_sync::{
-    LockFreeMpscQueue,
-    WaitFreeSpscQueue,
-};
+pub use advanced_sync::{LockFreeMpscQueue, WaitFreeSpscQueue};
 // Export comprehensive limits
 pub use comprehensive_limits::{
-    AsilLevel,
-    ComprehensiveLimitProvider,
-    ComprehensivePlatformLimits,
-    EmbeddedLimitProvider,
-    LinuxLimitProvider,
-    MacOsLimitProvider,
-    PlatformId,
-    PlatformLimitDiscoverer,
-    QnxLimitProvider,
+    AsilLevel, ComprehensiveLimitProvider, ComprehensivePlatformLimits, EmbeddedLimitProvider,
+    LinuxLimitProvider, MacOsLimitProvider, PlatformId, PlatformLimitDiscoverer, QnxLimitProvider,
 };
 pub use formal_verification::{
-    annotations,
-    concurrency_verification,
-    integration_verification,
-    memory_verification,
-    realtime_verification,
-    security_verification,
+    annotations, concurrency_verification, integration_verification, memory_verification,
+    realtime_verification, security_verification,
 };
 // Export specific CFI/BTI types for easy access
-pub use hardware_optimizations::arm::{
-    BranchTargetIdentification,
-    BtiExceptionLevel,
-    BtiMode,
-};
-pub use hardware_optimizations::riscv::{
-    CfiExceptionMode,
-    ControlFlowIntegrity,
-};
+pub use hardware_optimizations::arm::{BranchTargetIdentification, BtiExceptionLevel, BtiMode};
+pub use hardware_optimizations::riscv::{CfiExceptionMode, ControlFlowIntegrity};
 // Export enhanced platform features
 pub use hardware_optimizations::{
-    arm,
-    compile_time,
-    intel,
-    riscv,
-    HardwareOptimization,
-    HardwareOptimizer,
-    SecurityLevel,
+    HardwareOptimization, HardwareOptimizer, SecurityLevel, arm, compile_time, intel, riscv,
 };
 #[cfg(all(
     feature = "platform-linux",
     target_os = "linux",
     not(all(feature = "linux-mte", target_arch = "aarch64"))
 ))]
-pub use linux_memory::{
-    LinuxAllocator,
-    LinuxAllocatorBuilder,
-};
+pub use linux_memory::{LinuxAllocator, LinuxAllocatorBuilder};
 #[cfg(all(
     feature = "platform-linux",
     feature = "linux-mte",
     target_arch = "aarch64",
     target_os = "linux"
 ))]
-pub use linux_memory_arm64_mte::{
-    LinuxArm64MteAllocator,
-    LinuxArm64MteAllocatorBuilder,
-    MteMode,
-};
+pub use linux_memory_arm64_mte::{LinuxArm64MteAllocator, LinuxArm64MteAllocatorBuilder, MteMode};
 #[cfg(all(feature = "platform-linux", target_os = "linux"))]
-pub use linux_sync::{
-    LinuxFutex,
-    LinuxFutexBuilder,
-};
+pub use linux_sync::{LinuxFutex, LinuxFutexBuilder};
 // Export macOS specific implementations (using direct syscalls)
 #[cfg(all(feature = "platform-macos", target_os = "macos"))]
-pub use macos_memory::{
-    MacOsAllocator,
-    MacOsAllocatorBuilder,
-};
+pub use macos_memory::{MacOsAllocator, MacOsAllocatorBuilder};
 #[cfg(all(feature = "platform-macos", target_os = "macos"))]
-pub use macos_sync::{
-    MacOsFutex,
-    MacOsFutexBuilder,
-};
-pub use memory::{
-    NoStdProvider,
-    PageAllocator,
-    VerificationLevel,
-    WASM_PAGE_SIZE,
-}; // WASM_PAGE_SIZE is always available
+pub use macos_sync::{MacOsFutex, MacOsFutexBuilder};
+pub use memory::{NoStdProvider, PageAllocator, VerificationLevel, WASM_PAGE_SIZE}; // WASM_PAGE_SIZE is always available
 // Export performance validation (for testing and benchmarking)
-pub use performance_validation::{
-    BenchmarkResult,
-    CompileTimeValidator,
-    PerformanceValidator,
-}; // This is fine as kiln_error::Error is always available
+pub use performance_validation::{BenchmarkResult, CompileTimeValidator, PerformanceValidator}; // This is fine as kiln_error::Error is always available
 // Export hybrid platform abstraction
 pub use platform_abstraction::{
-    paradigm,
-    platform_select,
-    BaremetalPlatform,
-    IsolationLevel,
-    PlatformAbstraction,
-    PlatformConfig,
-    PosixPlatform,
-    RealtimePlatform,
-    SecurityPlatform,
-    UnifiedPlatform,
+    BaremetalPlatform, IsolationLevel, PlatformAbstraction, PlatformConfig, PosixPlatform,
+    RealtimePlatform, SecurityPlatform, UnifiedPlatform, paradigm, platform_select,
 };
 pub use prelude::*;
 #[cfg(all(feature = "platform-qnx", target_os = "nto"))]
-pub use qnx_arena::{
-    QnxArenaAllocator,
-    QnxArenaAllocatorBuilder,
-    QnxMallocOption,
-};
+pub use qnx_arena::{QnxArenaAllocator, QnxArenaAllocatorBuilder, QnxMallocOption};
 // Export QNX specific implementations if enabled and on QNX
 #[cfg(all(feature = "platform-qnx", target_os = "nto"))]
-pub use qnx_memory::{
-    QnxAllocator,
-    QnxAllocatorBuilder,
-    QnxMapFlags,
-    QnxProtFlags,
-};
+pub use qnx_memory::{QnxAllocator, QnxAllocatorBuilder, QnxMapFlags, QnxProtFlags};
 #[cfg(all(feature = "platform-qnx", target_os = "nto"))]
 pub use qnx_partition::{
-    PartitionGuard,
-    QnxMemoryPartition,
-    QnxMemoryPartitionBuilder,
-    QnxPartitionFlags,
+    PartitionGuard, QnxMemoryPartition, QnxMemoryPartitionBuilder, QnxPartitionFlags,
 };
 #[cfg(all(feature = "platform-qnx", target_os = "nto"))]
-pub use qnx_sync::{
-    QnxFutex,
-    QnxFutexBuilder,
-    QnxSyncPriority,
-};
+pub use qnx_sync::{QnxFutex, QnxFutexBuilder, QnxSyncPriority};
 // Export runtime detection
 pub use runtime_detection::{
-    MemoryCapabilities,
-    PlatformCapabilities,
-    PlatformDetector,
-    RealtimeCapabilities,
-    SecurityCapabilities,
-    SyncCapabilities,
+    MemoryCapabilities, PlatformCapabilities, PlatformDetector, RealtimeCapabilities,
+    SecurityCapabilities, SyncCapabilities,
 };
 pub use side_channel_resistance::{
-    access_obfuscation,
-    cache_aware_allocation,
-    constant_time,
+    AttackVector, ResistanceLevel, access_obfuscation, cache_aware_allocation, constant_time,
     platform_integration,
-    AttackVector,
-    ResistanceLevel,
 };
-#[cfg(target_arch = "x86_64")]
-pub use simd::x86_64::X86SimdProvider;
 #[cfg(feature = "std")]
 pub use simd::SimdRuntime;
-pub use simd::{
-    ScalarSimdProvider,
-    SimdCapabilities,
-    SimdLevel,
-    SimdProvider,
-};
-pub use sync::{
-    FutexLike,
-    SpinFutex,
-    SpinFutexBuilder,
-    TimeoutResult,
-}; // FutexLike is always available
+#[cfg(target_arch = "x86_64")]
+pub use simd::x86_64::X86SimdProvider;
+pub use simd::{ScalarSimdProvider, SimdCapabilities, SimdLevel, SimdProvider};
+pub use sync::{FutexLike, SpinFutex, SpinFutexBuilder, TimeoutResult}; // FutexLike is always available
 // Export Tock OS specific implementations if enabled
 #[cfg(feature = "platform-tock")]
-pub use tock_memory::{
-    TockAllocator,
-    TockAllocatorBuilder,
-};
+pub use tock_memory::{TockAllocator, TockAllocatorBuilder};
 #[cfg(feature = "platform-tock")]
-pub use tock_sync::{
-    TockFutex,
-    TockFutexBuilder,
-    TockSemaphoreFutex,
-};
+pub use tock_sync::{TockFutex, TockFutexBuilder, TockSemaphoreFutex};
 // Export VxWorks specific implementations if enabled
 #[cfg(feature = "platform-vxworks")]
 pub use vxworks_memory::{
-    VxWorksAllocator,
-    VxWorksAllocatorBuilder,
-    VxWorksContext,
-    VxWorksMemoryConfig,
+    VxWorksAllocator, VxWorksAllocatorBuilder, VxWorksContext, VxWorksMemoryConfig,
 };
 #[cfg(feature = "platform-vxworks")]
-pub use vxworks_sync::{
-    VxWorksFutex,
-    VxWorksFutexBuilder,
-};
+pub use vxworks_sync::{VxWorksFutex, VxWorksFutexBuilder};
 #[cfg(feature = "platform-vxworks")]
-pub use vxworks_threading::{
-    VxWorksThread,
-    VxWorksThreadBuilder,
-    VxWorksThreadConfig,
-};
+pub use vxworks_threading::{VxWorksThread, VxWorksThreadBuilder, VxWorksThreadConfig};
 // Re-export core error type (also available via prelude)
 pub use kiln_error::Error;
 // Export Zephyr specific implementations if enabled
 #[cfg(feature = "platform-zephyr")]
-pub use zephyr_memory::{
-    ZephyrAllocator,
-    ZephyrAllocatorBuilder,
-    ZephyrMemoryFlags,
-};
+pub use zephyr_memory::{ZephyrAllocator, ZephyrAllocatorBuilder, ZephyrMemoryFlags};
 #[cfg(feature = "platform-zephyr")]
-pub use zephyr_sync::{
-    ZephyrFutex,
-    ZephyrFutexBuilder,
-    ZephyrSemaphoreFutex,
-};
+pub use zephyr_sync::{ZephyrFutex, ZephyrFutexBuilder, ZephyrSemaphoreFutex};
 
 #[cfg(test)]
 #[allow(clippy::panic)] // Allow panics in the test module
 mod tests {
     // Import through the prelude for testing
-    use super::{
-        memory::MemoryProvider,
-        prelude::*,
-    };
+    use super::{memory::MemoryProvider, prelude::*};
 
     #[test]
     fn it_works() {

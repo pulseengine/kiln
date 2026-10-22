@@ -28,7 +28,11 @@ fn snapshot_filters_by_prefix_and_reads_integer_values() {
 
     let snapshot = instance.export_global_snapshot("__witness_counter_").unwrap();
 
-    assert_eq!(snapshot.len(), 2, "only the two prefixed globals, not `other`");
+    assert_eq!(
+        snapshot.len(),
+        2,
+        "only the two prefixed globals, not `other`"
+    );
     assert_eq!(snapshot.get("__witness_counter_0"), Some(&7i64));
     assert_eq!(snapshot.get("__witness_counter_1"), Some(&0i64));
     assert_eq!(snapshot.get("other"), None);

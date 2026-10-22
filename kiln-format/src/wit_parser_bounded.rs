@@ -4,15 +4,8 @@
 //! collections, enabling WIT support in pure no_std environments without
 //! allocation.
 
-use kiln_error::{
-    Error,
-    Result,
-};
-use kiln_foundation::{
-    BoundedString,
-    MemoryProvider,
-    NoStdProvider,
-};
+use kiln_error::{Error, Result};
+use kiln_foundation::{BoundedString, MemoryProvider, NoStdProvider};
 
 use crate::MAX_WASM_STRING_SIZE;
 
@@ -25,14 +18,14 @@ use crate::MAX_WASM_STRING_SIZE;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SimpleBoundedString {
     data: [u8; 64], // 64 bytes should be enough for WIT identifiers
-    len:  usize,
+    len: usize,
 }
 
 impl SimpleBoundedString {
     pub fn new() -> Self {
         Self {
             data: [0; 64],
-            len:  0,
+            len: 0,
         }
     }
 
@@ -75,25 +68,25 @@ pub struct BoundedWitParser<
     P: MemoryProvider + Default + Clone + PartialEq + Eq = NoStdProvider<8192>,
 > {
     /// Input text being parsed (stored as bytes for processing)
-    input_buffer:    [u8; 8192], // 8KB fixed buffer
-    input_len:       usize,
+    input_buffer: [u8; 8192], // 8KB fixed buffer
+    input_len: usize,
     /// Parsed worlds (simplified)
-    worlds:          [Option<BoundedWitWorld>; 4], // Maximum 4 worlds
+    worlds: [Option<BoundedWitWorld>; 4], // Maximum 4 worlds
     /// Parsed interfaces (simplified)
-    interfaces:      [Option<BoundedWitInterface>; 8], // Maximum 8 interfaces
+    interfaces: [Option<BoundedWitInterface>; 8], // Maximum 8 interfaces
     /// Number of parsed worlds
-    world_count:     usize,
+    world_count: usize,
     /// Number of parsed interfaces
     interface_count: usize,
     /// Memory provider
-    provider:        P,
+    provider: P,
 }
 
 /// Simple bounded WIT world definition
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BoundedWitWorld {
     /// World name
-    pub name:         BoundedWitName,
+    pub name: BoundedWitName,
     /// Simple import/export counters for basic functionality
     pub import_count: u32,
     pub export_count: u32,
@@ -103,7 +96,7 @@ pub struct BoundedWitWorld {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BoundedWitInterface {
     /// Interface name
-    pub name:           BoundedWitName,
+    pub name: BoundedWitName,
     /// Simple function counter for basic functionality
     pub function_count: u32,
 }
@@ -112,9 +105,9 @@ pub struct BoundedWitInterface {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BoundedWitFunction {
     /// Function name
-    pub name:         BoundedWitName,
+    pub name: BoundedWitName,
     /// Parameter count (simplified)
-    pub param_count:  u32,
+    pub param_count: u32,
     /// Result count (simplified)
     pub result_count: u32,
 }
@@ -150,7 +143,7 @@ pub enum BoundedWitType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BoundedWitImport {
     /// Import name
-    pub name:        BoundedWitName,
+    pub name: BoundedWitName,
     /// Import is a function (simplified)
     pub is_function: bool,
 }
@@ -159,7 +152,7 @@ pub struct BoundedWitImport {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BoundedWitExport {
     /// Export name
-    pub name:        BoundedWitName,
+    pub name: BoundedWitName,
     /// Export is a function (simplified)
     pub is_function: bool,
 }
@@ -469,13 +462,13 @@ impl<P: MemoryProvider + Default + Clone + PartialEq + Eq> Default for BoundedWi
         Self::new(P::default()).unwrap_or_else(|_| {
             // Fallback to empty parser if creation fails
             Self {
-                input_buffer:    [0; 8192],
-                input_len:       0,
-                worlds:          [None, None, None, None],
-                interfaces:      [None, None, None, None, None, None, None, None],
-                world_count:     0,
+                input_buffer: [0; 8192],
+                input_len: 0,
+                worlds: [None, None, None, None],
+                interfaces: [None, None, None, None, None, None, None, None],
+                world_count: 0,
                 interface_count: 0,
-                provider:        P::default(),
+                provider: P::default(),
             }
         })
     }

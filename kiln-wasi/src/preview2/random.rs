@@ -5,11 +5,7 @@
 
 use core::any::Any;
 
-use crate::{
-    capabilities::WasiRandomCapabilities,
-    prelude::*,
-    Value,
-};
+use crate::{Value, capabilities::WasiRandomCapabilities, prelude::*};
 
 /// WASI get random bytes operation
 ///
@@ -51,10 +47,7 @@ pub fn wasi_get_random_bytes(_target: &mut dyn Any, args: &[Value]) -> Result<Ve
 /// Returns an error if:
 /// - The requested length exceeds 10MB
 /// - Pseudo-random generation fails
-pub fn wasi_get_insecure_random_bytes(
-    _target: &mut dyn Any,
-    args: &[Value],
-) -> Result<Vec<Value>> {
+pub fn wasi_get_insecure_random_bytes(_target: &mut dyn Any, args: &[Value]) -> Result<Vec<Value>> {
     // Extract length from arguments
     let len = extract_length(args)?;
 
@@ -101,10 +94,7 @@ pub fn wasi_get_random_u64(_target: &mut dyn Any, _args: &[Value]) -> Result<Vec
 /// # Errors
 ///
 /// Returns an error if pseudo-random generation fails.
-pub fn wasi_get_insecure_random_u64(
-    _target: &mut dyn Any,
-    _args: &[Value],
-) -> Result<Vec<Value>> {
+pub fn wasi_get_insecure_random_u64(_target: &mut dyn Any, _args: &[Value]) -> Result<Vec<Value>> {
     // Generate 8 pseudo-random bytes
     let random_bytes = generate_pseudo_random(8)?;
 
@@ -151,10 +141,9 @@ fn generate_secure_random(len: usize) -> Result<Vec<u8>> {
         use kiln_platform::random::PlatformRandom;
 
         let mut buffer = vec![0u8; len];
-        PlatformRandom::get_secure_bytes(&mut buffer)
-            .map_err(|_| Error::wasi_capability_unavailable(
-                "Failed to generate secure random bytes"
-            ))?;
+        PlatformRandom::get_secure_bytes(&mut buffer).map_err(|_| {
+            Error::wasi_capability_unavailable("Failed to generate secure random bytes")
+        })?;
 
         Ok(buffer)
     }

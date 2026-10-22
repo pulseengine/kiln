@@ -7,42 +7,30 @@
 //! to provide secure and isolated memory regions for WebAssembly execution.
 
 use core::{
-    fmt::{
-        self,
-        Debug,
-    },
+    fmt::{self, Debug},
     ptr::NonNull,
 };
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 
-use crate::memory::{
-    PageAllocator,
-    VerificationLevel,
-    WASM_PAGE_SIZE,
-};
+use crate::memory::{PageAllocator, VerificationLevel, WASM_PAGE_SIZE};
 
 /// QNX memory protection flags (compatible with mmap/mprotect)
 #[repr(u32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QnxProtFlags {
     /// No access
-    None             = 0,
+    None = 0,
     /// Read access
-    Read             = 1,
+    Read = 1,
     /// Write access
-    Write            = 2,
+    Write = 2,
     /// Execute access
-    Execute          = 4,
+    Execute = 4,
     /// Read and write access
-    ReadWrite        = 3,
+    ReadWrite = 3,
     /// Read and execute access
-    ReadExecute      = 5,
+    ReadExecute = 5,
     /// Read, write, and execute access
     ReadWriteExecute = 7,
 }
@@ -52,11 +40,11 @@ pub enum QnxProtFlags {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QnxMapFlags {
     /// Memory is shared
-    Shared    = 1,
+    Shared = 1,
     /// Memory is private (copy-on-write)
-    Private   = 2,
+    Private = 2,
     /// Memory is fixed at the specified address
-    Fixed     = 16,
+    Fixed = 16,
     /// Memory is anonymous (not backed by a file)
     Anonymous = 4096,
 }
@@ -110,15 +98,15 @@ mod ffi {
 #[derive(Debug, Clone)]
 pub struct QnxAllocatorConfig {
     /// Binary std/no_std choice
-    pub use_guard_pages:    bool,
+    pub use_guard_pages: bool,
     /// Memory protection flags for guard pages
-    pub guard_page_prot:    QnxProtFlags,
+    pub guard_page_prot: QnxProtFlags,
     /// Memory protection flags for data pages
-    pub data_page_prot:     QnxProtFlags,
+    pub data_page_prot: QnxProtFlags,
     /// Memory mapping flags
-    pub map_flags:          QnxMapFlags,
+    pub map_flags: QnxMapFlags,
     /// Whether to create a dedicated memory partition
-    pub create_partition:   bool,
+    pub create_partition: bool,
     /// Verification level for memory operations
     pub verification_level: VerificationLevel,
 }
@@ -126,11 +114,11 @@ pub struct QnxAllocatorConfig {
 impl Default for QnxAllocatorConfig {
     fn default() -> Self {
         Self {
-            use_guard_pages:    true,
-            guard_page_prot:    QnxProtFlags::None,
-            data_page_prot:     QnxProtFlags::ReadWrite,
-            map_flags:          QnxMapFlags::Private | QnxMapFlags::Anonymous,
-            create_partition:   false,
+            use_guard_pages: true,
+            guard_page_prot: QnxProtFlags::None,
+            data_page_prot: QnxProtFlags::ReadWrite,
+            map_flags: QnxMapFlags::Private | QnxMapFlags::Anonymous,
+            create_partition: false,
             verification_level: VerificationLevel::Standard,
         }
     }
@@ -188,17 +176,17 @@ impl QnxAllocatorBuilder {
 #[derive(Debug)]
 pub struct QnxAllocator {
     /// Binary std/no_std choice
-    config:             QnxAllocatorConfig,
+    config: QnxAllocatorConfig,
     /// Memory partition ID if a dedicated partition was created
-    partition_id:       Option<u32>,
+    partition_id: Option<u32>,
     /// Binary std/no_std choice
     current_allocation: Option<NonNull<u8>>,
     /// Binary std/no_std choice
-    current_size:       usize,
+    current_size: usize,
     /// Binary std/no_std choice
-    current_pages:      u32,
+    current_pages: u32,
     /// Binary std/no_std choice
-    maximum_pages:      Option<u32>,
+    maximum_pages: Option<u32>,
 }
 
 impl QnxAllocator {
@@ -214,11 +202,7 @@ impl QnxAllocator {
                     b"kiln_memory\0".as_ptr(),
                     ffi::mem_partition_getid(),
                 );
-                if id != 0 {
-                    Some(id)
-                } else {
-                    None
-                }
+                if id != 0 { Some(id) } else { None }
             }
         } else {
             None

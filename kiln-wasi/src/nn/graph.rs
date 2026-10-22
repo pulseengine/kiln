@@ -4,23 +4,11 @@
 //! models (graphs) with capability-based access control.
 
 use core::fmt;
-use std::sync::{
-    Mutex,
-    OnceLock,
-};
+use std::sync::{Mutex, OnceLock};
 
-use kiln_foundation::{
-    budget_aware_provider::CrateId,
-    safe_managed_alloc,
-    BoundedVec,
-};
+use kiln_foundation::{BoundedVec, budget_aware_provider::CrateId, safe_managed_alloc};
 
-use super::{
-    ModelCapability,
-    ModelFormat,
-    NeuralNetworkCapability,
-    VerificationLevel,
-};
+use super::{ModelCapability, ModelFormat, NeuralNetworkCapability, VerificationLevel};
 use crate::prelude::*;
 
 /// Maximum number of graphs that can be loaded
@@ -78,17 +66,17 @@ impl Default for ExecutionTarget {
 /// A loaded neural network graph
 pub struct Graph {
     /// Unique identifier
-    id:               u32,
+    id: u32,
     /// Graph encoding format
-    encoding:         GraphEncoding,
+    encoding: GraphEncoding,
     /// Execution target
-    target:           ExecutionTarget,
+    target: ExecutionTarget,
     /// Size of the model in bytes
-    size:             usize,
+    size: usize,
     /// SHA-256 hash of the model data
-    hash:             [u8; 32],
+    hash: [u8; 32],
     /// Backend-specific model handle
-    backend_model:    Box<dyn ModelCapability>,
+    backend_model: Box<dyn ModelCapability>,
     /// Capability level used to load this graph
     capability_level: VerificationLevel,
 }
@@ -182,7 +170,7 @@ impl fmt::Debug for Graph {
 
 /// Graph store for managing loaded models
 pub struct GraphStore {
-    graphs:  Vec<Graph>,
+    graphs: Vec<Graph>,
     next_id: u32,
 }
 
@@ -190,7 +178,7 @@ impl GraphStore {
     /// Create a new graph store
     pub fn new() -> Result<Self> {
         Ok(Self {
-            graphs:  Vec::new(),
+            graphs: Vec::new(),
             next_id: 1,
         })
     }

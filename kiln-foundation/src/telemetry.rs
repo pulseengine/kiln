@@ -11,27 +11,22 @@
 
 // Note: no_std is configured at the crate level
 
-use core::sync::atomic::{
-    AtomicBool,
-    AtomicU64,
-    AtomicU8,
-    Ordering,
-};
+use core::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering};
 
 /// Telemetry event severity levels
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum Severity {
     /// Detailed tracing information
-    Trace    = 0,
+    Trace = 0,
     /// Debug-level information
-    Debug    = 1,
+    Debug = 1,
     /// Informational messages
-    Info     = 2,
+    Info = 2,
     /// Warning conditions
-    Warning  = 3,
+    Warning = 3,
     /// Error conditions
-    Error    = 4,
+    Error = 4,
     /// Critical failures
     Critical = 5,
 }
@@ -59,15 +54,15 @@ pub struct TelemetryEvent {
     /// Event timestamp (milliseconds since start)
     pub timestamp_ms: u64,
     /// Event severity
-    pub severity:     Severity,
+    pub severity: Severity,
     /// Event category
-    pub category:     Category,
+    pub category: Category,
     /// Event code for categorization
-    pub event_code:   u32,
+    pub event_code: u32,
     /// Context value 1 (event-specific)
-    pub context1:     u64,
+    pub context1: u64,
     /// Context value 2 (event-specific)
-    pub context2:     u64,
+    pub context2: u64,
 }
 
 /// Event codes for different telemetry events
@@ -120,9 +115,9 @@ pub mod event_codes {
 /// Lock-free implementation suitable for real-time systems
 pub struct TelemetryBuffer<const N: usize> {
     /// Event storage
-    events:      [AtomicU64; N],
+    events: [AtomicU64; N],
     /// Write position
-    write_pos:   AtomicU64,
+    write_pos: AtomicU64,
     /// Number of events written
     event_count: AtomicU64,
 }
@@ -137,8 +132,8 @@ impl<const N: usize> TelemetryBuffer<N> {
     /// Create a new telemetry buffer
     pub const fn new() -> Self {
         Self {
-            events:      [const { AtomicU64::new(0) }; N],
-            write_pos:   AtomicU64::new(0),
+            events: [const { AtomicU64::new(0) }; N],
+            write_pos: AtomicU64::new(0),
             event_count: AtomicU64::new(0),
         }
     }
@@ -170,9 +165,9 @@ impl<const N: usize> TelemetryBuffer<N> {
 /// Global telemetry system configuration
 pub struct TelemetryConfig {
     /// Whether telemetry is enabled
-    enabled:           AtomicBool,
+    enabled: AtomicBool,
     /// Minimum severity level to record
-    min_severity:      AtomicU8,
+    min_severity: AtomicU8,
     /// Timestamp counter
     timestamp_counter: AtomicU64,
 }
@@ -187,8 +182,8 @@ impl TelemetryConfig {
     /// Create new telemetry configuration
     pub const fn new() -> Self {
         Self {
-            enabled:           AtomicBool::new(true),
-            min_severity:      AtomicU8::new(Severity::Info as u8),
+            enabled: AtomicBool::new(true),
+            min_severity: AtomicU8::new(Severity::Info as u8),
             timestamp_counter: AtomicU64::new(0),
         }
     }
@@ -346,9 +341,9 @@ pub fn init_telemetry(enabled: bool, min_severity: Severity) {
 /// Get telemetry statistics
 pub fn get_telemetry_stats() -> TelemetryStats {
     TelemetryStats {
-        events_recorded:   TELEMETRY_BUFFER.event_count(),
+        events_recorded: TELEMETRY_BUFFER.event_count(),
         telemetry_enabled: TELEMETRY_CONFIG.is_enabled(),
-        min_severity:      TELEMETRY_CONFIG.min_severity.load(Ordering::Relaxed),
+        min_severity: TELEMETRY_CONFIG.min_severity.load(Ordering::Relaxed),
     }
 }
 
@@ -356,11 +351,11 @@ pub fn get_telemetry_stats() -> TelemetryStats {
 #[derive(Debug, Clone)]
 pub struct TelemetryStats {
     /// Total events recorded
-    pub events_recorded:   u64,
+    pub events_recorded: u64,
     /// Whether telemetry is enabled
     pub telemetry_enabled: bool,
     /// Minimum severity level
-    pub min_severity:      u8,
+    pub min_severity: u8,
 }
 
 #[cfg(test)]

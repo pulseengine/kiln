@@ -10,10 +10,7 @@ use std::vec::Vec;
 use kiln_error::Result;
 // For pure no_std mode, we'll make validation work with bounded collections
 #[cfg(not(any(feature = "std")))]
-use kiln_foundation::{
-    BoundedCapacity,
-    BoundedVec,
-};
+use kiln_foundation::{BoundedCapacity, BoundedVec};
 
 /// Trait for types that can be validated
 pub trait Validatable {

@@ -552,14 +552,30 @@ mod std_encoding {
             },
             kiln_format::component::FormatValType::S8 => kiln_format::component::FormatValType::S8,
             kiln_format::component::FormatValType::U8 => kiln_format::component::FormatValType::U8,
-            kiln_format::component::FormatValType::S16 => kiln_format::component::FormatValType::S16,
-            kiln_format::component::FormatValType::U16 => kiln_format::component::FormatValType::U16,
-            kiln_format::component::FormatValType::S32 => kiln_format::component::FormatValType::S32,
-            kiln_format::component::FormatValType::U32 => kiln_format::component::FormatValType::U32,
-            kiln_format::component::FormatValType::S64 => kiln_format::component::FormatValType::S64,
-            kiln_format::component::FormatValType::U64 => kiln_format::component::FormatValType::U64,
-            kiln_format::component::FormatValType::F32 => kiln_format::component::FormatValType::F32,
-            kiln_format::component::FormatValType::F64 => kiln_format::component::FormatValType::F64,
+            kiln_format::component::FormatValType::S16 => {
+                kiln_format::component::FormatValType::S16
+            },
+            kiln_format::component::FormatValType::U16 => {
+                kiln_format::component::FormatValType::U16
+            },
+            kiln_format::component::FormatValType::S32 => {
+                kiln_format::component::FormatValType::S32
+            },
+            kiln_format::component::FormatValType::U32 => {
+                kiln_format::component::FormatValType::U32
+            },
+            kiln_format::component::FormatValType::S64 => {
+                kiln_format::component::FormatValType::S64
+            },
+            kiln_format::component::FormatValType::U64 => {
+                kiln_format::component::FormatValType::U64
+            },
+            kiln_format::component::FormatValType::F32 => {
+                kiln_format::component::FormatValType::F32
+            },
+            kiln_format::component::FormatValType::F64 => {
+                kiln_format::component::FormatValType::F64
+            },
             kiln_format::component::FormatValType::Char => {
                 kiln_format::component::FormatValType::Char
             },
@@ -580,7 +596,10 @@ mod std_encoding {
                 // Clone the values to avoid references to temporaries
                 let inner_val_type = format_val_type_to_val_type(inner);
                 let len_value = *len;
-                kiln_format::component::FormatValType::FixedList(Box::new(inner_val_type), len_value)
+                kiln_format::component::FormatValType::FixedList(
+                    Box::new(inner_val_type),
+                    len_value,
+                )
             },
             kiln_format::component::FormatValType::Record(fields) => {
                 // Create new vectors of fields to avoid references to temporaries
@@ -785,7 +804,8 @@ mod no_std_encoding {
     pub fn encode_component(
         component: &Component,
     ) -> Result<BoundedVec<u8, 1024, NoStdProvider<2048>>> {
-        let provider = kiln_foundation::safe_managed_alloc!(2048, kiln_foundation::CrateId::Decoder)?;
+        let provider =
+            kiln_foundation::safe_managed_alloc!(2048, kiln_foundation::CrateId::Decoder)?;
         let mut binary = BoundedVec::new(provider)
             .map_err(|_| Error::memory_error("Failed to create encoding buffer"))?;
 

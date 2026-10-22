@@ -19,51 +19,26 @@
 //! - Comprehensive validation and bounds checking
 //! - Memory isolation and access control
 
-use std::{
-    boxed::Box,
-    collections::HashMap,
-    sync::Arc,
-    vec::Vec,
-};
+use std::{boxed::Box, collections::HashMap, sync::Arc, vec::Vec};
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 use kiln_foundation::{
     traits::BoundedCapacity,
-    types::{
-        MemoryType,
-        ValueType,
-    },
+    types::{MemoryType, ValueType},
     values::Value,
 };
 
 use crate::prelude::CoreMemoryType;
 use kiln_instructions::{
-    memory_ops::{
-        DataSegmentOperations,
-        MemoryOperations,
-    },
+    memory_ops::{DataSegmentOperations, MemoryOperations},
     multi_memory::{
-        MultiMemoryBulk,
-        MultiMemoryCrossCopy,
-        MultiMemoryGrow,
-        MultiMemoryLoad,
-        MultiMemorySize,
-        MultiMemoryStore,
-        MAX_MEMORIES,
+        MAX_MEMORIES, MultiMemoryBulk, MultiMemoryCrossCopy, MultiMemoryGrow, MultiMemoryLoad,
+        MultiMemorySize, MultiMemoryStore,
     },
 };
 use kiln_sync::{
-    unified_sync::{
-        AsilLevel,
-        SafeAtomicCounter,
-        SafetyContext,
-    },
     KilnMutex,
+    unified_sync::{AsilLevel, SafeAtomicCounter, SafetyContext},
 };
 
 use crate::memory::Memory;
@@ -95,76 +70,76 @@ pub enum MultiMemoryOperation {
         /// Index of the memory to load from.
         memory_index: u32,
         /// The load operation to perform.
-        load_op:      MultiMemoryLoad,
+        load_op: MultiMemoryLoad,
         /// Address to load from.
-        address:      Value,
+        address: Value,
     },
     /// Store to specific memory instance
     Store {
         /// Index of the memory to store to.
         memory_index: u32,
         /// The store operation to perform.
-        store_op:     MultiMemoryStore,
+        store_op: MultiMemoryStore,
         /// Address to store to.
-        address:      Value,
+        address: Value,
         /// Value to store.
-        value:        Value,
+        value: Value,
     },
     /// Fill memory region
     Fill {
         /// Index of the memory to fill.
         memory_index: u32,
         /// Destination address.
-        dest:         Value,
+        dest: Value,
         /// Byte value to fill with.
-        value:        Value,
+        value: Value,
         /// Number of bytes to fill.
-        size:         Value,
+        size: Value,
     },
     /// Copy within same memory
     Copy {
         /// Index of the memory to copy within.
         memory_index: u32,
         /// Destination address.
-        dest:         Value,
+        dest: Value,
         /// Source address.
-        src:          Value,
+        src: Value,
         /// Number of bytes to copy.
-        size:         Value,
+        size: Value,
     },
     /// Initialize memory from data segment
     Init {
         /// Index of the memory to initialize.
         memory_index: u32,
         /// Index of the data segment.
-        data_index:   u32,
+        data_index: u32,
         /// Destination address.
-        dest:         Value,
+        dest: Value,
         /// Source offset in data segment.
-        src:          Value,
+        src: Value,
         /// Number of bytes to copy.
-        size:         Value,
+        size: Value,
     },
     /// Cross-memory copy operation
     CrossCopy {
         /// The cross-copy operation definition.
         cross_copy_op: MultiMemoryCrossCopy,
         /// Destination address.
-        dest_addr:     Value,
+        dest_addr: Value,
         /// Source address.
-        src_addr:      Value,
+        src_addr: Value,
         /// Number of bytes to copy.
-        size:          Value,
+        size: Value,
     },
     /// Get memory size
     Size {
         /// The size operation definition.
-        size_op: MultiMemorySize
+        size_op: MultiMemorySize,
     },
     /// Grow memory
     Grow {
         /// The grow operation definition.
-        grow_op:     MultiMemoryGrow,
+        grow_op: MultiMemoryGrow,
         /// Number of pages to grow by.
         delta_pages: Value,
     },
@@ -176,11 +151,11 @@ pub struct MultiMemoryInstance {
     /// Memory index within the module.
     pub memory_index: u32,
     /// Memory type specification.
-    pub memory_type:  MemoryType,
+    pub memory_type: MemoryType,
     /// Underlying memory implementation.
-    memory:           Arc<KilnMutex<Memory>>,
+    memory: Arc<KilnMutex<Memory>>,
     /// Access statistics.
-    pub stats:        Arc<KilnMutex<MultiMemoryStats>>,
+    pub stats: Arc<KilnMutex<MultiMemoryStats>>,
 }
 
 impl MultiMemoryInstance {
@@ -199,7 +174,7 @@ impl MultiMemoryInstance {
         Ok(Self {
             memory_index,
             memory_type,
-            memory: Arc::new(KilnMutex::new(*memory)),  // Dereference Box<Memory>
+            memory: Arc::new(KilnMutex::new(*memory)), // Dereference Box<Memory>
             stats: Arc::new(KilnMutex::new(MultiMemoryStats::new())),
         })
     }
@@ -326,10 +301,7 @@ impl MultiMemoryContext {
     pub fn new() -> Self {
         Self {
             memories: HashMap::new(),
-            memory_counter: SafeAtomicCounter::new(
-                usize::MAX,
-                SafetyContext::new(AsilLevel::QM),
-            ),
+            memory_counter: SafeAtomicCounter::new(usize::MAX, SafetyContext::new(AsilLevel::QM)),
             global_stats: Arc::new(KilnMutex::new(MultiMemoryStats::new())),
             data_segments: DummyDataSegments,
         }
@@ -547,32 +519,32 @@ impl ASILCompliantMultiMemoryProvider {
 #[derive(Debug, Clone)]
 pub struct MultiMemoryStats {
     /// Number of registered memory instances.
-    pub registered_memories:     u64,
+    pub registered_memories: u64,
     /// Number of load operations performed.
-    pub load_operations:         u64,
+    pub load_operations: u64,
     /// Number of store operations performed.
-    pub store_operations:        u64,
+    pub store_operations: u64,
     /// Number of bulk operations performed.
-    pub bulk_operations:         u64,
+    pub bulk_operations: u64,
     /// Number of cross-memory operations performed.
     pub cross_memory_operations: u64,
     /// Number of grow operations performed.
-    pub grow_operations:         u64,
+    pub grow_operations: u64,
     /// Number of access violations detected.
-    pub access_violations:       u64,
+    pub access_violations: u64,
 }
 
 impl MultiMemoryStats {
     /// Creates a new statistics instance with all counters initialized to zero.
     fn new() -> Self {
         Self {
-            registered_memories:     0,
-            load_operations:         0,
-            store_operations:        0,
-            bulk_operations:         0,
+            registered_memories: 0,
+            load_operations: 0,
+            store_operations: 0,
+            bulk_operations: 0,
             cross_memory_operations: 0,
-            grow_operations:         0,
-            access_violations:       0,
+            grow_operations: 0,
+            access_violations: 0,
         }
     }
 

@@ -385,7 +385,8 @@ impl CommandSuggestionEngine {
                     .bright_black()
                     .to_string()
             } else {
-                "No suggestions available. Try 'cargo-kiln help' for available commands.".to_string()
+                "No suggestions available. Try 'cargo-kiln help' for available commands."
+                    .to_string()
             };
         }
 

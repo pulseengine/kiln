@@ -8,23 +8,9 @@ use alloc::sync::Arc;
 #[cfg(feature = "std")]
 use std::sync::Arc;
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
-use kiln_foundation::{
-    budget_aware_provider::CrateId,
-    safe_managed_alloc,
-    values::Value,
-};
-use kiln_runtime::engine::{
-    CapabilityAwareEngine,
-    CapabilityEngine,
-    EnginePreset,
-    ModuleHandle,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
+use kiln_foundation::{budget_aware_provider::CrateId, safe_managed_alloc, values::Value};
+use kiln_runtime::engine::{CapabilityAwareEngine, CapabilityEngine, EnginePreset, ModuleHandle};
 
 /// Simple WebAssembly module that adds two numbers
 /// Generated from: (module (func (export "add") (param i32 i32) (result i32)

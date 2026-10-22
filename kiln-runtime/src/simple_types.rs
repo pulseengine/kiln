@@ -4,21 +4,10 @@
 //! errors. It focuses on concrete types rather than generic type aliases.
 
 use kiln_foundation::{
-    bounded::{
-        BoundedString,
-        BoundedVec,
-    },
-    prelude::{
-        Clone,
-        Copy,
-        Debug,
-    },
+    bounded::{BoundedString, BoundedVec},
+    prelude::{Clone, Copy, Debug},
     safe_memory::NoStdProvider,
-    traits::{
-        Checksummable,
-        FromBytes,
-        ToBytes,
-    },
+    traits::{Checksummable, FromBytes, ToBytes},
 };
 use kiln_instructions::Value;
 
@@ -60,11 +49,11 @@ pub type ResultVec = BoundedVec<Value, 16, RuntimeProvider>;
 #[derive(Debug, Clone, Copy)]
 pub struct PlatformCapacities {
     /// Small collection capacity limit
-    pub small_capacity:       usize,
+    pub small_capacity: usize,
     /// Medium collection capacity limit
-    pub medium_capacity:      usize,
+    pub medium_capacity: usize,
     /// Large collection capacity limit
-    pub large_capacity:       usize,
+    pub large_capacity: usize,
     /// Memory provider buffer size in bytes
     pub memory_provider_size: usize,
 }
@@ -74,9 +63,9 @@ impl PlatformCapacities {
     #[must_use]
     pub const fn default() -> Self {
         Self {
-            small_capacity:       64,
-            medium_capacity:      1024,
-            large_capacity:       65536,
+            small_capacity: 64,
+            medium_capacity: 1024,
+            large_capacity: 65536,
             memory_provider_size: 1048576,
         }
     }
@@ -85,9 +74,9 @@ impl PlatformCapacities {
     #[must_use]
     pub const fn embedded() -> Self {
         Self {
-            small_capacity:       16,
-            medium_capacity:      256,
-            large_capacity:       8192,
+            small_capacity: 16,
+            medium_capacity: 256,
+            large_capacity: 8192,
             memory_provider_size: 32768,
         }
     }
@@ -99,11 +88,7 @@ impl PlatformCapacities {
 
 /// Compatibility types for gradual migration
 pub mod compat {
-    use super::{
-        BoundedString,
-        BoundedVec,
-        RuntimeProvider,
-    };
+    use super::{BoundedString, BoundedVec, RuntimeProvider};
 
     /// Small vector for limited collections (T must implement all required
     /// traits)

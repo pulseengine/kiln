@@ -9,74 +9,47 @@
 #[cfg(feature = "debug-full")]
 use kiln_debug::FunctionInfo;
 #[cfg(feature = "debug")]
-use kiln_debug::{
-    DwarfDebugInfo,
-    LineInfo,
-};
+use kiln_debug::{DwarfDebugInfo, LineInfo};
 use kiln_foundation::{
     budget_aware_provider::CrateId,
     safe_managed_alloc,
-    traits::{
-        BoundedCapacity,
-        Checksummable,
-        FromBytes,
-        ReadStream,
-        ToBytes,
-        WriteStream,
-    },
+    traits::{BoundedCapacity, Checksummable, FromBytes, ReadStream, ToBytes, WriteStream},
     verification::Checksum,
 };
 use kiln_instructions::reference_ops::ReferenceOperations;
 
 // Type alias for FuncType to make signatures more readable - uses unified RuntimeProvider
 use crate::bounded_runtime_infra::{
-    create_runtime_provider,
-    BoundedImportExportName,
-    BoundedImportMap,
-    RuntimeProvider,
+    BoundedImportExportName, BoundedImportMap, RuntimeProvider, create_runtime_provider,
 };
 use crate::{
     global::Global,
     memory::Memory,
-    module::{
-        GlobalWrapper,
-        MemoryWrapper,
-        Module,
-        TableWrapper,
-    },
-    prelude::{
-        Debug,
-        Error,
-        ErrorCategory,
-        FuncType,
-        Result,
-    },
+    module::{GlobalWrapper, MemoryWrapper, Module, TableWrapper},
+    prelude::{Debug, Error, ErrorCategory, FuncType, Result},
     table::Table,
 };
 type KilnFuncType = kiln_foundation::types::FuncType;
 
 // Import format! macro for string formatting
 use std::format;
-use std::sync::{
-    Arc,
-    Mutex,
-};
+use std::sync::{Arc, Mutex};
 
 /// Represents a runtime instance of a WebAssembly module
 #[cfg_attr(not(feature = "debug"), derive(Debug))]
 pub struct ModuleInstance {
     /// The module this instance was instantiated from
-    module:      Arc<Module>,
+    module: Arc<Module>,
     /// The instance's memories
-    memories:    Arc<Mutex<Vec<MemoryWrapper>>>,
+    memories: Arc<Mutex<Vec<MemoryWrapper>>>,
     /// The instance's tables
-    tables:      Arc<Mutex<Vec<TableWrapper>>>,
+    tables: Arc<Mutex<Vec<TableWrapper>>>,
     /// The instance's globals
-    globals:     Arc<Mutex<Vec<GlobalWrapper>>>,
+    globals: Arc<Mutex<Vec<GlobalWrapper>>>,
     /// Instance ID for debugging
     instance_id: usize,
     /// Imported instance indices to resolve imports
-    imports:     BoundedImportMap<BoundedImportMap<(usize, usize)>>,
+    imports: BoundedImportMap<BoundedImportMap<(usize, usize)>>,
     /// Tracks which element segments have been dropped via elem.drop
     /// After dropping, table.init will treat the segment as having 0 length
     dropped_elements: Arc<Mutex<Vec<bool>>>,
@@ -85,7 +58,7 @@ pub struct ModuleInstance {
     dropped_data: Arc<Mutex<Vec<bool>>>,
     /// Debug information (optional)
     #[cfg(feature = "debug")]
-    debug_info:  Option<DwarfDebugInfo<'static>>,
+    debug_info: Option<DwarfDebugInfo<'static>>,
 }
 
 // Manual Debug implementation when debug feature is enabled
@@ -171,7 +144,8 @@ impl ModuleInstance {
                     shared: false,
                     memory64: false,
                     page_size: None,
-                }).map_err(|e| Error::runtime_error("Failed to create placeholder memory"))?;
+                })
+                .map_err(|e| Error::runtime_error("Failed to create placeholder memory"))?;
                 memories.push(MemoryWrapper::new(placeholder));
             }
             memories.push(memory);
@@ -206,10 +180,8 @@ impl ModuleInstance {
     /// Set a table at a specific index (for imported tables)
     /// This is used during instantiation to replace placeholder tables with imported ones
     pub fn set_table(&self, idx: usize, table: TableWrapper) -> Result<()> {
-        let mut tables = self
-            .tables
-            .lock()
-            .map_err(|_| Error::runtime_error("Failed to lock tables"))?;
+        let mut tables =
+            self.tables.lock().map_err(|_| Error::runtime_error("Failed to lock tables"))?;
         if idx < tables.len() {
             tables[idx] = table;
         } else {
@@ -220,7 +192,8 @@ impl ModuleInstance {
                     element_type: RefType::Funcref,
                     limits: Limits { min: 0, max: None },
                     table64: false,
-                }).map_err(|e| Error::runtime_error("Failed to create placeholder table"))?;
+                })
+                .map_err(|e| Error::runtime_error("Failed to create placeholder table"))?;
                 tables.push(TableWrapper::new(placeholder));
             }
             tables.push(table);
@@ -268,7 +241,9 @@ impl ModuleInstance {
             globals.push(global);
             Ok(())
         } else {
-            Err(Error::runtime_error("Global index out of bounds for set_global"))
+            Err(Error::runtime_error(
+                "Global index out of bounds for set_global",
+            ))
         }
     }
 
@@ -276,8 +251,8 @@ impl ModuleInstance {
     /// This fixes the deferred initialization problem where globals using global.get
     /// of imported globals were evaluated before import values were known.
     pub fn reevaluate_deferred_globals(&self) -> Result<()> {
-        use crate::module::GlobalWrapper;
         use crate::global::Global;
+        use crate::module::GlobalWrapper;
         use std::sync::{Arc as StdArc, RwLock};
 
         // Lock globals to get the current values (including resolved imports)
@@ -298,7 +273,9 @@ impl ModuleInstance {
         // Apply the updates using set_initial_value (bypasses mutability check)
         for (idx, new_value) in updates {
             let global_wrapper = {
-                let globals = self.globals.lock()
+                let globals = self
+                    .globals
+                    .lock()
                     .map_err(|_| Error::runtime_error("Failed to lock globals for update"))?;
                 globals.get(idx).cloned()
             };
@@ -361,7 +338,7 @@ impl ModuleInstance {
                     return Err(Error::runtime_error(
                         "exported counter global is not an integer (i32/i64)",
                     ));
-                }
+                },
             };
             snapshot.insert(export_name.to_string(), counter);
         }
@@ -460,7 +437,10 @@ impl ModuleInstance {
         use kiln_foundation::tracing::{debug, info};
 
         #[cfg(feature = "tracing")]
-        info!("Populating globals from module for instance {}", self.instance_id);
+        info!(
+            "Populating globals from module for instance {}",
+            self.instance_id
+        );
 
         // Use the pre-computed count of global imports from the module
         let num_global_imports = self.module.num_global_imports;
@@ -474,7 +454,7 @@ impl ModuleInstance {
             // First, create placeholder globals for imports using the direct global_import_types vector
             // This bypasses the broken nested BoundedMap serialization issue
             for (idx, global_type) in self.module.global_import_types.iter().enumerate() {
-                use kiln_foundation::values::{Value, FloatBits32, FloatBits64};
+                use kiln_foundation::values::{FloatBits32, FloatBits64, Value};
 
                 // Create a placeholder global with default value
                 let default_value = match global_type.value_type {
@@ -486,7 +466,9 @@ impl ModuleInstance {
                     kiln_foundation::ValueType::NullFuncRef => Value::FuncRef(None),
                     kiln_foundation::ValueType::TypedFuncRef(_, _) => Value::FuncRef(None),
                     kiln_foundation::ValueType::ExternRef => Value::ExternRef(None),
-                    kiln_foundation::ValueType::V128 => Value::V128(kiln_foundation::values::V128 { bytes: [0u8; 16] }),
+                    kiln_foundation::ValueType::V128 => {
+                        Value::V128(kiln_foundation::values::V128 { bytes: [0u8; 16] })
+                    },
                     kiln_foundation::ValueType::ExnRef => Value::ExnRef(None),
                     kiln_foundation::ValueType::AnyRef => Value::ExternRef(None),
                     kiln_foundation::ValueType::EqRef => Value::I31Ref(None),
@@ -495,20 +477,22 @@ impl ModuleInstance {
                     kiln_foundation::ValueType::ArrayRef(_) => Value::ArrayRef(None),
                     _ => Value::I32(0),
                 };
-                let placeholder = Global::new(global_type.value_type, global_type.mutable, default_value)
-                    .map_err(|_| Error::runtime_error("Failed to create placeholder global"))?;
+                let placeholder =
+                    Global::new(global_type.value_type, global_type.mutable, default_value)
+                        .map_err(|_| Error::runtime_error("Failed to create placeholder global"))?;
                 #[cfg(feature = "tracing")]
                 debug!(
                     "Creating placeholder for imported global {} ({:?}) - is_mutable: {}",
-                    idx,
-                    global_type.value_type,
-                    global_type.mutable
+                    idx, global_type.value_type, global_type.mutable
                 );
                 globals.push(GlobalWrapper::new(placeholder));
             }
 
             #[cfg(feature = "tracing")]
-            debug!("Created {} placeholder globals for imports", num_global_imports);
+            debug!(
+                "Created {} placeholder globals for imports",
+                num_global_imports
+            );
 
             // Now copy defined globals
             for idx in 0..self.module.globals.len() {
@@ -542,7 +526,10 @@ impl ModuleInstance {
         use kiln_foundation::tracing::{debug, info};
 
         #[cfg(feature = "tracing")]
-        info!("Populating memories from module for instance {}", self.instance_id);
+        info!(
+            "Populating memories from module for instance {}",
+            self.instance_id
+        );
 
         {
             let mut memories = self
@@ -556,7 +543,11 @@ impl ModuleInstance {
                 memories.push(memory_wrapper.clone());
             }
             #[cfg(feature = "tracing")]
-            info!("Populated {} memories for instance {}", self.module.memories.len(), self.instance_id);
+            info!(
+                "Populated {} memories for instance {}",
+                self.module.memories.len(),
+                self.instance_id
+            );
         }
 
         Ok(())
@@ -569,21 +560,30 @@ impl ModuleInstance {
         use kiln_foundation::tracing::{debug, info};
 
         #[cfg(feature = "tracing")]
-        info!("Populating tables from module for instance {}", self.instance_id);
+        info!(
+            "Populating tables from module for instance {}",
+            self.instance_id
+        );
 
         {
-            let mut tables = self
-                .tables
-                .lock()
-                .map_err(|_| Error::runtime_error("Failed to lock tables"))?;
+            let mut tables =
+                self.tables.lock().map_err(|_| Error::runtime_error("Failed to lock tables"))?;
 
             for (idx, table_wrapper) in self.module.tables.iter().enumerate() {
                 #[cfg(feature = "tracing")]
-                debug!("Copying table {} to instance (size={})", idx, table_wrapper.size());
+                debug!(
+                    "Copying table {} to instance (size={})",
+                    idx,
+                    table_wrapper.size()
+                );
                 tables.push(table_wrapper.clone());
             }
             #[cfg(feature = "tracing")]
-            info!("Populated {} tables for instance {}", self.module.tables.len(), self.instance_id);
+            info!(
+                "Populated {} tables for instance {}",
+                self.module.tables.len(),
+                self.instance_id
+            );
 
             #[cfg(feature = "tracing")]
             kiln_foundation::tracing::trace!(
@@ -612,13 +612,15 @@ impl ModuleInstance {
         }
 
         #[cfg(feature = "tracing")]
-        debug!(count = table_init_exprs.len(), "Evaluating table init expressions");
+        debug!(
+            count = table_init_exprs.len(),
+            "Evaluating table init expressions"
+        );
 
         // Lock globals for reading init expression values
-        let globals_guard = self
-            .globals
-            .lock()
-            .map_err(|_| Error::runtime_error("Failed to lock globals for table init expr evaluation"))?;
+        let globals_guard = self.globals.lock().map_err(|_| {
+            Error::runtime_error("Failed to lock globals for table init expr evaluation")
+        })?;
         let globals_slice: &[crate::module::GlobalWrapper] = &globals_guard;
 
         // Lock tables for writing
@@ -628,7 +630,10 @@ impl ModuleInstance {
             .map_err(|_| Error::runtime_error("Failed to lock tables for init expr evaluation"))?;
 
         // Count imported tables to get the correct offset for defined table indices
-        let num_table_imports = self.module.import_types.iter()
+        let num_table_imports = self
+            .module
+            .import_types
+            .iter()
             .filter(|desc| matches!(desc, crate::module::RuntimeImportDesc::Table(_)))
             .count();
 
@@ -673,9 +678,13 @@ impl ModuleInstance {
     /// Initialize dropped segment tracking arrays based on module's segment counts
     /// Call this during instance initialization before any elem.drop/data.drop operations
     pub fn initialize_dropped_segments(&self) -> Result<()> {
-        let mut dropped_elems = self.dropped_elements.lock()
+        let mut dropped_elems = self
+            .dropped_elements
+            .lock()
             .map_err(|_| Error::runtime_error("Failed to lock dropped_elements"))?;
-        let mut dropped_data = self.dropped_data.lock()
+        let mut dropped_data = self
+            .dropped_data
+            .lock()
             .map_err(|_| Error::runtime_error("Failed to lock dropped_data"))?;
 
         // Resize to match module's element and data segment counts
@@ -686,7 +695,9 @@ impl ModuleInstance {
 
     /// Mark an element segment as dropped (called by elem.drop instruction)
     pub fn drop_element_segment(&self, segment_idx: u32) -> Result<()> {
-        let mut dropped = self.dropped_elements.lock()
+        let mut dropped = self
+            .dropped_elements
+            .lock()
             .map_err(|_| Error::runtime_error("Failed to lock dropped_elements"))?;
         if (segment_idx as usize) < dropped.len() {
             dropped[segment_idx as usize] = true;
@@ -696,7 +707,9 @@ impl ModuleInstance {
 
     /// Mark a data segment as dropped (called by data.drop instruction)
     pub fn drop_data_segment(&self, segment_idx: u32) -> Result<()> {
-        let mut dropped = self.dropped_data.lock()
+        let mut dropped = self
+            .dropped_data
+            .lock()
             .map_err(|_| Error::runtime_error("Failed to lock dropped_data"))?;
         if (segment_idx as usize) < dropped.len() {
             dropped[segment_idx as usize] = true;
@@ -744,133 +757,131 @@ impl ModuleInstance {
             match instr {
                 Instruction::I32Const(value) => {
                     stack.push(Value::I32(*value));
-                }
+                },
                 Instruction::I64Const(value) => {
                     stack.push(Value::I64(*value));
-                }
+                },
                 Instruction::GlobalGet(global_idx) => {
-                    let global_wrapper = globals.iter().nth(*global_idx as usize)
-                        .ok_or_else(|| Error::runtime_error(
-                            "Global index out of bounds in offset expression"
-                        ))?;
-                    let global = global_wrapper.0.read()
-                        .map_err(|_| Error::runtime_error(
-                            "Failed to read global in offset expression"
-                        ))?;
+                    let global_wrapper =
+                        globals.iter().nth(*global_idx as usize).ok_or_else(|| {
+                            Error::runtime_error("Global index out of bounds in offset expression")
+                        })?;
+                    let global = global_wrapper.0.read().map_err(|_| {
+                        Error::runtime_error("Failed to read global in offset expression")
+                    })?;
                     stack.push(global.get().clone());
-                }
+                },
                 Instruction::I32Add => {
-                    let b = stack.pop().ok_or_else(|| Error::runtime_error(
-                        "Stack underflow in i32.add offset expression"
-                    ))?;
-                    let a = stack.pop().ok_or_else(|| Error::runtime_error(
-                        "Stack underflow in i32.add offset expression"
-                    ))?;
+                    let b = stack.pop().ok_or_else(|| {
+                        Error::runtime_error("Stack underflow in i32.add offset expression")
+                    })?;
+                    let a = stack.pop().ok_or_else(|| {
+                        Error::runtime_error("Stack underflow in i32.add offset expression")
+                    })?;
                     if let (Value::I32(va), Value::I32(vb)) = (a, b) {
                         stack.push(Value::I32(va.wrapping_add(vb)));
                     } else {
                         return Err(Error::runtime_error(
-                            "Type mismatch in i32.add offset expression"
+                            "Type mismatch in i32.add offset expression",
                         ));
                     }
-                }
+                },
                 Instruction::I32Sub => {
-                    let b = stack.pop().ok_or_else(|| Error::runtime_error(
-                        "Stack underflow in i32.sub offset expression"
-                    ))?;
-                    let a = stack.pop().ok_or_else(|| Error::runtime_error(
-                        "Stack underflow in i32.sub offset expression"
-                    ))?;
+                    let b = stack.pop().ok_or_else(|| {
+                        Error::runtime_error("Stack underflow in i32.sub offset expression")
+                    })?;
+                    let a = stack.pop().ok_or_else(|| {
+                        Error::runtime_error("Stack underflow in i32.sub offset expression")
+                    })?;
                     if let (Value::I32(va), Value::I32(vb)) = (a, b) {
                         stack.push(Value::I32(va.wrapping_sub(vb)));
                     } else {
                         return Err(Error::runtime_error(
-                            "Type mismatch in i32.sub offset expression"
+                            "Type mismatch in i32.sub offset expression",
                         ));
                     }
-                }
+                },
                 Instruction::I32Mul => {
-                    let b = stack.pop().ok_or_else(|| Error::runtime_error(
-                        "Stack underflow in i32.mul offset expression"
-                    ))?;
-                    let a = stack.pop().ok_or_else(|| Error::runtime_error(
-                        "Stack underflow in i32.mul offset expression"
-                    ))?;
+                    let b = stack.pop().ok_or_else(|| {
+                        Error::runtime_error("Stack underflow in i32.mul offset expression")
+                    })?;
+                    let a = stack.pop().ok_or_else(|| {
+                        Error::runtime_error("Stack underflow in i32.mul offset expression")
+                    })?;
                     if let (Value::I32(va), Value::I32(vb)) = (a, b) {
                         stack.push(Value::I32(va.wrapping_mul(vb)));
                     } else {
                         return Err(Error::runtime_error(
-                            "Type mismatch in i32.mul offset expression"
+                            "Type mismatch in i32.mul offset expression",
                         ));
                     }
-                }
+                },
                 Instruction::I64Add => {
-                    let b = stack.pop().ok_or_else(|| Error::runtime_error(
-                        "Stack underflow in i64.add offset expression"
-                    ))?;
-                    let a = stack.pop().ok_or_else(|| Error::runtime_error(
-                        "Stack underflow in i64.add offset expression"
-                    ))?;
+                    let b = stack.pop().ok_or_else(|| {
+                        Error::runtime_error("Stack underflow in i64.add offset expression")
+                    })?;
+                    let a = stack.pop().ok_or_else(|| {
+                        Error::runtime_error("Stack underflow in i64.add offset expression")
+                    })?;
                     if let (Value::I64(va), Value::I64(vb)) = (a, b) {
                         stack.push(Value::I64(va.wrapping_add(vb)));
                     } else {
                         return Err(Error::runtime_error(
-                            "Type mismatch in i64.add offset expression"
+                            "Type mismatch in i64.add offset expression",
                         ));
                     }
-                }
+                },
                 Instruction::I64Sub => {
-                    let b = stack.pop().ok_or_else(|| Error::runtime_error(
-                        "Stack underflow in i64.sub offset expression"
-                    ))?;
-                    let a = stack.pop().ok_or_else(|| Error::runtime_error(
-                        "Stack underflow in i64.sub offset expression"
-                    ))?;
+                    let b = stack.pop().ok_or_else(|| {
+                        Error::runtime_error("Stack underflow in i64.sub offset expression")
+                    })?;
+                    let a = stack.pop().ok_or_else(|| {
+                        Error::runtime_error("Stack underflow in i64.sub offset expression")
+                    })?;
                     if let (Value::I64(va), Value::I64(vb)) = (a, b) {
                         stack.push(Value::I64(va.wrapping_sub(vb)));
                     } else {
                         return Err(Error::runtime_error(
-                            "Type mismatch in i64.sub offset expression"
+                            "Type mismatch in i64.sub offset expression",
                         ));
                     }
-                }
+                },
                 Instruction::I64Mul => {
-                    let b = stack.pop().ok_or_else(|| Error::runtime_error(
-                        "Stack underflow in i64.mul offset expression"
-                    ))?;
-                    let a = stack.pop().ok_or_else(|| Error::runtime_error(
-                        "Stack underflow in i64.mul offset expression"
-                    ))?;
+                    let b = stack.pop().ok_or_else(|| {
+                        Error::runtime_error("Stack underflow in i64.mul offset expression")
+                    })?;
+                    let a = stack.pop().ok_or_else(|| {
+                        Error::runtime_error("Stack underflow in i64.mul offset expression")
+                    })?;
                     if let (Value::I64(va), Value::I64(vb)) = (a, b) {
                         stack.push(Value::I64(va.wrapping_mul(vb)));
                     } else {
                         return Err(Error::runtime_error(
-                            "Type mismatch in i64.mul offset expression"
+                            "Type mismatch in i64.mul offset expression",
                         ));
                     }
-                }
+                },
                 Instruction::End => {
                     break;
-                }
+                },
                 _other => {
                     return Err(Error::runtime_error(
-                        "Unsupported instruction in offset expression"
+                        "Unsupported instruction in offset expression",
                     ));
-                }
+                },
             }
         }
 
         // Extract the final value from the stack as u32
-        let result = stack.pop().ok_or_else(|| Error::runtime_error(
-            "Empty stack after evaluating offset expression"
-        ))?;
+        let result = stack.pop().ok_or_else(|| {
+            Error::runtime_error("Empty stack after evaluating offset expression")
+        })?;
         match result {
             Value::I32(v) => Ok(v as u32),
-            Value::I64(v) => u32::try_from(v).map_err(|_| {
-                Error::runtime_error("Offset expression result too large for u32")
-            }),
+            Value::I64(v) => u32::try_from(v)
+                .map_err(|_| Error::runtime_error("Offset expression result too large for u32")),
             _ => Err(Error::runtime_error(
-                "Offset expression did not produce an integer value"
+                "Offset expression did not produce an integer value",
             )),
         }
     }
@@ -878,13 +889,16 @@ impl ModuleInstance {
     /// Initialize data segments into memory
     /// This copies the static data from data segments into the appropriate memory locations
     pub fn initialize_data_segments(&self) -> Result<()> {
+        use kiln_foundation::DataMode as KilnDataMode;
         #[cfg(feature = "tracing")]
         use kiln_foundation::tracing::{debug, info};
-        use kiln_foundation::DataMode as KilnDataMode;
 
         #[cfg(feature = "tracing")]
-        info!("Initializing data segments for instance {} - module has {} data segments",
-              self.instance_id, self.module.data.len());
+        info!(
+            "Initializing data segments for instance {} - module has {} data segments",
+            self.instance_id,
+            self.module.data.len()
+        );
 
         #[cfg(feature = "tracing")]
         kiln_foundation::tracing::trace!(
@@ -908,8 +922,9 @@ impl ModuleInstance {
                 // Get the offset expression and evaluate it using stack-based evaluation
                 // to support extended constant expressions (i32.add, i32.sub, i32.mul, etc.)
                 let offset = if let Some(ref offset_expr) = data_segment.offset_expr {
-                    let globals = self.globals.lock()
-                        .map_err(|_| Error::runtime_error("Failed to lock globals for data segment offset"))?;
+                    let globals = self.globals.lock().map_err(|_| {
+                        Error::runtime_error("Failed to lock globals for data segment offset")
+                    })?;
                     let value = Self::evaluate_offset_expr(&offset_expr.instructions, &globals)?;
                     drop(globals);
                     #[cfg(feature = "tracing")]
@@ -920,18 +935,26 @@ impl ModuleInstance {
                 };
 
                 #[cfg(feature = "tracing")]
-                debug!("Data segment {} targets memory {} at offset {:#x}", idx, memory_idx, offset);
+                debug!(
+                    "Data segment {} targets memory {} at offset {:#x}",
+                    idx, memory_idx, offset
+                );
 
                 // Get the memory instance
-                let memories = self.memories.lock()
+                let memories = self
+                    .memories
+                    .lock()
                     .map_err(|_| Error::runtime_error("Failed to lock memories"))?;
 
                 if memory_idx as usize >= memories.len() {
-                    return Err(Error::runtime_error("Data segment references invalid memory index"));
+                    return Err(Error::runtime_error(
+                        "Data segment references invalid memory index",
+                    ));
                 }
 
                 // Find the memory at the specified index using an iterator
-                let memory_wrapper = memories.iter()
+                let memory_wrapper = memories
+                    .iter()
                     .nth(memory_idx as usize)
                     .ok_or_else(|| Error::runtime_error("Failed to get memory from collection"))?;
                 let memory = &memory_wrapper.0;
@@ -939,7 +962,11 @@ impl ModuleInstance {
                 // Write the data to memory
                 let init_data = &data_segment.init[..];
                 #[cfg(feature = "tracing")]
-                debug!("Writing {} bytes of data to memory at offset {:#x}", init_data.len(), offset);
+                debug!(
+                    "Writing {} bytes of data to memory at offset {:#x}",
+                    init_data.len(),
+                    offset
+                );
 
                 #[cfg(feature = "tracing")]
                 kiln_foundation::tracing::trace!(
@@ -953,10 +980,17 @@ impl ModuleInstance {
                 memory.write_shared(offset, init_data)?;
 
                 #[cfg(feature = "tracing")]
-                kiln_foundation::tracing::trace!(segment_idx = idx, "Successfully wrote data segment");
+                kiln_foundation::tracing::trace!(
+                    segment_idx = idx,
+                    "Successfully wrote data segment"
+                );
 
                 #[cfg(feature = "tracing")]
-                info!("Successfully initialized data segment {} ({} bytes)", idx, init_data.len());
+                info!(
+                    "Successfully initialized data segment {} ({} bytes)",
+                    idx,
+                    init_data.len()
+                );
             } else {
                 #[cfg(feature = "tracing")]
                 debug!("Skipping passive data segment {}", idx);
@@ -964,7 +998,10 @@ impl ModuleInstance {
         }
 
         #[cfg(feature = "tracing")]
-        info!("Data segment initialization complete for instance {}", self.instance_id);
+        info!(
+            "Data segment initialization complete for instance {}",
+            self.instance_id
+        );
         Ok(())
     }
 
@@ -974,11 +1011,14 @@ impl ModuleInstance {
         #[cfg(feature = "tracing")]
         use kiln_foundation::tracing::{debug, info};
         use kiln_foundation::types::ElementMode as KilnElementMode;
-        use kiln_foundation::values::{Value as KilnValue, FuncRef as KilnFuncRef};
+        use kiln_foundation::values::{FuncRef as KilnFuncRef, Value as KilnValue};
 
         #[cfg(feature = "tracing")]
-        info!("Initializing element segments for instance {} - module has {} element segments",
-              self.instance_id, self.module.elements.len());
+        info!(
+            "Initializing element segments for instance {} - module has {} element segments",
+            self.instance_id,
+            self.module.elements.len()
+        );
 
         #[cfg(feature = "tracing")]
         kiln_foundation::tracing::trace!(
@@ -988,24 +1028,31 @@ impl ModuleInstance {
         );
 
         // Get access to tables
-        let tables = self.tables.lock()
-            .map_err(|_| Error::runtime_error("Failed to lock tables"))?;
+        let tables =
+            self.tables.lock().map_err(|_| Error::runtime_error("Failed to lock tables"))?;
 
         // Iterate through all element segments in the module
         {
             // Get access to globals for evaluating offset expressions
-            let globals = self.globals.lock()
+            let globals = self
+                .globals
+                .lock()
                 .map_err(|_| Error::runtime_error("Failed to lock globals for element init"))?;
 
             for (idx, elem_segment) in self.module.elements.iter().enumerate() {
                 #[cfg(feature = "tracing")]
                 debug!("Processing element segment {}", idx);
                 // Only process active element segments
-                if let KilnElementMode::Active { table_index, offset: mode_offset } = &elem_segment.mode {
+                if let KilnElementMode::Active {
+                    table_index,
+                    offset: mode_offset,
+                } = &elem_segment.mode
+                {
                     // Evaluate the actual offset using stack-based evaluation
                     // to support extended constant expressions (i32.add, i32.sub, i32.mul, etc.)
                     let actual_offset = if let Some(ref offset_expr) = elem_segment.offset_expr {
-                        let value = Self::evaluate_offset_expr(&offset_expr.instructions, &globals)?;
+                        let value =
+                            Self::evaluate_offset_expr(&offset_expr.instructions, &globals)?;
                         #[cfg(feature = "tracing")]
                         debug!("Element segment {} offset evaluated to: {}", idx, value);
                         value
@@ -1014,8 +1061,13 @@ impl ModuleInstance {
                     };
 
                     #[cfg(feature = "tracing")]
-                    debug!("Processing active element segment {}: table={}, offset={}, items={}",
-                           idx, table_index, actual_offset, elem_segment.items.len());
+                    debug!(
+                        "Processing active element segment {}: table={}, offset={}, items={}",
+                        idx,
+                        table_index,
+                        actual_offset,
+                        elem_segment.items.len()
+                    );
 
                     #[cfg(feature = "tracing")]
                     kiln_foundation::tracing::trace!(
@@ -1029,7 +1081,9 @@ impl ModuleInstance {
                     // Get the table
                     let table_idx = *table_index as usize;
                     if table_idx >= tables.len() {
-                        return Err(Error::runtime_error("Element segment references invalid table index"));
+                        return Err(Error::runtime_error(
+                            "Element segment references invalid table index",
+                        ));
                     }
 
                     let table_wrapper = &tables[table_idx];
@@ -1047,7 +1101,10 @@ impl ModuleInstance {
                     // Set each element in the table
                     // Use the element segment's type to determine if we're dealing with
                     // funcref or externref elements
-                    let is_externref = matches!(elem_segment.element_type, kiln_foundation::types::RefType::Externref);
+                    let is_externref = matches!(
+                        elem_segment.element_type,
+                        kiln_foundation::types::RefType::Externref
+                    );
 
                     for (item_idx, func_idx) in elem_segment.items.iter().enumerate() {
                         let table_offset = actual_offset + item_idx as u32;
@@ -1068,7 +1125,10 @@ impl ModuleInstance {
                         } else {
                             // Normal function reference (only valid for funcref elements)
                             // Stamp with this instance's ID for cross-instance table sharing
-                            let fref = KilnFuncRef::from_index_with_instance(func_idx, self.instance_id as u32);
+                            let fref = KilnFuncRef::from_index_with_instance(
+                                func_idx,
+                                self.instance_id as u32,
+                            );
                             Some(KilnValue::FuncRef(Some(fref)))
                         };
 
@@ -1077,7 +1137,11 @@ impl ModuleInstance {
 
                         #[cfg(feature = "tracing")]
                         if item_idx < 3 || item_idx == elem_segment.items.len() - 1 {
-                            kiln_foundation::tracing::trace!(table_offset = table_offset, func_idx = func_idx, "Set table element");
+                            kiln_foundation::tracing::trace!(
+                                table_offset = table_offset,
+                                func_idx = func_idx,
+                                "Set table element"
+                            );
                         }
                     }
 
@@ -1091,37 +1155,45 @@ impl ModuleInstance {
                             match instr {
                                 KilnInstr::I32Const(val) => {
                                     eval_stack.push(KilnValue::I32(*val));
-                                }
+                                },
                                 KilnInstr::I64Const(val) => {
                                     eval_stack.push(KilnValue::I64(*val));
-                                }
+                                },
                                 KilnInstr::GlobalGet(global_idx) => {
-                                    if let Some(global_wrapper) = globals.iter().nth(*global_idx as usize) {
+                                    if let Some(global_wrapper) =
+                                        globals.iter().nth(*global_idx as usize)
+                                    {
                                         if let Ok(global) = global_wrapper.0.read() {
                                             eval_stack.push(global.get().clone());
                                         }
                                     }
-                                }
+                                },
                                 KilnInstr::RefFunc(func_idx) => {
-                                    let fref = KilnFuncRef::from_index_with_instance(*func_idx, self.instance_id as u32);
+                                    let fref = KilnFuncRef::from_index_with_instance(
+                                        *func_idx,
+                                        self.instance_id as u32,
+                                    );
                                     eval_stack.push(KilnValue::FuncRef(Some(fref)));
-                                }
+                                },
                                 KilnInstr::RefNull(_) => {
                                     // Push appropriate null based on element type
                                     eval_stack.push(KilnValue::FuncRef(None));
-                                }
+                                },
                                 KilnInstr::RefI31 => {
                                     // ref.i31: pop i32, push i31ref
                                     if let Some(KilnValue::I32(n)) = eval_stack.pop() {
                                         eval_stack.push(KilnValue::I31Ref(Some(n & 0x7FFFFFFF)));
                                     }
-                                }
+                                },
                                 KilnInstr::StructNew(type_idx) => {
                                     use kiln_foundation::values::GcStructRef;
-                                    let field_count = match self.module.gc_types.get(*type_idx as usize) {
-                                        Some(crate::module::GcTypeInfo::Struct(fields)) => fields.len(),
-                                        _ => 0,
-                                    };
+                                    let field_count =
+                                        match self.module.gc_types.get(*type_idx as usize) {
+                                            Some(crate::module::GcTypeInfo::Struct(fields)) => {
+                                                fields.len()
+                                            },
+                                            _ => 0,
+                                        };
                                     let mut field_values = Vec::new();
                                     for _ in 0..field_count {
                                         if let Some(val) = eval_stack.pop() {
@@ -1136,23 +1208,27 @@ impl ModuleInstance {
                                         for val in field_values {
                                             let _ = s.add_field(val);
                                         }
-                                        eval_stack.push(KilnValue::StructRef(Some(GcStructRef::new(s))));
+                                        eval_stack
+                                            .push(KilnValue::StructRef(Some(GcStructRef::new(s))));
                                     }
-                                }
+                                },
                                 KilnInstr::StructNewDefault(type_idx) => {
                                     use kiln_foundation::values::GcStructRef;
                                     if let Ok(mut s) = kiln_foundation::values::StructRef::new(
                                         *type_idx,
                                         kiln_foundation::traits::DefaultMemoryProvider::default(),
                                     ) {
-                                        if let Some(crate::module::GcTypeInfo::Struct(fields)) = self.module.gc_types.get(*type_idx as usize) {
+                                        if let Some(crate::module::GcTypeInfo::Struct(fields)) =
+                                            self.module.gc_types.get(*type_idx as usize)
+                                        {
                                             for field in fields {
                                                 let _ = s.add_field(field.default_value());
                                             }
                                         }
-                                        eval_stack.push(KilnValue::StructRef(Some(GcStructRef::new(s))));
+                                        eval_stack
+                                            .push(KilnValue::StructRef(Some(GcStructRef::new(s))));
                                     }
-                                }
+                                },
                                 KilnInstr::ArrayNew(type_idx) => {
                                     use kiln_foundation::values::GcArrayRef;
                                     let length = match eval_stack.pop() {
@@ -1167,19 +1243,23 @@ impl ModuleInstance {
                                         for _ in 0..length {
                                             let _ = a.push(init_val.clone());
                                         }
-                                        eval_stack.push(KilnValue::ArrayRef(Some(GcArrayRef::new(a))));
+                                        eval_stack
+                                            .push(KilnValue::ArrayRef(Some(GcArrayRef::new(a))));
                                     }
-                                }
+                                },
                                 KilnInstr::ArrayNewDefault(type_idx) => {
                                     use kiln_foundation::values::GcArrayRef;
                                     let length = match eval_stack.pop() {
                                         Some(KilnValue::I32(n)) => n as u32,
                                         _ => 0,
                                     };
-                                    let default_val = match self.module.gc_types.get(*type_idx as usize) {
-                                        Some(crate::module::GcTypeInfo::Array(field)) => field.default_value(),
-                                        _ => KilnValue::I32(0),
-                                    };
+                                    let default_val =
+                                        match self.module.gc_types.get(*type_idx as usize) {
+                                            Some(crate::module::GcTypeInfo::Array(field)) => {
+                                                field.default_value()
+                                            },
+                                            _ => KilnValue::I32(0),
+                                        };
                                     if let Ok(mut a) = kiln_foundation::values::ArrayRef::new(
                                         *type_idx,
                                         kiln_foundation::traits::DefaultMemoryProvider::default(),
@@ -1187,9 +1267,10 @@ impl ModuleInstance {
                                         for _ in 0..length {
                                             let _ = a.push(default_val.clone());
                                         }
-                                        eval_stack.push(KilnValue::ArrayRef(Some(GcArrayRef::new(a))));
+                                        eval_stack
+                                            .push(KilnValue::ArrayRef(Some(GcArrayRef::new(a))));
                                     }
-                                }
+                                },
                                 KilnInstr::ArrayNewFixed(type_idx, count) => {
                                     use kiln_foundation::values::GcArrayRef;
                                     let mut values = Vec::new();
@@ -1206,13 +1287,14 @@ impl ModuleInstance {
                                         for val in values {
                                             let _ = a.push(val);
                                         }
-                                        eval_stack.push(KilnValue::ArrayRef(Some(GcArrayRef::new(a))));
+                                        eval_stack
+                                            .push(KilnValue::ArrayRef(Some(GcArrayRef::new(a))));
                                     }
-                                }
+                                },
                                 KilnInstr::End => {
                                     // End of expression - stop evaluating
                                     break;
-                                }
+                                },
                                 _ => {
                                     #[cfg(feature = "tracing")]
                                     kiln_foundation::tracing::trace!(
@@ -1220,7 +1302,7 @@ impl ModuleInstance {
                                         instr = ?instr,
                                         "Unhandled instruction in element expression"
                                     );
-                                }
+                                },
                             }
                         }
                         // Set the final value from the evaluation stack
@@ -1236,8 +1318,13 @@ impl ModuleInstance {
                     }
 
                     #[cfg(feature = "tracing")]
-                    info!("Initialized element segment {} ({} items) into table {} at offset {}",
-                          idx, elem_segment.items.len(), table_index, actual_offset);
+                    info!(
+                        "Initialized element segment {} ({} items) into table {} at offset {}",
+                        idx,
+                        elem_segment.items.len(),
+                        table_index,
+                        actual_offset
+                    );
                 } else {
                     #[cfg(feature = "tracing")]
                     debug!("Skipping non-active element segment {}", idx);
@@ -1253,13 +1340,16 @@ impl ModuleInstance {
             match &elem_segment.mode {
                 KilnElementMode::Active { .. } | KilnElementMode::Declarative => {
                     self.drop_element_segment(idx as u32)?;
-                }
-                KilnElementMode::Passive => {}
+                },
+                KilnElementMode::Passive => {},
             }
         }
 
         #[cfg(feature = "tracing")]
-        info!("Element segment initialization complete for instance {}", self.instance_id);
+        info!(
+            "Element segment initialization complete for instance {}",
+            self.instance_id
+        );
         Ok(())
     }
 
@@ -1316,7 +1406,9 @@ impl ModuleInstance {
             .get(idx)
             .ok_or_else(|| Error::runtime_function_not_found("Function index not found"))?;
 
-        self.module.types.get(function.type_idx as usize)
+        self.module
+            .types
+            .get(function.type_idx as usize)
             .cloned()
             .ok_or_else(|| Error::runtime_error("Function type index out of bounds"))
     }
@@ -1328,7 +1420,9 @@ impl ModuleInstance {
 
     /// Get a type by index - alias for compatibility with tail_call.rs
     pub fn get_type(&self, idx: usize) -> Result<KilnFuncType> {
-        self.module.types.get(idx)
+        self.module
+            .types
+            .get(idx)
             .cloned()
             .ok_or_else(|| Error::runtime_error("Type index out of bounds"))
     }
@@ -1462,7 +1556,8 @@ impl Default for ModuleInstance {
         }
     }
 }
-*/ // End of DISABLED Default impl
+*/
+// End of DISABLED Default impl
 
 impl Clone for ModuleInstance {
     fn clone(&self) -> Self {
@@ -1608,7 +1703,9 @@ impl FromBytes for ModuleInstance {
             resolved_elem_items: Vec::new(),
             data: Vec::new(),
             start: None,
-            custom_sections: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
+            custom_sections: kiln_foundation::bounded_collections::BoundedMap::new(
+                provider.clone(),
+            )?,
             exports: crate::module::ExportMap::new(),
             name: None,
             binary: None,

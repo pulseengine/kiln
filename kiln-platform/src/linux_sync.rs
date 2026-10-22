@@ -14,18 +14,9 @@
 //! This implementation provides wait/notify synchronization using Linux futex
 //! system calls directly, supporting no_std/no_alloc environments.
 
-use core::{
-    fmt,
-    sync::atomic::AtomicU32,
-    time::Duration,
-};
+use core::{fmt, sync::atomic::AtomicU32, time::Duration};
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 
 use crate::sync::FutexLike;
 
@@ -53,7 +44,7 @@ const FUTEX_WAKE_PRIVATE: u32 = FUTEX_WAKE | FUTEX_PRIVATE_FLAG;
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 struct TimeSpec {
-    tv_sec:  i64,
+    tv_sec: i64,
     tv_nsec: i64,
 }
 
@@ -61,7 +52,7 @@ impl TimeSpec {
     /// Create a new TimeSpec from Duration
     fn from_duration(duration: Duration) -> Self {
         Self {
-            tv_sec:  duration.as_secs() as i64,
+            tv_sec: duration.as_secs() as i64,
             tv_nsec: duration.subsec_nanos() as i64,
         }
     }
@@ -69,7 +60,7 @@ impl TimeSpec {
     /// Create a zero timeout (immediate)
     fn zero() -> Self {
         Self {
-            tv_sec:  0,
+            tv_sec: 0,
             tv_nsec: 0,
         }
     }
@@ -82,7 +73,7 @@ impl TimeSpec {
 #[derive(Debug)]
 pub struct LinuxFutex {
     /// The atomic value used for synchronization
-    value:    AtomicU32,
+    value: AtomicU32,
     /// Padding to ensure the value is on its own cache line
     _padding: [u8; 60], // 64 - sizeof(AtomicU32)
 }
@@ -96,7 +87,7 @@ impl LinuxFutex {
     /// Creates a new `LinuxFutex` with the given initial value.
     pub fn new(initial_value: u32) -> Self {
         Self {
-            value:    AtomicU32::new(initial_value),
+            value: AtomicU32::new(initial_value),
             _padding: [0; 60],
         }
     }

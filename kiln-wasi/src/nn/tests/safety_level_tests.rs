@@ -1,9 +1,6 @@
 //! Safety level specific tests for QM, ASIL-A, and ASIL-B compliance
 
-use crate::{
-    nn::*,
-    prelude::*,
-};
+use crate::{nn::*, prelude::*};
 
 /// QM (Quality Management) level tests - most permissive
 mod qm_tests {
@@ -16,7 +13,7 @@ mod qm_tests {
 
         // QM should allow large models (up to default limit)
         let large_load_op = capabilities::NNOperation::Load {
-            size:   90 * 1024 * 1024, // 90MB - within 100MB default
+            size: 90 * 1024 * 1024, // 90MB - within 100MB default
             format: capabilities::ModelFormat::ONNX,
         };
         assert!(qm_cap.verify_operation(&large_load_op).is_ok());
@@ -111,14 +108,14 @@ mod asil_a_tests {
 
         // Test model size enforcement
         let oversized_load = capabilities::NNOperation::Load {
-            size:   60 * 1024 * 1024, // 60MB - exceeds 50MB limit
+            size: 60 * 1024 * 1024, // 60MB - exceeds 50MB limit
             format: capabilities::ModelFormat::ONNX,
         };
         assert!(asil_a_cap.verify_operation(&oversized_load).is_err());
 
         // Test acceptable size
         let acceptable_load = capabilities::NNOperation::Load {
-            size:   40 * 1024 * 1024, // 40MB - within 50MB limit
+            size: 40 * 1024 * 1024, // 40MB - within 50MB limit
             format: capabilities::ModelFormat::ONNX,
         };
         assert!(asil_a_cap.verify_operation(&acceptable_load).is_ok());
@@ -218,7 +215,7 @@ mod asil_b_tests {
 
         // Should reject experimental formats
         let pytorch_load = capabilities::NNOperation::Load {
-            size:   10 * 1024 * 1024,
+            size: 10 * 1024 * 1024,
             format: capabilities::ModelFormat::PyTorch,
         };
         assert!(asil_b_cap.verify_operation(&pytorch_load).is_err());
@@ -372,7 +369,7 @@ mod compatibility_tests {
     #[test]
     fn test_operation_verification_consistency() {
         let small_op = capabilities::NNOperation::Load {
-            size:   1024 * 1024,                     // 1MB - should work for all levels
+            size: 1024 * 1024,                       // 1MB - should work for all levels
             format: capabilities::ModelFormat::ONNX, // Supported by all levels
         };
 
