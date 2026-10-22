@@ -710,10 +710,10 @@ impl Memory {
     }
 
     /// Thread-safe grow operation for shared memory access (works with
-    /// Arc<Memory>)
+    /// `Arc<Memory>`)
     ///
     /// This method works with `&self` instead of `&mut self`, making it
-    /// compatible with Arc<Memory> usage patterns.
+    /// compatible with `Arc<Memory>` usage patterns.
     ///
     /// # Arguments
     ///
@@ -868,10 +868,10 @@ impl Memory {
     }
 
     /// Thread-safe write operation for shared memory access (works with
-    /// Arc<Memory>)
+    /// `Arc<Memory>`)
     ///
     /// This method works with `&self` instead of `&mut self`, making it
-    /// compatible with Arc<Memory> usage patterns.
+    /// compatible with `Arc<Memory>` usage patterns.
     ///
     /// # Arguments
     ///
@@ -885,7 +885,7 @@ impl Memory {
     /// # Errors
     ///
     /// Returns an error if the memory access is invalid
-    /// ASIL-B COMPLIANT: Thread-safe write operation for Arc<Memory> usage.
+    /// ASIL-B COMPLIANT: Thread-safe write operation for `Arc<Memory>` usage.
     /// Uses interior mutability via Mutex for deterministic, bounded-time writes.
     pub fn write_shared(&self, offset: u32, buffer: &[u8]) -> Result<()> {
         // Calculate and verify bounds (even empty writes must check offset per spec)

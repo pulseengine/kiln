@@ -636,7 +636,7 @@ mod std_parsing {
     /// The section data IS the component binary (starting with `\x00asm` magic).
     /// Each component section defines one nested component.
     ///
-    /// See: https://docs.rs/wasmparser/latest/wasmparser/enum.Payload.html
+    /// See: <https://docs.rs/wasmparser/latest/wasmparser/enum.Payload.html>
     pub fn parse_component_section(bytes: &[u8]) -> Result<(Vec<Component>, usize)> {
         // The section data is the complete nested component binary
         // No count prefix, no size prefix - just the raw component bytes
@@ -1628,12 +1628,15 @@ mod std_parsing {
 
     /// Parse an external type descriptor (externdesc)
     /// Based on Component Model spec:
+    ///
+    /// ```text
     /// externdesc ::= 0x00 0x11 i:<core:typeidx>  => (core module (type i))
     ///              | 0x01 i:<typeidx>             => (func (type i))
     ///              | 0x02 b:<valuebound>          => (value b)
     ///              | 0x03 b:<typebound>           => (type b)
     ///              | 0x04 i:<typeidx>             => (component (type i))
     ///              | 0x05 i:<typeidx>             => (instance (type i))
+    /// ```
     fn parse_extern_type(bytes: &[u8]) -> Result<(kiln_format::component::ExternType, usize)> {
         if bytes.is_empty() {
             return Err(Error::parse_error(
@@ -1766,8 +1769,10 @@ mod std_parsing {
     /// Parse a value type
     /// Parse a valtype according to Component Model spec
     ///
+    /// ```text
     /// valtype ::= i:<typeidx> => i
     ///           | pvt:<primvaltype> => pvt
+    /// ```
     ///
     /// This can be either a type index (non-negative) or a primvaltype (negative SLEB128)
     fn parse_val_type(bytes: &[u8]) -> Result<(kiln_format::component::FormatValType, usize)> {
@@ -2499,7 +2504,7 @@ mod std_parsing {
 
     /// Parse a single alias (sort + aliastarget)
     ///
-    /// This is the complete alias production: alias ::= s:<sort> t:<aliastarget>
+    /// This is the complete alias production: `alias ::= s:<sort> t:<aliastarget>`
     pub fn parse_alias(bytes: &[u8]) -> Result<(Alias, usize)> {
         let (target, bytes_read) = parse_alias_target(bytes)?;
         Ok((
@@ -2541,7 +2546,7 @@ mod std_parsing {
     /// Parse an alias target
     ///
     /// According to the Component Model spec:
-    /// alias ::= s:<sort> t:<aliastarget>
+    /// `alias ::= s:<sort> t:<aliastarget>`
     ///
     /// Where:
     /// - s is the sort byte (func, table, memory, global, type, module, instance, etc.)

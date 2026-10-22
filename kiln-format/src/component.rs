@@ -578,7 +578,7 @@ pub enum ExternType {
     },
 }
 
-/// Type reference index for recursive types (replaces Box<T>)
+/// Type reference index for recursive types (replaces `Box<T>`)
 pub type TypeRef = u32;
 
 /// Binary std/no_std choice

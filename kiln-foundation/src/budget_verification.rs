@@ -101,7 +101,7 @@ const _: () = validate_total_budget();
 /// # Example
 ///
 /// ```rust,ignore
-/// verify_crate_budget!(CrateId::Component, 64 * 1024;
+/// verify_crate_budget!(CrateId::Component, 64 * 1024);
 /// ```
 #[macro_export]
 macro_rules! verify_crate_budget {
@@ -132,7 +132,7 @@ macro_rules! verify_crate_budget {
 /// # Example
 ///
 /// ```rust,ignore
-/// init_crate_memory!(CrateId::Component;
+/// init_crate_memory!(CrateId::Component);
 /// ```
 #[macro_export]
 macro_rules! init_crate_memory {

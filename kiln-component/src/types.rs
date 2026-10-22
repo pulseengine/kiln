@@ -330,7 +330,7 @@ impl ComponentInstance {
     ///
     /// Must be called after setting the host handler (so the preopens are registered)
     /// but before calling entry points that use `get-directories`. Mirrors
-    /// [`pre_allocate_wasi_args`]; the canonical ABI requires guest-owned memory for
+    /// [`Self::pre_allocate_wasi_args`]; the canonical ABI requires guest-owned memory for
     /// returning the `list<tuple<descriptor,string>>` from get-directories.
     #[cfg(all(feature = "std", feature = "kiln-execution", feature = "wasi"))]
     pub fn pre_allocate_wasi_preopens(&mut self) -> kiln_error::Result<()> {

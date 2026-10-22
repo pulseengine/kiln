@@ -78,7 +78,7 @@
 //!   verification
 //! - `kiln_component::bounded_resource_management`: Component resource
 //!   management
-//! - [`kiln_foundation::memory_system`]: Memory provider integration
+//! - [`kiln_foundation::kiln_memory_system`]: Memory provider integration
 //!
 //! # REQ Traceability
 //!

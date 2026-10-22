@@ -2071,7 +2071,7 @@ pub mod with_alloc {
     }
 
     /// Parses an element segment from the binary format.
-    /// Reference: https://webassembly.github.io/spec/core/binary/modules.html#element-section
+    /// Reference: <https://webassembly.github.io/spec/core/binary/modules.html#element-section>
     #[cfg(feature = "std")]
     pub fn parse_element_segment(bytes: &[u8], mut offset: usize) -> Result<(Element, usize)> {
         let (prefix_val, next_offset) = read_leb128_u32(bytes, offset).map_err(|e| {

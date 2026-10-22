@@ -208,7 +208,7 @@ pub struct WasiStubMemory {
 pub struct LoweredFunction {
     /// Target interface (e.g., "wasi:io/streams@0.2.4")
     pub interface: String,
-    /// Target function name (e.g., "[method]output-stream.blocking-write-and-flush")
+    /// Target function name (e.g., `"[method]output-stream.blocking-write-and-flush"`)
     pub function: String,
     /// Memory index for ABI operations (from canon options)
     pub memory_idx: Option<u32>,
@@ -239,7 +239,7 @@ pub struct StacklessEngine {
     /// Pre-allocated WASI stub memory for each instance
     wasi_stubs: HashMap<usize, WasiStubMemory>,
     /// Dropped data segments per instance (for data.drop/memory.init)
-    /// Maps instance_id -> Vec<bool> where true means segment was dropped
+    /// Maps instance_id -> `Vec<bool>` where true means segment was dropped
     dropped_data_segments: HashMap<usize, Vec<bool>>,
     /// Cross-instance import links: (instance_id, import_module, import_name) -> (target_instance_id, export_name)
     import_links: HashMap<(usize, String, String), (usize, String)>,
@@ -14473,7 +14473,7 @@ impl StacklessEngine {
     ///
     /// The canonical-ABI return area for `func() -> list<tuple<descriptor,string>>` is
     /// only 8 bytes (ptr+len), so the entry array (N*12 bytes) and each path string must
-    /// live in guest-owned memory. Mirrors [`pre_allocate_wasi_args`]. The preopens are
+    /// live in guest-owned memory. Mirrors [`Self::pre_allocate_wasi_args`]. The preopens are
     /// read back from the host handler (they were registered via `add_preopen`).
     #[cfg(feature = "wasi")]
     pub fn pre_allocate_wasi_preopens(&mut self, instance_id: usize) -> Result<()> {

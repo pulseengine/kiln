@@ -158,11 +158,11 @@ pub enum WasiComponentType {
     Char,
     /// String - passed as ptr+len, needs lifting
     String,
-    /// List<u8> - passed as ptr+len, needs lifting
+    /// `List<u8>` - passed as ptr+len, needs lifting
     ListU8,
-    /// List<T> - passed as ptr+len, needs lifting
+    /// `List<T>` - passed as ptr+len, needs lifting
     List(Box<WasiComponentType>),
-    /// Option<T> - discriminant + optional value
+    /// `Option<T>` - discriminant + optional value
     Option(Box<WasiComponentType>),
     /// Result<T, E> - discriminant + payload
     Result(
@@ -202,7 +202,7 @@ impl WasiFunctionSignature {
     /// results limit (1 for core wasm), results go on the stack. Otherwise
     /// a retptr is used. In practice:
     /// - Single scalar/handle: on stack
-    /// - option<handle>/result<_, _> with simple payloads: on stack (≤ 2 flat values)
+    /// - `option<handle>`/`result<_, _>` with simple payloads: on stack (≤ 2 flat values)
     /// - Strings, lists, tuples, complex options/results: via retptr
     pub fn result_needs_retptr(&self) -> bool {
         if self.results.is_empty() {

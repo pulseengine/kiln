@@ -200,7 +200,7 @@ impl LockFreeAllocator {
     ///
     /// # Safety
     /// `pool` must be a valid memory region of size `pool_size`.
-    /// `block_size` must be >= size_of::<FreeBlock>().
+    /// `block_size` must be >= `size_of::<FreeBlock>()`.
     pub unsafe fn new(pool: *mut u8, pool_size: usize, block_size: usize) -> Result<Self, Error> {
         if block_size < core::mem::size_of::<FreeBlock>() {
             return Err(Error::runtime_execution_error("Block size too small"));

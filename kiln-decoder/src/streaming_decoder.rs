@@ -2067,12 +2067,14 @@ impl<'a> StreamingDecoder<'a> {
                 use kiln_format::module::ImportDesc;
                 use kiln_format::types::FormatGlobalType as FGT;
                 use kiln_foundation::types::ValueType;
-                let global_imports: Vec<&FGT> = self
+                // `FGT` is `Copy`: the bounded no_std import vec yields owned items, so
+                // references into it cannot escape the iterator.
+                let global_imports: Vec<FGT> = self
                     .module
                     .imports
                     .iter()
                     .filter_map(|imp| match &imp.desc {
-                        ImportDesc::Global(gt, ..) => Some(gt),
+                        ImportDesc::Global(gt, ..) => Some(*gt),
                         _ => None,
                     })
                     .collect();
@@ -2246,14 +2248,19 @@ impl<'a> StreamingDecoder<'a> {
                             init_expr_nullable = false;
                             // Look up the function's type index to get the concrete heap type.
                             // ref.func produces (ref $type_idx), not just (ref func).
-                            init_expr_heap_type =
-                                if (func_idx as usize) < self.module.functions.len() {
-                                    HeapType::Concrete(
-                                        self.module.functions[func_idx as usize].type_idx,
-                                    )
-                                } else {
-                                    HeapType::Func
-                                };
+                            init_expr_heap_type = if (func_idx as usize)
+                                < self.module.functions.len()
+                            {
+                                // `Vec` indexes; the bounded `WasmVec` is read via `get`.
+                                #[cfg(feature = "std")]
+                                let type_idx = self.module.functions[func_idx as usize].type_idx;
+                                #[cfg(not(feature = "std"))]
+                                let type_idx =
+                                    self.module.functions.get(func_idx as usize)?.type_idx;
+                                HeapType::Concrete(type_idx)
+                            } else {
+                                HeapType::Func
+                            };
                         },
                         _ => {
                             // Other opcodes - continue scanning

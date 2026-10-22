@@ -1,7 +1,7 @@
 //! WASI resource manager using Kiln foundation patterns
 //!
 //! This module provides resource management for WASI handles using the proven
-//! Resource<P> patterns from kiln-foundation.
+//! `Resource<P>` patterns from kiln-foundation.
 
 #[cfg(feature = "std")]
 use std::collections::HashMap;
@@ -135,7 +135,7 @@ pub struct WasiResourceManager {
     _provider: WasiProvider,
 }
 
-/// WASI resource wrapper using Kiln Resource<P> pattern
+/// WASI resource wrapper using Kiln `Resource<P>` pattern
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WasiResource {
     /// Base Kiln resource

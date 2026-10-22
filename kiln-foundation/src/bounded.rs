@@ -4105,7 +4105,7 @@ impl<
 {
     /// Returns a raw byte slice of the BoundedVec's used data.
     /// This is unsafe if T is not u8 or if T's size is not 1.
-    /// This is primarily for BoundedString<u8> use case.
+    /// This is primarily for `BoundedString<u8>` use case.
     /// For direct access to the underlying provider's memory for T items,
     /// use get_item_slice or iterate and handle items.
     pub(crate) fn as_bytes_slice(&self) -> core::result::Result<&[u8], BoundedError> {

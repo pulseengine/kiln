@@ -3436,7 +3436,7 @@ impl ComponentInstance {
         ))
     }
 
-    /// Convert a component-model scalar [`FormatValType`] to the canonical ABI
+    /// Convert a component-model scalar [`kiln_format::component::FormatValType`] to the canonical ABI
     /// [`ComponentType`]. FAIL LOUD on non-scalar types — the direct-hosting
     /// path only lifts scalar results (#344); aggregates are not yet supported.
     #[cfg(feature = "std")]
@@ -4458,7 +4458,7 @@ impl ComponentInstance {
         Ok(lifted)
     }
 
-    /// Lower a scalar [`ComponentValue`] to a core [`Value`]. FAIL LOUD on
+    /// Lower a scalar [`ComponentValue`] to a core [`kiln_foundation::Value`]. FAIL LOUD on
     /// non-scalar values (#344).
     #[cfg(all(feature = "std", feature = "kiln-execution"))]
     fn lower_scalar_component_value(
@@ -4493,7 +4493,7 @@ impl ComponentInstance {
         Ok(lowered)
     }
 
-    /// Lift a scalar core [`Value`] to a [`ComponentValue`] per the resolved
+    /// Lift a scalar core [`kiln_foundation::Value`] to a [`ComponentValue`] per the resolved
     /// result type. FAIL LOUD on non-scalar result types or core/expected type
     /// mismatch (#344).
     #[cfg(all(feature = "std", feature = "kiln-execution"))]

@@ -16,7 +16,7 @@ use kiln_foundation::{
 
 use crate::bounded_runtime_infra::{RuntimeProvider, create_runtime_provider};
 
-/// Convert a flat Vec<ValueType> to a BoundedVec<LocalEntry> by grouping
+/// Convert a flat `Vec<ValueType>` to a `BoundedVec<LocalEntry>` by grouping
 /// consecutive types of the same kind into LocalEntry structs with count and
 /// type.
 pub fn convert_locals_to_bounded_with_provider(
@@ -58,7 +58,7 @@ pub fn convert_locals_to_bounded_with_provider(
     Ok(bounded_locals)
 }
 
-/// Convert a flat Vec<ValueType> to a BoundedVec<LocalEntry> by grouping
+/// Convert a flat `Vec<ValueType>` to a `BoundedVec<LocalEntry>` by grouping
 /// consecutive types of the same kind into LocalEntry structs with count and
 /// type.
 ///
@@ -70,7 +70,7 @@ pub fn convert_locals_to_bounded(
     convert_locals_to_bounded_with_provider(locals, provider)
 }
 
-/// Convert a BoundedVec<LocalEntry> back to a flat Vec<ValueType>
+/// Convert a `BoundedVec<LocalEntry>` back to a flat `Vec<ValueType>`
 /// This is useful for compatibility with APIs that expect the flat
 /// representation
 pub fn expand_locals_to_flat(

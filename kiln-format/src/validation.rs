@@ -18,7 +18,7 @@ pub trait Validatable {
     fn validate(&self) -> Result<()>;
 }
 
-/// Simple validation helper for Option<T> where T is Validatable
+/// Simple validation helper for `Option<T>` where T is Validatable
 impl<T: Validatable> Validatable for Option<T> {
     fn validate(&self) -> Result<()> {
         match self {
@@ -28,7 +28,7 @@ impl<T: Validatable> Validatable for Option<T> {
     }
 }
 
-/// Simple validation helper for Vec<T> where T is Validatable
+/// Simple validation helper for `Vec<T>` where T is Validatable
 #[cfg(feature = "std")]
 impl<T: Validatable> Validatable for Vec<T> {
     fn validate(&self) -> Result<()> {
