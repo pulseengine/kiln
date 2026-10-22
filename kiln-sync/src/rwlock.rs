@@ -1,7 +1,9 @@
 #![allow(clippy::missing_fields_in_debug)] // Added to allow for now
-#![allow(clippy::uninlined_format_args)] // Added to allow for now
-// #![allow(unsafe_code)] // Allow unsafe for UnsafeCell, atomics, and Send/Sync
-// impls
+#![allow(clippy::uninlined_format_args)]
+// Added to allow for now
+// Reviewed exception (SR-73): UnsafeCell access guarded by the lock state and
+// the Send/Sync impls for the locks. Each site carries its own SAFETY comment.
+#![allow(unsafe_code)]
 
 use core::{
     cell::UnsafeCell,

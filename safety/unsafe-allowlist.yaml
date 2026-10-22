@@ -1,0 +1,17 @@
+# Crates that are exempt from the crate-level unsafe policy (SR-73, #568).
+#
+# Policy: every workspace crate's library and binary roots carry
+# `#![deny(unsafe_code)]` or `#![forbid(unsafe_code)]`, so the compiler lists
+# every unsafe use. A crate may be exempt only if it is named here with a
+# reason. Enforced by kiln-build-core/tests/unsafe_policy.rs.
+#
+# Crates that keep `deny` and opt individual items or modules in with
+# `#[allow(unsafe_code)]` are NOT listed here: they satisfy the policy.
+#
+# Adding an entry needs maintainer review. Removing the need for an entry (by
+# adding `#![deny(unsafe_code)]` and compiling) means deleting it.
+allowed:
+  - crate: kiln-builtins
+    reason: "no_std C ABI boundary for synth-compiled code: `#[unsafe(no_mangle)] extern \"C\"` exports, `unsafe extern \"C\"` platform callbacks, and raw platform-pointer dereferences are the crate's purpose."
+  - crate: kiln-platform
+    reason: "OS and hardware abstraction layer (libc/syscall FFI, mmap, futex, threads, SIMD intrinsics) across Linux, macOS, QNX, VxWorks, Zephyr, Tock; roughly 30 modules, most cfg-gated to targets that cannot be compiled on one host, so per-item allows cannot be verified in one pass."

@@ -40,6 +40,12 @@
 //! let (_sender, _receiver) = BoundedChannel::<i32, 16>::create_channel(channel_ctx).unwrap();
 //! ```
 
+// Reviewed exception (SR-73): UnsafeCell access behind SafeMutex's lock and the
+// Send/Sync impls. The BoundedChannel sender/receiver handles dereference a raw
+// channel pointer that create_channel does not keep alive (#584); that is a
+// known defect, recorded here so the exception is not mistaken for a proof.
+#![allow(unsafe_code)]
+
 use core::{
     cell::UnsafeCell,
     marker::PhantomData,

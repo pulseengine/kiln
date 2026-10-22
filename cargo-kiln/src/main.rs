@@ -4,6 +4,8 @@
 //! interface to the kiln-build-core library. It replaces the fragmented approach
 //! of justfile, xtask, and shell scripts with a single, AI-friendly tool.
 
+#![forbid(unsafe_code)]
+
 // Standard library imports
 use std::{io::IsTerminal, path::PathBuf, process};
 

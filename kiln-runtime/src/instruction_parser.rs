@@ -40,11 +40,8 @@ pub fn parse_instructions_with_provider(
     let mut offset = 0;
 
     let mut instruction_count = 0u32;
-    static mut FUNC_COUNTER: u32 = 0;
-    let func_id = unsafe {
-        FUNC_COUNTER += 1;
-        FUNC_COUNTER
-    };
+    static FUNC_COUNTER: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
+    let func_id = FUNC_COUNTER.fetch_add(1, core::sync::atomic::Ordering::Relaxed) + 1;
 
     #[cfg(feature = "tracing")]
     if func_id == 34 || func_id == 44 {

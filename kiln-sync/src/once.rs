@@ -1,6 +1,7 @@
-// #![allow(unsafe_code)] // Allow unsafe for UnsafeCell, raw pointers, and
-// Send/Sync impls
-
+// Reviewed exception (SR-73): MaybeUninit storage behind a one-time
+// initialization state machine, and the Send/Sync impls. Each site carries its
+// own SAFETY comment.
+#![allow(unsafe_code)]
 // Kiln - kiln-sync
 // Module: OnceCell - A one-time initialization primitive
 // SW-REQ-ID: REQ_CONCURRENCY_001
