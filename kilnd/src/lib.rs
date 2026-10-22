@@ -299,6 +299,8 @@ pub struct KilndConfig {
     pub enable_memory_profiling: bool,
     /// Platform-specific optimizations
     pub enable_platform_optimizations: bool,
+    /// Print the banner, startup lines and run statistics on stderr (`--verbose`, SR-74)
+    pub verbose: bool,
     /// WASI capabilities
     #[cfg(feature = "wasi")]
     pub wasi_capabilities: Option<WasiCapabilities>,
@@ -336,6 +338,7 @@ impl Default for KilndConfig {
             call_args: Vec::new(),
             enable_memory_profiling: false,
             enable_platform_optimizations: true,
+            verbose: false,
         }
     }
 }
@@ -414,24 +417,43 @@ pub struct RuntimeStats {
     pub cross_component_calls: u32,
 }
 
-/// Simple log handler that uses minimal output
-pub struct KilndLogHandler;
+/// Log handler for the engine's startup and progress lines.
+///
+/// Records always go to the tracing framework (off unless `RUST_LOG` is set).
+/// With `verbose` set (`--verbose`) they are also printed on stderr — never on
+/// stdout, which carries only the program's output (SR-74).
+pub struct KilndLogHandler {
+    verbose: bool,
+}
 
 impl MinimalLogHandler for KilndLogHandler {
     fn handle_minimal_log(&self, level: LogLevel, message: &'static str) -> Result<()> {
-        // In std mode, use println!; in no_std mode, this would need platform-specific
+        // In std mode, use stderr; in no_std mode, this would need platform-specific
         // output
         #[cfg(feature = "std")]
         {
-            let prefix = match level {
-                LogLevel::Trace => "TRACE",
-                LogLevel::Debug => "DEBUG",
-                LogLevel::Info => "INFO",
-                LogLevel::Warn => "WARN",
-                LogLevel::Error => "ERROR",
-                LogLevel::Critical => "CRITICAL",
-            };
-            println!("[{}] {}", prefix, message);
+            #[cfg(feature = "tracing")]
+            match level {
+                LogLevel::Trace => kiln_foundation::tracing::trace!("{}", message),
+                LogLevel::Debug => kiln_foundation::tracing::debug!("{}", message),
+                LogLevel::Info => kiln_foundation::tracing::info!("{}", message),
+                LogLevel::Warn => kiln_foundation::tracing::warn!("{}", message),
+                LogLevel::Error | LogLevel::Critical => {
+                    kiln_foundation::tracing::error!("{}", message)
+                },
+            }
+
+            if self.verbose {
+                let prefix = match level {
+                    LogLevel::Trace => "TRACE",
+                    LogLevel::Debug => "DEBUG",
+                    LogLevel::Info => "INFO",
+                    LogLevel::Warn => "WARN",
+                    LogLevel::Error => "ERROR",
+                    LogLevel::Critical => "CRITICAL",
+                };
+                eprintln!("[{}] {}", prefix, message);
+            }
         }
 
         #[cfg(not(feature = "std"))]
@@ -470,9 +492,9 @@ impl KilndEngine {
     /// Create a new engine with the given configuration
     pub fn new(config: KilndConfig) -> Result<Self> {
         let mut engine = Self {
+            logger: KilndLogHandler { verbose: config.verbose },
             config,
             stats: RuntimeStats::default(),
-            logger: KilndLogHandler,
             #[cfg(feature = "kiln-execution")]
             host_registry: CallbackRegistry::new(),
             #[cfg(feature = "wasi")]
@@ -1000,6 +1022,8 @@ impl KilndEngine {
             // cross-tool contract is needed, we just consume the mapping meld
             // already provides. Without this, library/reactor components (which
             // have no `_start`) had no invocation route at all.
+            let explicit_export =
+                self.config.invoke_export.is_some() || self.config.function_name.is_some();
             let function_name = self
                 .config
                 .invoke_export
@@ -1257,8 +1281,11 @@ impl KilndEngine {
                     }
                 }
 
-                if return_area_sig.is_some() {
-                    // Reported above.
+                // The result is user-facing output only for an export the user
+                // asked for (`--invoke` / `--function`); the default entry's
+                // result is not printed — stdout carries only the program's
+                // output (SR-74). A return area was reported above.
+                if return_area_sig.is_some() || !explicit_export {
                 } else if !results.is_empty() {
                     println!(
                         "\n✓ Function '{}' returned {} value(s):",
@@ -1314,10 +1341,9 @@ impl KilndEngine {
                         LogLevel::Info,
                         "Executing Meld-fused P3 module entry point",
                     );
-                    let results = engine.execute(instance, entry, &[])?;
-                    if !results.is_empty() {
-                        println!("\n✓ Entry '{}' returned: {:?}", entry, results);
-                    }
+                    // The command entry's result is not program output; it is
+                    // not printed (SR-74).
+                    engine.execute(instance, entry, &[])?;
                 } else {
                     // SR-58 / #480: a module with no command entry is very often
                     // a LIBRARY/reactor component (e.g. scry exports
@@ -1599,6 +1625,8 @@ pub struct SimpleArgs {
     pub enable_memory_profiling: bool,
     /// Enable platform optimizations
     pub enable_platform_optimizations: bool,
+    /// Print the banner, startup lines and run statistics on stderr
+    pub verbose: bool,
 }
 
 #[cfg(feature = "std")]
@@ -1635,6 +1663,7 @@ impl SimpleArgs {
             call_args: Vec::new(),
             enable_memory_profiling: false,
             enable_platform_optimizations: true,
+            verbose: false,
         };
 
         let mut i = 1; // Skip program name
@@ -1669,6 +1698,10 @@ impl SimpleArgs {
                     println!("  --no-std             Force no-std execution mode");
                     println!("  --memory-profile     Enable memory profiling");
                     println!("  --no-platform-opt    Disable platform optimizations");
+                    println!(
+                        "  --verbose            Print the banner, startup lines and run statistics \
+                         on stderr"
+                    );
                     #[cfg(feature = "wasi")]
                     {
                         println!("  --wasi               Enable WASI support");
@@ -1721,6 +1754,9 @@ impl SimpleArgs {
                 },
                 "--no-platform-opt" => {
                     result.enable_platform_optimizations = false;
+                },
+                "--verbose" => {
+                    result.verbose = true;
                 },
                 #[cfg(feature = "wasi")]
                 "--wasi" => {
@@ -1915,11 +1951,17 @@ pub fn run(bin_name: &str) -> Result<()> {
     // Parse arguments first to check for --help
     let args = SimpleArgs::parse(bin_name)?;
 
-    println!("Kiln WebAssembly Runtime ({bin_name})");
-    println!("===================================");
+    // Banner, startup lines and statistics are `--verbose` only, on stderr:
+    // stdout carries only the program's output (SR-74).
+    let verbose = args.verbose;
+    if verbose {
+        eprintln!("Kiln WebAssembly Runtime ({bin_name})");
+        eprintln!("===================================");
+    }
 
     // Create configuration from arguments
     let mut config = KilndConfig::default();
+    config.verbose = verbose;
     config.module_path = args.module_path;
     config.function_name = args.function_name;
 
@@ -1984,11 +2026,13 @@ pub fn run(bin_name: &str) -> Result<()> {
             config.wasi_args = args.wasi_args.clone();
             config.wasi_fs_paths = args.wasi_fs_paths.clone();
 
-            println!("✓ WASI enabled:");
-            println!("  - Version: {:?}", config.wasi_version);
-            println!("  - Filesystem paths: {}", args.wasi_fs_paths.len());
-            println!("  - Environment variables: {}", args.wasi_env_vars.len());
-            println!("  - Program arguments: {}", args.wasi_args.len());
+            if verbose {
+                eprintln!("✓ WASI enabled:");
+                eprintln!("  - Version: {:?}", config.wasi_version);
+                eprintln!("  - Filesystem paths: {}", args.wasi_fs_paths.len());
+                eprintln!("  - Environment variables: {}", args.wasi_env_vars.len());
+                eprintln!("  - Program arguments: {}", args.wasi_args.len());
+            }
         }
     }
 
@@ -2000,26 +2044,26 @@ pub fn run(bin_name: &str) -> Result<()> {
         config.invoke_export = args.invoke_export.clone();
         config.call_args = args.call_args.clone();
 
-        if config.enable_component_model {
-            println!(
+        if verbose && config.enable_component_model {
+            eprintln!(
                 "✓ Component model enabled with {} interfaces",
                 args.component_interfaces.len()
             );
         }
     }
 
-    if config.enable_memory_profiling {
-        println!("✓ Memory profiling enabled");
+    if verbose && config.enable_memory_profiling {
+        eprintln!("✓ Memory profiling enabled");
     }
 
-    if !config.enable_platform_optimizations {
-        println!("! Platform optimizations disabled");
+    if verbose && !config.enable_platform_optimizations {
+        eprintln!("! Platform optimizations disabled");
     }
 
     // Check if we have a module to execute
     if config.module_path.is_none() {
-        println!("Error: No module specified");
-        println!("Use --help for usage information");
+        eprintln!("Error: No module specified");
+        eprintln!("Use --help for usage information");
         process::exit(1);
     }
 
@@ -2034,35 +2078,39 @@ pub fn run(bin_name: &str) -> Result<()> {
         let mut full_args = vec![module_name];
         full_args.extend(config.wasi_args.clone());
         set_global_wasi_args(full_args.clone());
-        println!(
-            "  - Set {} global WASI args: {:?}",
-            full_args.len(),
-            full_args
-        );
+        if verbose {
+            eprintln!(
+                "  - Set {} global WASI args: {:?}",
+                full_args.len(),
+                full_args
+            );
+        }
     }
 
     match engine.execute_module() {
         Ok(()) => {
-            let stats = engine.stats();
-            println!("✓ Execution completed successfully");
-            println!("  Modules executed: {}", stats.modules_executed);
-            println!("  Components executed: {}", stats.components_executed);
-            println!("  Fuel consumed: {}", stats.fuel_consumed);
-            println!("  Peak memory: {} bytes", stats.peak_memory);
-            println!(
-                "  Host functions registered: {}",
-                stats.host_functions_registered
-            );
-            println!("  WASI functions called: {}", stats.wasi_functions_called);
-            println!("  Cross-component calls: {}", stats.cross_component_calls);
+            if verbose {
+                let stats = engine.stats();
+                eprintln!("✓ Execution completed successfully");
+                eprintln!("  Modules executed: {}", stats.modules_executed);
+                eprintln!("  Components executed: {}", stats.components_executed);
+                eprintln!("  Fuel consumed: {}", stats.fuel_consumed);
+                eprintln!("  Peak memory: {} bytes", stats.peak_memory);
+                eprintln!(
+                    "  Host functions registered: {}",
+                    stats.host_functions_registered
+                );
+                eprintln!("  WASI functions called: {}", stats.wasi_functions_called);
+                eprintln!("  Cross-component calls: {}", stats.cross_component_calls);
 
-            // Display memory profiling if enabled — REAL guest linear-memory usage
-            // sampled from the instance after the run (SR-42), not the dead profiler
-            // counters (which were never driven on the exec path and always read 0).
-            if engine.memory_profiler().is_some() {
-                println!("Memory Profiling:");
-                println!("  Peak usage: {} bytes", stats.peak_memory);
-                println!("  Current usage: {} bytes", stats.current_memory);
+                // Display memory profiling if enabled — REAL guest linear-memory usage
+                // sampled from the instance after the run (SR-42), not the dead profiler
+                // counters (which were never driven on the exec path and always read 0).
+                if engine.memory_profiler().is_some() {
+                    eprintln!("Memory Profiling:");
+                    eprintln!("  Peak usage: {} bytes", stats.peak_memory);
+                    eprintln!("  Current usage: {} bytes", stats.current_memory);
+                }
             }
         },
         Err(e) => {
