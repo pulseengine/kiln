@@ -272,21 +272,21 @@ impl WasiInstanceProvider {
     }
 
     /// Add terminal-stdin interface exports (wasi:cli/terminal-stdin@0.2.0)
-    /// Returns option<terminal-input> to indicate if stdin is a terminal
+    /// Returns `option<terminal-input>` to indicate if stdin is a terminal
     fn add_terminal_stdin_exports(&mut self, instance: &mut InstanceImport) -> Result<()> {
         // Export: get-terminal-stdin() -> option<terminal-input>
         self.add_simple_export(instance, "get-terminal-stdin")
     }
 
     /// Add terminal-stdout interface exports (wasi:cli/terminal-stdout@0.2.0)
-    /// Returns option<terminal-output> to indicate if stdout is a terminal
+    /// Returns `option<terminal-output>` to indicate if stdout is a terminal
     fn add_terminal_stdout_exports(&mut self, instance: &mut InstanceImport) -> Result<()> {
         // Export: get-terminal-stdout() -> option<terminal-output>
         self.add_simple_export(instance, "get-terminal-stdout")
     }
 
     /// Add terminal-stderr interface exports (wasi:cli/terminal-stderr@0.2.0)
-    /// Returns option<terminal-output> to indicate if stderr is a terminal
+    /// Returns `option<terminal-output>` to indicate if stderr is a terminal
     fn add_terminal_stderr_exports(&mut self, instance: &mut InstanceImport) -> Result<()> {
         // Export: get-terminal-stderr() -> option<terminal-output>
         self.add_simple_export(instance, "get-terminal-stderr")

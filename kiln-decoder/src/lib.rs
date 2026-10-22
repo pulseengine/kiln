@@ -102,6 +102,9 @@ pub mod custom_section_handler;
 // Resource limits section - now ASIL-D compatible (no external dependencies)
 pub mod resource_limits_section;
 /// Reader for meld's `meld.signature-manifest` custom section (SR-60, #480).
+// serde (and serde_json) are only pulled in by the `std` feature, so the module
+// does not exist without it.
+#[cfg(feature = "std")]
 pub mod signature_manifest;
 
 // YAML configuration parser for resource limits (std only for tooling)

@@ -4,8 +4,8 @@
 //! providing predictable memory usage for embedded/no_std environments.
 //!
 //! Based on the Component Model MVP design:
-//! - Owned handles (own<T>) represent unique ownership
-//! - Borrowed handles (borrow<T>) represent temporary access
+//! - Owned handles (`own<T>`) represent unique ownership
+//! - Borrowed handles (`borrow<T>`) represent temporary access
 //! - Handles are 32-bit integers indexing into type-specific tables
 
 use kiln_error::{Error, ErrorCategory, Result};

@@ -911,7 +911,7 @@ pub struct Module {
     /// Element segments for tables
     pub elements: Vec<Element>,
     /// Pre-resolved element item values for each element segment.
-    /// Indexed by [segment_idx][item_idx]. Contains the evaluated Value for
+    /// Indexed by `[segment_idx][item_idx]`. Contains the evaluated Value for
     /// each element item (including those using ref.i31, struct.new, etc.).
     /// Used by table.init to copy GC-typed elements from passive segments.
     pub resolved_elem_items: Vec<Vec<kiln_foundation::values::Value>>,
@@ -4464,7 +4464,7 @@ use kiln_foundation::component::ExternType; // For error handling
 // Newtype wrappers to solve orphan rules issue
 // These allow us to implement external traits on types containing Arc<T>
 
-/// Wrapper for Arc<Table> to enable trait implementations
+/// Wrapper for `Arc<Table>` to enable trait implementations
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TableWrapper(pub Arc<Table>);
 
@@ -4480,7 +4480,7 @@ impl TableWrapper {
         &self.0
     }
 
-    /// Unwrap to get the Arc<Table>
+    /// Unwrap to get the `Arc<Table>`
     #[must_use]
     pub fn into_inner(self) -> Arc<Table> {
         self.0
@@ -4535,7 +4535,7 @@ impl TableWrapper {
     }
 }
 
-/// Wrapper for Arc<Memory> to enable trait implementations  
+/// Wrapper for `Arc<Memory>` to enable trait implementations  
 /// Memory guard for atomic operations
 #[derive(Debug)]
 pub struct MemoryGuard {
@@ -4580,7 +4580,7 @@ impl MemoryWrapper {
         &self.0
     }
 
-    /// Unwrap to get the Arc<Memory>
+    /// Unwrap to get the `Arc<Memory>`
     #[must_use]
     pub fn into_inner(self) -> Arc<Memory> {
         self.0
@@ -4615,7 +4615,7 @@ impl MemoryWrapper {
         self.0.read(offset, buffer)
     }
 
-    /// Write to memory (requires mutable access to Arc<Memory>)
+    /// Write to memory (requires mutable access to `Arc<Memory>`)
     pub fn write(&self, offset: u32, buffer: &[u8]) -> Result<()> {
         // Note: This requires unsafe because we can't get mutable access to Arc<Memory>
         // For now, we'll return an error
@@ -4678,7 +4678,7 @@ impl MemoryWrapper {
     }
 }
 
-/// Wrapper for Arc<RwLock<Global>> to enable trait implementations and mutable access
+/// Wrapper for `Arc<RwLock<Global>>` to enable trait implementations and mutable access
 #[derive(Debug, Clone)]
 pub struct GlobalWrapper(pub Arc<RwLock<Global>>);
 
@@ -4698,7 +4698,7 @@ impl GlobalWrapper {
         Self(Arc::new(RwLock::new(global)))
     }
 
-    /// Get a reference to the inner global (returns the Arc<RwLock<Global>>)
+    /// Get a reference to the inner global (returns the `Arc<RwLock<Global>>`)
     #[must_use]
     pub fn inner(&self) -> &Arc<RwLock<Global>> {
         &self.0
@@ -4731,7 +4731,7 @@ impl GlobalWrapper {
         guard.set(&value)
     }
 
-    /// Unwrap to get the Arc<RwLock<Global>>
+    /// Unwrap to get the `Arc<RwLock<Global>>`
     #[must_use]
     pub fn into_inner(self) -> Arc<RwLock<Global>> {
         self.0

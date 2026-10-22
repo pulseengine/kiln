@@ -10,7 +10,7 @@
 //! - `WITNESS_OUTPUT`   — abs path the harness MUST write the snapshot JSON to
 //!
 //! This module makes `kilnd` such a harness. It runs the module, snapshots the
-//! counter globals via [`ModuleInstance::export_global_snapshot`], and writes the
+//! counter globals via [`kiln_runtime::module_instance::ModuleInstance::export_global_snapshot`], and writes the
 //! `witness-harness-v1` JSON to `WITNESS_OUTPUT`:
 //!
 //! ```json

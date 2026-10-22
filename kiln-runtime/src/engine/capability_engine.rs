@@ -676,7 +676,7 @@ impl CapabilityAwareEngine {
 
     /// Pre-allocate cabi_realloc'd memory backing `get-directories` (filesystem preopens).
     ///
-    /// Mirrors [`pre_allocate_wasi_args`] for `wasi:filesystem/preopens::get-directories`.
+    /// Mirrors [`Self::pre_allocate_wasi_args`] for `wasi:filesystem/preopens::get-directories`.
     #[cfg(feature = "wasi")]
     pub fn pre_allocate_wasi_preopens(&mut self, instance_handle: InstanceHandle) -> Result<()> {
         let instance_idx = self

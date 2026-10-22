@@ -28,7 +28,7 @@ use crate::{
     verification::VerificationLevel,
 };
 
-/// Thread-safe wrapper for NonNull<u8> pointers
+/// Thread-safe wrapper for `NonNull<u8>` pointers
 ///
 /// This provides Send + Sync guarantees for capability-managed memory regions
 /// where we can ensure thread safety through the capability system.

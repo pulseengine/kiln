@@ -1793,7 +1793,7 @@ impl<P: Provider> SafeMemoryHandler<P> {
     /// Converts the memory handler to a Vec of bytes.
     ///
     /// This method reads all the data from the memory provider and returns
-    /// it as a Vec<u8>. This is useful for compatibility with APIs that expect
+    /// it as a `Vec<u8>`. This is useful for compatibility with APIs that expect
     /// a standard Vec.
     ///
     /// # Examples

@@ -83,7 +83,7 @@ pub struct Table {
     /// The table type, using the canonical `KilnTableType`
     pub ty: KilnTableType,
     /// The table elements - wrapped in Mutex for interior mutability
-    /// This allows setting elements through Arc<Table> references
+    /// This allows setting elements through `Arc<Table>` references
     elements: Mutex<TableElements>,
     /// A debug name for the table (optional)
     pub debug_name: Option<RuntimeString>,

@@ -770,7 +770,7 @@ pub struct WasiDispatcher {
     #[cfg(feature = "std")]
     preopens_alloc: Option<(u32, Vec<(u32, u32)>)>,
     /// Fresh cabi_realloc'd guest buffer for the NEXT input-stream read (`ptr`, `size`).
-    /// Set by the engine per-read (the guest owns and frees the returned list<u8>, so a
+    /// Set by the engine per-read (the guest owns and frees the returned `list<u8>`, so a
     /// reused buffer would be use-after-free). Consumed by blocking-read/read. SR-38.
     #[cfg(feature = "std")]
     read_buf_alloc: Option<(u32, u32)>,
@@ -941,7 +941,7 @@ impl WasiDispatcher {
     ///
     /// The path is canonicalized so the allow-list compares against the
     /// OS-resolved real paths the sandbox gate produces (see
-    /// [`Self::resolve_and_authorize`]). A non-empty allow-list is enforced by
+    /// `Self::resolve_and_authorize`). A non-empty allow-list is enforced by
     /// every filesystem handler; an empty allow-list imposes no restriction
     /// beyond preopen containment.
     ///

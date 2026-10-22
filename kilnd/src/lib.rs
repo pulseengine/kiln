@@ -55,7 +55,7 @@ pub mod witness_harness;
 #[cfg(feature = "component-model")]
 pub mod component_host;
 
-/// Render a core [`Value`] for user-facing result output (SR-59).
+/// Render a core [`kiln_foundation::Value`] for user-facing result output (SR-59).
 ///
 /// `{:?}` prints floats as their raw bit pattern
 /// (`F64(FloatBits64(4615626668101337088))`), which is unreadable for someone
@@ -73,7 +73,7 @@ fn format_core_value(value: &kiln_foundation::Value) -> String {
     }
 }
 
-/// Parse `--arg` strings into core [`Value`]s using the export's declared
+/// Parse `--arg` strings into core [`kiln_foundation::Value`]s using the export's declared
 /// parameter types (SR-59, #480).
 ///
 /// Only core scalar types are constructible from the command line. Component
@@ -141,7 +141,7 @@ fn parse_call_args(
     Ok(out)
 }
 
-/// Render a scalar [`ComponentValue`] for user-facing `--invoke` output (#344).
+/// Render a scalar [`kiln_component::canonical_abi::ComponentValue`] for user-facing `--invoke` output (#344).
 #[cfg(all(feature = "std", feature = "component-model"))]
 fn format_component_value(value: &kiln_component::canonical_abi::ComponentValue) -> String {
     use kiln_component::canonical_abi::ComponentValue as V;

@@ -15,6 +15,8 @@
 ///
 /// # Examples
 ///
+/// Not compiled as a doctest: it only builds with the `asil-b` (or higher) feature enabled.
+///
 /// ```ignore
 /// use kiln_error::{asil_error, ErrorCategory, codes};
 ///
@@ -24,7 +26,7 @@
 ///     codes::SAFETY_VIOLATION,
 ///     "Critical safety violation",
 ///     "asil-b"
-/// ;
+/// );
 /// ```
 #[macro_export]
 macro_rules! asil_error {
@@ -169,6 +171,8 @@ macro_rules! asil_assert {
 ///
 /// # Examples
 ///
+/// Not compiled as a doctest: it only builds with the `asil-c` (or higher) feature enabled.
+///
 /// ```ignore
 /// use kiln_error::{safety_error, codes};
 ///
@@ -176,7 +180,7 @@ macro_rules! asil_assert {
 /// let error = safety_error!(
 ///     codes::MEMORY_CORRUPTION_DETECTED,
 ///     "Critical memory corruption detected"
-/// ;
+/// );
 /// ```
 #[macro_export]
 macro_rules! safety_error {

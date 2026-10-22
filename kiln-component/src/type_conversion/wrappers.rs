@@ -57,7 +57,7 @@ use super::bidirectional::{
 
 use crate::bounded_component_infra::ComponentProvider;
 
-/// Helper function to convert Namespace<P> to String
+/// Helper function to convert `Namespace<P>` to String
 fn namespace_to_string<P>(namespace: &kiln_foundation::component::Namespace<P>) -> Result<String>
 where
     P: kiln_foundation::MemoryProvider + Clone + Default + Eq + core::fmt::Debug,

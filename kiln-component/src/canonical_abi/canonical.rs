@@ -207,7 +207,7 @@ impl CanonicalABI {
     ///
     /// This is a simplified lower operation for basic types. For full type-aware
     /// lowering including strings and lists with proper cabi_realloc allocation,
-    /// use [`lower_typed`] instead.
+    /// use [`Self::lower_typed`] instead.
     pub fn lower(
         &self,
         value: &kiln_foundation::values::Value,
@@ -243,7 +243,7 @@ impl CanonicalABI {
     ///
     /// This performs type-aware lowering including support for strings, lists,
     /// records, variants, and all other Component Model types. When a
-    /// `ReallocManager` is configured (via [`with_realloc_manager`]), strings
+    /// `ReallocManager` is configured (via [`Self::with_realloc_manager`]), strings
     /// and lists will be allocated using `cabi_realloc`.
     ///
     /// # Arguments

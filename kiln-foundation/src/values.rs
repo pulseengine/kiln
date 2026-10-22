@@ -237,7 +237,7 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> De
 /// Wraps `Arc<Mutex<StructRef>>` to provide WebAssembly GC reference semantics:
 /// multiple locals and stack entries can refer to the same struct, and mutations
 /// through one reference are visible through all others.
-/// Uses Arc<Mutex> for thread safety (Send + Sync).
+/// Uses `Arc<Mutex>` for thread safety (Send + Sync).
 #[derive(Clone)]
 pub struct GcStructRef(pub Arc<Mutex<StructRef<DefaultMemoryProvider>>>);
 
@@ -327,7 +327,7 @@ impl core::hash::Hash for GcStructRef {
 /// Wraps `Arc<Mutex<ArrayRef>>` to provide WebAssembly GC reference semantics:
 /// multiple locals and stack entries can refer to the same array, and mutations
 /// through one reference are visible through all others.
-/// Uses Arc<Mutex> for thread safety (Send + Sync).
+/// Uses `Arc<Mutex>` for thread safety (Send + Sync).
 #[derive(Clone)]
 pub struct GcArrayRef(pub Arc<Mutex<ArrayRef<DefaultMemoryProvider>>>);
 

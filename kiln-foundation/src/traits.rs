@@ -227,7 +227,7 @@ impl<A: StaticSerializedSize, B: StaticSerializedSize> StaticSerializedSize for 
 /// Trait for types where the maximum serialized size is known.
 /// This is used by BoundedVec to allocate sufficient space for each item.
 /// For most types, the max size equals the serialized size.
-/// For variable-size types like Option<T>, max size is the size when Some.
+/// For variable-size types like `Option<T>`, max size is the size when Some.
 pub trait MaxSerializedSize {
     /// Returns the maximum serialized size in bytes for this type.
     /// This is the size that BoundedVec should reserve for each item.
@@ -809,7 +809,7 @@ impl FromBytes for char {
 
 /// Default memory provider for GC value types and trait-level fallbacks.
 ///
-/// In std mode, uses heap-backed storage (Vec<u8>) for actual GC operations.
+/// In std mode, uses heap-backed storage (`Vec<u8>`) for actual GC operations.
 /// In no_std mode, uses NoStdProvider<0> (zero capacity) as a placeholder.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DefaultMemoryProvider {
@@ -1659,7 +1659,7 @@ pub trait HostImportHandler: Send + Sync {
     /// to free individual strings.
     ///
     /// # Arguments
-    /// * `list_ptr` - Pointer to the list<string> structure (array of ptr+len pairs)
+    /// * `list_ptr` - Pointer to the `list<string>` structure (array of ptr+len pairs)
     /// * `string_ptrs` - Vector of (ptr, len) for each individually allocated string
     ///
     /// Default implementation does nothing (for non-WASI handlers).
@@ -1678,7 +1678,7 @@ pub trait HostImportHandler: Send + Sync {
 
     /// Record the cabi_realloc'd memory backing the `get-directories` list return.
     ///
-    /// Mirrors [`set_args_allocation`]: the canonical-ABI return area for
+    /// Mirrors [`Self::set_args_allocation`]: the canonical-ABI return area for
     /// `func() -> list<tuple<descriptor,string>>` is only 8 bytes (ptr,len), so the
     /// list entries and path strings must live in guest-owned memory allocated via
     /// `cabi_realloc`. `list_ptr` points to the N*12-byte entry array; `string_ptrs`

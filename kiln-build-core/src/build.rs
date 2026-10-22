@@ -404,7 +404,7 @@ pub mod xtask_port {
             "cargo-kiln",
         ];
 
-        let mut any_failed = false;
+        let mut failed: Vec<&str> = Vec::new();
 
         for package in &packages {
             print!("    Building docs for {}... ", package);
@@ -439,13 +439,11 @@ pub mod xtask_port {
                         .collect::<Vec<_>>()
                         .join("\n      ")
                 );
-                any_failed = true;
+                failed.push(package);
             }
         }
 
-        if any_failed {
-            println!("    ⚠️  Some packages failed to build docs, but continuing...");
-        }
+        docs_outcome(&failed)?;
 
         println!("    ✅ Rust API documentation generated");
 
@@ -459,6 +457,20 @@ pub mod xtask_port {
             "✅".bright_green()
         );
         Ok(())
+    }
+
+    /// Decide the docs command's result from the packages whose doc build failed.
+    ///
+    /// Any failed package fails the command and is named in the error.
+    fn docs_outcome(failed: &[&str]) -> BuildResult<()> {
+        if failed.is_empty() {
+            Ok(())
+        } else {
+            Err(BuildError::Build(format!(
+                "documentation build failed for: {}",
+                failed.join(", ")
+            )))
+        }
     }
 
     /// Open generated documentation
@@ -721,6 +733,25 @@ pub mod xtask_port {
             "✅".bright_green()
         );
         Ok(())
+    }
+
+    #[cfg(test)]
+    mod docs_gate_tests {
+        use super::*;
+
+        #[test]
+        fn docs_outcome_ok_when_nothing_failed() {
+            assert!(docs_outcome(&[]).is_ok());
+        }
+
+        #[test]
+        fn docs_outcome_errors_and_names_every_failed_package() {
+            let err = docs_outcome(&["kiln-decoder", "kiln-error"])
+                .expect_err("failed doc builds must fail the command");
+            let msg = err.to_string();
+            assert!(msg.contains("kiln-decoder"), "{msg}");
+            assert!(msg.contains("kiln-error"), "{msg}");
+        }
     }
 }
 

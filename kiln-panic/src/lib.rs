@@ -61,7 +61,9 @@
 //! ## Memory Pattern Design
 //!
 //! Panic information is stored in a recognizable memory pattern for debugger
-//! access: ```
+//! access:
+//!
+//! ```text
 //! Magic: 0xDEADBEEF
 //! ASIL Level: u8
 //! Timestamp: u64 (if available)
