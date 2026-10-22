@@ -336,10 +336,32 @@ impl SafetyMonitor {
 }
 
 /// Global safety monitor instance
+#[cfg(not(test))]
 static mut SAFETY_MONITOR: SafetyMonitor = SafetyMonitor::new();
 
 /// Safety monitor lock for thread safety
+#[cfg(not(test))]
 static mut MONITOR_LOCK: bool = false;
+
+#[cfg(test)]
+std::thread_local! {
+    /// Unit tests run on one thread each and assert absolute counts, so each
+    /// test thread owns its monitor instead of sharing the process-global one
+    /// (which any concurrently running test that allocates would mutate).
+    /// Every `with_safety_monitor` caller in the crate goes through this one
+    /// function, so there is no other path to the global.
+    static TEST_SAFETY_MONITOR: core::cell::RefCell<SafetyMonitor> =
+        const { core::cell::RefCell::new(SafetyMonitor::new()) };
+}
+
+/// Get the safety monitor owned by the current test thread (unit tests only).
+#[cfg(test)]
+pub fn with_safety_monitor<F, R>(f: F) -> R
+where
+    F: FnOnce(&mut SafetyMonitor) -> R,
+{
+    TEST_SAFETY_MONITOR.with(|monitor| f(&mut monitor.borrow_mut()))
+}
 
 /// Get global safety monitor
 ///
@@ -362,6 +384,7 @@ static mut MONITOR_LOCK: bool = false;
 /// - Critical section is minimal to reduce contention
 ///
 /// SW-REQ-ID: ASIL-A-MON-002 - Thread-safe monitor access
+#[cfg(not(test))]
 #[allow(unsafe_code)]
 pub fn with_safety_monitor<F, R>(f: F) -> R
 where

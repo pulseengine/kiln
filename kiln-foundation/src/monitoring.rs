@@ -146,7 +146,33 @@ impl MemoryStatistics {
 }
 
 /// Global memory monitor instance
+#[cfg(not(test))]
 pub static MEMORY_MONITOR: MemoryMonitor = MemoryMonitor::new();
+
+/// In unit tests every test thread owns its monitor: tests assert absolute
+/// counts, and a process-global would be mutated by any concurrently running
+/// test that allocates. Call sites are unchanged (`MEMORY_MONITOR.method()`).
+#[cfg(test)]
+pub static MEMORY_MONITOR: PerTestThreadMemoryMonitor = PerTestThreadMemoryMonitor;
+
+/// Stand-in for the global [`MemoryMonitor`] that resolves to the current test
+/// thread's own instance (unit tests only).
+#[cfg(test)]
+pub struct PerTestThreadMemoryMonitor;
+
+#[cfg(test)]
+impl core::ops::Deref for PerTestThreadMemoryMonitor {
+    type Target = MemoryMonitor;
+
+    fn deref(&self) -> &MemoryMonitor {
+        std::thread_local! {
+            // Leaked once per test thread so the reference outlives the borrow.
+            static MONITOR: &'static MemoryMonitor =
+                std::boxed::Box::leak(std::boxed::Box::new(MemoryMonitor::new()));
+        }
+        MONITOR.with(|monitor| *monitor)
+    }
+}
 
 /// Per-crate monitoring
 pub struct CrateMonitor {
