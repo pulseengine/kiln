@@ -38,7 +38,6 @@ glob = "0.3"
 # Environment detection
 tokio = { version = "1.0", features = ["rt", "rt-multi-thread", "macros"] }
 chrono = { version = "0.4", features = ["serde"] }
-atty = "0.2"
 
 # Configuration and validation
 rivet-yaml = { workspace = true }
