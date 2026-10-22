@@ -312,9 +312,9 @@ pub fn value_type_to_types_valtype<P: kiln_foundation::MemoryProvider>(
         ValueType::AnyRef => KilnTypesValType::Ref(0),  // Map to Ref with default index
         ValueType::EqRef => KilnTypesValType::Ref(0),   // Map to Ref with default index
         ValueType::TypedFuncRef(_, _) => KilnTypesValType::Own(0), // Map to resource type
-        ValueType::NoneRef => KilnTypesValType::Ref(0),    // Bottom of any hierarchy
+        ValueType::NoneRef => KilnTypesValType::Ref(0), // Bottom of any hierarchy
         ValueType::NoExternRef => KilnTypesValType::Ref(0), // Bottom of extern hierarchy
-        ValueType::NoExnRef => KilnTypesValType::Ref(0),   // Bottom of exn hierarchy
+        ValueType::NoExnRef => KilnTypesValType::Ref(0), // Bottom of exn hierarchy
     }
 }
 
@@ -838,7 +838,9 @@ impl<P: kiln_foundation::MemoryProvider> IntoRuntimeType<TypesKilnExternType<P>>
     }
 }
 
-impl<P: kiln_foundation::MemoryProvider> IntoFormatType<FormatExternType> for TypesKilnExternType<P> {
+impl<P: kiln_foundation::MemoryProvider> IntoFormatType<FormatExternType>
+    for TypesKilnExternType<P>
+{
     fn into_format_type(self) -> Result<FormatExternType> {
         runtime_to_format_extern_type(&self)
     }

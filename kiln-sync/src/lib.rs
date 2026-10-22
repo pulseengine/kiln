@@ -71,42 +71,22 @@ pub mod prelude {
     pub use core::{
         cell::UnsafeCell,
         fmt,
-        ops::{
-            Deref,
-            DerefMut,
-        },
-        sync::atomic::{
-            AtomicBool,
-            AtomicUsize,
-            Ordering,
-        },
+        ops::{Deref, DerefMut},
+        sync::atomic::{AtomicBool, AtomicUsize, Ordering},
     };
     #[cfg(feature = "std")]
     pub use std::{
         boxed::Box,
         cell::UnsafeCell,
         fmt,
-        ops::{
-            Deref,
-            DerefMut,
-        },
+        ops::{Deref, DerefMut},
         sync::{
-            atomic::{
-                AtomicBool,
-                AtomicUsize,
-                Ordering,
-            },
             Arc,
             // Note: Mutex, RwLock from std::sync are not re-exported here
             // to avoid conflict with kiln_sync's own types.
+            atomic::{AtomicBool, AtomicUsize, Ordering},
         },
-        thread::{
-            self,
-            park as park_thread,
-            sleep,
-            yield_now,
-            JoinHandle,
-        },
+        thread::{self, JoinHandle, park as park_thread, sleep, yield_now},
         time::Duration,
         vec::Vec,
     };
@@ -146,37 +126,22 @@ pub mod unified_sync;
 pub mod verify;
 
 // Re-export types for convenience
-pub use mutex::{
-    KilnMutex,
-    KilnMutexGuard,
-};
+pub use mutex::{KilnMutex, KilnMutexGuard};
 pub use once::KilnOnce;
 // Publicly exported synchronization primitives when the `std` feature is
 // enabled. These are the parking versions.
 #[cfg(feature = "std")]
 #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
 pub use rwlock::parking_impl::{
-    KilnParkingRwLock,
-    KilnParkingRwLockReadGuard,
-    KilnParkingRwLockWriteGuard,
+    KilnParkingRwLock, KilnParkingRwLockReadGuard, KilnParkingRwLockWriteGuard,
 };
 // Re-export the basic (spin-lock) RwLock and its guards.
 // These are always available as they don't depend on std for parking.
-pub use rwlock::{
-    KilnRwLock,
-    KilnRwLockReadGuard,
-    KilnRwLockWriteGuard,
-};
+pub use rwlock::{KilnRwLock, KilnRwLockReadGuard, KilnRwLockWriteGuard};
 // Re-export unified synchronization primitives
 pub use unified_sync::{
-    AsilLevel,
-    BoundedChannel,
-    BoundedReceiver,
-    BoundedSender,
-    SafeAtomicCounter,
-    SafetyContext,
-    SafeMutex,
-    SafeMutexGuard,
+    AsilLevel, BoundedChannel, BoundedReceiver, BoundedSender, SafeAtomicCounter, SafeMutex,
+    SafeMutexGuard, SafetyContext,
 };
 
 // Convenience aliases for easier importing

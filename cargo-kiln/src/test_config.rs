@@ -6,8 +6,8 @@
 use std::{collections::HashMap, fs, path::Path};
 
 use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
 use kiln_build_core::config::AsilLevel;
+use serde::{Deserialize, Serialize};
 
 /// Main test configuration structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -219,7 +219,10 @@ impl KilnTestConfig {
                     min_coverage: Some(95.0),
                 },
                 _ => AsilTestConfig {
-                    required_packages: vec!["kiln-error".to_string(), "kiln-foundation".to_string()],
+                    required_packages: vec![
+                        "kiln-error".to_string(),
+                        "kiln-foundation".to_string(),
+                    ],
                     optional_packages: vec![],
                     include_patterns: vec![],
                     exclude_patterns: vec![],

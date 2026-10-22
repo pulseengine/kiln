@@ -6,20 +6,12 @@
 
 use core::{
     ptr::NonNull,
-    sync::atomic::{
-        AtomicPtr,
-        AtomicUsize,
-        Ordering,
-    },
+    sync::atomic::{AtomicPtr, AtomicUsize, Ordering},
 };
 
 use kiln_error::Error;
 
-use crate::memory::{
-    PageAllocator,
-    VerificationLevel,
-    WASM_PAGE_SIZE,
-};
+use crate::memory::{PageAllocator, VerificationLevel, WASM_PAGE_SIZE};
 
 /// Tock OS system call interface
 mod syscall {
@@ -123,11 +115,11 @@ mod syscall {
 #[derive(Debug, Copy, Clone)]
 struct GrantRegion {
     /// Pointer to the granted memory region
-    ptr:        NonNull<u8>,
+    ptr: NonNull<u8>,
     /// Size of the granted region in bytes
-    size:       usize,
+    size: usize,
     /// Binary std/no_std choice
-    allocated:  bool,
+    allocated: bool,
     /// Protection flags for this region
     #[allow(dead_code)]
     protection: u32,
@@ -172,19 +164,19 @@ const MAX_GRANT_REGIONS: usize = 8;
 #[derive(Debug)]
 pub struct TockAllocator {
     /// Available grant regions (using array instead of heapless::Vec)
-    grant_regions:       [Option<GrantRegion>; MAX_GRANT_REGIONS],
+    grant_regions: [Option<GrantRegion>; MAX_GRANT_REGIONS],
     /// Number of active grant regions
     grant_regions_count: usize,
     /// Binary std/no_std choice
-    current_allocation:  AtomicPtr<u8>,
+    current_allocation: AtomicPtr<u8>,
     /// Binary std/no_std choice
-    current_size:        AtomicUsize,
+    current_size: AtomicUsize,
     /// Maximum pages allowed
-    maximum_pages:       u32,
+    maximum_pages: u32,
     /// Verification level
-    verification_level:  VerificationLevel,
+    verification_level: VerificationLevel,
     /// Binary std/no_std choice
-    static_buffer:       Option<&'static mut [u8]>,
+    static_buffer: Option<&'static mut [u8]>,
 }
 
 unsafe impl Send for TockAllocator {}
@@ -404,18 +396,18 @@ impl PageAllocator for TockAllocator {
 
 /// Builder for TockAllocator
 pub struct TockAllocatorBuilder {
-    maximum_pages:      u32,
+    maximum_pages: u32,
     verification_level: VerificationLevel,
-    static_buffer:      Option<&'static mut [u8]>,
+    static_buffer: Option<&'static mut [u8]>,
 }
 
 impl TockAllocatorBuilder {
     /// Create new builder
     pub fn new() -> Self {
         Self {
-            maximum_pages:      1024,
+            maximum_pages: 1024,
             verification_level: VerificationLevel::Full,
-            static_buffer:      None,
+            static_buffer: None,
         }
     }
 

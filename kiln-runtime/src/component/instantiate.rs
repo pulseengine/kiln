@@ -3,56 +3,34 @@
 //! This module implements the runtime behavior for instantiating WebAssembly
 //! components and core modules within components.
 
-use kiln_error::{
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result};
 use kiln_format::{
     component::{
-        Component,
-        CoreInstance,
-        CoreInstanceExpr,
-        CoreSort,
-        Instance,
-        InstanceExpr,
-        Sort,
+        Component, CoreInstance, CoreInstanceExpr, CoreSort, Instance, InstanceExpr, Sort,
     },
     module::Module,
 };
 // Always use BoundedMap for HashMap to ensure trait compatibility
 // alloc is imported in lib.rs with proper feature gates
-use kiln_foundation::{
-    safe_memory::NoStdProvider,
-    BoundedMap,
-};
+use kiln_foundation::{BoundedMap, safe_memory::NoStdProvider};
 
-use crate::bounded_runtime_infra::{
-    create_runtime_provider,
-    RuntimeProvider,
-};
+use crate::bounded_runtime_infra::{RuntimeProvider, create_runtime_provider};
 
 // Always use BoundedMap regardless of std/no_std to ensure serialization traits
 type HashMap<K, V> = BoundedMap<K, V, 256, RuntimeProvider>;
 
 // Use BoundedString for component names to ensure trait compatibility
-use kiln_foundation::{
-    budget_aware_provider::CrateId,
-    safe_managed_alloc,
-    BoundedString,
-};
+use kiln_foundation::{BoundedString, budget_aware_provider::CrateId, safe_managed_alloc};
 type ComponentString = BoundedString<256>;
 
 /// Result of component instantiation
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct InstantiationResult {
     /// Instance handle
-    pub handle:  u32,
+    pub handle: u32,
     /// Exported items from the instance
     pub exports: HashMap<ComponentString, ExportedItem>,
 }
-
 
 impl kiln_foundation::traits::Checksummable for InstantiationResult {
     fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
@@ -208,23 +186,21 @@ pub struct InstantiationContext {
     /// Next available instance handle
     next_instance_handle: u32,
     /// Registry of instantiated components
-    instances:            HashMap<u32, InstantiationResult>,
+    instances: HashMap<u32, InstantiationResult>,
     /// Core module instances
-    core_instances:       HashMap<u32, CoreModuleInstance>,
+    core_instances: HashMap<u32, CoreModuleInstance>,
 }
 
 /// Represents an instantiated core module
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct CoreModuleInstance {
     /// Module reference
     pub module_idx: u32,
     /// Imported items resolved during instantiation
-    pub imports:    HashMap<ComponentString, u32>,
+    pub imports: HashMap<ComponentString, u32>,
     /// Exported items from the module
-    pub exports:    HashMap<ComponentString, ExportedItem>,
+    pub exports: HashMap<ComponentString, ExportedItem>,
 }
-
 
 impl kiln_foundation::traits::Checksummable for CoreModuleInstance {
     fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
@@ -275,14 +251,14 @@ pub enum LinkingError {
         /// Module name.
         module: ComponentString,
         /// Import name.
-        name:   ComponentString,
+        name: ComponentString,
     },
     /// Type mismatch during linking
     TypeMismatch {
         /// Expected type.
         expected: ComponentString,
         /// Actual type.
-        actual:   ComponentString,
+        actual: ComponentString,
     },
     /// Circular dependency detected
     CircularDependency,
@@ -329,8 +305,8 @@ impl ComponentInstantiator {
         Self {
             context: InstantiationContext {
                 next_instance_handle: 1,
-                instances:            HashMap::new(instances_provider).unwrap_or_default(),
-                core_instances:       HashMap::new(core_provider).unwrap_or_default(),
+                instances: HashMap::new(instances_provider).unwrap_or_default(),
+                core_instances: HashMap::new(core_provider).unwrap_or_default(),
             },
         }
     }
@@ -384,10 +360,10 @@ impl ComponentInstantiator {
             create_runtime_provider().unwrap_or_else(|_| RuntimeProvider::default());
         Ok(CoreModuleInstance {
             module_idx: 0,
-            imports:    HashMap::new(imports_provider).unwrap_or_default(), /* Core module
-                                                                             * imports are empty
-                                                                             * for now */
-            exports:    core_exports,
+            imports: HashMap::new(imports_provider).unwrap_or_default(), /* Core module
+                                                                          * imports are empty
+                                                                          * for now */
+            exports: core_exports,
         })
     }
 }
@@ -396,7 +372,7 @@ impl ComponentInstantiator {
 /// modules
 pub struct CoreModuleInstantiator {
     /// Module instances registry
-    instances:        HashMap<u32, CoreModuleInstance>,
+    instances: HashMap<u32, CoreModuleInstance>,
     /// Next instance ID
     next_instance_id: u32,
 }
@@ -409,7 +385,7 @@ impl CoreModuleInstantiator {
             RuntimeProvider::default()
         });
         Self {
-            instances:        HashMap::new(provider).unwrap_or_default(),
+            instances: HashMap::new(provider).unwrap_or_default(),
             next_instance_id: 1,
         }
     }
@@ -441,8 +417,8 @@ impl CoreModuleInstantiator {
 
                 let core_instance = CoreModuleInstance {
                     module_idx: *module_idx,
-                    imports:    HashMap::new(imports_provider).unwrap_or_default(),
-                    exports:    HashMap::new(exports_provider).unwrap_or_default(),
+                    imports: HashMap::new(imports_provider).unwrap_or_default(),
+                    exports: HashMap::new(exports_provider).unwrap_or_default(),
                 };
 
                 self.instances.insert(instance_id, core_instance)?;
@@ -470,8 +446,7 @@ impl CoreModuleInstantiator {
                         },
                     };
                     // Convert String to ComponentString
-                    let component_name =
-                        ComponentString::from_str_truncate(&export.name)?;
+                    let component_name = ComponentString::from_str_truncate(&export.name)?;
                     export_map.insert(component_name, item)?;
                 }
 

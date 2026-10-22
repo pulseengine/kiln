@@ -366,7 +366,9 @@ impl ToBytes for MemoryBuffer {
         (self.data.len() as u32).to_bytes_with_provider(writer, provider)?;
         // Write the data buffer contents
         writer.write_all(&self.data).map_err(|_| {
-            kiln_error::Error::foundation_memory_provider_failed("Failed to write MemoryBuffer data")
+            kiln_error::Error::foundation_memory_provider_failed(
+                "Failed to write MemoryBuffer data",
+            )
         })?;
         // Write the in_use flag
         self.in_use.to_bytes_with_provider(writer, provider)?;

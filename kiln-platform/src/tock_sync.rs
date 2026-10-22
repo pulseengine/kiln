@@ -5,10 +5,7 @@
 //! synchronization with MPU isolation between processes.
 
 use core::{
-    sync::atomic::{
-        AtomicU32,
-        Ordering,
-    },
+    sync::atomic::{AtomicU32, Ordering},
     time::Duration,
 };
 
@@ -140,7 +137,7 @@ extern "C" fn ipc_callback() {
 #[derive(Debug)]
 pub struct TockFutex {
     /// Atomic value for futex operations
-    value:      AtomicU32,
+    value: AtomicU32,
     /// Process ID for IPC communication (for cross-process wake)
     process_id: u32,
 }
@@ -152,7 +149,7 @@ impl TockFutex {
     /// Create new Tock futex
     pub fn new(initial_value: u32) -> Self {
         Self {
-            value:      AtomicU32::new(initial_value),
+            value: AtomicU32::new(initial_value),
             process_id: Self::get_process_id(),
         }
     }
@@ -330,7 +327,7 @@ impl FutexLike for TockFutex {
 #[derive(Debug)]
 pub struct TockSemaphoreFutex {
     /// Atomic value
-    value:           AtomicU32,
+    value: AtomicU32,
     /// Semaphore count for blocking operations
     semaphore_count: AtomicU32,
 }
@@ -339,7 +336,7 @@ impl TockSemaphoreFutex {
     /// Create new semaphore-based futex
     pub fn new(initial_value: u32) -> Self {
         Self {
-            value:           AtomicU32::new(initial_value),
+            value: AtomicU32::new(initial_value),
             semaphore_count: AtomicU32::new(0),
         }
     }
@@ -405,7 +402,7 @@ impl FutexLike for TockSemaphoreFutex {
 /// Builder for TockFutex
 pub struct TockFutexBuilder {
     initial_value: u32,
-    use_ipc:       bool,
+    use_ipc: bool,
 }
 
 impl TockFutexBuilder {
@@ -413,7 +410,7 @@ impl TockFutexBuilder {
     pub fn new() -> Self {
         Self {
             initial_value: 0,
-            use_ipc:       true,
+            use_ipc: true,
         }
     }
 

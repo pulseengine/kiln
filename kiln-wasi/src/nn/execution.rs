@@ -4,27 +4,15 @@
 //! capability-based resource management and safety checks.
 
 use core::fmt;
-use std::sync::{
-    Mutex,
-    OnceLock,
-};
+use std::sync::{Mutex, OnceLock};
 
 use kiln_foundation::{
-    budget_aware_provider::CrateId,
-    safe_managed_alloc,
-    safe_memory::NoStdProvider,
-    BoundedVec,
+    BoundedVec, budget_aware_provider::CrateId, safe_managed_alloc, safe_memory::NoStdProvider,
 };
 
 use super::{
-    get_graph_store,
-    wit_types::ErrorCode,
-    ComputeCapable,
-    Graph,
-    NNOperation,
-    NeuralNetworkCapability,
-    Tensor,
-    VerificationLevel,
+    ComputeCapable, Graph, NNOperation, NeuralNetworkCapability, Tensor, VerificationLevel,
+    get_graph_store, wit_types::ErrorCode,
 };
 use crate::prelude::*;
 
@@ -71,28 +59,28 @@ impl From<ComputeError> for Error {
 /// Execution context for neural network inference
 pub struct ExecutionContext {
     /// Unique identifier
-    id:               u32,
+    id: u32,
     /// Associated graph ID
-    graph_id:         u32,
+    graph_id: u32,
     /// Input tensors
-    inputs:           Vec<Option<Tensor>>,
+    inputs: Vec<Option<Tensor>>,
     /// Output tensors (populated after compute)
-    outputs:          Vec<Option<Tensor>>,
+    outputs: Vec<Option<Tensor>>,
     /// Backend-specific context
-    backend_context:  Box<dyn ComputeCapable>,
+    backend_context: Box<dyn ComputeCapable>,
     /// Capability level
     capability_level: VerificationLevel,
     /// Execution statistics
-    stats:            ExecutionStats,
+    stats: ExecutionStats,
 }
 
 /// Statistics for execution monitoring
 #[derive(Debug, Default, Clone)]
 pub struct ExecutionStats {
     /// Number of inferences run
-    pub inference_count:   u64,
+    pub inference_count: u64,
     /// Total execution time in microseconds
-    pub total_time_us:     u64,
+    pub total_time_us: u64,
     /// Peak memory usage
     pub peak_memory_bytes: usize,
 }
@@ -300,7 +288,7 @@ impl fmt::Debug for ExecutionContext {
 /// Execution context store
 pub struct ContextStore {
     contexts: Vec<ExecutionContext>,
-    next_id:  u32,
+    next_id: u32,
 }
 
 impl ContextStore {
@@ -308,7 +296,7 @@ impl ContextStore {
     pub fn new() -> Result<Self> {
         Ok(Self {
             contexts: Vec::new(),
-            next_id:  1,
+            next_id: 1,
         })
     }
 
@@ -520,10 +508,7 @@ fn calculate_output_memory_usage(context: &ExecutionContext) -> usize {
 fn get_time_us() -> u64 {
     #[cfg(feature = "std")]
     {
-        use std::time::{
-            SystemTime,
-            UNIX_EPOCH,
-        };
+        use std::time::{SystemTime, UNIX_EPOCH};
         SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_micros() as u64
     }
     #[cfg(not(feature = "std"))]

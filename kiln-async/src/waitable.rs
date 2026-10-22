@@ -120,11 +120,7 @@ impl<const N: usize> FutureTable<N> {
     #[must_use]
     pub fn state_of(&self, id: FutureId) -> Option<FutureState> {
         let slot = self.slots.get(id.index as usize)?;
-        if slot.generation == id.generation {
-            slot.state
-        } else {
-            None
-        }
+        if slot.generation == id.generation { slot.state } else { None }
     }
 
     /// Allocate a fresh `Empty` future (`future.new`). Fails loud at capacity.
@@ -161,7 +157,7 @@ impl<const N: usize> FutureTable<N> {
                 }
                 slot.waiter = reader;
                 Ok(())
-            }
+            },
             // Ready: the reader should consume, not block.
             Some(FutureState::Ready) => Err(Error::invalid_state_error(
                 "kiln-async: cannot park a reader on an already-ready future",
@@ -183,7 +179,7 @@ impl<const N: usize> FutureTable<N> {
             Some(FutureState::Empty) => {
                 slot.state = Some(FutureState::Ready);
                 Ok(Self::take_waiter(slot))
-            }
+            },
             Some(FutureState::Ready) => Err(Error::invalid_state_error(
                 "kiln-async: future already completed (single-shot write)",
             )),
@@ -225,9 +221,7 @@ impl<const N: usize> FutureTable<N> {
         self.slots
             .get_mut(id.index as usize)
             .filter(|s| s.state.is_some() && s.generation == id.generation)
-            .ok_or_else(|| {
-                Error::validation_error("kiln-async: stale or unknown future handle")
-            })
+            .ok_or_else(|| Error::validation_error("kiln-async: stale or unknown future handle"))
     }
 
     /// Take the parked reader out of a slot, returning it if one was set.
@@ -516,21 +510,13 @@ impl<const NSET: usize, const NMEM: usize> WaitableSetTable<NSET, NMEM> {
     #[must_use]
     pub fn get(&self, id: SetId) -> Option<&WaitableSet<NMEM>> {
         let slot = self.slots.get(id.index as usize)?;
-        if slot.generation == id.generation {
-            slot.set.as_ref()
-        } else {
-            None
-        }
+        if slot.generation == id.generation { slot.set.as_ref() } else { None }
     }
 
     /// Generation-validated mutable access to a live set.
     pub fn get_mut(&mut self, id: SetId) -> Option<&mut WaitableSet<NMEM>> {
         let slot = self.slots.get_mut(id.index as usize)?;
-        if slot.generation == id.generation {
-            slot.set.as_mut()
-        } else {
-            None
-        }
+        if slot.generation == id.generation { slot.set.as_mut() } else { None }
     }
 
     /// `waitable-set.drop` — free a set, bumping its generation so stale handles
@@ -541,7 +527,9 @@ impl<const NSET: usize, const NMEM: usize> WaitableSetTable<NSET, NMEM> {
             .get_mut(id.index as usize)
             .filter(|s| s.set.is_some() && s.generation == id.generation)
             .ok_or_else(|| {
-                Error::validation_error("kiln-async: drop of a stale or unknown waitable-set handle")
+                Error::validation_error(
+                    "kiln-async: drop of a stale or unknown waitable-set handle",
+                )
             })?;
         slot.set = None;
         slot.generation = slot.generation.wrapping_add(1);

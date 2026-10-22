@@ -3,34 +3,23 @@
 #![cfg(all(feature = "wasi-nn", feature = "preview2"))]
 
 use kiln_foundation::{
-    memory_init::{
-        init_crate_memory,
-        init_kiln_memory,
-    },
     CrateId,
+    memory_init::{init_crate_memory, init_kiln_memory},
 };
 use kiln_wasi::{
+    ComponentModelProvider, WasiCapabilities, WasiNeuralNetworkCapabilities,
     nn::{
+        ModelFormat, NNOperation, NeuralNetworkCapability,
         backend::initialize_backends,
         capabilities::{
-            create_nn_capability,
-            BoundedNNCapability,
-            DynamicNNCapability,
-            NNVerificationLevel as VerificationLevel,
-            StaticNNCapability,
+            BoundedNNCapability, DynamicNNCapability, NNVerificationLevel as VerificationLevel,
+            StaticNNCapability, create_nn_capability,
         },
         execution::initialize_context_store,
         graph::initialize_graph_store,
-        initialize_nn,
-        is_nn_available,
-        ModelFormat,
-        NNOperation,
-        NeuralNetworkCapability,
+        initialize_nn, is_nn_available,
     },
     prelude::*,
-    ComponentModelProvider,
-    WasiCapabilities,
-    WasiNeuralNetworkCapabilities,
 };
 
 /// Test full WASI-NN initialization flow
@@ -89,17 +78,13 @@ fn test_nn_subsystem_init() {
 #[test]
 fn test_nn_capability_restrictions() {
     use kiln_wasi::nn::capabilities::{
-        BoundedNNCapability,
-        DynamicNNCapability,
-        ModelFormat,
-        NNOperation,
-        StaticNNCapability,
+        BoundedNNCapability, DynamicNNCapability, ModelFormat, NNOperation, StaticNNCapability,
     };
 
     // Test dynamic capability (QM)
     let dynamic_cap = DynamicNNCapability::new();
     let load_op = NNOperation::Load {
-        size:   50 * 1024 * 1024,
+        size: 50 * 1024 * 1024,
         format: ModelFormat::ONNX,
     };
     assert!(dynamic_cap.verify_operation(&load_op).is_ok());
@@ -107,7 +92,7 @@ fn test_nn_capability_restrictions() {
     // Test bounded capability (ASIL-A)
     let bounded_cap = BoundedNNCapability::new().unwrap();
     let big_load = NNOperation::Load {
-        size:   100 * 1024 * 1024,
+        size: 100 * 1024 * 1024,
         format: ModelFormat::ONNX,
     };
     assert!(bounded_cap.verify_operation(&big_load).is_err());
@@ -175,12 +160,7 @@ fn test_verification_level_mapping() {
 /// Test tensor operations with different capabilities
 #[test]
 fn test_tensor_operations() {
-    use kiln_wasi::nn::{
-        capabilities::DynamicNNCapability,
-        Tensor,
-        TensorDimensions,
-        TensorType,
-    };
+    use kiln_wasi::nn::{Tensor, TensorDimensions, TensorType, capabilities::DynamicNNCapability};
 
     let capability = DynamicNNCapability::new();
 

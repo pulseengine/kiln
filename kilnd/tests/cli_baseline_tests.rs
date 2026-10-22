@@ -20,10 +20,7 @@ const KILN: &str = env!("CARGO_BIN_EXE_kiln");
 #[test]
 fn version_flag_prints_name_and_semver_and_exits_zero() {
     for flag in ["--version", "-V"] {
-        let out = Command::new(KILN)
-            .arg(flag)
-            .output()
-            .expect("kiln must be executable");
+        let out = Command::new(KILN).arg(flag).output().expect("kiln must be executable");
 
         assert!(
             out.status.success(),
@@ -73,10 +70,7 @@ fn help_exits_zero() {
 
 #[test]
 fn unknown_long_flag_exits_two_with_usage_on_stderr() {
-    let out = Command::new(KILN)
-        .arg("--definitely-not-a-flag")
-        .output()
-        .unwrap();
+    let out = Command::new(KILN).arg("--definitely-not-a-flag").output().unwrap();
 
     assert_eq!(
         out.status.code(),

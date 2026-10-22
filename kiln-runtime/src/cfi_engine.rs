@@ -61,7 +61,7 @@ mod cfi_types {
             /// Return address to push
             return_address: u32,
             /// Current stack pointer
-            stack_pointer:  u32,
+            stack_pointer: u32,
         },
         /// Pop and validate a return address from the shadow stack
         Pop {
@@ -78,7 +78,7 @@ mod cfi_types {
         /// Return address for this stack frame
         pub return_address: u32,
         /// Stack pointer value for this frame
-        pub stack_pointer:  u32,
+        pub stack_pointer: u32,
         /// Index of the function for this frame
         pub function_index: u32,
     }
@@ -139,23 +139,11 @@ use kiln_foundation::traits::DefaultMemoryProvider;
 
 use self::cfi_types::ShadowStackRequirement;
 // Export CFI types for all feature combinations
-pub use self::cfi_types::{
-    CfiHardwareInstruction,
-    CfiSoftwareValidation,
-    ShadowStackEntry,
-};
+pub use self::cfi_types::{CfiHardwareInstruction, CfiSoftwareValidation, ShadowStackEntry};
 // CFI imports temporarily disabled since CFI module is disabled
 use crate::{
     execution::ExecutionContext,
-    prelude::{
-        str,
-        BoundedCapacity,
-        Debug,
-        Eq,
-        Error,
-        ErrorCategory,
-        PartialEq,
-    },
+    prelude::{BoundedCapacity, Debug, Eq, Error, ErrorCategory, PartialEq, str},
 }; // stackless::StacklessEngine temporarily disabled
 
 // Stub types for disabled CFI functionality
@@ -233,7 +221,7 @@ pub struct CfiSoftwareConfig {
     /// Maximum depth of the shadow stack
     pub max_shadow_stack_depth: usize,
     /// Enable temporal validation
-    pub temporal_validation:    bool,
+    pub temporal_validation: bool,
 }
 
 // Default trait implemented by derive
@@ -242,9 +230,9 @@ pub struct CfiSoftwareConfig {
 #[derive(Debug, Clone)]
 pub struct CfiExecutionContext {
     /// Index of the currently executing function
-    pub current_function:         u32,
+    pub current_function: u32,
     /// Offset of the current instruction within the function
-    pub current_instruction:      u32,
+    pub current_instruction: u32,
     /// Shadow stack for return address protection
     pub shadow_stack: kiln_foundation::bounded::BoundedVec<
         ShadowStackEntry,
@@ -258,19 +246,19 @@ pub struct CfiExecutionContext {
         kiln_foundation::safe_memory::NoStdProvider<1024>,
     >,
     /// Number of CFI violations detected
-    pub violation_count:          u32,
+    pub violation_count: u32,
     /// CFI performance and security metrics
-    pub metrics:                  CfiMetrics,
+    pub metrics: CfiMetrics,
     /// Current calling convention
-    pub calling_convention:       CallingConvention,
+    pub calling_convention: CallingConvention,
     /// Current stack depth for platform-specific validation
-    pub current_stack_depth:      u32,
+    pub current_stack_depth: u32,
     /// Software configuration for CFI
-    pub software_config:          CfiSoftwareConfig,
+    pub software_config: CfiSoftwareConfig,
     /// Last checkpoint time for temporal validation
-    pub last_checkpoint_time:     u64,
+    pub last_checkpoint_time: u64,
     /// Maximum number of labels for control flow validation
-    pub max_labels:               u32,
+    pub max_labels: u32,
     /// Valid branch targets for CFI validation
     pub valid_branch_targets: kiln_foundation::bounded::BoundedVec<
         u32,
@@ -296,18 +284,18 @@ impl CfiExecutionContext {
             kiln_foundation::budget_aware_provider::CrateId::Runtime
         )?;
         Ok(Self {
-            current_function:         0,
-            current_instruction:      0,
-            shadow_stack:             kiln_foundation::bounded::BoundedVec::new(provider1)?,
+            current_function: 0,
+            current_instruction: 0,
+            shadow_stack: kiln_foundation::bounded::BoundedVec::new(provider1)?,
             landing_pad_expectations: kiln_foundation::bounded::BoundedVec::new(provider2)?,
-            violation_count:          0,
-            metrics:                  CfiMetrics::default(),
-            calling_convention:       CallingConvention::default(),
-            current_stack_depth:      0,
-            software_config:          CfiSoftwareConfig::default(),
-            last_checkpoint_time:     0,
-            max_labels:               128,
-            valid_branch_targets:     kiln_foundation::bounded::BoundedVec::new(provider3)?,
+            violation_count: 0,
+            metrics: CfiMetrics::default(),
+            calling_convention: CallingConvention::default(),
+            current_stack_depth: 0,
+            software_config: CfiSoftwareConfig::default(),
+            last_checkpoint_time: 0,
+            max_labels: 128,
+            valid_branch_targets: kiln_foundation::bounded::BoundedVec::new(provider3)?,
         })
     }
 }
@@ -316,36 +304,36 @@ impl CfiExecutionContext {
 #[derive(Debug, Clone, Default)]
 pub struct CfiMetrics {
     /// Number of landing pads successfully validated
-    pub landing_pads_validated:   u32,
+    pub landing_pads_validated: u32,
     /// Number of shadow stack operations performed
-    pub shadow_stack_operations:  u32,
+    pub shadow_stack_operations: u32,
     /// Number of indirect calls protected
     pub indirect_calls_protected: u32,
     /// Number of returns protected
-    pub returns_protected:        u32,
+    pub returns_protected: u32,
     /// Number of branches protected
-    pub branches_protected:       u32,
+    pub branches_protected: u32,
     /// Number of violations detected
-    pub violations_detected:      u32,
+    pub violations_detected: u32,
     /// Total overhead in nanoseconds
-    pub total_overhead_ns:        u64,
+    pub total_overhead_ns: u64,
     /// Total execution time for temporal validation
-    pub total_execution_time:     u64,
+    pub total_execution_time: u64,
     /// Average instruction time for performance analysis
     pub average_instruction_time: Option<u64>,
     /// Last instruction execution time
-    pub last_instruction_time:    u64,
+    pub last_instruction_time: u64,
 }
 
 /// Expected landing pad for CFI validation
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct LandingPadExpectation {
     /// Index of the function containing the landing pad
-    pub function_index:     u32,
+    pub function_index: u32,
     /// Byte offset of the landing pad within the function
     pub instruction_offset: u32,
     /// Optional deadline for landing pad validation (in cycles)
-    pub deadline:           Option<u64>,
+    pub deadline: Option<u64>,
 }
 
 impl kiln_foundation::traits::Checksummable for LandingPadExpectation {
@@ -413,7 +401,7 @@ pub struct CfiProtection {
 #[derive(Debug, Clone)]
 pub struct CfiLandingPad {
     /// Index of the function containing the landing pad
-    pub function_index:     u32,
+    pub function_index: u32,
     /// Byte offset of the landing pad within the function
     pub instruction_offset: u32,
 }
@@ -421,15 +409,15 @@ pub struct CfiLandingPad {
 /// CFI-enhanced WebAssembly execution engine
 pub struct CfiExecutionEngine {
     /// CFI control flow operations handler
-    cfi_ops:          DefaultCfiControlFlowOps,
+    cfi_ops: DefaultCfiControlFlowOps,
     /// CFI protection configuration
-    cfi_protection:   CfiControlFlowProtection,
+    cfi_protection: CfiControlFlowProtection,
     /// Current CFI execution context
-    cfi_context:      CfiExecutionContext,
+    cfi_context: CfiExecutionContext,
     /// CFI violation response policy
     violation_policy: CfiViolationPolicy,
     /// CFI statistics and metrics
-    statistics:       CfiEngineStatistics,
+    statistics: CfiEngineStatistics,
     // Reference to the stackless execution engine - temporarily disabled
     // stackless_engine: Option<StacklessEngine>,
 }
@@ -452,17 +440,17 @@ pub enum CfiViolationPolicy {
 #[derive(Debug, Clone, Default)]
 pub struct CfiEngineStatistics {
     /// Total instructions executed with CFI protection
-    pub instructions_protected:  u64,
+    pub instructions_protected: u64,
     /// Total CFI violations detected
-    pub violations_detected:     u64,
+    pub violations_detected: u64,
     /// Total CFI violations resolved
-    pub violations_resolved:     u64,
+    pub violations_resolved: u64,
     /// Total execution time spent on CFI (nanoseconds)
-    pub cfi_overhead_ns:         u64,
+    pub cfi_overhead_ns: u64,
     /// Peak shadow stack depth
     pub peak_shadow_stack_depth: usize,
     /// Average CFI validation time (nanoseconds)
-    pub avg_validation_time_ns:  u64,
+    pub avg_validation_time_ns: u64,
 }
 
 impl CfiExecutionEngine {
@@ -891,9 +879,7 @@ impl CfiExecutionEngine {
             },
             CfiViolationPolicy::ReturnError => {
                 // Return error to caller
-                Err(Error::cfi_validation_failed(
-                    "CFI violation detected",
-                ))
+                Err(Error::cfi_validation_failed("CFI violation detected"))
             },
             CfiViolationPolicy::AttemptRecovery => {
                 // Attempt to recover from violation
@@ -937,10 +923,7 @@ impl CfiExecutionEngine {
         {
             // TODO: Replace with safe hardware timer access
             // For now, use a simple fallback based on atomic counter
-            use core::sync::atomic::{
-                AtomicU64,
-                Ordering,
-            };
+            use core::sync::atomic::{AtomicU64, Ordering};
             static COUNTER: AtomicU64 = AtomicU64::new(0);
             COUNTER.fetch_add(1, Ordering::Relaxed)
         }
@@ -948,10 +931,7 @@ impl CfiExecutionEngine {
         {
             // TODO: Replace with safe hardware timer access
             // For now, use a simple fallback based on atomic counter
-            use core::sync::atomic::{
-                AtomicU64,
-                Ordering,
-            };
+            use core::sync::atomic::{AtomicU64, Ordering};
             static COUNTER: AtomicU64 = AtomicU64::new(0);
             COUNTER.fetch_add(1, Ordering::Relaxed)
         }
@@ -1089,7 +1069,7 @@ pub enum CfiExecutionResult {
     /// Indirect call with CFI protection
     CallIndirect {
         /// Execution result for the call
-        result:           ExecutionResult,
+        result: ExecutionResult,
         /// CFI-protected branch target information
         protected_target: CfiProtectedBranchTarget,
     },
@@ -1101,7 +1081,7 @@ pub enum CfiExecutionResult {
     /// Branch with CFI protection
     Branch {
         /// Execution result for the branch
-        result:           ExecutionResult,
+        result: ExecutionResult,
         /// CFI-protected branch target information
         protected_target: CfiProtectedBranchTarget,
     },
@@ -1118,7 +1098,7 @@ pub struct CfiCheck {
     /// Check type
     pub check_type: kiln_foundation::bounded::BoundedString<64>,
     /// Location of check
-    pub location:   usize,
+    pub location: usize,
 }
 
 impl CfiCheck {

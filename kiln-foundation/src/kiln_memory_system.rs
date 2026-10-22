@@ -7,31 +7,16 @@
 //! SW-REQ-ID: REQ_MEM_002 - Budget enforcement
 //! SW-REQ-ID: REQ_MEM_003 - Automatic cleanup
 
-use kiln_error::{
-    helpers::memory_limit_exceeded_error,
-    Result,
-};
+use kiln_error::{Result, helpers::memory_limit_exceeded_error};
 
 use crate::{
+    Error, ErrorCategory,
     budget_aware_provider::CrateId,
     codes,
-    generic_memory_guard::{
-        GenericMemoryGuard,
-        ManagedMemoryProvider,
-        MemoryCoordinator,
-    },
-    generic_provider_factory::{
-        GenericBudgetAwareFactory,
-        ProviderFactory,
-    },
-    memory_coordinator::{
-        AllocationId,
-        CrateIdentifier,
-        GenericMemoryCoordinator,
-    },
+    generic_memory_guard::{GenericMemoryGuard, ManagedMemoryProvider, MemoryCoordinator},
+    generic_provider_factory::{GenericBudgetAwareFactory, ProviderFactory},
+    memory_coordinator::{AllocationId, CrateIdentifier, GenericMemoryCoordinator},
     safe_memory::NoStdProvider,
-    Error,
-    ErrorCategory,
 };
 
 /// Maximum number of crates in the Kiln system
@@ -144,4 +129,3 @@ macro_rules! kiln_provider {
         $crate::kiln_memory_system::CapabilityKilnFactory::create_provider::<$size>($crate_id)
     };
 }
-

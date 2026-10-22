@@ -7,20 +7,14 @@ use alloc::vec::Vec;
 
 use kiln_error::Result;
 use kiln_foundation::{
+    MemoryProvider,
     bounded::BoundedVec,
     budget_aware_provider::CrateId,
     safe_managed_alloc,
-    types::{
-        LocalEntry,
-        ValueType,
-    },
-    MemoryProvider,
+    types::{LocalEntry, ValueType},
 };
 
-use crate::bounded_runtime_infra::{
-    create_runtime_provider,
-    RuntimeProvider,
-};
+use crate::bounded_runtime_infra::{RuntimeProvider, create_runtime_provider};
 
 /// Convert a flat Vec<ValueType> to a BoundedVec<LocalEntry> by grouping
 /// consecutive types of the same kind into LocalEntry structs with count and
@@ -29,7 +23,6 @@ pub fn convert_locals_to_bounded_with_provider(
     locals: &[ValueType],
     provider: RuntimeProvider,
 ) -> Result<BoundedVec<LocalEntry, 256, RuntimeProvider>> {
-
     let mut bounded_locals = BoundedVec::new(provider)?;
 
     if locals.is_empty() {
@@ -46,7 +39,7 @@ pub fn convert_locals_to_bounded_with_provider(
         } else {
             // Add the accumulated group
             bounded_locals.push(LocalEntry {
-                count:      current_count,
+                count: current_count,
                 value_type: current_type,
             })?;
 
@@ -58,7 +51,7 @@ pub fn convert_locals_to_bounded_with_provider(
 
     // Add the final group
     bounded_locals.push(LocalEntry {
-        count:      current_count,
+        count: current_count,
         value_type: current_type,
     })?;
 
@@ -68,7 +61,7 @@ pub fn convert_locals_to_bounded_with_provider(
 /// Convert a flat Vec<ValueType> to a BoundedVec<LocalEntry> by grouping
 /// consecutive types of the same kind into LocalEntry structs with count and
 /// type.
-/// 
+///
 /// This is a backward-compatible wrapper that creates its own provider.
 pub fn convert_locals_to_bounded(
     locals: &[ValueType],
@@ -93,4 +86,3 @@ pub fn expand_locals_to_flat(
 
     Ok(flat_locals)
 }
-

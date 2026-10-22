@@ -16,10 +16,7 @@
 //! on bounded collections and memory, supporting WCET analysis and fuel
 //! consumption calculations.
 
-use core::sync::atomic::{
-    AtomicU64,
-    Ordering,
-};
+use core::sync::atomic::{AtomicU64, Ordering};
 
 use kiln_error::Error as KilnError; // Added for the Result return type
 use kiln_error::Result; // Use KilnOnce from kiln-sync crate
@@ -275,46 +272,46 @@ impl Type {
 #[derive(Debug)]
 pub struct Counter {
     /// Counter for memory read operations
-    memory_reads:          AtomicU64,
+    memory_reads: AtomicU64,
     /// Counter for memory write operations
-    memory_writes:         AtomicU64,
+    memory_writes: AtomicU64,
     /// Counter for memory grow operations
-    memory_grows:          AtomicU64,
+    memory_grows: AtomicU64,
     /// Binary std/no_std choice
-    memory_allocations:    AtomicU64,
+    memory_allocations: AtomicU64,
     /// Binary std/no_std choice
-    memory_deallocations:  AtomicU64,
+    memory_deallocations: AtomicU64,
     /// Counter for collection push operations
-    collection_pushes:     AtomicU64,
+    collection_pushes: AtomicU64,
     /// Counter for collection pop operations
-    collection_pops:       AtomicU64,
+    collection_pops: AtomicU64,
     /// Counter for collection lookup operations
-    collection_lookups:    AtomicU64,
+    collection_lookups: AtomicU64,
     /// Counter for collection insert operations
-    collection_inserts:    AtomicU64,
+    collection_inserts: AtomicU64,
     /// Counter for collection remove operations
-    collection_removes:    AtomicU64,
+    collection_removes: AtomicU64,
     /// Counter for collection validate operations
-    collection_validates:  AtomicU64,
+    collection_validates: AtomicU64,
     /// Counter for collection mutate operations
-    collection_mutates:    AtomicU64,
+    collection_mutates: AtomicU64,
     /// Counter for checksum calculations
     checksum_calculations: AtomicU64,
     /// Counter for function calls
-    function_calls:        AtomicU64,
+    function_calls: AtomicU64,
     /// Counter for control flow operations
-    control_flows:         AtomicU64,
+    control_flows: AtomicU64,
     /// Counter for arithmetic operations
-    arithmetic_ops:        AtomicU64,
+    arithmetic_ops: AtomicU64,
     /// Counter for other operations
-    other_ops:             AtomicU64,
+    other_ops: AtomicU64,
     /// New counters
-    collection_creates:    AtomicU64,
-    collection_clears:     AtomicU64,
-    collection_truncates:  AtomicU64,
-    collection_iterates:   AtomicU64,
+    collection_creates: AtomicU64,
+    collection_clears: AtomicU64,
+    collection_truncates: AtomicU64,
+    collection_iterates: AtomicU64,
     /// Total fuel consumed by operations
-    fuel_consumed:         AtomicU64,
+    fuel_consumed: AtomicU64,
 }
 
 // Manual implementation of Clone for Counter since AtomicU64 doesn't
@@ -322,36 +319,30 @@ pub struct Counter {
 impl Clone for Counter {
     fn clone(&self) -> Self {
         Self {
-            memory_reads:          AtomicU64::new(self.memory_reads.load(Ordering::Relaxed)),
-            memory_writes:         AtomicU64::new(self.memory_writes.load(Ordering::Relaxed)),
-            memory_grows:          AtomicU64::new(self.memory_grows.load(Ordering::Relaxed)),
-            memory_allocations:    AtomicU64::new(self.memory_allocations.load(Ordering::Relaxed)),
-            memory_deallocations:  AtomicU64::new(
-                self.memory_deallocations.load(Ordering::Relaxed),
-            ),
-            collection_pushes:     AtomicU64::new(self.collection_pushes.load(Ordering::Relaxed)),
-            collection_pops:       AtomicU64::new(self.collection_pops.load(Ordering::Relaxed)),
-            collection_lookups:    AtomicU64::new(self.collection_lookups.load(Ordering::Relaxed)),
-            collection_inserts:    AtomicU64::new(self.collection_inserts.load(Ordering::Relaxed)),
-            collection_removes:    AtomicU64::new(self.collection_removes.load(Ordering::Relaxed)),
-            collection_validates:  AtomicU64::new(
-                self.collection_validates.load(Ordering::Relaxed),
-            ),
-            collection_mutates:    AtomicU64::new(self.collection_mutates.load(Ordering::Relaxed)),
+            memory_reads: AtomicU64::new(self.memory_reads.load(Ordering::Relaxed)),
+            memory_writes: AtomicU64::new(self.memory_writes.load(Ordering::Relaxed)),
+            memory_grows: AtomicU64::new(self.memory_grows.load(Ordering::Relaxed)),
+            memory_allocations: AtomicU64::new(self.memory_allocations.load(Ordering::Relaxed)),
+            memory_deallocations: AtomicU64::new(self.memory_deallocations.load(Ordering::Relaxed)),
+            collection_pushes: AtomicU64::new(self.collection_pushes.load(Ordering::Relaxed)),
+            collection_pops: AtomicU64::new(self.collection_pops.load(Ordering::Relaxed)),
+            collection_lookups: AtomicU64::new(self.collection_lookups.load(Ordering::Relaxed)),
+            collection_inserts: AtomicU64::new(self.collection_inserts.load(Ordering::Relaxed)),
+            collection_removes: AtomicU64::new(self.collection_removes.load(Ordering::Relaxed)),
+            collection_validates: AtomicU64::new(self.collection_validates.load(Ordering::Relaxed)),
+            collection_mutates: AtomicU64::new(self.collection_mutates.load(Ordering::Relaxed)),
             checksum_calculations: AtomicU64::new(
                 self.checksum_calculations.load(Ordering::Relaxed),
             ),
-            function_calls:        AtomicU64::new(self.function_calls.load(Ordering::Relaxed)),
-            control_flows:         AtomicU64::new(self.control_flows.load(Ordering::Relaxed)),
-            arithmetic_ops:        AtomicU64::new(self.arithmetic_ops.load(Ordering::Relaxed)),
-            other_ops:             AtomicU64::new(self.other_ops.load(Ordering::Relaxed)),
-            collection_creates:    AtomicU64::new(self.collection_creates.load(Ordering::Relaxed)),
-            collection_clears:     AtomicU64::new(self.collection_clears.load(Ordering::Relaxed)),
-            collection_truncates:  AtomicU64::new(
-                self.collection_truncates.load(Ordering::Relaxed),
-            ),
-            collection_iterates:   AtomicU64::new(self.collection_iterates.load(Ordering::Relaxed)),
-            fuel_consumed:         AtomicU64::new(self.fuel_consumed.load(Ordering::Relaxed)),
+            function_calls: AtomicU64::new(self.function_calls.load(Ordering::Relaxed)),
+            control_flows: AtomicU64::new(self.control_flows.load(Ordering::Relaxed)),
+            arithmetic_ops: AtomicU64::new(self.arithmetic_ops.load(Ordering::Relaxed)),
+            other_ops: AtomicU64::new(self.other_ops.load(Ordering::Relaxed)),
+            collection_creates: AtomicU64::new(self.collection_creates.load(Ordering::Relaxed)),
+            collection_clears: AtomicU64::new(self.collection_clears.load(Ordering::Relaxed)),
+            collection_truncates: AtomicU64::new(self.collection_truncates.load(Ordering::Relaxed)),
+            collection_iterates: AtomicU64::new(self.collection_iterates.load(Ordering::Relaxed)),
+            fuel_consumed: AtomicU64::new(self.fuel_consumed.load(Ordering::Relaxed)),
         }
     }
 }
@@ -367,28 +358,28 @@ impl Counter {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            memory_reads:          AtomicU64::new(0),
-            memory_writes:         AtomicU64::new(0),
-            memory_grows:          AtomicU64::new(0),
-            memory_allocations:    AtomicU64::new(0),
-            memory_deallocations:  AtomicU64::new(0),
-            collection_pushes:     AtomicU64::new(0),
-            collection_pops:       AtomicU64::new(0),
-            collection_lookups:    AtomicU64::new(0),
-            collection_inserts:    AtomicU64::new(0),
-            collection_removes:    AtomicU64::new(0),
-            collection_validates:  AtomicU64::new(0),
-            collection_mutates:    AtomicU64::new(0),
+            memory_reads: AtomicU64::new(0),
+            memory_writes: AtomicU64::new(0),
+            memory_grows: AtomicU64::new(0),
+            memory_allocations: AtomicU64::new(0),
+            memory_deallocations: AtomicU64::new(0),
+            collection_pushes: AtomicU64::new(0),
+            collection_pops: AtomicU64::new(0),
+            collection_lookups: AtomicU64::new(0),
+            collection_inserts: AtomicU64::new(0),
+            collection_removes: AtomicU64::new(0),
+            collection_validates: AtomicU64::new(0),
+            collection_mutates: AtomicU64::new(0),
             checksum_calculations: AtomicU64::new(0),
-            function_calls:        AtomicU64::new(0),
-            control_flows:         AtomicU64::new(0),
-            arithmetic_ops:        AtomicU64::new(0),
-            other_ops:             AtomicU64::new(0),
-            collection_creates:    AtomicU64::new(0),
-            collection_clears:     AtomicU64::new(0),
-            collection_truncates:  AtomicU64::new(0),
-            collection_iterates:   AtomicU64::new(0),
-            fuel_consumed:         AtomicU64::new(0),
+            function_calls: AtomicU64::new(0),
+            control_flows: AtomicU64::new(0),
+            arithmetic_ops: AtomicU64::new(0),
+            other_ops: AtomicU64::new(0),
+            collection_creates: AtomicU64::new(0),
+            collection_clears: AtomicU64::new(0),
+            collection_truncates: AtomicU64::new(0),
+            collection_iterates: AtomicU64::new(0),
+            fuel_consumed: AtomicU64::new(0),
         }
     }
 
@@ -584,28 +575,28 @@ impl Counter {
     #[must_use]
     pub fn get_summary(&self) -> Summary {
         Summary {
-            memory_reads:          self.memory_reads.load(Ordering::Relaxed),
-            memory_writes:         self.memory_writes.load(Ordering::Relaxed),
-            memory_grows:          self.memory_grows.load(Ordering::Relaxed),
-            memory_allocations:    self.memory_allocations.load(Ordering::Relaxed),
-            memory_deallocations:  self.memory_deallocations.load(Ordering::Relaxed),
-            collection_pushes:     self.collection_pushes.load(Ordering::Relaxed),
-            collection_pops:       self.collection_pops.load(Ordering::Relaxed),
-            collection_lookups:    self.collection_lookups.load(Ordering::Relaxed),
-            collection_inserts:    self.collection_inserts.load(Ordering::Relaxed),
-            collection_removes:    self.collection_removes.load(Ordering::Relaxed),
-            collection_validates:  self.collection_validates.load(Ordering::Relaxed),
-            collection_mutates:    self.collection_mutates.load(Ordering::Relaxed),
+            memory_reads: self.memory_reads.load(Ordering::Relaxed),
+            memory_writes: self.memory_writes.load(Ordering::Relaxed),
+            memory_grows: self.memory_grows.load(Ordering::Relaxed),
+            memory_allocations: self.memory_allocations.load(Ordering::Relaxed),
+            memory_deallocations: self.memory_deallocations.load(Ordering::Relaxed),
+            collection_pushes: self.collection_pushes.load(Ordering::Relaxed),
+            collection_pops: self.collection_pops.load(Ordering::Relaxed),
+            collection_lookups: self.collection_lookups.load(Ordering::Relaxed),
+            collection_inserts: self.collection_inserts.load(Ordering::Relaxed),
+            collection_removes: self.collection_removes.load(Ordering::Relaxed),
+            collection_validates: self.collection_validates.load(Ordering::Relaxed),
+            collection_mutates: self.collection_mutates.load(Ordering::Relaxed),
             checksum_calculations: self.checksum_calculations.load(Ordering::Relaxed),
-            function_calls:        self.function_calls.load(Ordering::Relaxed),
-            control_flows:         self.control_flows.load(Ordering::Relaxed),
-            arithmetic_ops:        self.arithmetic_ops.load(Ordering::Relaxed),
-            other_ops:             self.other_ops.load(Ordering::Relaxed),
-            collection_creates:    self.collection_creates.load(Ordering::Relaxed),
-            collection_clears:     self.collection_clears.load(Ordering::Relaxed),
-            collection_truncates:  self.collection_truncates.load(Ordering::Relaxed),
-            collection_iterates:   self.collection_iterates.load(Ordering::Relaxed),
-            fuel_consumed:         self.fuel_consumed.load(Ordering::Relaxed),
+            function_calls: self.function_calls.load(Ordering::Relaxed),
+            control_flows: self.control_flows.load(Ordering::Relaxed),
+            arithmetic_ops: self.arithmetic_ops.load(Ordering::Relaxed),
+            other_ops: self.other_ops.load(Ordering::Relaxed),
+            collection_creates: self.collection_creates.load(Ordering::Relaxed),
+            collection_clears: self.collection_clears.load(Ordering::Relaxed),
+            collection_truncates: self.collection_truncates.load(Ordering::Relaxed),
+            collection_iterates: self.collection_iterates.load(Ordering::Relaxed),
+            fuel_consumed: self.fuel_consumed.load(Ordering::Relaxed),
         }
     }
 }
@@ -614,49 +605,49 @@ impl Counter {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Summary {
     /// Number of memory read operations
-    pub memory_reads:          u64,
+    pub memory_reads: u64,
     /// Number of memory write operations
-    pub memory_writes:         u64,
+    pub memory_writes: u64,
     /// Number of memory grow operations
-    pub memory_grows:          u64,
+    pub memory_grows: u64,
     /// Binary std/no_std choice
-    pub memory_allocations:    u64,
+    pub memory_allocations: u64,
     /// Binary std/no_std choice
-    pub memory_deallocations:  u64,
+    pub memory_deallocations: u64,
     /// Number of collection push operations
-    pub collection_pushes:     u64,
+    pub collection_pushes: u64,
     /// Number of collection pop operations
-    pub collection_pops:       u64,
+    pub collection_pops: u64,
     /// Number of collection lookup operations
-    pub collection_lookups:    u64,
+    pub collection_lookups: u64,
     /// Number of collection insert operations
-    pub collection_inserts:    u64,
+    pub collection_inserts: u64,
     /// Number of collection remove operations
-    pub collection_removes:    u64,
+    pub collection_removes: u64,
     /// Number of collection validate operations
-    pub collection_validates:  u64,
+    pub collection_validates: u64,
     /// Number of collection mutate operations
-    pub collection_mutates:    u64,
+    pub collection_mutates: u64,
     /// Number of checksum calculations
     pub checksum_calculations: u64,
     /// Number of function calls
-    pub function_calls:        u64,
+    pub function_calls: u64,
     /// Number of control flow operations
-    pub control_flows:         u64,
+    pub control_flows: u64,
     /// Number of arithmetic operations
-    pub arithmetic_ops:        u64,
+    pub arithmetic_ops: u64,
     /// Number of other operations
-    pub other_ops:             u64,
+    pub other_ops: u64,
     /// Number of collection create operations
-    pub collection_creates:    u64,
+    pub collection_creates: u64,
     /// Number of collection clear operations
-    pub collection_clears:     u64,
+    pub collection_clears: u64,
     /// Number of collection truncate operations
-    pub collection_truncates:  u64,
+    pub collection_truncates: u64,
     /// Number of collection iterate operations
-    pub collection_iterates:   u64,
+    pub collection_iterates: u64,
     /// Total fuel consumed by operations
-    pub fuel_consumed:         u64,
+    pub fuel_consumed: u64,
 }
 
 /// Trait for objects that can track operations
@@ -745,9 +736,9 @@ fn verification_cost_multiplier_scaled(level: &VerificationLevel) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::verification::VerificationLevel;
     #[allow(unused_imports)]
     use std::vec;
-    use crate::verification::VerificationLevel;
 
     #[test]
     fn test_operation_counter() {

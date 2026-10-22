@@ -28,13 +28,13 @@ use core::any::Any;
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 #[cfg(feature = "std")]
-use std::io::{Read, Write, ErrorKind};
+use std::io::{ErrorKind, Read, Write};
 #[cfg(feature = "std")]
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream, UdpSocket};
 #[cfg(feature = "std")]
 use std::sync::RwLock;
 
-use crate::{prelude::*, Value};
+use crate::{Value, prelude::*};
 
 /// WASI socket capabilities for controlling network access
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -155,28 +155,28 @@ impl WasiSocketCapabilities {
                     if ip.is_loopback() {
                         return true;
                     }
-                }
+                },
                 (AllowedAddress::Localhost, IpAddr::V6(ip)) => {
                     if ip.is_loopback() {
                         return true;
                     }
-                }
+                },
                 (AllowedAddress::Ipv4(allowed_ip), IpAddr::V4(ip)) => {
                     if allowed_ip == ip {
                         return true;
                     }
-                }
+                },
                 (AllowedAddress::Ipv6(allowed_ip), IpAddr::V6(ip)) => {
                     if allowed_ip == ip {
                         return true;
                     }
-                }
+                },
                 (AllowedAddress::Ipv4Subnet(network, prefix_len), IpAddr::V4(ip)) => {
                     if is_in_subnet(*network, *prefix_len, *ip) {
                         return true;
                     }
-                }
-                _ => {}
+                },
+                _ => {},
             }
         }
 
@@ -205,11 +205,7 @@ fn is_in_subnet(network: Ipv4Addr, prefix_len: u8, addr: Ipv4Addr) -> bool {
     if prefix_len > 32 {
         return false;
     }
-    let mask = if prefix_len == 0 {
-        0
-    } else {
-        !0u32 << (32 - prefix_len)
-    };
+    let mask = if prefix_len == 0 { 0 } else { !0u32 << (32 - prefix_len) };
     let network_bits = u32::from_be_bytes(network.octets()) & mask;
     let addr_bits = u32::from_be_bytes(addr.octets()) & mask;
     network_bits == addr_bits
@@ -327,8 +323,7 @@ impl SocketTable {
             ));
         }
         let handle = self.alloc_handle();
-        self.sockets
-            .insert(handle, SocketEntry::Tcp(TcpSocketState::Initial));
+        self.sockets.insert(handle, SocketEntry::Tcp(TcpSocketState::Initial));
         Ok(handle)
     }
 
@@ -340,8 +335,7 @@ impl SocketTable {
             ));
         }
         let handle = self.alloc_handle();
-        self.sockets
-            .insert(handle, SocketEntry::Udp(UdpSocketState::Initial));
+        self.sockets.insert(handle, SocketEntry::Udp(UdpSocketState::Initial));
         Ok(handle)
     }
 
@@ -455,12 +449,8 @@ pub fn wasi_tcp_connect(_target: &mut dyn Any, args: Vec<Value>) -> Result<Vec<V
     // Attempt the connection
     let stream = TcpStream::connect(addr).map_err(|e| io_error_to_wasi_error(&e))?;
 
-    let local_addr = stream
-        .local_addr()
-        .map_err(|e| io_error_to_wasi_error(&e))?;
-    let peer_addr = stream
-        .peer_addr()
-        .map_err(|e| io_error_to_wasi_error(&e))?;
+    let local_addr = stream.local_addr().map_err(|e| io_error_to_wasi_error(&e))?;
+    let peer_addr = stream.peer_addr().map_err(|e| io_error_to_wasi_error(&e))?;
 
     // Update the socket state
     with_socket_table_mut(|table| {
@@ -473,7 +463,7 @@ pub fn wasi_tcp_connect(_target: &mut dyn Any, args: Vec<Value>) -> Result<Vec<V
                     peer_addr,
                 };
                 Ok(())
-            }
+            },
             SocketEntry::Udp(_) => Err(Error::wasi_invalid_fd("Expected TCP socket")),
         }
     })??;
@@ -510,7 +500,7 @@ pub fn wasi_tcp_bind(_target: &mut dyn Any, args: Vec<Value>) -> Result<Vec<Valu
             SocketEntry::Tcp(state) => {
                 *state = TcpSocketState::Bound { listener };
                 Ok(())
-            }
+            },
             SocketEntry::Udp(_) => Err(Error::wasi_invalid_fd("Expected TCP socket")),
         }
     })??;
@@ -547,11 +537,11 @@ pub fn wasi_tcp_listen(_target: &mut dyn Any, args: Vec<Value>) -> Result<Vec<Va
                         // Restore the state and return error
                         *state = other;
                         return Err(Error::wasi_invalid_fd("Socket not in bound state"));
-                    }
+                    },
                 };
                 *state = TcpSocketState::Listening { listener };
                 Ok(())
-            }
+            },
             SocketEntry::Udp(_) => Err(Error::wasi_invalid_fd("Expected TCP socket")),
         }
     })??;
@@ -573,25 +563,25 @@ pub fn wasi_tcp_accept(_target: &mut dyn Any, args: Vec<Value>) -> Result<Vec<Va
             .read()
             .map_err(|_| Error::wasi_runtime_error("Socket table lock poisoned"))?;
 
-        let entry = table.sockets.get(&socket_handle)
+        let entry = table
+            .sockets
+            .get(&socket_handle)
             .ok_or_else(|| Error::wasi_invalid_fd("Invalid socket handle"))?;
 
         match entry {
             SocketEntry::Tcp(TcpSocketState::Listening { listener }) => {
                 listener.accept().map_err(|e| io_error_to_wasi_error(&e))?
-            }
+            },
             SocketEntry::Tcp(_) => {
                 return Err(Error::wasi_invalid_fd("Socket not in listening state"));
-            }
+            },
             SocketEntry::Udp(_) => {
                 return Err(Error::wasi_invalid_fd("Expected TCP socket"));
-            }
+            },
         }
     };
 
-    let local_addr = stream
-        .local_addr()
-        .map_err(|e| io_error_to_wasi_error(&e))?;
+    let local_addr = stream.local_addr().map_err(|e| io_error_to_wasi_error(&e))?;
 
     // Create a new socket handle for the accepted connection
     let new_handle = with_socket_table_mut(|table| -> Result<SocketHandle> {
@@ -630,19 +620,21 @@ pub fn wasi_tcp_send(_target: &mut dyn Any, args: Vec<Value>) -> Result<Vec<Valu
             .read()
             .map_err(|_| Error::wasi_runtime_error("Socket table lock poisoned"))?;
 
-        let entry = table.sockets.get(&socket_handle)
+        let entry = table
+            .sockets
+            .get(&socket_handle)
             .ok_or_else(|| Error::wasi_invalid_fd("Invalid socket handle"))?;
 
         match entry {
             SocketEntry::Tcp(TcpSocketState::Connected { stream, .. }) => {
                 stream.try_clone().map_err(|e| io_error_to_wasi_error(&e))?
-            }
+            },
             SocketEntry::Tcp(_) => {
                 return Err(Error::wasi_invalid_fd("Socket not connected"));
-            }
+            },
             SocketEntry::Udp(_) => {
                 return Err(Error::wasi_invalid_fd("Expected TCP socket"));
-            }
+            },
         }
     };
 
@@ -666,19 +658,21 @@ pub fn wasi_tcp_recv(_target: &mut dyn Any, args: Vec<Value>) -> Result<Vec<Valu
             .read()
             .map_err(|_| Error::wasi_runtime_error("Socket table lock poisoned"))?;
 
-        let entry = table.sockets.get(&socket_handle)
+        let entry = table
+            .sockets
+            .get(&socket_handle)
             .ok_or_else(|| Error::wasi_invalid_fd("Invalid socket handle"))?;
 
         match entry {
             SocketEntry::Tcp(TcpSocketState::Connected { stream, .. }) => {
                 stream.try_clone().map_err(|e| io_error_to_wasi_error(&e))?
-            }
+            },
             SocketEntry::Tcp(_) => {
                 return Err(Error::wasi_invalid_fd("Socket not connected"));
-            }
+            },
             SocketEntry::Udp(_) => {
                 return Err(Error::wasi_invalid_fd("Expected TCP socket"));
-            }
+            },
         }
     };
 
@@ -714,19 +708,21 @@ pub fn wasi_tcp_shutdown(_target: &mut dyn Any, args: Vec<Value>) -> Result<Vec<
             .read()
             .map_err(|_| Error::wasi_runtime_error("Socket table lock poisoned"))?;
 
-        let entry = table.sockets.get(&socket_handle)
+        let entry = table
+            .sockets
+            .get(&socket_handle)
             .ok_or_else(|| Error::wasi_invalid_fd("Invalid socket handle"))?;
 
         match entry {
             SocketEntry::Tcp(TcpSocketState::Connected { stream, .. }) => {
                 stream.try_clone().map_err(|e| io_error_to_wasi_error(&e))?
-            }
+            },
             SocketEntry::Tcp(_) => {
                 return Err(Error::wasi_invalid_fd("Socket not connected"));
-            }
+            },
             SocketEntry::Udp(_) => {
                 return Err(Error::wasi_invalid_fd("Expected TCP socket"));
-            }
+            },
         }
     };
 
@@ -781,9 +777,7 @@ pub fn wasi_udp_bind(_target: &mut dyn Any, args: Vec<Value>) -> Result<Vec<Valu
 
     // Bind the socket
     let socket = UdpSocket::bind(addr).map_err(|e| io_error_to_wasi_error(&e))?;
-    let local_addr = socket
-        .local_addr()
-        .map_err(|e| io_error_to_wasi_error(&e))?;
+    let local_addr = socket.local_addr().map_err(|e| io_error_to_wasi_error(&e))?;
 
     // Update socket state
     with_socket_table_mut(|table| {
@@ -792,7 +786,7 @@ pub fn wasi_udp_bind(_target: &mut dyn Any, args: Vec<Value>) -> Result<Vec<Valu
             SocketEntry::Udp(state) => {
                 *state = UdpSocketState::Bound { socket, local_addr };
                 Ok(())
-            }
+            },
             SocketEntry::Tcp(_) => Err(Error::wasi_invalid_fd("Expected UDP socket")),
         }
     })??;
@@ -821,26 +815,26 @@ pub fn wasi_udp_send(_target: &mut dyn Any, args: Vec<Value>) -> Result<Vec<Valu
             .read()
             .map_err(|_| Error::wasi_runtime_error("Socket table lock poisoned"))?;
 
-        let entry = table.sockets.get(&socket_handle)
+        let entry = table
+            .sockets
+            .get(&socket_handle)
             .ok_or_else(|| Error::wasi_invalid_fd("Invalid socket handle"))?;
 
         match entry {
             SocketEntry::Udp(UdpSocketState::Bound { socket, .. })
             | SocketEntry::Udp(UdpSocketState::Connected { socket, .. }) => {
                 socket.try_clone().map_err(|e| io_error_to_wasi_error(&e))?
-            }
+            },
             SocketEntry::Udp(UdpSocketState::Initial) => {
                 return Err(Error::wasi_invalid_fd("Socket not bound"));
-            }
+            },
             SocketEntry::Tcp(_) => {
                 return Err(Error::wasi_invalid_fd("Expected UDP socket"));
-            }
+            },
         }
     };
 
-    let bytes_sent = socket
-        .send_to(&data, dest)
-        .map_err(|e| io_error_to_wasi_error(&e))?;
+    let bytes_sent = socket.send_to(&data, dest).map_err(|e| io_error_to_wasi_error(&e))?;
 
     Ok(vec![Value::U64(bytes_sent as u64)])
 }
@@ -859,28 +853,29 @@ pub fn wasi_udp_recv(_target: &mut dyn Any, args: Vec<Value>) -> Result<Vec<Valu
             .read()
             .map_err(|_| Error::wasi_runtime_error("Socket table lock poisoned"))?;
 
-        let entry = table.sockets.get(&socket_handle)
+        let entry = table
+            .sockets
+            .get(&socket_handle)
             .ok_or_else(|| Error::wasi_invalid_fd("Invalid socket handle"))?;
 
         match entry {
             SocketEntry::Udp(UdpSocketState::Bound { socket, .. })
             | SocketEntry::Udp(UdpSocketState::Connected { socket, .. }) => {
                 socket.try_clone().map_err(|e| io_error_to_wasi_error(&e))?
-            }
+            },
             SocketEntry::Udp(UdpSocketState::Initial) => {
                 return Err(Error::wasi_invalid_fd("Socket not bound"));
-            }
+            },
             SocketEntry::Tcp(_) => {
                 return Err(Error::wasi_invalid_fd("Expected UDP socket"));
-            }
+            },
         }
     };
 
     // Receive data
     let mut buffer = vec![0u8; max_len.min(65536)];
-    let (bytes_read, source_addr) = socket
-        .recv_from(&mut buffer)
-        .map_err(|e| io_error_to_wasi_error(&e))?;
+    let (bytes_read, source_addr) =
+        socket.recv_from(&mut buffer).map_err(|e| io_error_to_wasi_error(&e))?;
 
     // Convert to Value list
     let data: Vec<Value> = buffer[..bytes_read].iter().map(|b| Value::U8(*b)).collect();
@@ -916,23 +911,21 @@ pub fn wasi_resolve_addresses(_target: &mut dyn Any, args: Vec<Value>) -> Result
                                 Value::U8(4), // IPv4
                                 Value::List(octets.iter().map(|b| Value::U8(*b)).collect()),
                             ])
-                        }
+                        },
                         IpAddr::V6(ip) => {
                             let octets = ip.octets();
                             Value::Tuple(vec![
                                 Value::U8(6), // IPv6
                                 Value::List(octets.iter().map(|b| Value::U8(*b)).collect()),
                             ])
-                        }
+                        },
                     }
                 })
                 .collect();
 
             Ok(vec![Value::Result(Ok(Box::new(Value::List(ip_values))))])
-        }
-        Err(_e) => {
-            Err(Error::wasi_capability_unavailable("DNS resolution failed"))
-        }
+        },
+        Err(_e) => Err(Error::wasi_capability_unavailable("DNS resolution failed")),
     }
 }
 
@@ -1020,7 +1013,7 @@ fn extract_bytes(args: &[Value], index: usize) -> Result<Vec<u8>> {
                 }
             }
             Ok(bytes)
-        }
+        },
         _ => Err(Error::wasi_invalid_fd("Expected list argument")),
     }
 }
@@ -1039,12 +1032,14 @@ fn extract_string(args: &[Value], index: usize) -> Result<String> {
 #[cfg(feature = "std")]
 fn bytes_to_ip(bytes: &[u8]) -> Result<IpAddr> {
     match bytes.len() {
-        4 => Ok(IpAddr::V4(Ipv4Addr::new(bytes[0], bytes[1], bytes[2], bytes[3]))),
+        4 => Ok(IpAddr::V4(Ipv4Addr::new(
+            bytes[0], bytes[1], bytes[2], bytes[3],
+        ))),
         16 => {
-            let octets: [u8; 16] = bytes.try_into()
-                .map_err(|_| Error::wasi_invalid_fd("Invalid IPv6 address"))?;
+            let octets: [u8; 16] =
+                bytes.try_into().map_err(|_| Error::wasi_invalid_fd("Invalid IPv6 address"))?;
             Ok(IpAddr::V6(Ipv6Addr::from(octets)))
-        }
+        },
         _ => Err(Error::wasi_invalid_fd("Invalid IP address length")),
     }
 }
@@ -1224,9 +1219,10 @@ mod tests {
     #[test]
     fn test_subnet_check() {
         let mut caps = WasiSocketCapabilities::none();
-        caps.allowed_addresses = vec![
-            AllowedAddress::Ipv4Subnet(Ipv4Addr::new(192, 168, 0, 0), 16),
-        ];
+        caps.allowed_addresses = vec![AllowedAddress::Ipv4Subnet(
+            Ipv4Addr::new(192, 168, 0, 0),
+            16,
+        )];
 
         assert!(caps.is_address_allowed(&IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1))));
         assert!(caps.is_address_allowed(&IpAddr::V4(Ipv4Addr::new(192, 168, 255, 255))));

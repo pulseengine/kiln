@@ -14,16 +14,13 @@ use core::{
     alloc::{GlobalAlloc, Layout},
     cell::UnsafeCell,
     ptr,
-    sync::atomic::{AtomicUsize, AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
+use kiln_error::{Error, Result};
 use kiln_sync::KilnMutex;
-use kiln_error::{Result, Error};
 
-use crate::{
-    budget_aware_provider::CrateId,
-    collections::StaticVec,
-};
+use crate::{budget_aware_provider::CrateId, collections::StaticVec};
 
 /// Total heap size for embedded bump allocator (256 KB)
 pub const TOTAL_HEAP_SIZE: usize = 262_144;
@@ -55,7 +52,8 @@ impl<T> SyncUnsafeCell<T> {
 /// This is the backing storage for all dynamic allocations when using
 /// the GlobalAlloc interface. Memory is never returned to the system,
 /// only reset when scopes exit.
-static HEAP_BUFFER: SyncUnsafeCell<[u8; TOTAL_HEAP_SIZE]> = SyncUnsafeCell::new([0; TOTAL_HEAP_SIZE]);
+static HEAP_BUFFER: SyncUnsafeCell<[u8; TOTAL_HEAP_SIZE]> =
+    SyncUnsafeCell::new([0; TOTAL_HEAP_SIZE]);
 
 /// Scope information for hierarchical memory management
 #[derive(Debug, Clone, Copy)]
@@ -124,7 +122,7 @@ impl VerifiedAllocator {
             },
         }
     }
-    
+
     /// Allocate memory with verification
     ///
     /// # Requirements (checked at runtime)
@@ -138,19 +136,23 @@ impl VerifiedAllocator {
         }
 
         if size == 0 {
-            return Err(Error::validation_invalid_parameter("Cannot allocate zero bytes"));
+            return Err(Error::validation_invalid_parameter(
+                "Cannot allocate zero bytes",
+            ));
         }
 
         // Atomic allocation with overflow checking
         let mut current = self.allocated.load(Ordering::Acquire);
         loop {
             // Check budget constraint
-            let new_total = current.checked_add(size).ok_or_else(|| {
-                Error::memory_integer_overflow("Allocation would overflow")
-            })?;
+            let new_total = current
+                .checked_add(size)
+                .ok_or_else(|| Error::memory_integer_overflow("Allocation would overflow"))?;
 
             if new_total > self.total_budget {
-                return Err(Error::runtime_execution_error("Budget exceeded: allocation would exceed total budget"));
+                return Err(Error::runtime_execution_error(
+                    "Budget exceeded: allocation would exceed total budget",
+                ));
             }
 
             // Try to update atomically
@@ -171,12 +173,12 @@ impl VerifiedAllocator {
                         #[cfg(feature = "formal-verification")]
                         allocation_id: crate::formal_verification::ghost::record_allocation(size),
                     });
-                }
+                },
                 Err(actual) => current = actual,
             }
         }
     }
-    
+
     /// Deallocate memory with verification
     ///
     /// # Requirements (checked at runtime in debug mode)
@@ -188,7 +190,8 @@ impl VerifiedAllocator {
         debug_assert!(
             result >= size,
             "Deallocation underflow: allocated={}, deallocating={}",
-            result, size
+            result,
+            size
         );
 
         #[cfg(debug_assertions)]
@@ -201,10 +204,12 @@ impl VerifiedAllocator {
         let count = self.invariant_checker.check_counter.fetch_add(1, Ordering::Relaxed);
         if count % self.invariant_checker.check_frequency == 0 {
             debug_assert!(self.allocated.load(Ordering::Acquire) <= self.total_budget);
-            debug_assert!(self.enabled.load(Ordering::Acquire) || self.allocated.load(Ordering::Acquire) == 0);
+            debug_assert!(
+                self.enabled.load(Ordering::Acquire) || self.allocated.load(Ordering::Acquire) == 0
+            );
         }
     }
-    
+
     /// Disable the allocator (for shutdown)
     ///
     /// # Requirements
@@ -228,7 +233,9 @@ impl VerifiedAllocator {
     /// * `Err` - If scope stack is full or parameters invalid
     pub fn enter_scope(&self, crate_id: CrateId, budget: usize) -> Result<ScopeGuard<'_>> {
         if budget == 0 {
-            return Err(Error::validation_invalid_parameter("Scope budget cannot be zero"));
+            return Err(Error::validation_invalid_parameter(
+                "Scope budget cannot be zero",
+            ));
         }
 
         let checkpoint = self.allocated.load(Ordering::Acquire);
@@ -272,12 +279,14 @@ impl VerifiedAllocator {
     fn check_scope_budget(&self, size: usize) -> Result<()> {
         let mut scopes = self.scopes.lock();
         if let Some(scope) = scopes.last_mut() {
-            let new_allocated = scope.allocated.checked_add(size)
+            let new_allocated = scope
+                .allocated
+                .checked_add(size)
                 .ok_or_else(|| Error::memory_integer_overflow("Scope allocation overflow"))?;
 
             if new_allocated > scope.budget {
                 return Err(Error::runtime_execution_error(
-                    "Scope budget exceeded: allocation would exceed scope limit"
+                    "Scope budget exceeded: allocation would exceed scope limit",
                 ));
             }
 
@@ -437,11 +446,11 @@ unsafe impl GlobalAlloc for VerifiedAllocator {
                     self.check_invariants();
 
                     return ptr;
-                }
+                },
                 Err(_) => {
                     // Retry with updated value
                     continue;
-                }
+                },
             }
         }
     }
@@ -480,27 +489,27 @@ pub mod global_allocators {
             unsafe { CRATE_ALLOCATORS[0].dealloc(ptr, layout) }
         }
     }
-    
+
     /// Per-crate verified allocators
     pub static CRATE_ALLOCATORS: [VerifiedAllocator; 16] = [
-        VerifiedAllocator::new(1_048_576),  // Foundation - 1MB
-        VerifiedAllocator::new(2_097_152),  // Component - 2MB
-        VerifiedAllocator::new(4_194_304),  // Runtime - 4MB
-        VerifiedAllocator::new(1_048_576),  // Decoder - 1MB
-        VerifiedAllocator::new(2_097_152),  // Host - 2MB
-        VerifiedAllocator::new(524_288),    // Debug - 512KB
-        VerifiedAllocator::new(1_048_576),  // Platform - 1MB
-        VerifiedAllocator::new(524_288),    // Instructions - 512KB
-        VerifiedAllocator::new(524_288),    // Format - 512KB
-        VerifiedAllocator::new(524_288),    // Intercept - 512KB
-        VerifiedAllocator::new(262_144),    // Sync - 256KB
-        VerifiedAllocator::new(262_144),    // Math - 256KB
-        VerifiedAllocator::new(262_144),    // Logging - 256KB
-        VerifiedAllocator::new(131_072),    // Panic - 128KB
-        VerifiedAllocator::new(262_144),    // TestRegistry - 256KB
-        VerifiedAllocator::new(262_144),    // VerificationTool - 256KB
+        VerifiedAllocator::new(1_048_576), // Foundation - 1MB
+        VerifiedAllocator::new(2_097_152), // Component - 2MB
+        VerifiedAllocator::new(4_194_304), // Runtime - 4MB
+        VerifiedAllocator::new(1_048_576), // Decoder - 1MB
+        VerifiedAllocator::new(2_097_152), // Host - 2MB
+        VerifiedAllocator::new(524_288),   // Debug - 512KB
+        VerifiedAllocator::new(1_048_576), // Platform - 1MB
+        VerifiedAllocator::new(524_288),   // Instructions - 512KB
+        VerifiedAllocator::new(524_288),   // Format - 512KB
+        VerifiedAllocator::new(524_288),   // Intercept - 512KB
+        VerifiedAllocator::new(262_144),   // Sync - 256KB
+        VerifiedAllocator::new(262_144),   // Math - 256KB
+        VerifiedAllocator::new(262_144),   // Logging - 256KB
+        VerifiedAllocator::new(131_072),   // Panic - 128KB
+        VerifiedAllocator::new(262_144),   // TestRegistry - 256KB
+        VerifiedAllocator::new(262_144),   // VerificationTool - 256KB
     ];
-    
+
     /// Get allocator for a specific crate
     pub fn get_crate_allocator(crate_id: CrateId) -> &'static VerifiedAllocator {
         &CRATE_ALLOCATORS[crate_id as usize]
@@ -511,7 +520,7 @@ pub mod global_allocators {
 #[cfg(feature = "formal-verification")]
 pub mod properties {
     use super::*;
-    
+
     /// Property: No allocation can exceed the total budget
     #[cfg(kani)]
     #[kani::proof]

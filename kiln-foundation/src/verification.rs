@@ -17,41 +17,29 @@
 #[cfg(not(feature = "std"))]
 use core::fmt;
 #[cfg(not(feature = "std"))]
-use core::sync::atomic::{
-    AtomicU32,
-    Ordering,
-};
+use core::sync::atomic::{AtomicU32, Ordering};
 #[cfg(feature = "std")]
 use std::fmt;
 #[cfg(feature = "std")]
-use std::sync::atomic::{
-    AtomicU32,
-    Ordering,
-};
+use std::sync::atomic::{AtomicU32, Ordering};
 
-use crate::traits::{
-    FromBytes,
-    ReadStream,
-    SerializationError,
-    ToBytes,
-    WriteStream,
-};
+use crate::traits::{FromBytes, ReadStream, SerializationError, ToBytes, WriteStream};
 
 /// Defines the level of verification to apply for checksums and other checks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Default, Hash)]
 #[repr(u8)]
 pub enum VerificationLevel {
     /// No verification checks are performed.
-    Off       = 0,
+    Off = 0,
     /// Basic verification checks (e.g., length checks).
-    Basic     = 1,
+    Basic = 1,
     /// Standard verification checks (reasonable default).
     #[default]
-    Standard  = 2,
+    Standard = 2,
     /// Full verification including checksums on every relevant operation.
-    Full      = 3,
+    Full = 3,
     /// Perform verification checks based on sampling.
-    Sampling  = 4,
+    Sampling = 4,
     /// Perform redundant checks in addition to sampling or full checks.
     Redundant = 5,
 }

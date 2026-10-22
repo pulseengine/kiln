@@ -4,14 +4,8 @@
 //! make tail calls without growing the call stack. This is essential for
 //! functional programming patterns and recursive algorithms.
 
-use kiln_error::{
-    Error,
-    Result,
-};
-use kiln_foundation::{
-    types::FuncType,
-    Value,
-};
+use kiln_error::{Error, Result};
+use kiln_foundation::{Value, types::FuncType};
 use kiln_instructions::control_ops::ControlContext;
 
 // Type alias for FuncType to match module_instance.rs
@@ -21,10 +15,7 @@ use crate::bounded_runtime_infra::RuntimeProvider;
 use crate::{
     module_instance::ModuleInstance,
     prelude::*,
-    stackless::{
-        engine::StacklessEngine,
-        frame::StacklessFrame,
-    },
+    stackless::{engine::StacklessEngine, frame::StacklessFrame},
 };
 type KilnFuncType = kiln_foundation::types::FuncType;
 
@@ -180,4 +171,3 @@ pub mod validation {
         !has_try_catch_blocks && !in_multivalue_block
     }
 }
-

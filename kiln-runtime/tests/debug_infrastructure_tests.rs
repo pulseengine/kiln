@@ -5,12 +5,12 @@
 
 #![cfg(all(feature = "debug-runtime-traits", feature = "std"))]
 
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use kiln_debug::runtime_traits::{
-    Breakpoint, BreakpointCondition, BreakpointId, DebugAction, DebugError,
-    DebuggableRuntime, RuntimeDebugger, RuntimeState,
+    Breakpoint, BreakpointCondition, BreakpointId, DebugAction, DebugError, DebuggableRuntime,
+    RuntimeDebugger, RuntimeState,
 };
 use kiln_runtime::stackless::StacklessEngine;
 
@@ -56,11 +56,7 @@ impl TestDebugger {
 }
 
 impl RuntimeDebugger for TestDebugger {
-    fn on_breakpoint(
-        &mut self,
-        _bp: &Breakpoint,
-        _state: &dyn RuntimeState,
-    ) -> DebugAction {
+    fn on_breakpoint(&mut self, _bp: &Breakpoint, _state: &dyn RuntimeState) -> DebugAction {
         self.breakpoint_hits.fetch_add(1, Ordering::AcqRel);
         DebugAction::Continue
     }
@@ -206,7 +202,10 @@ fn test_breakpoint_conditions() {
 
     // Test breakpoint with local equals condition
     let mut bp_local = Breakpoint::new(BreakpointId(2), 0x200);
-    bp_local.condition = BreakpointCondition::LocalEquals { index: 0, value: 42 };
+    bp_local.condition = BreakpointCondition::LocalEquals {
+        index: 0,
+        value: 42,
+    };
     assert!(engine.add_breakpoint(bp_local).is_ok());
 
     // Test unconditional breakpoint

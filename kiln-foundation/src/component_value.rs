@@ -12,36 +12,16 @@
 
 // ToOwned is now imported from the prelude
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 
-use crate::bounded::{
-    BoundedString,
-    BoundedVec,
-    WasmName,
-    MAX_WASM_NAME_LENGTH,
-}; // Added BoundedString
+use crate::bounded::{BoundedString, BoundedVec, MAX_WASM_NAME_LENGTH, WasmName}; // Added BoundedString
 use crate::{
+    ComponentValueStore, FloatBits32, FloatBits64, MemoryProvider, Value,
     component_value_store::ValueRef,
     traits::{
-        BytesWriter,
-        Checksummable,
-        FromBytes,
-        ReadStream,
-        SerializationError,
-        ToBytes,
-        WriteStream,
+        BytesWriter, Checksummable, FromBytes, ReadStream, SerializationError, ToBytes, WriteStream,
     },
     verification::Checksum,
-    ComponentValueStore,
-    FloatBits32,
-    FloatBits64,
-    MemoryProvider,
-    Value,
 }; // Added import for ValueRef
 
 // no_std is configured at the crate level
@@ -51,38 +31,25 @@ extern crate alloc; // Binary std/no_std choice
 // Binary std/no_std choice
 use core::{
     fmt,
-    hash::{
-        Hash,
-        Hasher as CoreHasher,
-    },
+    hash::{Hash, Hasher as CoreHasher},
 };
 #[cfg(feature = "std")]
 use std::borrow::ToOwned;
 
 // Use constants from bounded.rs
 use crate::bounded::{
-    MAX_COMPONENT_ERROR_CONTEXT_ITEMS,
-    MAX_COMPONENT_FIXED_LIST_ITEMS,
-    MAX_COMPONENT_FLAGS,
-    MAX_COMPONENT_LIST_ITEMS,
-    MAX_COMPONENT_RECORD_FIELDS,
-    MAX_COMPONENT_TUPLE_ITEMS,
-    MAX_DESERIALIZED_VALUES,
-    MAX_WASM_STRING_LENGTH as MAX_COMPONENT_STRING_LENGTH,
+    MAX_COMPONENT_ERROR_CONTEXT_ITEMS, MAX_COMPONENT_FIXED_LIST_ITEMS, MAX_COMPONENT_FLAGS,
+    MAX_COMPONENT_LIST_ITEMS, MAX_COMPONENT_RECORD_FIELDS, MAX_COMPONENT_TUPLE_ITEMS,
+    MAX_DESERIALIZED_VALUES, MAX_WASM_STRING_LENGTH as MAX_COMPONENT_STRING_LENGTH,
 };
 #[cfg(feature = "std")]
-use crate::prelude::{
-    format,
-    vec,
-    BTreeMap,
-    ToString as _,
-}; // Removed String, Vec
+use crate::prelude::{BTreeMap, ToString as _, format, vec}; // Removed String, Vec
 
 // Define any component-value specific constants not in bounded.rs
 pub const MAX_STORED_COMPONENT_VALUES: usize = 256; // For ComponentValueStore capacity
-                                                    // Assuming MemoryProvider P will be passed or accessible where ComponentValue
-                                                    // is constructed with these BoundedVecs. For now, the enum definition won't
-                                                    // take P directly, but construction sites will need it.
+// Assuming MemoryProvider P will be passed or accessible where ComponentValue
+// is constructed with these BoundedVecs. For now, the enum definition won't
+// take P directly, but construction sites will need it.
 
 // Define ValTypeRef for recursive type definitions
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -116,10 +83,7 @@ impl FromBytes for ValTypeRef {
 
 // Use constants from bounded.rs
 use crate::bounded::{
-    MAX_TYPE_ENUM_NAMES,
-    MAX_TYPE_FLAGS_NAMES,
-    MAX_TYPE_RECORD_FIELDS,
-    MAX_TYPE_TUPLE_ELEMENTS,
+    MAX_TYPE_ENUM_NAMES, MAX_TYPE_FLAGS_NAMES, MAX_TYPE_RECORD_FIELDS, MAX_TYPE_TUPLE_ELEMENTS,
     MAX_TYPE_VARIANT_CASES,
 };
 
@@ -159,11 +123,7 @@ pub enum ValType<P: MemoryProvider + Default + Clone + PartialEq + Eq> {
     Record(BoundedVec<(WasmName<MAX_WASM_NAME_LENGTH>, ValTypeRef), MAX_TYPE_RECORD_FIELDS, P>),
     /// Variant with cases
     Variant(
-        BoundedVec<
-            (WasmName<MAX_WASM_NAME_LENGTH>, Option<ValTypeRef>),
-            MAX_TYPE_VARIANT_CASES,
-            P,
-        >,
+        BoundedVec<(WasmName<MAX_WASM_NAME_LENGTH>, Option<ValTypeRef>), MAX_TYPE_VARIANT_CASES, P>,
     ),
     /// List of elements
     List(ValTypeRef), // Replaced Box<ValType>
@@ -179,7 +139,7 @@ pub enum ValType<P: MemoryProvider + Default + Clone + PartialEq + Eq> {
     Option(ValTypeRef), // Replaced Box<ValType>
     /// `Result` type with both `Ok` and `Err` types (both optional for void)
     Result {
-        ok:  Option<ValTypeRef>,
+        ok: Option<ValTypeRef>,
         err: Option<ValTypeRef>,
     }, /* Replaced Result/ResultErr/
         * ResultBoth */
@@ -443,7 +403,7 @@ impl<P: MemoryProvider + Default + Clone + PartialEq + Eq> FromBytes for ValType
                     None
                 };
                 Ok(ValType::Result {
-                    ok:  ok_ref,
+                    ok: ok_ref,
                     err: err_ref,
                 })
             },
@@ -503,9 +463,7 @@ pub enum ComponentValue<P: MemoryProvider + Default + Clone + PartialEq + Eq> {
     /// Fixed-length list of component values with a known length
     FixedList(BoundedVec<ValueRef, MAX_COMPONENT_FIXED_LIST_ITEMS, P>, u32),
     /// Record with named fields
-    Record(
-        BoundedVec<(WasmName<MAX_WASM_NAME_LENGTH>, ValueRef), MAX_COMPONENT_RECORD_FIELDS, P>,
-    ),
+    Record(BoundedVec<(WasmName<MAX_WASM_NAME_LENGTH>, ValueRef), MAX_COMPONENT_RECORD_FIELDS, P>),
     /// Variant with case name and optional value
     Variant(WasmName<MAX_WASM_NAME_LENGTH>, Option<ValueRef>),
     /// Tuple of component values
@@ -802,7 +760,10 @@ impl<P: MemoryProvider + Default + Clone + PartialEq + Eq> ComponentValue<P> {
                 Ok(ValType::Enum(BoundedVec::new(P::default())?))
             },
             ComponentValue::Option(_) => Ok(ValType::Option(ValTypeRef(0))), // Placeholder index
-            ComponentValue::Result(_) => Ok(ValType::Result { ok: None, err: None }), // Placeholder
+            ComponentValue::Result(_) => Ok(ValType::Result {
+                ok: None,
+                err: None,
+            }), // Placeholder
             ComponentValue::Own(idx) => Ok(ValType::Own(*idx)),
             ComponentValue::Borrow(idx) => Ok(ValType::Borrow(*idx)),
             ComponentValue::Handle(idx) => Ok(ValType::Own(*idx)), // Handle maps to Own
@@ -1039,9 +1000,8 @@ impl<P: MemoryProvider + Default + Clone + PartialEq + Eq> FromBytes for Compone
                 Ok(ComponentValue::Record(fields))
             },
             17 => {
-                let name = WasmName::<MAX_WASM_NAME_LENGTH>::from_bytes_with_provider(
-                    reader, provider,
-                )?;
+                let name =
+                    WasmName::<MAX_WASM_NAME_LENGTH>::from_bytes_with_provider(reader, provider)?;
                 let opt_val_ref = if reader.read_u8()? == 1 {
                     Some(ValueRef::from_bytes_with_provider(reader, provider)?)
                 } else {
@@ -1065,9 +1025,8 @@ impl<P: MemoryProvider + Default + Clone + PartialEq + Eq> FromBytes for Compone
                 Ok(ComponentValue::Flags(flags))
             },
             20 => {
-                let name = WasmName::<MAX_WASM_NAME_LENGTH>::from_bytes_with_provider(
-                    reader, provider,
-                )?;
+                let name =
+                    WasmName::<MAX_WASM_NAME_LENGTH>::from_bytes_with_provider(reader, provider)?;
                 Ok(ComponentValue::Enum(name))
             },
             21 => {

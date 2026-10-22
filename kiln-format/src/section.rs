@@ -8,23 +8,13 @@
 extern crate alloc;
 
 #[cfg(not(feature = "std"))]
-use alloc::{
-    string::String,
-    vec::Vec,
-};
+use alloc::{string::String, vec::Vec};
 #[cfg(feature = "std")]
-use std::{
-    string::String,
-    vec::Vec,
-};
+use std::{string::String, vec::Vec};
 
 // Import the prelude for conditional imports
 #[cfg(not(any(feature = "std")))]
-use kiln_foundation::{
-    traits::BoundedCapacity,
-    MemoryProvider,
-    NoStdProvider,
-};
+use kiln_foundation::{MemoryProvider, NoStdProvider, traits::BoundedCapacity};
 
 #[cfg(not(any(feature = "std")))]
 use crate::WasmVec;
@@ -48,29 +38,29 @@ pub const DATA_COUNT_ID: u8 = 12;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SectionId {
     /// Custom section
-    Custom    = 0,
+    Custom = 0,
     /// Type section
-    Type      = 1,
+    Type = 1,
     /// Import section
-    Import    = 2,
+    Import = 2,
     /// Function section
-    Function  = 3,
+    Function = 3,
     /// Table section
-    Table     = 4,
+    Table = 4,
     /// Memory section
-    Memory    = 5,
+    Memory = 5,
     /// Global section
-    Global    = 6,
+    Global = 6,
     /// Export section
-    Export    = 7,
+    Export = 7,
     /// Start section
-    Start     = 8,
+    Start = 8,
     /// Element section
-    Element   = 9,
+    Element = 9,
     /// Code section
-    Code      = 10,
+    Code = 10,
     /// Data section
-    Data      = 11,
+    Data = 11,
     /// Data count section
     DataCount = 12,
 }
@@ -326,31 +316,31 @@ impl CustomSection {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ComponentSectionType {
     /// Custom section - for metadata, debug info, etc.
-    Custom       = 0,
+    Custom = 0,
     /// Core module section - contains WebAssembly modules
-    CoreModule   = 1,
+    CoreModule = 1,
     /// Core instance section - contains core WebAssembly instances
     CoreInstance = 2,
     /// Core type section - contains core WebAssembly types
-    CoreType     = 3,
+    CoreType = 3,
     /// Component section - contains nested components
-    Component    = 4,
+    Component = 4,
     /// Component instance section - contains component instances
-    Instance     = 5,
+    Instance = 5,
     /// Alias section - contains aliases
-    Alias        = 6,
+    Alias = 6,
     /// Type section - contains component types
-    Type         = 7,
+    Type = 7,
     /// Canonical section - contains canonical function conversions
-    Canon        = 8,
+    Canon = 8,
     /// Start section - contains the component start function
-    Start        = 9,
+    Start = 9,
     /// Import section - contains imports
-    Import       = 10,
+    Import = 10,
     /// Export section - contains exports
-    Export       = 11,
+    Export = 11,
     /// Value section - contains component values
-    Value        = 12,
+    Value = 12,
 }
 
 impl ComponentSectionType {
@@ -386,7 +376,7 @@ pub struct ComponentSectionHeader {
     /// Section type
     pub section_type: ComponentSectionType,
     /// Section size in bytes (excluding the header)
-    pub size:         u32,
+    pub size: u32,
 }
 
 /// Parse a component section header from binary data
@@ -443,10 +433,7 @@ mod tests {
     #[cfg(not(feature = "std"))]
     extern crate alloc;
     #[cfg(not(feature = "std"))]
-    use alloc::{
-        string::ToString,
-        vec,
-    };
+    use alloc::{string::ToString, vec};
     #[cfg(feature = "std")]
     use std::string::ToString;
     #[cfg(feature = "std")]
@@ -629,7 +616,7 @@ mod tests {
         // Create an invalid section ID
         let mut header_bytes = Vec::new();
         header_bytes.push(255); // Invalid section ID
-                                // Use a manual LEB128 encoding for 42
+        // Use a manual LEB128 encoding for 42
         header_bytes.push(42); // 42 fits in one byte for LEB128
 
         // Parse should fail

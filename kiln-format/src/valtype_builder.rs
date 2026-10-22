@@ -5,31 +5,15 @@
 //! to the proper BoundedVec-based ValType structures.
 
 #[cfg(not(feature = "std"))]
-use std::{
-    string::String,
-    vec::Vec,
-};
+use std::{string::String, vec::Vec};
 #[cfg(feature = "std")]
-use std::{
-    string::String,
-    vec::Vec,
-};
+use std::{string::String, vec::Vec};
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-};
+use kiln_error::{Error, ErrorCategory, codes};
 use kiln_foundation::{
-    bounded::{
-        BoundedVec,
-        WasmName,
-    },
-    component_value::{
-        ValType,
-        ValTypeRef,
-    },
     MemoryProvider,
+    bounded::{BoundedVec, WasmName},
+    component_value::{ValType, ValTypeRef},
 };
 
 /// Type store for managing ValType instances and references

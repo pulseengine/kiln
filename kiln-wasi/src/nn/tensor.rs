@@ -7,16 +7,10 @@
 use core::fmt;
 
 use kiln_foundation::{
-    budget_aware_provider::CrateId,
-    safe_managed_alloc,
-    safe_memory::NoStdProvider,
-    BoundedVec,
+    BoundedVec, budget_aware_provider::CrateId, safe_managed_alloc, safe_memory::NoStdProvider,
 };
 
-use super::{
-    NeuralNetworkCapability,
-    VerificationLevel,
-};
+use super::{NeuralNetworkCapability, VerificationLevel};
 use crate::prelude::*;
 
 /// Maximum number of tensor dimensions
@@ -180,11 +174,11 @@ impl TensorDimensions {
 #[derive(Clone)]
 pub struct Tensor {
     /// Tensor dimensions
-    dimensions:       TensorDimensions,
+    dimensions: TensorDimensions,
     /// Data type
-    data_type:        TensorType,
+    data_type: TensorType,
     /// Raw data storage
-    data:             Vec<u8>,
+    data: Vec<u8>,
     /// Capability level this tensor was created with
     capability_level: VerificationLevel,
 }
@@ -349,8 +343,8 @@ impl fmt::Debug for Tensor {
 /// Builder for creating tensors with validation
 pub struct TensorBuilder {
     dimensions: Option<TensorDimensions>,
-    data_type:  Option<TensorType>,
-    data:       Option<Vec<u8>>,
+    data_type: Option<TensorType>,
+    data: Option<Vec<u8>>,
 }
 
 impl TensorBuilder {
@@ -358,8 +352,8 @@ impl TensorBuilder {
     pub fn new() -> Self {
         Self {
             dimensions: None,
-            data_type:  None,
-            data:       None,
+            data_type: None,
+            data: None,
         }
     }
 

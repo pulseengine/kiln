@@ -19,19 +19,10 @@
 // use std::vec::Vec; // This was for the module scope, func_type::create used
 // its own.
 
-use kiln_error::{
-    codes,
-    Error,
-    Result,
-};
+use kiln_error::{Error, Result, codes};
 
 #[cfg(feature = "std")]
-use crate::{
-    BlockType,
-    FuncType,
-    RefType,
-    ValueType as CoreValueType,
-};
+use crate::{BlockType, FuncType, RefType, ValueType as CoreValueType};
 
 /// Convert `RefType` to `ValueType`
 ///
@@ -94,22 +85,14 @@ pub mod func_type {
 
     // Result is imported through crate prelude
 
-    use super::{
-        CoreValueType as ValueType,
-        FuncType,
-    };
-    use crate::{
-        MemoryProvider,
-        Result,
-    };
+    use super::{CoreValueType as ValueType, FuncType};
+    use crate::{MemoryProvider, Result};
 
     /// Verify that a function type conforms to WebAssembly constraints
     ///
     /// This is a utility function that can be used by any crate that
     /// needs to validate a function type.
-    pub fn verify(
-        func_type: &FuncType,
-    ) -> Result<()> {
+    pub fn verify(func_type: &FuncType) -> Result<()> {
         func_type.verify()
     }
 

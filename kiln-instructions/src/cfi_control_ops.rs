@@ -19,16 +19,12 @@
 //! - Hardware-specific CFI instruction integration
 //! - Software CFI fallback support
 
-#![allow(dead_code)] // Allow during development
+#![allow(dead_code)]
+// Allow during development
 // CFI index operations may involve address-like values that need casting.
 #![allow(clippy::cast_possible_truncation)]
 
-
-use crate::{
-    control_ops::BranchTarget,
-    prelude::*,
-    types::CfiTargetVec,
-};
+use crate::{control_ops::BranchTarget, prelude::*, types::CfiTargetVec};
 
 /// Calling convention used in CFI validation
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,14 +43,14 @@ pub struct CfiSoftwareConfig {
     /// Enable shadow stack protection
     pub shadow_stack_enabled: bool,
     /// Enable temporal validation
-    pub temporal_validation:  bool,
+    pub temporal_validation: bool,
 }
 
 impl Default for CfiSoftwareConfig {
     fn default() -> Self {
         Self {
             shadow_stack_enabled: true,
-            temporal_validation:  false,
+            temporal_validation: false,
         }
     }
 }
@@ -63,22 +59,22 @@ impl Default for CfiSoftwareConfig {
 #[derive(Debug, Clone)]
 pub struct CfiControlFlowProtection {
     /// Enable CFI protection
-    pub enabled:          bool,
+    pub enabled: bool,
     /// CFI protection level
     pub protection_level: CfiProtectionLevel,
     /// Hardware CFI configuration
-    pub hardware_config:  Option<HardwareCfiConfig>,
+    pub hardware_config: Option<HardwareCfiConfig>,
     /// Software CFI fallback configuration
-    pub software_config:  SoftwareCfiConfig,
+    pub software_config: SoftwareCfiConfig,
 }
 
 impl Default for CfiControlFlowProtection {
     fn default() -> Self {
         Self {
-            enabled:          true,
+            enabled: true,
             protection_level: CfiProtectionLevel::Enhanced,
-            hardware_config:  None, // Will be detected at runtime
-            software_config:  SoftwareCfiConfig::default(),
+            hardware_config: None, // Will be detected at runtime
+            software_config: SoftwareCfiConfig::default(),
         }
     }
 }
@@ -133,7 +129,7 @@ pub struct HardwareCfiConfig {
     /// Architecture type
     pub architecture: CfiArchitecture,
     /// Hardware-specific settings
-    pub settings:     HardwareCfiSettings,
+    pub settings: HardwareCfiSettings,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -151,7 +147,7 @@ pub enum HardwareCfiSettings {
     /// ARM BTI settings
     ArmBti {
         /// BTI mode
-        mode:            ArmBtiMode,
+        mode: ArmBtiMode,
         /// Exception level
         exception_level: ArmBtiExceptionLevel,
     },
@@ -165,7 +161,7 @@ pub enum HardwareCfiSettings {
     /// `x86_64` CET settings
     X86Cet {
         /// Shadow stack enabled
-        shadow_stack:             bool,
+        shadow_stack: bool,
         /// Indirect branch tracking
         indirect_branch_tracking: bool,
     },
@@ -197,13 +193,13 @@ pub enum ArmBtiExceptionLevel {
 #[derive(Debug, Clone)]
 pub struct SoftwareCfiConfig {
     /// Enable software shadow stack
-    pub shadow_stack_enabled:        bool,
+    pub shadow_stack_enabled: bool,
     /// Maximum shadow stack depth
-    pub max_shadow_stack_depth:      usize,
+    pub max_shadow_stack_depth: usize,
     /// Enable landing pad simulation
-    pub landing_pad_simulation:      bool,
+    pub landing_pad_simulation: bool,
     /// Enable temporal validation
-    pub temporal_validation:         bool,
+    pub temporal_validation: bool,
     /// Maximum function execution time (cycles)
     pub max_function_execution_time: u64,
 }
@@ -211,10 +207,10 @@ pub struct SoftwareCfiConfig {
 impl Default for SoftwareCfiConfig {
     fn default() -> Self {
         Self {
-            shadow_stack_enabled:        true,
-            max_shadow_stack_depth:      1024,
-            landing_pad_simulation:      true,
-            temporal_validation:         false, // Expensive, off by default
+            shadow_stack_enabled: true,
+            max_shadow_stack_depth: 1024,
+            landing_pad_simulation: true,
+            temporal_validation: false, // Expensive, off by default
             max_function_execution_time: 1_000_000, // 1M cycles
         }
     }
@@ -224,7 +220,7 @@ impl Default for SoftwareCfiConfig {
 #[derive(Debug, Clone)]
 pub struct CfiProtectedBranchTarget {
     /// Base branch target information
-    pub target:     BranchTarget,
+    pub target: BranchTarget,
     /// CFI protection requirements
     pub protection: CfiTargetProtection,
     /// Validation requirements
@@ -238,13 +234,13 @@ pub struct CfiProtectedBranchTarget {
 #[derive(Debug, Clone)]
 pub struct CfiTargetProtection {
     /// Target type for CFI classification
-    pub target_type:              CfiTargetType,
+    pub target_type: CfiTargetType,
     /// Required landing pad information
-    pub landing_pad:              Option<CfiLandingPad>,
+    pub landing_pad: Option<CfiLandingPad>,
     /// Shadow stack requirements
     pub shadow_stack_requirement: ShadowStackRequirement,
     /// Temporal validation settings
-    pub temporal_validation:      Option<TemporalValidation>,
+    pub temporal_validation: Option<TemporalValidation>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -320,16 +316,16 @@ impl kiln_foundation::traits::FromBytes for CfiTargetType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CfiLandingPad {
     /// Landing pad identifier
-    pub pad_id:               u32,
+    pub pad_id: u32,
     /// Hardware instruction to insert
     pub hardware_instruction: Option<CfiHardwareInstruction>,
     /// Software validation code
-    pub software_validation:  Option<CfiSoftwareValidation>,
+    pub software_validation: Option<CfiSoftwareValidation>,
     /// Expected predecessor types
     #[cfg(feature = "std")]
-    pub valid_predecessors:   Vec<CfiTargetType>,
+    pub valid_predecessors: Vec<CfiTargetType>,
     #[cfg(not(feature = "std"))]
-    pub valid_predecessors:   crate::types::CfiTargetTypeVec,
+    pub valid_predecessors: crate::types::CfiTargetTypeVec,
 }
 
 impl CfiLandingPad {
@@ -340,10 +336,10 @@ impl CfiLandingPad {
     /// Returns an error if allocation fails
     pub fn try_default() -> Result<Self> {
         Ok(Self {
-            pad_id:               0,
+            pad_id: 0,
             hardware_instruction: None,
-            software_validation:  None,
-            valid_predecessors:   {
+            software_validation: None,
+            valid_predecessors: {
                 #[cfg(feature = "std")]
                 {
                     Vec::new()
@@ -366,10 +362,10 @@ impl Default for CfiLandingPad {
             {
                 // Fallback for Default trait compatibility
                 Self {
-                    pad_id:               0,
+                    pad_id: 0,
                     hardware_instruction: None,
-                    software_validation:  None,
-                    valid_predecessors:   Vec::new(),
+                    software_validation: None,
+                    valid_predecessors: Vec::new(),
                 }
             }
             #[cfg(not(feature = "std"))]
@@ -400,12 +396,12 @@ pub enum CfiHardwareInstruction {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CfiSoftwareValidation {
     /// Validation check ID
-    pub check_id:            u32,
+    pub check_id: u32,
     /// Expected values to validate
     #[cfg(feature = "std")]
-    pub expected_values:     Vec<CfiExpectedValue>,
+    pub expected_values: Vec<CfiExpectedValue>,
     #[cfg(not(feature = "std"))]
-    pub expected_values:     crate::types::CfiExpectedValueVec,
+    pub expected_values: crate::types::CfiExpectedValueVec,
     /// Validation function
     pub validation_function: SoftwareCfiFunction,
 }
@@ -519,7 +515,7 @@ pub enum ShadowStackRequirement {
     None,
     /// Push return address to shadow stack
     Push {
-        return_address:     u64,
+        return_address: u64,
         function_signature: u64,
     },
     /// Pop and validate return address from shadow stack
@@ -534,9 +530,9 @@ pub struct TemporalValidation {
     /// Maximum execution time allowed
     pub max_execution_time: u64,
     /// Timestamp when execution started
-    pub start_timestamp:    Option<u64>,
+    pub start_timestamp: Option<u64>,
     /// Deadline for completion
-    pub deadline:           Option<u64>,
+    pub deadline: Option<u64>,
 }
 
 /// CFI validation requirements
@@ -545,7 +541,7 @@ pub enum CfiValidationRequirement {
     /// Validate function signature matches expected
     TypeSignatureCheck {
         expected_type_index: u32,
-        signature_hash:      u64,
+        signature_hash: u64,
     },
     /// Validate return address matches shadow stack
     #[default]
@@ -756,36 +752,36 @@ pub trait CfiControlFlowOps {
 #[derive(Debug, Clone)]
 pub struct CfiExecutionContext {
     /// Current function index
-    pub current_function:         u32,
+    pub current_function: u32,
     /// Current instruction offset
-    pub current_instruction:      u32,
+    pub current_instruction: u32,
     /// Software shadow stack
     #[cfg(feature = "std")]
-    pub shadow_stack:             Vec<ShadowStackEntry>,
+    pub shadow_stack: Vec<ShadowStackEntry>,
     #[cfg(not(feature = "std"))]
-    pub shadow_stack:             crate::types::ShadowStackVec,
+    pub shadow_stack: crate::types::ShadowStackVec,
     /// Active landing pad expectations
     #[cfg(feature = "std")]
     pub landing_pad_expectations: Vec<LandingPadExpectation>,
     #[cfg(not(feature = "std"))]
     pub landing_pad_expectations: crate::types::LandingPadExpectationVec,
     /// CFI violation count
-    pub violation_count:          u32,
+    pub violation_count: u32,
     /// Performance metrics
-    pub metrics:                  CfiMetrics,
+    pub metrics: CfiMetrics,
     /// Calling convention for platform-specific validation
-    pub calling_convention:       CallingConvention,
+    pub calling_convention: CallingConvention,
     /// Current stack depth for alignment checking
-    pub current_stack_depth:      u32,
+    pub current_stack_depth: u32,
     /// Software configuration for CFI
-    pub software_config:          CfiSoftwareConfig,
+    pub software_config: CfiSoftwareConfig,
     /// Timestamp of last checkpoint for temporal validation
-    pub last_checkpoint_time:     u64,
+    pub last_checkpoint_time: u64,
     /// Maximum number of labels supported
-    pub max_labels:               u32,
+    pub max_labels: u32,
     /// Valid branch targets for indirect jumps
     #[cfg(feature = "std")]
-    pub valid_branch_targets:     Vec<u32>,
+    pub valid_branch_targets: Vec<u32>,
     #[cfg(not(feature = "std"))]
     pub valid_branch_targets: kiln_foundation::bounded::BoundedVec<
         u32,
@@ -793,10 +789,10 @@ pub struct CfiExecutionContext {
         kiln_foundation::safe_memory::NoStdProvider<1024>,
     >,
     /// Maximum number of types supported
-    pub max_types:                u32,
+    pub max_types: u32,
     /// Type signatures for validation
     #[cfg(feature = "std")]
-    pub type_signatures:          Vec<u64>,
+    pub type_signatures: Vec<u64>,
     #[cfg(not(feature = "std"))]
     pub type_signatures: kiln_foundation::bounded::BoundedVec<
         u64,
@@ -804,10 +800,10 @@ pub struct CfiExecutionContext {
         kiln_foundation::safe_memory::NoStdProvider<2048>,
     >,
     /// Maximum shadow stack depth
-    pub max_shadow_stack_depth:   usize,
+    pub max_shadow_stack_depth: usize,
     /// Indirect branch targets for validation
     #[cfg(feature = "std")]
-    pub indirect_branch_targets:  Vec<u32>,
+    pub indirect_branch_targets: Vec<u32>,
     #[cfg(not(feature = "std"))]
     pub indirect_branch_targets: kiln_foundation::bounded::BoundedVec<
         u32,
@@ -826,9 +822,9 @@ impl CfiExecutionContext {
         // Remove unused providers - they were placeholders
 
         Ok(Self {
-            current_function:         0,
-            current_instruction:      0,
-            shadow_stack:             {
+            current_function: 0,
+            current_instruction: 0,
+            shadow_stack: {
                 #[cfg(feature = "std")]
                 {
                     Vec::new()
@@ -854,14 +850,14 @@ impl CfiExecutionContext {
                     .map_err(|_| Error::memory_error("Failed to create LandingPadExpectationVec"))?
                 }
             },
-            violation_count:          0,
-            metrics:                  CfiMetrics::default(),
-            calling_convention:       CallingConvention::WebAssembly,
-            current_stack_depth:      0,
-            software_config:          CfiSoftwareConfig::default(),
-            last_checkpoint_time:     0,
-            max_labels:               256,
-            valid_branch_targets:     {
+            violation_count: 0,
+            metrics: CfiMetrics::default(),
+            calling_convention: CallingConvention::WebAssembly,
+            current_stack_depth: 0,
+            software_config: CfiSoftwareConfig::default(),
+            last_checkpoint_time: 0,
+            max_labels: 256,
+            valid_branch_targets: {
                 #[cfg(feature = "std")]
                 {
                     Vec::new()
@@ -874,8 +870,8 @@ impl CfiExecutionContext {
                     })?
                 }
             },
-            max_types:                256,
-            type_signatures:          {
+            max_types: 256,
+            type_signatures: {
                 #[cfg(feature = "std")]
                 {
                     Vec::new()
@@ -888,8 +884,8 @@ impl CfiExecutionContext {
                     })?
                 }
             },
-            max_shadow_stack_depth:   1024,
-            indirect_branch_targets:  {
+            max_shadow_stack_depth: 1024,
+            indirect_branch_targets: {
                 #[cfg(feature = "std")]
                 {
                     Vec::new()
@@ -913,29 +909,30 @@ impl Default for CfiExecutionContext {
             {
                 // Fallback for Default trait compatibility - create minimal context
                 Self {
-                    current_function:         0,
-                    current_instruction:      0,
-                    shadow_stack:             Vec::new(),
+                    current_function: 0,
+                    current_instruction: 0,
+                    shadow_stack: Vec::new(),
                     landing_pad_expectations: Vec::new(),
-                    violation_count:          0,
-                    metrics:                  CfiMetrics::default(),
-                    calling_convention:       CallingConvention::WebAssembly,
-                    current_stack_depth:      0,
-                    software_config:          CfiSoftwareConfig::default(),
-                    last_checkpoint_time:     0,
-                    max_labels:               256,
-                    valid_branch_targets:     Vec::new(),
-                    max_types:                256,
-                    type_signatures:          Vec::new(),
-                    max_shadow_stack_depth:   1024,
-                    indirect_branch_targets:  Vec::new(),
+                    violation_count: 0,
+                    metrics: CfiMetrics::default(),
+                    calling_convention: CallingConvention::WebAssembly,
+                    current_stack_depth: 0,
+                    software_config: CfiSoftwareConfig::default(),
+                    last_checkpoint_time: 0,
+                    max_labels: 256,
+                    valid_branch_targets: Vec::new(),
+                    max_types: 256,
+                    type_signatures: Vec::new(),
+                    max_shadow_stack_depth: 1024,
+                    indirect_branch_targets: Vec::new(),
                 }
             }
             #[cfg(not(feature = "std"))]
             {
                 // try_default() should not fail in practice
-                Self::try_default()
-                    .expect("CfiExecutionContext::default() failed in no_std - use try_default() instead")
+                Self::try_default().expect(
+                    "CfiExecutionContext::default() failed in no_std - use try_default() instead",
+                )
             }
         })
     }
@@ -949,9 +946,9 @@ pub struct ShadowStackEntry {
     /// Function signature hash for validation
     pub signature_hash: u64,
     /// Timestamp when call was made
-    pub timestamp:      u64,
+    pub timestamp: u64,
     /// Call site metadata
-    pub call_site_id:   u32,
+    pub call_site_id: u32,
 }
 
 impl kiln_foundation::traits::Checksummable for ShadowStackEntry {
@@ -1014,21 +1011,19 @@ impl kiln_foundation::traits::FromBytes for ShadowStackEntry {
 }
 
 /// Landing pad expectation for CFI validation
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct LandingPadExpectation {
     /// Expected function index
-    pub function_index:     u32,
+    pub function_index: u32,
     /// Expected instruction offset
     pub instruction_offset: u32,
     /// Expected target type
-    pub target_type:        CfiTargetType,
+    pub target_type: CfiTargetType,
     /// Deadline for landing pad (for timeout detection)
-    pub deadline:           Option<u64>,
+    pub deadline: Option<u64>,
     /// Associated metadata
-    pub metadata:           CfiLandingPad,
+    pub metadata: CfiLandingPad,
 }
-
 
 impl kiln_foundation::traits::Checksummable for LandingPadExpectation {
     fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
@@ -1105,25 +1100,25 @@ pub struct CfiMetrics {
     /// Total indirect calls protected
     pub indirect_calls_protected: u64,
     /// Total returns protected
-    pub returns_protected:        u64,
+    pub returns_protected: u64,
     /// Total branches protected
-    pub branches_protected:       u64,
+    pub branches_protected: u64,
     /// Total CFI violations detected
-    pub violations_detected:      u64,
+    pub violations_detected: u64,
     /// Total CFI overhead (nanoseconds)
-    pub total_overhead_ns:        u64,
+    pub total_overhead_ns: u64,
     /// Landing pads validated
-    pub landing_pads_validated:   u64,
+    pub landing_pads_validated: u64,
     /// Shadow stack operations
-    pub shadow_stack_operations:  u64,
+    pub shadow_stack_operations: u64,
     /// Total execution time for temporal validation
-    pub total_execution_time:     u64,
+    pub total_execution_time: u64,
     /// Average instruction execution time
     pub average_instruction_time: Option<u64>,
     /// Last instruction execution time
-    pub last_instruction_time:    u64,
+    pub last_instruction_time: u64,
     /// Count of indirect branches taken
-    pub indirect_branches_taken:  u64,
+    pub indirect_branches_taken: u64,
 }
 
 /// Default implementation of CFI control flow operations
@@ -1142,15 +1137,15 @@ impl CfiControlFlowOps for DefaultCfiControlFlowOps {
         if !cfi_protection.enabled {
             // CFI disabled, use regular branch target
             return Ok(CfiProtectedBranchTarget {
-                target:     BranchTarget {
-                    label_idx:   table_idx,
+                target: BranchTarget {
+                    label_idx: table_idx,
                     keep_values: 0, // Will be determined by type signature
                 },
                 protection: CfiTargetProtection {
-                    target_type:              CfiTargetType::IndirectCall,
-                    landing_pad:              None,
+                    target_type: CfiTargetType::IndirectCall,
+                    landing_pad: None,
                     shadow_stack_requirement: ShadowStackRequirement::None,
-                    temporal_validation:      None,
+                    temporal_validation: None,
                 },
                 validation: {
                     #[cfg(feature = "std")]
@@ -1178,7 +1173,7 @@ impl CfiControlFlowOps for DefaultCfiControlFlowOps {
             CfiProtectionLevel::Enhanced | CfiProtectionLevel::Maximum
         ) {
             ShadowStackRequirement::Push {
-                return_address:     self.compute_return_address(context),
+                return_address: self.compute_return_address(context),
                 function_signature: self.compute_signature_hash(type_idx),
             }
         } else {
@@ -1189,8 +1184,8 @@ impl CfiControlFlowOps for DefaultCfiControlFlowOps {
             if matches!(cfi_protection.protection_level, CfiProtectionLevel::Maximum) {
                 Some(TemporalValidation {
                     max_execution_time: cfi_protection.software_config.max_function_execution_time,
-                    start_timestamp:    Some(self.get_current_timestamp()),
-                    deadline:           Some(
+                    start_timestamp: Some(self.get_current_timestamp()),
+                    deadline: Some(
                         self.get_current_timestamp()
                             + cfi_protection.software_config.max_function_execution_time,
                     ),
@@ -1204,7 +1199,7 @@ impl CfiControlFlowOps for DefaultCfiControlFlowOps {
         let validation_requirements = vec![
             CfiValidationRequirement::TypeSignatureCheck {
                 expected_type_index: type_idx,
-                signature_hash:      self.compute_signature_hash(type_idx),
+                signature_hash: self.compute_signature_hash(type_idx),
             },
             CfiValidationRequirement::ControlFlowTargetCheck {
                 valid_targets: {
@@ -1236,7 +1231,7 @@ impl CfiControlFlowOps for DefaultCfiControlFlowOps {
                 )?;
             reqs.push(CfiValidationRequirement::TypeSignatureCheck {
                 expected_type_index: type_idx,
-                signature_hash:      self.compute_signature_hash(type_idx),
+                signature_hash: self.compute_signature_hash(type_idx),
             })
             .map_err(|_| Error::validation_error("Failed to add validation requirement"))?;
             reqs
@@ -1246,8 +1241,8 @@ impl CfiControlFlowOps for DefaultCfiControlFlowOps {
         context.metrics.indirect_calls_protected += 1;
 
         Ok(CfiProtectedBranchTarget {
-            target:     BranchTarget {
-                label_idx:   table_idx,
+            target: BranchTarget {
+                label_idx: table_idx,
                 keep_values: 0, // Determined by function signature
             },
             protection: CfiTargetProtection {
@@ -1292,15 +1287,15 @@ impl CfiControlFlowOps for DefaultCfiControlFlowOps {
     ) -> Result<CfiProtectedBranchTarget> {
         if !cfi_protection.enabled {
             return Ok(CfiProtectedBranchTarget {
-                target:     BranchTarget {
+                target: BranchTarget {
                     label_idx,
                     keep_values: 0,
                 },
                 protection: CfiTargetProtection {
-                    target_type:              CfiTargetType::Branch,
-                    landing_pad:              None,
+                    target_type: CfiTargetType::Branch,
+                    landing_pad: None,
                     shadow_stack_requirement: ShadowStackRequirement::None,
-                    temporal_validation:      None,
+                    temporal_validation: None,
                 },
                 validation: {
                     #[cfg(feature = "std")]
@@ -1356,15 +1351,15 @@ impl CfiControlFlowOps for DefaultCfiControlFlowOps {
         context.metrics.branches_protected += 1;
 
         Ok(CfiProtectedBranchTarget {
-            target:     BranchTarget {
+            target: BranchTarget {
                 label_idx,
                 keep_values: 0,
             },
             protection: CfiTargetProtection {
-                target_type:              CfiTargetType::Branch,
-                landing_pad:              None,
+                target_type: CfiTargetType::Branch,
+                landing_pad: None,
                 shadow_stack_requirement: ShadowStackRequirement::None,
-                temporal_validation:      None,
+                temporal_validation: None,
             },
             validation: validation_requirements,
         })

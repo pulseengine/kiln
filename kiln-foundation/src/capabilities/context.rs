@@ -3,10 +3,7 @@
 //! This module provides the capability context that replaces global state
 //! with explicit dependency injection of memory capabilities.
 
-use core::{
-    fmt,
-    marker::PhantomData,
-};
+use core::{fmt, marker::PhantomData};
 #[cfg(feature = "std")]
 use std::boxed::Box;
 
@@ -18,20 +15,13 @@ use alloc::boxed::Box;
 use kiln_error::helpers::memory_limit_exceeded_error;
 
 use super::{
-    dynamic::DynamicMemoryCapability,
-    static_alloc::StaticMemoryCapability,
-    verified::VerifiedMemoryCapability,
-    MemoryCapability,
-    MemoryOperation,
+    MemoryCapability, MemoryOperation, dynamic::DynamicMemoryCapability,
+    static_alloc::StaticMemoryCapability, verified::VerifiedMemoryCapability,
 };
 // No HashMap needed - always using static arrays for ASIL-A compliance
 use crate::{
-    budget_aware_provider::CrateId,
-    codes,
+    Error, ErrorCategory, Result, budget_aware_provider::CrateId, codes,
     verification::VerificationLevel,
-    Error,
-    ErrorCategory,
-    Result,
 };
 
 /// Maximum number of capabilities that can be stored in no_std mode
@@ -278,7 +268,7 @@ impl fmt::Debug for MemoryCapabilityContext {
 /// This replaces the raw NoStdProvider with capability-gated access.
 pub struct CapabilityGuardedProvider<const N: usize> {
     capability: Box<dyn AnyMemoryCapability>,
-    _phantom:   PhantomData<[u8; N]>,
+    _phantom: PhantomData<[u8; N]>,
 }
 
 impl<const N: usize> CapabilityGuardedProvider<N> {
@@ -348,7 +338,7 @@ unsafe impl<const N: usize> Sync for CapabilityGuardedProvider<N> {}
 
 /// Builder for creating capability contexts with different configurations
 pub struct CapabilityContextBuilder {
-    verification_level:   VerificationLevel,
+    verification_level: VerificationLevel,
     runtime_verification: bool,
 }
 
@@ -356,7 +346,7 @@ impl CapabilityContextBuilder {
     /// Create a new builder with default settings
     pub fn new() -> Self {
         Self {
-            verification_level:   VerificationLevel::Standard,
+            verification_level: VerificationLevel::Standard,
             runtime_verification: false,
         }
     }
@@ -384,4 +374,3 @@ impl Default for CapabilityContextBuilder {
         Self::new()
     }
 }
-

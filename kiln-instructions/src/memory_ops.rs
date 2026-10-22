@@ -117,20 +117,8 @@
 #![allow(clippy::cast_possible_truncation)]
 
 use crate::{
-    prelude::{
-        Debug,
-        Error,
-        PartialEq,
-        PureInstruction,
-        Result,
-        Value,
-        ValueType,
-    },
-    validation::{
-        validate_memory_op,
-        Validate,
-        ValidationContext,
-    },
+    prelude::{Debug, Error, PartialEq, PureInstruction, Result, Value, ValueType},
+    validation::{Validate, ValidationContext, validate_memory_op},
 };
 
 /// Memory trait defining the requirements for memory operations
@@ -200,15 +188,15 @@ pub struct MemoryLoad {
     /// Memory index (for multi-memory support)
     pub memory_index: u32,
     /// Memory offset (u64 for Memory64 support)
-    pub offset:       u64,
+    pub offset: u64,
     /// Required alignment
-    pub align:        u32,
+    pub align: u32,
     /// Value type to load
-    pub value_type:   ValueType,
+    pub value_type: ValueType,
     /// Whether this is a signed load (for smaller-than-register loads)
-    pub signed:       bool,
+    pub signed: bool,
     /// Memory access width in bytes (8, 16, 32, 64)
-    pub width:        u32,
+    pub width: u32,
 }
 
 /// Memory store operation
@@ -217,13 +205,13 @@ pub struct MemoryStore {
     /// Memory index (for multi-memory support)
     pub memory_index: u32,
     /// Memory offset (u64 for Memory64 support)
-    pub offset:       u64,
+    pub offset: u64,
     /// Required alignment
-    pub align:        u32,
+    pub align: u32,
     /// Value type to store
-    pub value_type:   ValueType,
+    pub value_type: ValueType,
     /// Memory access width in bytes (8, 16, 32, 64)
-    pub width:        u32,
+    pub width: u32,
 }
 
 impl MemoryLoad {
@@ -575,7 +563,8 @@ impl MemoryLoad {
                     return Err(Error::memory_error("Insufficient bytes read for i8 value"));
                 }
                 #[cfg(feature = "std")]
-                let byte = bytes.first()
+                let byte = bytes
+                    .first()
                     .copied()
                     .ok_or_else(|| Error::memory_error("Index out of bounds"))?;
                 #[cfg(not(any(feature = "std",)))]
@@ -589,7 +578,8 @@ impl MemoryLoad {
                     return Err(Error::memory_error("Insufficient bytes read for i8 value"));
                 }
                 #[cfg(feature = "std")]
-                let byte = bytes.first()
+                let byte = bytes
+                    .first()
                     .copied()
                     .ok_or_else(|| Error::memory_error("Index out of bounds"))?;
                 #[cfg(not(any(feature = "std",)))]
@@ -976,7 +966,7 @@ pub struct MemoryCopy {
     /// Destination memory index
     pub dest_memory_index: u32,
     /// Source memory index
-    pub src_memory_index:  u32,
+    pub src_memory_index: u32,
 }
 
 /// Memory init operation (WebAssembly bulk memory proposal)
@@ -985,7 +975,7 @@ pub struct MemoryInit {
     /// Memory index
     pub memory_index: u32,
     /// Data segment index
-    pub data_index:   u32,
+    pub data_index: u32,
 }
 
 /// Data drop operation (WebAssembly bulk memory proposal)
@@ -1014,7 +1004,9 @@ pub trait DataSegmentOperations {
     fn get_data_segment(
         &self,
         data_index: u32,
-    ) -> Result<Option<kiln_foundation::BoundedVec<u8, 65_536, kiln_foundation::NoStdProvider<65_536>>>>;
+    ) -> Result<
+        Option<kiln_foundation::BoundedVec<u8, 65_536, kiln_foundation::NoStdProvider<65_536>>>,
+    >;
 
     /// Drop (mark as unavailable) a data segment
     ///
@@ -1305,7 +1297,7 @@ pub struct MemorySize {
     /// Memory index (0 for MVP, but allows for multi-memory proposal)
     pub memory_index: u32,
     /// Whether this is for a memory64 memory (returns i64 instead of i32)
-    pub memory64:     bool,
+    pub memory64: bool,
 }
 
 impl MemorySize {
@@ -1358,20 +1350,26 @@ pub struct MemoryGrow {
     /// Memory index (0 for MVP, but allows for multi-memory proposal)
     pub memory_index: u32,
     /// Whether this is a memory64 operation (returns i64 instead of i32)
-    pub memory64:     bool,
+    pub memory64: bool,
 }
 
 impl MemoryGrow {
     /// Create a new memory grow operation (32-bit memory)
     #[must_use]
     pub fn new(memory_index: u32) -> Self {
-        Self { memory_index, memory64: false }
+        Self {
+            memory_index,
+            memory64: false,
+        }
     }
 
     /// Create a new memory grow operation with memory64 flag
     #[must_use]
     pub fn new_with_memory64(memory_index: u32, memory64: bool) -> Self {
-        Self { memory_index, memory64 }
+        Self {
+            memory_index,
+            memory64,
+        }
     }
 
     /// Execute memory.grow operation
@@ -1402,7 +1400,11 @@ impl MemoryGrow {
             match delta {
                 Value::I64(pages) => *pages,
                 Value::I32(pages) => i64::from(*pages), // Allow i32 for convenience
-                _ => return Err(Error::type_error("memory.grow delta must be i64 for memory64")),
+                _ => {
+                    return Err(Error::type_error(
+                        "memory.grow delta must be i64 for memory64",
+                    ));
+                },
             }
         } else {
             match delta {
@@ -1413,11 +1415,7 @@ impl MemoryGrow {
 
         // Negative delta is not allowed
         if delta_pages < 0 {
-            return if self.memory64 {
-                Ok(Value::I64(-1))
-            } else {
-                Ok(Value::I32(-1))
-            };
+            return if self.memory64 { Ok(Value::I64(-1)) } else { Ok(Value::I32(-1)) };
         }
 
         // Get current size in pages
@@ -1438,11 +1436,7 @@ impl MemoryGrow {
             },
             Err(_) => {
                 // Growth failed, return -1
-                if self.memory64 {
-                    Ok(Value::I64(-1))
-                } else {
-                    Ok(Value::I32(-1))
-                }
+                if self.memory64 { Ok(Value::I64(-1)) } else { Ok(Value::I32(-1)) }
             },
         }
     }

@@ -16,15 +16,7 @@
 
 use kiln_math as math;
 
-use crate::prelude::{
-    Debug,
-    Error,
-    FloatBits32,
-    FloatBits64,
-    PureInstruction,
-    Result,
-    Value,
-};
+use crate::prelude::{Debug, Error, FloatBits32, FloatBits64, PureInstruction, Result, Value};
 
 /// Represents a pure conversion operation for WebAssembly.
 #[derive(Debug, Clone)]

@@ -492,7 +492,10 @@ impl ComponentLoader {
     }
 
     /// Create module adapter from parsed module
-    fn create_module_adapter(&self, module: &ParsedModule) -> kiln_error::Result<CoreModuleAdapter> {
+    fn create_module_adapter(
+        &self,
+        module: &ParsedModule,
+    ) -> kiln_error::Result<CoreModuleAdapter> {
         #[cfg(feature = "std")]
         let adapter = CoreModuleAdapter::new("module".to_string());
 

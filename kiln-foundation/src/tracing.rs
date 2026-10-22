@@ -6,9 +6,9 @@
 
 #![cfg(feature = "tracing")]
 
+pub use tracing::{Level, Span, event, instrument};
 pub use tracing::{debug, error, info, trace, warn};
 pub use tracing::{debug_span, error_span, info_span, span, trace_span, warn_span};
-pub use tracing::{event, instrument, Level, Span};
 
 /// Re-export tracing macros for convenience
 pub use tracing::{field, span_enabled};

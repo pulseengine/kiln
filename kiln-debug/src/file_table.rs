@@ -142,11 +142,7 @@ impl<'a> FileTable<'a> {
             return None; // 0 means no file in DWARF
         }
         let i = (index - 1) as usize;
-        if i < self.file_count {
-            self.files[i]
-        } else {
-            None
-        }
+        if i < self.file_count { self.files[i] } else { None }
     }
 
     /// Get a directory by index (0 = compilation directory)
@@ -155,11 +151,7 @@ impl<'a> FileTable<'a> {
             return None; // 0 = compilation directory (not stored here)
         }
         let i = (index - 1) as usize;
-        if i < self.directory_count {
-            self.directories[i]
-        } else {
-            None
-        }
+        if i < self.directory_count { self.directories[i] } else { None }
     }
 
     /// Get the full path for a file

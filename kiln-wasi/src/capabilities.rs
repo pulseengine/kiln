@@ -7,17 +7,11 @@
 #[cfg(feature = "std")]
 use kiln_foundation::capabilities::CapabilityAwareProvider;
 use kiln_foundation::{
-    budget_aware_provider::CrateId,
-    safe_managed_alloc,
+    BoundedString, BoundedVec, budget_aware_provider::CrateId, safe_managed_alloc,
     safe_memory::NoStdProvider,
-    BoundedString,
-    BoundedVec,
 };
 
-use crate::{
-    prelude::*,
-    WASI_CRATE_ID,
-};
+use crate::{WASI_CRATE_ID, prelude::*};
 
 #[cfg(feature = "wasi-sockets")]
 use crate::preview2::sockets::WasiSocketCapabilities;
@@ -69,24 +63,24 @@ fn create_provider() -> Result<PathProvider> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct WasiCapabilities {
     /// Filesystem access capabilities
-    pub filesystem:  WasiFileSystemCapabilities,
+    pub filesystem: WasiFileSystemCapabilities,
     /// Environment and CLI capabilities
     pub environment: WasiEnvironmentCapabilities,
     /// Clock access capabilities
-    pub clocks:      WasiClockCapabilities,
+    pub clocks: WasiClockCapabilities,
     /// I/O capabilities
-    pub io:          WasiIoCapabilities,
+    pub io: WasiIoCapabilities,
     /// Random number generation capabilities
-    pub random:      WasiRandomCapabilities,
+    pub random: WasiRandomCapabilities,
     /// Network capabilities (Preview3)
     #[cfg(feature = "preview3-prep")]
-    pub network:     WasiNetworkCapabilities,
+    pub network: WasiNetworkCapabilities,
     /// Neural network capabilities (preview-agnostic)
     #[cfg(feature = "wasi-nn")]
-    pub nn:          WasiNeuralNetworkCapabilities,
+    pub nn: WasiNeuralNetworkCapabilities,
     /// Socket capabilities (TCP/UDP network operations)
     #[cfg(feature = "wasi-sockets")]
-    pub sockets:     WasiSocketCapabilities,
+    pub sockets: WasiSocketCapabilities,
 }
 
 impl WasiCapabilities {
@@ -165,19 +159,15 @@ pub struct WasiFileSystemCapabilities {
     #[cfg(feature = "std")]
     allowed_paths: Vec<String>,
     #[cfg(not(feature = "std"))]
-    allowed_paths: BoundedVec<
-        BoundedString<MAX_PATH_LENGTH>,
-        MAX_FILESYSTEM_PATHS,
-        PathProvider,
-    >,
+    allowed_paths: BoundedVec<BoundedString<MAX_PATH_LENGTH>, MAX_FILESYSTEM_PATHS, PathProvider>,
     /// Allow read operations
-    pub read_access:      bool,
+    pub read_access: bool,
     /// Allow write operations
-    pub write_access:     bool,
+    pub write_access: bool,
     /// Allow directory operations
     pub directory_access: bool,
     /// Allow file metadata access
-    pub metadata_access:  bool,
+    pub metadata_access: bool,
 }
 
 impl WasiFileSystemCapabilities {
@@ -190,22 +180,22 @@ impl WasiFileSystemCapabilities {
         #[cfg(feature = "std")]
         {
             Ok(Self {
-                allowed_paths:    Vec::new(),
-                read_access:      false,
-                write_access:     false,
+                allowed_paths: Vec::new(),
+                read_access: false,
+                write_access: false,
                 directory_access: false,
-                metadata_access:  false,
+                metadata_access: false,
             })
         }
         #[cfg(not(feature = "std"))]
         {
             let provider = create_provider()?;
             Ok(Self {
-                allowed_paths:    BoundedVec::new(provider)?,
-                read_access:      false,
-                write_access:     false,
+                allowed_paths: BoundedVec::new(provider)?,
+                read_access: false,
+                write_access: false,
                 directory_access: false,
-                metadata_access:  false,
+                metadata_access: false,
             })
         }
     }
@@ -219,22 +209,22 @@ impl WasiFileSystemCapabilities {
         #[cfg(feature = "std")]
         {
             Ok(Self {
-                allowed_paths:    Vec::new(),
-                read_access:      true,
-                write_access:     false,
+                allowed_paths: Vec::new(),
+                read_access: true,
+                write_access: false,
                 directory_access: true,
-                metadata_access:  true,
+                metadata_access: true,
             })
         }
         #[cfg(not(feature = "std"))]
         {
             let provider = create_provider()?;
             Ok(Self {
-                allowed_paths:    BoundedVec::new(provider)?,
-                read_access:      true,
-                write_access:     false,
+                allowed_paths: BoundedVec::new(provider)?,
+                read_access: true,
+                write_access: false,
                 directory_access: true,
-                metadata_access:  true,
+                metadata_access: true,
             })
         }
     }
@@ -248,22 +238,22 @@ impl WasiFileSystemCapabilities {
         #[cfg(feature = "std")]
         {
             Ok(Self {
-                allowed_paths:    Vec::new(),
-                read_access:      true,
-                write_access:     true,
+                allowed_paths: Vec::new(),
+                read_access: true,
+                write_access: true,
                 directory_access: true,
-                metadata_access:  true,
+                metadata_access: true,
             })
         }
         #[cfg(not(feature = "std"))]
         {
             let provider = create_provider()?;
             Ok(Self {
-                allowed_paths:    BoundedVec::new(provider)?,
-                read_access:      true,
-                write_access:     true,
+                allowed_paths: BoundedVec::new(provider)?,
+                read_access: true,
+                write_access: true,
                 directory_access: true,
-                metadata_access:  true,
+                metadata_access: true,
             })
         }
     }
@@ -346,12 +336,11 @@ impl WasiFileSystemCapabilities {
 #[derive(Debug, Clone, PartialEq)]
 pub struct WasiEnvironmentCapabilities {
     /// Allow access to command line arguments
-    pub args_access:    bool,
+    pub args_access: bool,
     /// Allow access to environment variables
     pub environ_access: bool,
     /// Specific environment variables that are allowed
-    allowed_env_vars:
-        BoundedVec<BoundedString<MAX_ENV_VAR_LENGTH>, MAX_ENV_VARS, EnvProvider>,
+    allowed_env_vars: BoundedVec<BoundedString<MAX_ENV_VAR_LENGTH>, MAX_ENV_VARS, EnvProvider>,
 }
 
 impl WasiEnvironmentCapabilities {
@@ -363,8 +352,8 @@ impl WasiEnvironmentCapabilities {
     pub fn minimal() -> Result<Self> {
         let provider = create_provider()?;
         Ok(Self {
-            args_access:      false,
-            environ_access:   false,
+            args_access: false,
+            environ_access: false,
             allowed_env_vars: BoundedVec::new(provider)?,
         })
     }
@@ -377,8 +366,8 @@ impl WasiEnvironmentCapabilities {
     pub fn args_only() -> Result<Self> {
         let provider = create_provider()?;
         Ok(Self {
-            args_access:      true,
-            environ_access:   false,
+            args_access: true,
+            environ_access: false,
             allowed_env_vars: BoundedVec::new(provider)?,
         })
     }
@@ -391,8 +380,8 @@ impl WasiEnvironmentCapabilities {
     pub fn full_access() -> Result<Self> {
         let provider = create_provider()?;
         Ok(Self {
-            args_access:      true,
-            environ_access:   true,
+            args_access: true,
+            environ_access: true,
             allowed_env_vars: BoundedVec::new(provider)?,
         })
     }
@@ -432,11 +421,7 @@ impl WasiEnvironmentCapabilities {
         }
 
         self.allowed_env_vars.iter().any(|allowed_var| {
-            if let Ok(allowed) = allowed_var.as_str() {
-                allowed == var_name
-            } else {
-                false
-            }
+            if let Ok(allowed) = allowed_var.as_str() { allowed == var_name } else { false }
         })
     }
 }
@@ -447,46 +432,46 @@ impl WasiEnvironmentCapabilities {
 #[derive(Debug, Clone, PartialEq)]
 pub struct WasiClockCapabilities {
     /// Allow access to realtime clock
-    pub realtime_access:        bool,
+    pub realtime_access: bool,
     /// Allow access to monotonic clock
-    pub monotonic_access:       bool,
+    pub monotonic_access: bool,
     /// Allow access to process CPU time
     pub process_cputime_access: bool,
     /// Allow access to thread CPU time
-    pub thread_cputime_access:  bool,
+    pub thread_cputime_access: bool,
 }
 
 impl WasiClockCapabilities {
     /// Create minimal clock capabilities (monotonic only)
-    #[must_use] 
+    #[must_use]
     pub fn minimal() -> Self {
         Self {
-            realtime_access:        false,
-            monotonic_access:       true,
+            realtime_access: false,
+            monotonic_access: true,
             process_cputime_access: false,
-            thread_cputime_access:  false,
+            thread_cputime_access: false,
         }
     }
 
     /// Create monotonic-only clock capabilities
-    #[must_use] 
+    #[must_use]
     pub fn monotonic_only() -> Self {
         Self {
-            realtime_access:        false,
-            monotonic_access:       true,
+            realtime_access: false,
+            monotonic_access: true,
             process_cputime_access: false,
-            thread_cputime_access:  false,
+            thread_cputime_access: false,
         }
     }
 
     /// Create full clock access capabilities
-    #[must_use] 
+    #[must_use]
     pub fn full_access() -> Self {
         Self {
-            realtime_access:        true,
-            monotonic_access:       true,
+            realtime_access: true,
+            monotonic_access: true,
             process_cputime_access: true,
-            thread_cputime_access:  true,
+            thread_cputime_access: true,
         }
     }
 }
@@ -497,45 +482,45 @@ impl WasiClockCapabilities {
 #[derive(Debug, Clone, PartialEq)]
 pub struct WasiIoCapabilities {
     /// Allow access to stdin
-    pub stdin_access:   bool,
+    pub stdin_access: bool,
     /// Allow access to stdout  
-    pub stdout_access:  bool,
+    pub stdout_access: bool,
     /// Allow access to stderr
-    pub stderr_access:  bool,
+    pub stderr_access: bool,
     /// Allow creation of custom streams
     pub custom_streams: bool,
 }
 
 impl WasiIoCapabilities {
     /// Create minimal I/O capabilities (no access)
-    #[must_use] 
+    #[must_use]
     pub fn minimal() -> Self {
         Self {
-            stdin_access:   false,
-            stdout_access:  false,
-            stderr_access:  false,
+            stdin_access: false,
+            stdout_access: false,
+            stderr_access: false,
             custom_streams: false,
         }
     }
 
     /// Create stdio-only I/O capabilities
-    #[must_use] 
+    #[must_use]
     pub fn stdio_only() -> Self {
         Self {
-            stdin_access:   true,
-            stdout_access:  true,
-            stderr_access:  true,
+            stdin_access: true,
+            stdout_access: true,
+            stderr_access: true,
             custom_streams: false,
         }
     }
 
     /// Create full I/O access capabilities
-    #[must_use] 
+    #[must_use]
     pub fn full_access() -> Self {
         Self {
-            stdin_access:   true,
-            stdout_access:  true,
-            stderr_access:  true,
+            stdin_access: true,
+            stdout_access: true,
+            stderr_access: true,
             custom_streams: true,
         }
     }
@@ -552,7 +537,7 @@ pub struct WasiRandomCapabilities {
 
 impl WasiRandomCapabilities {
     /// Create minimal random capabilities (no access)
-    #[must_use] 
+    #[must_use]
     pub fn minimal() -> Self {
         Self {
             secure_random: false,
@@ -561,7 +546,7 @@ impl WasiRandomCapabilities {
     }
 
     /// Create secure-only random capabilities
-    #[must_use] 
+    #[must_use]
     pub fn secure_only() -> Self {
         Self {
             secure_random: true,
@@ -570,7 +555,7 @@ impl WasiRandomCapabilities {
     }
 
     /// Create full random access capabilities
-    #[must_use] 
+    #[must_use]
     pub fn full_access() -> Self {
         Self {
             secure_random: true,
@@ -584,15 +569,15 @@ impl WasiRandomCapabilities {
 #[derive(Debug, Clone, PartialEq)]
 pub struct WasiNetworkCapabilities {
     /// Allow TCP connections
-    pub tcp_access:      bool,
+    pub tcp_access: bool,
     /// Allow UDP connections
-    pub udp_access:      bool,
+    pub udp_access: bool,
     /// Allow only localhost connections
-    pub localhost_only:  bool,
+    pub localhost_only: bool,
     /// Allow outbound connections
     pub outbound_access: bool,
     /// Allow inbound connections (listening)
-    pub inbound_access:  bool,
+    pub inbound_access: bool,
 }
 
 #[cfg(feature = "preview3-prep")]
@@ -600,33 +585,33 @@ impl WasiNetworkCapabilities {
     /// Create no network capabilities
     pub fn none() -> Self {
         Self {
-            tcp_access:      false,
-            udp_access:      false,
-            localhost_only:  true,
+            tcp_access: false,
+            udp_access: false,
+            localhost_only: true,
             outbound_access: false,
-            inbound_access:  false,
+            inbound_access: false,
         }
     }
 
     /// Create localhost-only network capabilities
     pub fn local_only() -> Self {
         Self {
-            tcp_access:      true,
-            udp_access:      true,
-            localhost_only:  true,
+            tcp_access: true,
+            udp_access: true,
+            localhost_only: true,
             outbound_access: true,
-            inbound_access:  true,
+            inbound_access: true,
         }
     }
 
     /// Create full network access capabilities
     pub fn full_access() -> Self {
         Self {
-            tcp_access:      true,
-            udp_access:      true,
-            localhost_only:  false,
+            tcp_access: true,
+            udp_access: true,
+            localhost_only: false,
             outbound_access: true,
-            inbound_access:  true,
+            inbound_access: true,
         }
     }
 }
@@ -636,15 +621,15 @@ impl WasiNetworkCapabilities {
 #[derive(Debug, Clone, PartialEq)]
 pub struct WasiNeuralNetworkCapabilities {
     /// Allow dynamic model loading
-    pub dynamic_loading:        bool,
+    pub dynamic_loading: bool,
     /// Maximum model size in bytes (0 = unlimited)
-    pub max_model_size:         usize,
+    pub max_model_size: usize,
     /// Maximum tensor memory per inference (0 = unlimited)
-    pub max_tensor_memory:      usize,
+    pub max_tensor_memory: usize,
     /// Allow only pre-approved models
     pub require_model_approval: bool,
     /// Verification level for NN operations
-    pub verification_level:     kiln_foundation::verification::VerificationLevel,
+    pub verification_level: kiln_foundation::verification::VerificationLevel,
 }
 
 #[cfg(feature = "wasi-nn")]
@@ -652,33 +637,33 @@ impl WasiNeuralNetworkCapabilities {
     /// Create minimal NN capabilities (no access)
     pub fn minimal() -> Result<Self> {
         Ok(Self {
-            dynamic_loading:        false,
-            max_model_size:         0,
-            max_tensor_memory:      0,
+            dynamic_loading: false,
+            max_model_size: 0,
+            max_tensor_memory: 0,
             require_model_approval: true,
-            verification_level:     kiln_foundation::verification::VerificationLevel::Standard,
+            verification_level: kiln_foundation::verification::VerificationLevel::Standard,
         })
     }
 
     /// Create sandboxed NN capabilities (limited inference)
     pub fn sandboxed() -> Result<Self> {
         Ok(Self {
-            dynamic_loading:        true,
-            max_model_size:         10 * 1024 * 1024, // 10MB
-            max_tensor_memory:      5 * 1024 * 1024,  // 5MB
+            dynamic_loading: true,
+            max_model_size: 10 * 1024 * 1024,   // 10MB
+            max_tensor_memory: 5 * 1024 * 1024, // 5MB
             require_model_approval: false,
-            verification_level:     kiln_foundation::verification::VerificationLevel::Sampling,
+            verification_level: kiln_foundation::verification::VerificationLevel::Sampling,
         })
     }
 
     /// Create full NN access capabilities
     pub fn full_access() -> Result<Self> {
         Ok(Self {
-            dynamic_loading:        true,
-            max_model_size:         100 * 1024 * 1024, // 100MB
-            max_tensor_memory:      50 * 1024 * 1024,  // 50MB
+            dynamic_loading: true,
+            max_model_size: 100 * 1024 * 1024,   // 100MB
+            max_tensor_memory: 50 * 1024 * 1024, // 50MB
             require_model_approval: false,
-            verification_level:     kiln_foundation::verification::VerificationLevel::Standard,
+            verification_level: kiln_foundation::verification::VerificationLevel::Standard,
         })
     }
 
@@ -690,11 +675,11 @@ impl WasiNeuralNetworkCapabilities {
             kiln_foundation::verification::VerificationLevel::Standard => Self::full_access(),
             kiln_foundation::verification::VerificationLevel::Sampling => Self::sandboxed(),
             kiln_foundation::verification::VerificationLevel::Full => Ok(Self {
-                dynamic_loading:        false,
-                max_model_size:         20 * 1024 * 1024, // 20MB
-                max_tensor_memory:      10 * 1024 * 1024, // 10MB
+                dynamic_loading: false,
+                max_model_size: 20 * 1024 * 1024,    // 20MB
+                max_tensor_memory: 10 * 1024 * 1024, // 10MB
                 require_model_approval: true,
-                verification_level:     level,
+                verification_level: level,
             }),
             _ => Err(Error::wasi_unsupported_operation(
                 "ASIL-C/D not supported in kilnd",
@@ -728,9 +713,18 @@ mod tests {
         fs_caps.add_allowed_path("/tmp")?;
         fs_caps.add_allowed_path("/home/user")?;
 
-        assert!(fs_caps.is_path_allowed("/tmp/file.txt"), "/tmp/file.txt should be allowed");
-        assert!(fs_caps.is_path_allowed("/home/user/docs"), "/home/user/docs should be allowed");
-        assert!(!fs_caps.is_path_allowed("/etc/passwd"), "/etc/passwd should NOT be allowed");
+        assert!(
+            fs_caps.is_path_allowed("/tmp/file.txt"),
+            "/tmp/file.txt should be allowed"
+        );
+        assert!(
+            fs_caps.is_path_allowed("/home/user/docs"),
+            "/home/user/docs should be allowed"
+        );
+        assert!(
+            !fs_caps.is_path_allowed("/etc/passwd"),
+            "/etc/passwd should NOT be allowed"
+        );
 
         Ok(())
     }

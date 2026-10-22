@@ -527,9 +527,9 @@ impl BlastZoneManager {
             if !zone_found {
                 return Err(kiln_error::Error::invalid_value("Zone not found"));
             }
-            self.component_zones
-                .push((component_id, zone_id))
-                .map_err(|_| kiln_error::Error::resource_exhausted("Too many component mappings"))?;
+            self.component_zones.push((component_id, zone_id)).map_err(|_| {
+                kiln_error::Error::resource_exhausted("Too many component mappings")
+            })?;
         }
 
         Ok(())

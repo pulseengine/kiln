@@ -113,7 +113,9 @@ impl<const N: usize> ErrorContextTable<N> {
             .get_mut(id.index as usize)
             .filter(|s| s.live && s.generation == id.generation)
             .ok_or_else(|| {
-                Error::validation_error("kiln-async: drop of a stale or unknown error-context handle")
+                Error::validation_error(
+                    "kiln-async: drop of a stale or unknown error-context handle",
+                )
             })?;
         slot.live = false;
         slot.generation = slot.generation.wrapping_add(1);

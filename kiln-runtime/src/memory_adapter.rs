@@ -11,10 +11,7 @@ use std::format;
 // Import Arc from the correct location to match ArcMemoryExt
 use alloc::sync::Arc;
 
-use crate::{
-    memory::Memory,
-    prelude::*,
-};
+use crate::{memory::Memory, prelude::*};
 
 /// Invalid offset error code
 const INVALID_OFFSET: u16 = 4006;
@@ -92,7 +89,7 @@ pub trait MemoryAdapter: Debug + Send + Sync {
 #[derive(Debug)]
 pub struct SafeMemoryAdapter {
     /// The underlying memory
-    memory:   Arc<Memory>,
+    memory: Arc<Memory>,
     /// The memory provider for safety checks
     provider: StdMemoryProvider,
 }
@@ -262,7 +259,7 @@ impl SafeMemoryAdapter {
         let memory = Memory::new(memory_type)?;
 
         // Create a new adapter with the memory
-        let arc_memory: Arc<Memory> = Arc::from(memory);  // Convert Box<Memory> to Arc<Memory>
+        let arc_memory: Arc<Memory> = Arc::from(memory); // Convert Box<Memory> to Arc<Memory>
 
         let provider = {
             let data = arc_memory.buffer()?;
@@ -331,11 +328,19 @@ impl MemoryAdapter for SafeMemoryAdapter {
 
         // Use the thread-safe write_shared method designed for Arc<Memory>
         #[cfg(feature = "tracing")]
-        trace!("Writing {} bytes to memory at offset {:#x}", bytes.len(), offset);
+        trace!(
+            "Writing {} bytes to memory at offset {:#x}",
+            bytes.len(),
+            offset
+        );
         self.memory.write_shared(offset, bytes)?;
 
         #[cfg(feature = "tracing")]
-        debug!("Successfully wrote {} bytes to memory at offset {:#x}", bytes.len(), offset);
+        debug!(
+            "Successfully wrote {} bytes to memory at offset {:#x}",
+            bytes.len(),
+            offset
+        );
         Ok(())
     }
 
@@ -357,7 +362,10 @@ impl MemoryAdapter for SafeMemoryAdapter {
         // 2. Refactoring to use Arc<Mutex<Memory>> or Arc<RwLock<Memory>>
         // 3. Adding a new grow method that takes &self and uses interior mutability
         #[cfg(feature = "tracing")]
-        warn!("Memory grow operation requested but not yet implemented for Arc<Memory> (needs {} pages)", pages);
+        warn!(
+            "Memory grow operation requested but not yet implemented for Arc<Memory> (needs {} pages)",
+            pages
+        );
         Err(Error::runtime_execution_error(
             "Grow operation not yet implemented for Arc<Memory> - requires interior mutability",
         ))

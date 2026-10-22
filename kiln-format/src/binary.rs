@@ -884,7 +884,8 @@ pub mod with_alloc {
 
         // Create a minimal valid module with bounded allocation
         #[cfg(feature = "safety-critical")]
-        let mut binary: KilnVec<u8, { CrateId::Format as u8 }, { 4 * 1024 * 1024 }> = KilnVec::new();
+        let mut binary: KilnVec<u8, { CrateId::Format as u8 }, { 4 * 1024 * 1024 }> =
+            KilnVec::new();
 
         #[cfg(not(feature = "safety-critical"))]
         let mut binary = Vec::with_capacity(8);

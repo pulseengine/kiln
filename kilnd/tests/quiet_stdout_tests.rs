@@ -29,7 +29,11 @@ const PROGRAM_BYTES: &[u8] = b"OUT-ONE|OUT-TWO";
 
 fn run_writer(name: &str, extra: &[&str]) -> (Vec<u8>, String) {
     let path = std::env::temp_dir().join(name);
-    fs::write(&path, wat::parse_str(WRITER).expect("fixture must assemble")).unwrap();
+    fs::write(
+        &path,
+        wat::parse_str(WRITER).expect("fixture must assemble"),
+    )
+    .unwrap();
     let out = Command::new(KILN)
         .args(extra)
         .arg("--wasi")
@@ -39,7 +43,10 @@ fn run_writer(name: &str, extra: &[&str]) -> (Vec<u8>, String) {
         .unwrap();
     let _ = fs::remove_file(&path);
     assert!(out.status.success(), "run must succeed: {:?}", out.status);
-    (out.stdout, String::from_utf8_lossy(&out.stderr).into_owned())
+    (
+        out.stdout,
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
 }
 
 #[test]
@@ -83,5 +90,8 @@ fn help_documents_the_verbose_flag() {
     let out = Command::new(KILN).arg("--help").output().unwrap();
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(stdout.contains("--verbose"), "help must mention --verbose\n{stdout}");
+    assert!(
+        stdout.contains("--verbose"),
+        "help must mention --verbose\n{stdout}"
+    );
 }

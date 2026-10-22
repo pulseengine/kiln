@@ -73,7 +73,7 @@ fn verify_model_size_limits() {
     let limits = capability.resource_limits();
 
     let operation = NNOperation::Load {
-        size:   model_size,
+        size: model_size,
         format: ModelFormat::ONNX,
     };
 
@@ -124,7 +124,7 @@ fn verify_capability_consistency() {
 
     let capability = BoundedNNCapability::new().unwrap();
     let operation = NNOperation::Load {
-        size:   model_size,
+        size: model_size,
         format: ModelFormat::ONNX,
     };
 
@@ -144,18 +144,18 @@ fn verify_rate_limiting_bounds() {
     use std::sync::Arc;
 
     let limits = NNResourceLimits {
-        max_model_size:          100 * 1024 * 1024,
-        max_concurrent_models:   4,
+        max_model_size: 100 * 1024 * 1024,
+        max_concurrent_models: 4,
         max_concurrent_contexts: 8,
-        max_tensor_memory:       256 * 1024 * 1024,
-        max_tensor_dimensions:   8,
-        operations_per_minute:   10,
+        max_tensor_memory: 256 * 1024 * 1024,
+        max_tensor_dimensions: 8,
+        operations_per_minute: 10,
     };
 
     let rate_limits = RateLimits {
-        operations_per_minute:                10,
-        operations_burst_size:                5,
-        model_loads_per_hour:                 20,
+        operations_per_minute: 10,
+        operations_burst_size: 5,
+        model_loads_per_hour: 20,
         memory_allocation_rate_mb_per_second: 100,
     };
 
@@ -196,10 +196,7 @@ fn verify_context_isolation() {
 /// Property: All errors are properly categorized
 #[kani::proof]
 fn verify_error_categorization() {
-    use kiln_error::{
-        Error,
-        ErrorCategory,
-    };
+    use kiln_error::{Error, ErrorCategory};
 
     // Verify that WASI-NN errors use appropriate categories
     let error_messages = [

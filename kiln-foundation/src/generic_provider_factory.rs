@@ -9,15 +9,8 @@
 use core::marker::PhantomData;
 
 use crate::{
-    codes,
-    generic_memory_guard::{
-        GenericMemoryGuard,
-        ManagedMemoryProvider,
-        MemoryCoordinator,
-    },
-    Error,
-    ErrorCategory,
-    Result,
+    Error, ErrorCategory, Result, codes,
+    generic_memory_guard::{GenericMemoryGuard, ManagedMemoryProvider, MemoryCoordinator},
 };
 
 /// Trait for types that can create memory providers
@@ -46,11 +39,11 @@ where
     I: Copy,
 {
     /// The underlying factory
-    factory:     F,
+    factory: F,
     /// The memory coordinator
     coordinator: &'static C,
     /// Phantom data for type parameters
-    _phantom:    PhantomData<I>,
+    _phantom: PhantomData<I>,
 }
 
 impl<F, C, I> GenericBudgetAwareFactory<F, C, I>
@@ -92,9 +85,9 @@ pub struct FactoryConfig<F, C, I>
 where
     C: 'static,
 {
-    pub factory:     F,
+    pub factory: F,
     pub coordinator: &'static C,
-    _phantom:        PhantomData<I>,
+    _phantom: PhantomData<I>,
 }
 
 impl<F, C, I> FactoryConfig<F, C, I>
@@ -153,4 +146,3 @@ pub mod examples {
         }
     }
 }
-

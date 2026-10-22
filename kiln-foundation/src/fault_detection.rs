@@ -6,18 +6,9 @@
 
 // Note: no_std is configured at the crate level
 
-use core::sync::atomic::{
-    AtomicBool,
-    AtomicU32,
-    AtomicUsize,
-    Ordering,
-};
+use core::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 
-use crate::{
-    budget_aware_provider::CrateId,
-    Error,
-    Result,
-};
+use crate::{Error, Result, budget_aware_provider::CrateId};
 
 /// Global fault detection state (safe for concurrent access)
 pub struct FaultDetector {
@@ -313,11 +304,11 @@ impl FaultDetector {
     /// Get current fault statistics
     pub fn get_statistics(&self) -> FaultStatistics {
         FaultStatistics {
-            memory_violations:     self.memory_violations.load(Ordering::Relaxed),
-            budget_violations:     self.budget_violations.load(Ordering::Relaxed),
-            bounds_violations:     self.bounds_violations.load(Ordering::Relaxed),
+            memory_violations: self.memory_violations.load(Ordering::Relaxed),
+            budget_violations: self.budget_violations.load(Ordering::Relaxed),
+            bounds_violations: self.bounds_violations.load(Ordering::Relaxed),
             capability_violations: self.capability_violations.load(Ordering::Relaxed),
-            memory_watermark:      self.memory_watermark.load(Ordering::Relaxed),
+            memory_watermark: self.memory_watermark.load(Ordering::Relaxed),
         }
     }
 
@@ -362,10 +353,10 @@ pub fn fault_detector() -> &'static FaultDetector {
 macro_rules! check_bounds {
     ($index:expr, $limit:expr, $crate_id:expr) => {{
         let context = $crate::fault_detection::FaultContext {
-            crate_id:  $crate_id,
+            crate_id: $crate_id,
             operation: $crate::fault_detection::OperationType::BoundsCheck,
-            address:   None,
-            size:      Some($index),
+            address: None,
+            size: Some($index),
         };
         $crate::fault_detection::fault_detector().check_bounds($index, $limit, &context)
     }};
@@ -376,10 +367,10 @@ macro_rules! check_bounds {
 macro_rules! check_budget {
     ($requested:expr, $available:expr, $crate_id:expr) => {{
         let context = $crate::fault_detection::FaultContext {
-            crate_id:  $crate_id,
+            crate_id: $crate_id,
             operation: $crate::fault_detection::OperationType::Allocate,
-            address:   None,
-            size:      Some($requested),
+            address: None,
+            size: Some($requested),
         };
         $crate::fault_detection::fault_detector().check_budget($requested, $available, &context)
     }};
@@ -393,10 +384,10 @@ mod tests {
     fn test_bounds_checking() {
         let detector = FaultDetector::new(FaultResponseMode::LogOnly);
         let context = FaultContext {
-            crate_id:  CrateId::Foundation,
+            crate_id: CrateId::Foundation,
             operation: OperationType::BoundsCheck,
-            address:   None,
-            size:      Some(10),
+            address: None,
+            size: Some(10),
         };
 
         // Valid bounds check
@@ -415,10 +406,10 @@ mod tests {
     fn test_budget_checking() {
         let detector = FaultDetector::new(FaultResponseMode::LogOnly);
         let context = FaultContext {
-            crate_id:  CrateId::Component,
+            crate_id: CrateId::Component,
             operation: OperationType::Allocate,
-            address:   None,
-            size:      Some(1024),
+            address: None,
+            size: Some(1024),
         };
 
         // Valid budget check
@@ -437,10 +428,10 @@ mod tests {
     fn test_alignment_checking() {
         let detector = FaultDetector::new(FaultResponseMode::LogOnly);
         let context = FaultContext {
-            crate_id:  CrateId::Runtime,
+            crate_id: CrateId::Runtime,
             operation: OperationType::Read,
-            address:   Some(0x1000),
-            size:      Some(4),
+            address: Some(0x1000),
+            size: Some(4),
         };
 
         // Valid alignment
@@ -463,10 +454,10 @@ mod tests {
         detector.set_enabled(true);
 
         let context = FaultContext {
-            crate_id:  CrateId::Foundation,
+            crate_id: CrateId::Foundation,
             operation: OperationType::Allocate,
-            address:   None,
-            size:      Some(100),
+            address: None,
+            size: Some(100),
         };
 
         let fault = FaultType::BudgetExceeded {

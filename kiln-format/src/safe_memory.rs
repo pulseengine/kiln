@@ -6,16 +6,13 @@
 
 // Re-export the safe memory types from kiln-foundation
 // Re-export memory providers matching kiln-foundation feature-gating
-#[cfg(feature = "std")]
-pub use kiln_foundation::safe_memory::StdProvider as StdMemoryProvider;
 #[cfg(not(feature = "std"))]
 pub use kiln_foundation::NoStdProvider as NoStdMemoryProvider;
+#[cfg(feature = "std")]
+pub use kiln_foundation::safe_memory::StdProvider as StdMemoryProvider;
 // Re-export common memory types always
 pub use kiln_foundation::{
-    BoundedStack as SafeStack,
-    MemoryProvider,
-    SafeMemoryHandler,
-    SafeSlice,
+    BoundedStack as SafeStack, MemoryProvider, SafeMemoryHandler, SafeSlice,
 };
 
 /// Create a safe slice from binary data

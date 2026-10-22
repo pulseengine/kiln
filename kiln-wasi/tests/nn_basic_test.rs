@@ -3,28 +3,15 @@
 #![cfg(feature = "wasi-nn")]
 
 use kiln_wasi::{
+    Error, Result,
     nn::{
-        capabilities::{
-            create_nn_capability,
-            NNVerificationLevel as VerificationLevel,
-        },
-        get_nn_capability,
-        initialize_nn,
+        ExecutionTarget, GraphEncoding, NeuralNetworkCapability, TensorType, WitTypeConversion,
+        capabilities::{NNVerificationLevel as VerificationLevel, create_nn_capability},
+        get_nn_capability, initialize_nn,
         sync_bridge::{
-            nn_compute,
-            nn_get_output,
-            nn_init_execution_context,
-            nn_load,
-            nn_set_input,
+            nn_compute, nn_get_output, nn_init_execution_context, nn_load, nn_set_input,
         },
-        ExecutionTarget,
-        GraphEncoding,
-        NeuralNetworkCapability,
-        TensorType,
-        WitTypeConversion,
     },
-    Error,
-    Result,
 };
 
 #[test]
@@ -142,11 +129,7 @@ fn test_tensor_dimensions() {
 
 #[test]
 fn test_tensor_creation() {
-    use kiln_wasi::nn::{
-        capabilities::DynamicNNCapability,
-        Tensor,
-        TensorDimensions,
-    };
+    use kiln_wasi::nn::{Tensor, TensorDimensions, capabilities::DynamicNNCapability};
 
     // Create a capability
     let capability = DynamicNNCapability::new();
@@ -178,15 +161,9 @@ fn test_error_conversions() {
 #[test]
 fn test_tract_backend_creation() {
     use kiln_wasi::nn::{
-        backend::{
-            BackendProvider,
-            NeuralNetworkBackend,
-        },
+        backend::{BackendProvider, NeuralNetworkBackend},
         capabilities::DynamicNNCapability,
-        tract_backend::{
-            TractBackend,
-            TractBackendProvider,
-        },
+        tract_backend::{TractBackend, TractBackendProvider},
     };
 
     // Create a Tract backend
@@ -203,11 +180,7 @@ fn test_tract_backend_creation() {
 
 #[test]
 fn test_capability_limits() {
-    use kiln_wasi::nn::capabilities::{
-        BoundedNNCapability,
-        ModelFormat,
-        NNOperation,
-    };
+    use kiln_wasi::nn::capabilities::{BoundedNNCapability, ModelFormat, NNOperation};
 
     // Create bounded capability
     let capability = BoundedNNCapability::new().unwrap();
@@ -215,7 +188,7 @@ fn test_capability_limits() {
 
     // Test model size limit
     let load_op = NNOperation::Load {
-        size:   100 * 1024 * 1024, // 100MB
+        size: 100 * 1024 * 1024, // 100MB
         format: ModelFormat::ONNX,
     };
     let result = capability.verify_operation(&load_op);
@@ -223,7 +196,7 @@ fn test_capability_limits() {
 
     // Test within limits
     let small_load = NNOperation::Load {
-        size:   10 * 1024 * 1024, // 10MB
+        size: 10 * 1024 * 1024, // 10MB
         format: ModelFormat::ONNX,
     };
     let result2 = capability.verify_operation(&small_load);

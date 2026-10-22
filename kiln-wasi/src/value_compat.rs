@@ -162,7 +162,7 @@ impl kiln_foundation::traits::ToBytes for Value {
             Value::U8(v) => writer.write_u8(*v),
             // Per CLAUDE.md: fail loud and early for unsupported types
             _ => Err(kiln_error::Error::not_implemented_error(
-                "ToBytes not implemented for this Value variant"
+                "ToBytes not implemented for this Value variant",
             )),
         }
     }
@@ -188,7 +188,7 @@ impl kiln_foundation::traits::FromBytes for Value {
             },
             // Per CLAUDE.md: fail loud and early for unknown discriminants
             _ => Err(kiln_error::Error::parse_error(
-                "Unknown Value discriminant in FromBytes deserialization"
+                "Unknown Value discriminant in FromBytes deserialization",
             )),
         }
     }
@@ -196,7 +196,7 @@ impl kiln_foundation::traits::FromBytes for Value {
 
 impl Value {
     /// Extract a u32 from the value, returning 0 if not possible
-    #[must_use] 
+    #[must_use]
     pub fn as_u32(&self) -> u32 {
         match self {
             Value::U32(v) => *v,
@@ -207,7 +207,7 @@ impl Value {
     }
 
     /// Extract a u64 from the value, returning 0 if not possible
-    #[must_use] 
+    #[must_use]
     pub fn as_u64(&self) -> u64 {
         match self {
             Value::U64(v) => *v,
@@ -220,7 +220,7 @@ impl Value {
 
     /// Extract a string from the value, returning empty string if not possible
     #[cfg(feature = "std")]
-    #[must_use] 
+    #[must_use]
     pub fn as_string(&self) -> String {
         match self {
             Value::String(s) => s.clone(),
@@ -245,7 +245,7 @@ impl Value {
     }
 
     /// Extract a boolean from the value, returning false if not possible
-    #[must_use] 
+    #[must_use]
     pub fn as_bool(&self) -> bool {
         match self {
             Value::Bool(b) => *b,

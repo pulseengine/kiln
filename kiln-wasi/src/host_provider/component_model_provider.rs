@@ -20,11 +20,8 @@ use kiln_format::component::ExternType;
 use kiln_host::HostFunctionHandler;
 
 use crate::{
-    capabilities::WasiCapabilities,
-    host_provider::resource_manager::WasiResourceManager,
-    prelude::*,
-    wasi_safety_level,
-    HostFunction,
+    HostFunction, capabilities::WasiCapabilities,
+    host_provider::resource_manager::WasiResourceManager, prelude::*, wasi_safety_level,
 };
 #[cfg(not(feature = "std"))]
 type WasiHostString = BoundedString<256, kiln_foundation::safe_memory::NoStdProvider<1024>>;
@@ -51,7 +48,7 @@ fn convert_foundation_values_to_compat(args: FoundationValueVec) -> Result<Vec<c
             _ => {
                 return Err(Error::wasi_invalid_argument(
                     "Unsupported value type for conversion",
-                ))
+                ));
             },
         }
     }
@@ -68,12 +65,22 @@ fn convert_compat_values_to_foundation(values: Vec<crate::Value>) -> Result<Foun
             crate::Value::Bool(v) => {
                 converted.push(kiln_foundation::values::Value::I32(i32::from(v)));
             },
-            crate::Value::U8(v) => converted.push(kiln_foundation::values::Value::I32(i32::from(v))),
-            crate::Value::U16(v) => converted.push(kiln_foundation::values::Value::I32(i32::from(v))),
-            crate::Value::U32(v) => converted.push(kiln_foundation::values::Value::I64(i64::from(v))),
+            crate::Value::U8(v) => {
+                converted.push(kiln_foundation::values::Value::I32(i32::from(v)))
+            },
+            crate::Value::U16(v) => {
+                converted.push(kiln_foundation::values::Value::I32(i32::from(v)))
+            },
+            crate::Value::U32(v) => {
+                converted.push(kiln_foundation::values::Value::I64(i64::from(v)))
+            },
             crate::Value::U64(v) => converted.push(kiln_foundation::values::Value::I64(v as i64)),
-            crate::Value::S8(v) => converted.push(kiln_foundation::values::Value::I32(i32::from(v))),
-            crate::Value::S16(v) => converted.push(kiln_foundation::values::Value::I32(i32::from(v))),
+            crate::Value::S8(v) => {
+                converted.push(kiln_foundation::values::Value::I32(i32::from(v)))
+            },
+            crate::Value::S16(v) => {
+                converted.push(kiln_foundation::values::Value::I32(i32::from(v)))
+            },
             crate::Value::S32(v) => converted.push(kiln_foundation::values::Value::I32(v)),
             crate::Value::S64(v) => converted.push(kiln_foundation::values::Value::I64(v)),
             crate::Value::F32(v) => converted.push(kiln_foundation::values::Value::F32(
@@ -92,7 +99,7 @@ fn convert_compat_values_to_foundation(values: Vec<crate::Value>) -> Result<Foun
             _ => {
                 return Err(Error::wasi_invalid_argument(
                     "Unsupported value type for conversion",
-                ))
+                ));
             },
         }
     }
@@ -187,7 +194,7 @@ impl kiln_foundation::traits::FromBytes for ValType {
 #[derive(Debug)]
 pub struct ComponentModelProvider {
     /// WASI capabilities for this provider
-    capabilities:      WasiCapabilities,
+    capabilities: WasiCapabilities,
     /// Resource manager for WASI handles
     _resource_manager: WasiResourceManager,
     /// Cached host functions
@@ -425,7 +432,6 @@ impl ComponentModelProvider {
         // use crate::preview2::filesystem::wasi_filesystem_read;
 
         // Use capability-aware value conversion
-        
 
         Ok(HostFunction {
             #[cfg(feature = "std")]
@@ -445,7 +451,7 @@ impl ComponentModelProvider {
                 }
             }),
             extern_type: ExternType::Function {
-                params:  type_vec!(),
+                params: type_vec!(),
                 results: type_vec!(),
             },
         })
@@ -473,7 +479,7 @@ impl ComponentModelProvider {
                 }
             }),
             extern_type: ExternType::Function {
-                params:  type_vec!(),
+                params: type_vec!(),
                 results: type_vec!(),
             },
         })
@@ -501,7 +507,7 @@ impl ComponentModelProvider {
                 }
             }),
             extern_type: ExternType::Function {
-                params:  type_vec!(),
+                params: type_vec!(),
                 results: type_vec!(),
             },
         })
@@ -532,7 +538,7 @@ impl ComponentModelProvider {
                 }
             }),
             extern_type: ExternType::Function {
-                params:  type_vec!(),
+                params: type_vec!(),
                 results: type_vec!(),
             },
         })
@@ -563,7 +569,7 @@ impl ComponentModelProvider {
                 }
             }),
             extern_type: ExternType::Function {
-                params:  type_vec!(),
+                params: type_vec!(),
                 results: type_vec!(),
             },
         })
@@ -591,7 +597,7 @@ impl ComponentModelProvider {
                 }
             }),
             extern_type: ExternType::Function {
-                params:  type_vec!(),
+                params: type_vec!(),
                 results: type_vec!(),
             },
         })
@@ -619,7 +625,7 @@ impl ComponentModelProvider {
                 }
             }),
             extern_type: ExternType::Function {
-                params:  type_vec!(),
+                params: type_vec!(),
                 results: type_vec!(),
             },
         })
@@ -647,7 +653,7 @@ impl ComponentModelProvider {
                 }
             }),
             extern_type: ExternType::Function {
-                params:  type_vec!(),
+                params: type_vec!(),
                 results: type_vec!(),
             },
         })
@@ -657,10 +663,7 @@ impl ComponentModelProvider {
     #[cfg(all(feature = "wasi-nn", feature = "nn-preview2", feature = "std"))]
     fn create_nn_functions(&self) -> Result<Vec<HostFunction>> {
         use crate::nn::sync_bridge::{
-            wasi_nn_compute,
-            wasi_nn_get_output,
-            wasi_nn_init_execution_context,
-            wasi_nn_load,
+            wasi_nn_compute, wasi_nn_get_output, wasi_nn_init_execution_context, wasi_nn_load,
             wasi_nn_set_input,
         };
 
@@ -668,8 +671,8 @@ impl ComponentModelProvider {
 
         // Load function
         functions.push(HostFunction {
-            name:        make_string("wasi:nn/inference.load"),
-            handler:     HostFunctionHandler::new_with_args(
+            name: make_string("wasi:nn/inference.load"),
+            handler: HostFunctionHandler::new_with_args(
                 |target: &mut dyn Any, args: FoundationValueVec| {
                     // Convert kiln_foundation::Value to crate::Value
                     let converted_args = convert_foundation_values_to_compat(args)?;
@@ -682,15 +685,15 @@ impl ComponentModelProvider {
                 },
             ),
             extern_type: ExternType::Function {
-                params:  type_vec!(),
+                params: type_vec!(),
                 results: type_vec!(),
             },
         });
 
         // Init execution context function
         functions.push(HostFunction {
-            name:        make_string("wasi:nn/inference.init-execution-context"),
-            handler:     HostFunctionHandler::new_with_args(
+            name: make_string("wasi:nn/inference.init-execution-context"),
+            handler: HostFunctionHandler::new_with_args(
                 |target: &mut dyn Any, args: FoundationValueVec| {
                     // Convert kiln_foundation::Value to crate::Value
                     let converted_args = convert_foundation_values_to_compat(args)?;
@@ -703,15 +706,15 @@ impl ComponentModelProvider {
                 },
             ),
             extern_type: ExternType::Function {
-                params:  type_vec!(),
+                params: type_vec!(),
                 results: type_vec!(),
             },
         });
 
         // Set input function
         functions.push(HostFunction {
-            name:        make_string("wasi:nn/inference.set-input"),
-            handler:     HostFunctionHandler::new_with_args(
+            name: make_string("wasi:nn/inference.set-input"),
+            handler: HostFunctionHandler::new_with_args(
                 |target: &mut dyn Any, args: FoundationValueVec| {
                     // Convert kiln_foundation::Value to crate::Value
                     let converted_args = convert_foundation_values_to_compat(args)?;
@@ -724,15 +727,15 @@ impl ComponentModelProvider {
                 },
             ),
             extern_type: ExternType::Function {
-                params:  type_vec!(),
+                params: type_vec!(),
                 results: type_vec!(),
             },
         });
 
         // Compute function
         functions.push(HostFunction {
-            name:        make_string("wasi:nn/inference.compute"),
-            handler:     HostFunctionHandler::new_with_args(
+            name: make_string("wasi:nn/inference.compute"),
+            handler: HostFunctionHandler::new_with_args(
                 |target: &mut dyn Any, args: FoundationValueVec| {
                     // Convert kiln_foundation::Value to crate::Value
                     let converted_args = convert_foundation_values_to_compat(args)?;
@@ -745,15 +748,15 @@ impl ComponentModelProvider {
                 },
             ),
             extern_type: ExternType::Function {
-                params:  type_vec!(),
+                params: type_vec!(),
                 results: type_vec!(),
             },
         });
 
         // Get output function
         functions.push(HostFunction {
-            name:        make_string("wasi:nn/inference.get-output"),
-            handler:     HostFunctionHandler::new_with_args(
+            name: make_string("wasi:nn/inference.get-output"),
+            handler: HostFunctionHandler::new_with_args(
                 |target: &mut dyn Any, args: FoundationValueVec| {
                     // Convert kiln_foundation::Value to crate::Value
                     let converted_args = convert_foundation_values_to_compat(args)?;
@@ -766,7 +769,7 @@ impl ComponentModelProvider {
                 },
             ),
             extern_type: ExternType::Function {
-                params:  type_vec!(),
+                params: type_vec!(),
                 results: type_vec!(),
             },
         });
@@ -798,11 +801,7 @@ impl WasiHostProvider for ComponentModelProvider {
         }
         #[cfg(not(feature = "std"))]
         {
-            if let Some(count) = self.cached_functions {
-                count as usize
-            } else {
-                0
-            }
+            if let Some(count) = self.cached_functions { count as usize } else { 0 }
         }
     }
 
@@ -825,7 +824,7 @@ pub struct WasiProviderBuilder {
 
 impl WasiProviderBuilder {
     /// Create a new WASI provider builder
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             capabilities: None,
@@ -858,7 +857,9 @@ impl WasiProviderBuilder {
                 // Choose default capabilities based on safety level
                 match self.safety_level.unwrap_or(wasi_safety_level()) {
                     "maximum-safety" => WasiCapabilities::minimal()?,
-                    "static-memory-safety" | "bounded-collections" => WasiCapabilities::sandboxed()?,
+                    "static-memory-safety" | "bounded-collections" => {
+                        WasiCapabilities::sandboxed()?
+                    },
                     _ => WasiCapabilities::system_utility()?,
                 }
             },

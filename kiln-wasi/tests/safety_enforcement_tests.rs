@@ -4,19 +4,13 @@
 //! properly enforce allocation limits based on configured safety level.
 
 use kiln_foundation::{
-    memory_init::{
-        init_crate_memory,
-        init_kiln_memory,
-    },
-    safe_managed_alloc,
     CrateId,
+    memory_init::{init_crate_memory, init_kiln_memory},
+    safe_managed_alloc,
 };
 use kiln_wasi::{
-    wasi_max_allocation_size,
+    WASI_CRATE_ID, WasiHostProvider, WasiProviderBuilder, wasi_max_allocation_size,
     wasi_safety_level,
-    WasiHostProvider,
-    WasiProviderBuilder,
-    WASI_CRATE_ID,
 };
 
 #[test]
@@ -100,7 +94,7 @@ fn test_capability_defaults_by_safety_level() {
             assert!(!caps.filesystem.write_access);
             assert!(!caps.environment.environ_access);
             assert!(caps.clocks.monotonic_access); // Only monotonic clock
-                                                   // allowed
+            // allowed
         },
         "static-memory-safety" | "bounded-collections" => {
             // Should have sandboxed capabilities

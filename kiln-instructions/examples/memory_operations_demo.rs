@@ -15,13 +15,7 @@
 
 use kiln_error::Result;
 use kiln_instructions::{
-    memory_ops::{
-        MemoryCopy,
-        MemoryFill,
-        MemoryLoad,
-        MemoryOperations,
-        MemoryStore,
-    },
+    memory_ops::{MemoryCopy, MemoryFill, MemoryLoad, MemoryOperations, MemoryStore},
     prelude::Value,
 };
 
@@ -213,7 +207,9 @@ fn main() -> Result<()> {
     println!("  New size after growth: {} bytes", new_size);
 
     println!("\n✓ All memory operations completed successfully!");
-    println!("✓ The MemoryOperations trait successfully bridges kiln-instructions and kiln-runtime!");
+    println!(
+        "✓ The MemoryOperations trait successfully bridges kiln-instructions and kiln-runtime!"
+    );
 
     // Memory cleanup happens automatically via RAII
     println!("\nMemory operations demo completed successfully!");

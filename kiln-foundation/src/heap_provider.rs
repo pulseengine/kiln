@@ -5,38 +5,26 @@
 
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
-use core::sync::atomic::{
-    AtomicUsize,
-    Ordering,
-};
+use core::sync::atomic::{AtomicUsize, Ordering};
 #[cfg(feature = "std")]
 use std::vec::Vec;
 
-use kiln_error::{
-    Error,
-    Result,
-};
+use kiln_error::{Error, Result};
 
 use crate::{
     budget_aware_provider::CrateId,
-    safe_memory::{
-        Allocator,
-        Provider,
-        Slice,
-        SliceMut,
-        Stats,
-    },
+    safe_memory::{Allocator, Provider, Slice, SliceMut, Stats},
     verification::VerificationLevel,
 };
 
 /// A heap-based memory provider that avoids stack allocation
 pub struct HeapProvider {
     /// The underlying data buffer (heap-allocated)
-    data:               Vec<u8>,
+    data: Vec<u8>,
     /// Current usage of the buffer
-    used:               usize,
+    used: usize,
     /// Counter for access operations
-    access_count:       AtomicUsize,
+    access_count: AtomicUsize,
     /// Last access offset for validation
     last_access_offset: AtomicUsize,
     /// Last access length for validation
@@ -142,9 +130,9 @@ impl Provider for HeapProvider {
 
     fn memory_stats(&self) -> Stats {
         Stats {
-            total_size:      self.data.len(),
-            access_count:    self.access_count.load(Ordering::Relaxed),
-            unique_regions:  0, // Not tracking this for simplicity
+            total_size: self.data.len(),
+            access_count: self.access_count.load(Ordering::Relaxed),
+            unique_regions: 0, // Not tracking this for simplicity
             max_access_size: self.last_access_length.load(Ordering::Relaxed),
         }
     }

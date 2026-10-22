@@ -15,25 +15,13 @@
 #![allow(clippy::module_name_repetitions)]
 
 // Import Box, Vec, and other types for allocating memory adapters
-use alloc::{
-    boxed::Box,
-    vec,
-    vec::Vec,
-};
+use alloc::{boxed::Box, vec, vec::Vec};
 
 use crate::{
-    cfi_engine::{
-        CfiExecutionEngine,
-        CfiViolationPolicy,
-    },
+    cfi_engine::{CfiExecutionEngine, CfiViolationPolicy},
     component_stubs::ComponentId,
     execution::ExecutionContext,
-    foundation_stubs::{
-        AsilLevel,
-        MediumProvider,
-        SafetyContext,
-        UnifiedMemoryProvider,
-    },
+    foundation_stubs::{AsilLevel, MediumProvider, SafetyContext, UnifiedMemoryProvider},
     func::Function as RuntimeFunction,
     prelude::*,
     unified_types::UnifiedMemoryAdapter as UnifiedMemoryAdapterTrait,
@@ -42,11 +30,7 @@ use crate::{
 type ValueVec = Vec<Value>;
 
 // Import Value type
-use kiln_error::{
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result};
 use kiln_foundation::Value;
 // Import specific allocators conditionally
 #[cfg(all(feature = "platform-linux", target_os = "linux"))]
@@ -57,11 +41,7 @@ use kiln_platform::MacOsAllocatorBuilder;
 use kiln_platform::QnxAllocatorBuilder;
 // Import from kiln-platform for all platform abstractions
 use kiln_platform::{
-    ComprehensivePlatformLimits,
-    PageAllocator,
-    PlatformId,
-    PlatformLimitDiscoverer,
-    WASM_PAGE_SIZE,
+    ComprehensivePlatformLimits, PageAllocator, PlatformId, PlatformLimitDiscoverer, WASM_PAGE_SIZE,
 };
 
 // CFI imports temporarily disabled since CFI module is disabled
@@ -89,28 +69,28 @@ pub struct PlatformAwareRuntime {
     #[cfg(feature = "platform")]
     memory_allocator: Box<dyn PageAllocator>,
     /// Platform-specific limits and capabilities
-    platform_limits:  ComprehensivePlatformLimits,
+    platform_limits: ComprehensivePlatformLimits,
     /// Safety context for ASIL compliance
-    safety_context:   SafetyContext,
+    safety_context: SafetyContext,
     /// Runtime statistics and metrics
-    metrics:          RuntimeMetrics,
+    metrics: RuntimeMetrics,
 }
 
 /// Runtime performance and resource metrics
 #[derive(Debug, Clone, Default)]
 pub struct RuntimeMetrics {
     /// Total instructions executed
-    pub instructions_executed:   u64,
+    pub instructions_executed: u64,
     /// Total memory allocated
-    pub memory_allocated:        usize,
+    pub memory_allocated: usize,
     /// Peak memory usage
-    pub peak_memory_usage:       usize,
+    pub peak_memory_usage: usize,
     /// Number of components instantiated
     pub components_instantiated: u32,
     /// CFI violations detected
-    pub cfi_violations:          u64,
+    pub cfi_violations: u64,
     /// Execution time in nanoseconds
-    pub execution_time_ns:       u64,
+    pub execution_time_ns: u64,
 }
 
 impl PlatformAwareRuntime {
@@ -422,14 +402,10 @@ impl PlatformAwareRuntime {
 
     /// Get current timestamp for performance tracking
     fn get_timestamp(&self) -> u64 {
-        use std::time::{
-            SystemTime,
-            UNIX_EPOCH,
-        };
+        use std::time::{SystemTime, UNIX_EPOCH};
         SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos() as u64
     }
 }
 
 // All platform-specific memory adapters removed - using kiln-platform
 // abstractions instead
-

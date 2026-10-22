@@ -4,51 +4,25 @@
 //! isolation and control, along with real-time scheduling capabilities.
 
 use core::{
-    fmt::{
-        self,
-        Debug,
-    },
-    sync::atomic::{
-        AtomicBool,
-        AtomicU64,
-        AtomicUsize,
-        Ordering,
-    },
+    fmt::{self, Debug},
+    sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     time::Duration,
 };
 use std::{
     boxed::Box,
     collections::BTreeMap,
     format,
-    string::{
-        String,
-        ToString,
-    },
+    string::{String, ToString},
     sync::Arc,
     vec::Vec,
 };
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
-use kiln_sync::{
-    KilnMutex,
-    KilnRwLock,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
+use kiln_sync::{KilnMutex, KilnRwLock};
 
 use crate::threading::{
-    CpuSet,
-    PlatformThreadHandle,
-    PlatformThreadPool,
-    ThreadHandle,
-    ThreadPoolConfig,
-    ThreadPoolStats,
-    ThreadPriority,
-    ThreadStats,
-    WasmTask,
+    CpuSet, PlatformThreadHandle, PlatformThreadPool, ThreadHandle, ThreadPoolConfig,
+    ThreadPoolStats, ThreadPriority, ThreadStats, WasmTask,
 };
 
 /// Linux scheduling policies
@@ -56,28 +30,23 @@ use crate::threading::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SchedPolicy {
     /// Normal scheduling
-    Normal     = 0,
+    Normal = 0,
     /// FIFO real-time scheduling
-    Fifo       = 1,
+    Fifo = 1,
     /// Round-robin real-time scheduling
     RoundRobin = 2,
     /// Batch scheduling
-    Batch      = 3,
+    Batch = 3,
     /// Idle scheduling
-    Idle       = 5,
+    Idle = 5,
     /// Deadline scheduling
-    Deadline   = 6,
+    Deadline = 6,
 }
 
 /// FFI declarations for Linux thread and cgroup management
 #[allow(non_camel_case_types)]
 mod ffi {
-    use core::ffi::{
-        c_char,
-        c_int,
-        c_long,
-        c_void,
-    };
+    use core::ffi::{c_char, c_int, c_long, c_void};
 
     pub type pthread_t = c_long;
     pub type cpu_set_t = [u64; 16]; // 1024 bits for CPU mask
@@ -89,14 +58,14 @@ mod ffi {
 
     #[repr(C)]
     pub struct sched_attr {
-        pub size:           u32,
-        pub sched_policy:   u32,
-        pub sched_flags:    u64,
-        pub sched_nice:     i32,
+        pub size: u32,
+        pub sched_policy: u32,
+        pub sched_flags: u64,
+        pub sched_nice: i32,
         pub sched_priority: u32,
-        pub sched_runtime:  u64,
+        pub sched_runtime: u64,
         pub sched_deadline: u64,
-        pub sched_period:   u64,
+        pub sched_period: u64,
     }
 
     // SAFETY: Edition 2024 requires unsafe extern blocks
@@ -166,7 +135,7 @@ mod ffi {
 /// Cgroup controller for resource management
 struct CgroupController {
     /// Cgroup path
-    path:  String,
+    path: String,
     /// Whether we created this cgroup
     owned: bool,
 }
@@ -242,17 +211,17 @@ impl Drop for CgroupController {
 /// Linux thread handle
 struct LinuxThreadHandle {
     /// Thread ID
-    tid:     ffi::pthread_t,
+    tid: ffi::pthread_t,
     /// Task being executed
-    task:    Arc<KilnMutex<Option<WasmTask>>>,
+    task: Arc<KilnMutex<Option<WasmTask>>>,
     /// `Result` storage
-    result:  Arc<KilnMutex<Option<Result<Vec<u8>>>>>,
+    result: Arc<KilnMutex<Option<Result<Vec<u8>>>>>,
     /// Running flag
     running: Arc<AtomicBool>,
     /// Thread statistics
-    stats:   Arc<KilnMutex<ThreadStats>>,
+    stats: Arc<KilnMutex<ThreadStats>>,
     /// Cgroup controller
-    cgroup:  Option<Arc<CgroupController>>,
+    cgroup: Option<Arc<CgroupController>>,
 }
 
 impl PlatformThreadHandle for LinuxThreadHandle {
@@ -292,35 +261,35 @@ impl PlatformThreadHandle for LinuxThreadHandle {
 /// Thread context passed to pthread
 struct ThreadContext {
     /// Task to execute
-    task:     WasmTask,
+    task: WasmTask,
     /// `Result` storage
-    result:   Arc<KilnMutex<Option<Result<Vec<u8>>>>>,
+    result: Arc<KilnMutex<Option<Result<Vec<u8>>>>>,
     /// Running flag
-    running:  Arc<AtomicBool>,
+    running: Arc<AtomicBool>,
     /// Stats
-    stats:    Arc<KilnMutex<ThreadStats>>,
+    stats: Arc<KilnMutex<ThreadStats>>,
     /// Executor function
     executor: Arc<dyn Fn(WasmTask) -> Result<Vec<u8>> + Send + Sync>,
     /// Cgroup controller
-    cgroup:   Option<Arc<CgroupController>>,
+    cgroup: Option<Arc<CgroupController>>,
 }
 
 /// Linux thread pool implementation
 pub struct LinuxThreadPool {
     /// Configuration
-    config:         ThreadPoolConfig,
+    config: ThreadPoolConfig,
     /// Base cgroup for the pool
-    base_cgroup:    Option<CgroupController>,
+    base_cgroup: Option<CgroupController>,
     /// Active threads
     active_threads: Arc<KilnRwLock<BTreeMap<u64, Box<dyn PlatformThreadHandle>>>>,
     /// Thread statistics
-    stats:          Arc<KilnMutex<ThreadPoolStats>>,
+    stats: Arc<KilnMutex<ThreadPoolStats>>,
     /// Next thread ID
     next_thread_id: AtomicU64,
     /// Shutdown flag
-    shutdown:       AtomicBool,
+    shutdown: AtomicBool,
     /// Task executor
-    executor:       Arc<dyn Fn(WasmTask) -> Result<Vec<u8>> + Send + Sync>,
+    executor: Arc<dyn Fn(WasmTask) -> Result<Vec<u8>> + Send + Sync>,
 }
 
 impl LinuxThreadPool {
@@ -565,7 +534,7 @@ impl PlatformThreadPool for LinuxThreadPool {
         }
 
         Ok(ThreadHandle {
-            id:              thread_id,
+            id: thread_id,
             platform_handle: handle,
         })
     }
@@ -608,14 +577,14 @@ mod tests {
 
         // Spawn a thread
         let task = WasmTask {
-            id:           1,
-            function_id:  100,
-            args:         vec![1, 2, 3, 4],
-            priority:     ThreadPriority::Normal,
-            stack_size:   None,
+            id: 1,
+            function_id: 100,
+            args: vec![1, 2, 3, 4],
+            priority: ThreadPriority::Normal,
+            stack_size: None,
             memory_limit: None,
             cpu_affinity: None,
-            deadline:     None,
+            deadline: None,
         };
 
         let handle = pool.spawn_wasm_thread(task).unwrap();
@@ -642,14 +611,14 @@ mod tests {
         cpu_set.add(0);
 
         let task = WasmTask {
-            id:           2,
-            function_id:  200,
-            args:         vec![],
-            priority:     ThreadPriority::High,
-            stack_size:   Some(4 * 1024 * 1024),
+            id: 2,
+            function_id: 200,
+            args: vec![],
+            priority: ThreadPriority::High,
+            stack_size: Some(4 * 1024 * 1024),
             memory_limit: Some(32 * 1024 * 1024),
             cpu_affinity: Some(cpu_set),
-            deadline:     Some(Duration::from_millis(100)),
+            deadline: Some(Duration::from_millis(100)),
         };
 
         let handle = pool.spawn_wasm_thread(task).unwrap();

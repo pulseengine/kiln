@@ -8,46 +8,31 @@
 //! WebAssembly memory that is both efficient and well-integrated with the OS.
 
 use core::{
-    fmt::{
-        self,
-        Debug,
-    },
+    fmt::{self, Debug},
     ptr::NonNull,
-    sync::atomic::{
-        AtomicUsize,
-        Ordering,
-    },
+    sync::atomic::{AtomicUsize, Ordering},
 };
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 
-use crate::memory::{
-    PageAllocator,
-    VerificationLevel,
-    WASM_PAGE_SIZE,
-};
+use crate::memory::{PageAllocator, VerificationLevel, WASM_PAGE_SIZE};
 
 /// QNX memory protection flags (compatible with mmap/mprotect)
 #[repr(u32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QnxProtFlags {
     /// No access
-    None             = 0,
+    None = 0,
     /// Read access
-    Read             = 1,
+    Read = 1,
     /// Write access
-    Write            = 2,
+    Write = 2,
     /// Execute access
-    Execute          = 4,
+    Execute = 4,
     /// Read and write access
-    ReadWrite        = 3,
+    ReadWrite = 3,
     /// Read and execute access
-    ReadExecute      = 5,
+    ReadExecute = 5,
     /// Read, write, and execute access
     ReadWriteExecute = 7,
 }
@@ -58,17 +43,17 @@ pub enum QnxProtFlags {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QnxMallocOption {
     /// Arena size (default 32KB)
-    ArenaSize           = 1,
+    ArenaSize = 1,
     /// Maximum number of cached arena blocks
     ArenaCacheMaxBlocks = 2,
     /// Maximum size of arena cache
-    ArenaCacheMaxSize   = 3,
+    ArenaCacheMaxSize = 3,
     /// Free mode (LIFO vs FIFO)
-    FifoFree            = 4,
+    FifoFree = 4,
     /// Hold memory (never release to OS)
-    MemoryHold          = 5,
+    MemoryHold = 5,
     /// Trim threshold
-    TrimThreshold       = 6,
+    TrimThreshold = 6,
 }
 
 /// Binary std/no_std choice
@@ -124,13 +109,13 @@ mod ffi {
     #[repr(C)]
     #[derive(Debug, Clone, Copy)]
     pub struct MallocInfo {
-        pub arena:    i32, // Binary std/no_std choice
-        pub ordblks:  i32, // Number of free chunks
-        pub smblks:   i32, // Number of fast bins
-        pub hblks:    i32, // Number of mmapped regions
-        pub hblkhd:   i32, // Binary std/no_std choice
-        pub usmblks:  i32, // Binary std/no_std choice
-        pub fsmblks:  i32, // Space in freed fastbin blocks
+        pub arena: i32,    // Binary std/no_std choice
+        pub ordblks: i32,  // Number of free chunks
+        pub smblks: i32,   // Number of fast bins
+        pub hblks: i32,    // Number of mmapped regions
+        pub hblkhd: i32,   // Binary std/no_std choice
+        pub usmblks: i32,  // Binary std/no_std choice
+        pub fsmblks: i32,  // Space in freed fastbin blocks
         pub uordblks: i32, // Binary std/no_std choice
         pub fordblks: i32, // Total free space
         pub keepcost: i32, // Top-most, releasable space
@@ -151,13 +136,13 @@ mod ffi {
     #[repr(C)]
     #[derive(Debug, Clone, Copy)]
     pub struct MallocInfo {
-        pub arena:    i32,
-        pub ordblks:  i32,
-        pub smblks:   i32,
-        pub hblks:    i32,
-        pub hblkhd:   i32,
-        pub usmblks:  i32,
-        pub fsmblks:  i32,
+        pub arena: i32,
+        pub ordblks: i32,
+        pub smblks: i32,
+        pub hblks: i32,
+        pub hblkhd: i32,
+        pub usmblks: i32,
+        pub fsmblks: i32,
         pub uordblks: i32,
         pub fordblks: i32,
         pub keepcost: i32,
@@ -186,13 +171,13 @@ mod ffi {
     #[allow(unused)]
     pub unsafe fn mallinfo() -> MallocInfo {
         MallocInfo {
-            arena:    0,
-            ordblks:  0,
-            smblks:   0,
-            hblks:    0,
-            hblkhd:   0,
-            usmblks:  0,
-            fsmblks:  0,
+            arena: 0,
+            ordblks: 0,
+            smblks: 0,
+            hblks: 0,
+            hblkhd: 0,
+            usmblks: 0,
+            fsmblks: 0,
             uordblks: 0,
             fordblks: 0,
             keepcost: 0,
@@ -245,37 +230,37 @@ mod ffi {
 #[derive(Debug, Clone)]
 pub struct QnxArenaAllocatorConfig {
     /// Size of each arena in bytes (default 32KB, must be multiple of 4KB)
-    pub arena_size:             usize,
+    pub arena_size: usize,
     /// Maximum number of arena blocks to cache
     pub arena_cache_max_blocks: usize,
     /// Maximum size of arena cache in bytes
-    pub arena_cache_max_size:   usize,
+    pub arena_cache_max_size: usize,
     /// Whether to use LIFO free strategy (default is FIFO)
-    pub use_lifo_free:          bool,
+    pub use_lifo_free: bool,
     /// Whether to hold memory (never release to OS)
-    pub memory_hold:            bool,
+    pub memory_hold: bool,
     /// Binary std/no_std choice
-    pub use_guard_pages:        bool,
+    pub use_guard_pages: bool,
     /// Memory protection flags for guard pages
-    pub guard_page_prot:        QnxProtFlags,
+    pub guard_page_prot: QnxProtFlags,
     /// Memory protection flags for data pages
-    pub data_page_prot:         QnxProtFlags,
+    pub data_page_prot: QnxProtFlags,
     /// Verification level for memory operations
-    pub verification_level:     VerificationLevel,
+    pub verification_level: VerificationLevel,
 }
 
 impl Default for QnxArenaAllocatorConfig {
     fn default() -> Self {
         Self {
-            arena_size:             32 * 1024,  // 32KB default in QNX
-            arena_cache_max_blocks: 8,          // Default in QNX
-            arena_cache_max_size:   256 * 1024, // 256KB
-            use_lifo_free:          false,
-            memory_hold:            false,
-            use_guard_pages:        true,
-            guard_page_prot:        QnxProtFlags::None,
-            data_page_prot:         QnxProtFlags::ReadWrite,
-            verification_level:     VerificationLevel::Standard,
+            arena_size: 32 * 1024,            // 32KB default in QNX
+            arena_cache_max_blocks: 8,        // Default in QNX
+            arena_cache_max_size: 256 * 1024, // 256KB
+            use_lifo_free: false,
+            memory_hold: false,
+            use_guard_pages: true,
+            guard_page_prot: QnxProtFlags::None,
+            data_page_prot: QnxProtFlags::ReadWrite,
+            verification_level: VerificationLevel::Standard,
         }
     }
 }
@@ -361,17 +346,17 @@ impl QnxArenaAllocatorBuilder {
 #[derive(Debug)]
 pub struct QnxArenaAllocator {
     /// Binary std/no_std choice
-    config:             QnxArenaAllocatorConfig,
+    config: QnxArenaAllocatorConfig,
     /// Binary std/no_std choice
     current_allocation: Option<NonNull<u8>>,
     /// Binary std/no_std choice
-    current_size:       AtomicUsize,
+    current_size: AtomicUsize,
     /// Binary std/no_std choice
-    current_pages:      AtomicUsize,
+    current_pages: AtomicUsize,
     /// Binary std/no_std choice
-    maximum_pages:      Option<u32>,
+    maximum_pages: Option<u32>,
     /// Binary std/no_std choice
-    initialized:        bool,
+    initialized: bool,
 }
 
 impl QnxArenaAllocator {

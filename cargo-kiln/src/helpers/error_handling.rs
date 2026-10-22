@@ -5,8 +5,8 @@
 
 use anyhow::{Context, Result};
 use colored::Colorize;
-use serde_json;
 use kiln_build_core::formatters::OutputFormat;
+use serde_json;
 
 use super::OutputManager;
 

@@ -9,11 +9,7 @@ use core::ops::Range;
 #[cfg(test)]
 extern crate alloc;
 
-use crate::{
-    bounded::BoundedVec,
-    traits::BoundedCapacity,
-    MemoryProvider,
-};
+use crate::{MemoryProvider, bounded::BoundedVec, traits::BoundedCapacity};
 
 /// A read-only view into a BoundedVec that provides slice-like operations
 /// without exposing the underlying memory directly.
@@ -30,9 +26,9 @@ where
         + Eq,
     P: MemoryProvider + Clone + PartialEq + Eq,
 {
-    vec:   &'a BoundedVec<T, N, P>,
+    vec: &'a BoundedVec<T, N, P>,
     start: usize,
-    len:   usize,
+    len: usize,
 }
 
 impl<'a, T, const N: usize, P> BoundedSlice<'a, T, N, P>
@@ -92,7 +88,7 @@ where
     /// Create an iterator over the slice
     pub fn iter(&'a self) -> BoundedSliceIter<'a, T, N, P> {
         BoundedSliceIter {
-            slice:   self,
+            slice: self,
             current: 0,
         }
     }
@@ -104,15 +100,15 @@ where
         }
 
         let left = Self {
-            vec:   self.vec,
+            vec: self.vec,
             start: self.start,
-            len:   mid,
+            len: mid,
         };
 
         let right = Self {
-            vec:   self.vec,
+            vec: self.vec,
             start: self.start + mid,
-            len:   self.len - mid,
+            len: self.len - mid,
         };
 
         Some((left, right))
@@ -132,7 +128,7 @@ where
         + Eq,
     P: MemoryProvider + Clone + PartialEq + Eq,
 {
-    slice:   &'a BoundedSlice<'a, T, N, P>,
+    slice: &'a BoundedSlice<'a, T, N, P>,
     current: usize,
 }
 

@@ -2,16 +2,9 @@
 //!
 //! This module contains tests for the state serialization module.
 
-use kiln_format::{
-    CompressionType,
-    CustomSection,
-    Module,
-};
+use kiln_format::{CompressionType, CustomSection, Module};
 use kiln_runtime::state::{
-    create_state_section,
-    extract_state_section,
-    has_state_sections,
-    StateSection,
+    StateSection, create_state_section, extract_state_section, has_state_sections,
 };
 
 /// Test basic serialization properties of the state module

@@ -68,19 +68,19 @@ pub enum SimdLevel {
 pub struct SimdCapabilities {
     /// x86_64 features
     #[cfg(target_arch = "x86_64")]
-    pub has_sse2:    bool,
+    pub has_sse2: bool,
     #[cfg(target_arch = "x86_64")]
-    pub has_sse3:    bool,
+    pub has_sse3: bool,
     #[cfg(target_arch = "x86_64")]
-    pub has_ssse3:   bool,
+    pub has_ssse3: bool,
     #[cfg(target_arch = "x86_64")]
-    pub has_sse41:   bool,
+    pub has_sse41: bool,
     #[cfg(target_arch = "x86_64")]
-    pub has_sse42:   bool,
+    pub has_sse42: bool,
     #[cfg(target_arch = "x86_64")]
-    pub has_avx:     bool,
+    pub has_avx: bool,
     #[cfg(target_arch = "x86_64")]
-    pub has_avx2:    bool,
+    pub has_avx2: bool,
     #[cfg(target_arch = "x86_64")]
     pub has_avx512f: bool,
 
@@ -88,7 +88,7 @@ pub struct SimdCapabilities {
     #[cfg(target_arch = "aarch64")]
     pub has_neon: bool,
     #[cfg(target_arch = "aarch64")]
-    pub has_sve:  bool,
+    pub has_sve: bool,
     #[cfg(target_arch = "aarch64")]
     pub has_sve2: bool,
 
@@ -118,7 +118,9 @@ impl SimdCapabilities {
         // No SIMD detection exists for other architectures, so none is reported.
         #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
         {
-            Self { level: SimdLevel::None }
+            Self {
+                level: SimdLevel::None,
+            }
         }
     }
 
@@ -445,7 +447,7 @@ pub trait SimdProvider: Send + Sync {
 /// SIMD runtime that manages provider selection
 #[cfg(feature = "std")]
 pub struct SimdRuntime {
-    provider:     Box<dyn SimdProvider>,
+    provider: Box<dyn SimdProvider>,
     capabilities: SimdCapabilities,
 }
 

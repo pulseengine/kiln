@@ -96,13 +96,7 @@ extern crate std;
 extern crate alloc;
 
 // External crates
-use kiln_error::{
-    codes,
-    kinds,
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes, kinds};
 
 // Kiln - kiln-foundation
 // SW-REQ-ID: REQ_MEM_SAFETY_001
@@ -190,10 +184,7 @@ macro_rules! safe_managed_alloc {
 }
 
 // Re-export bounded slice functionality
-pub use bounded_slice::{
-    BoundedSlice,
-    BoundedVecSliceExt,
-};
+pub use bounded_slice::{BoundedSlice, BoundedVecSliceExt};
 
 /// `Result` type alias for Kiln operations using `kiln_error::Error`
 ///
@@ -211,12 +202,12 @@ pub mod bounded;
 pub mod bounded_collections;
 /// Bounded slice abstraction for safe slice-like access
 pub mod bounded_slice;
-/// Direct storage map for hot-path execution (no serialization)
-pub mod direct_map;
 /// Binary std/no_std choice
 pub mod builder;
 /// WebAssembly Component Model built-in types
 pub mod builtin;
+/// Direct storage map for hot-path execution (no serialization)
+pub mod direct_map;
 // /// String conversion traits for component model integration
 // pub mod string_conversion;
 /// WebAssembly Component Model types
@@ -265,10 +256,10 @@ pub mod compile_time_bounds;
 pub mod generic_memory_guard;
 /// Generic provider factory - budget-aware allocation
 pub mod generic_provider_factory;
-/// Generic memory coordination system - works with any project
-pub mod memory_coordinator;
 /// Kiln-specific memory system implementation
 pub mod kiln_memory_system;
+/// Generic memory coordination system - works with any project
+pub mod memory_coordinator;
 // Validated collections disabled - architectural decision to keep API simple
 // Use standard bounded collections instead for better maintainability
 // #[cfg(feature = "std")]
@@ -371,90 +362,41 @@ pub mod no_std_hashmap;
 // pub mod no_std_compat;
 
 // Re-export the most important types - core types always available
-pub use atomic_memory::{
-    AtomicMemoryExt,
-    AtomicMemoryOps,
-};
-pub use bounded::{
-    BoundedStack,
-    BoundedString,
-    BoundedVec,
-    CapacityError,
-    WasmName,
-};
+pub use atomic_memory::{AtomicMemoryExt, AtomicMemoryOps};
+pub use bounded::{BoundedStack, BoundedString, BoundedVec, CapacityError, WasmName};
 // Alloc-dependent re-exports
 #[cfg(feature = "std")]
 pub use bounded_collections::BoundedBitSet;
-pub use bounded_collections::{
-    BoundedDeque,
-    BoundedMap,
-    BoundedQueue,
-    BoundedSet,
-};
+pub use bounded_collections::{BoundedDeque, BoundedMap, BoundedQueue, BoundedSet};
 pub use builder::{
-    BoundedBuilder,
-    MemoryBuilder,
-    ResourceBuilder,
-    ResourceItemBuilder,
-    ResourceTypeBuilder,
+    BoundedBuilder, MemoryBuilder, ResourceBuilder, ResourceItemBuilder, ResourceTypeBuilder,
     StringBuilder,
 };
 pub use builtin::BuiltinType;
-pub use component::{
-    ComponentType,
-    ExternType,
-    InstanceType,
-    Namespace,
-    ResourceType,
-};
+pub use component::{ComponentType, ExternType, InstanceType, Namespace, ResourceType};
 #[cfg(feature = "std")]
-pub use component_builder::{
-    ComponentTypeBuilder,
-    ExportBuilder,
-    ImportBuilder,
-    NamespaceBuilder,
-};
+pub use component_builder::{ComponentTypeBuilder, ExportBuilder, ImportBuilder, NamespaceBuilder};
 #[cfg(feature = "std")]
-pub use component_type_store::{
-    ComponentTypeStore,
-    TypeRef,
-};
+pub use component_type_store::{ComponentTypeStore, TypeRef};
 #[cfg(feature = "std")]
 pub use component_value::ComponentValue;
 #[cfg(feature = "std")]
-pub use component_value_store::{
-    ComponentValueStore,
-    ValueRef,
-};
+pub use component_value_store::{ComponentValueStore, ValueRef};
 #[cfg(feature = "std")]
 pub use component_value_store_builder::ComponentValueStoreBuilder;
 #[cfg(feature = "std")]
-pub use conversion::{
-    ref_type_to_val_type,
-    val_type_to_ref_type,
-};
-pub use float_repr::{
-    FloatBits32,
-    FloatBits64,
-};
+pub use conversion::{ref_type_to_val_type, val_type_to_ref_type};
+pub use float_repr::{FloatBits32, FloatBits64};
 pub use operations::{
-    global_fuel_consumed,
-    global_operation_summary,
-    record_global_operation,
+    Summary as OperationSummary, Tracking as OperationTracking, Type as OperationType,
+    global_fuel_consumed, global_operation_summary, record_global_operation,
     reset_global_operations,
-    Summary as OperationSummary,
-    Tracking as OperationTracking,
-    Type as OperationType,
 };
 #[cfg(feature = "std")]
 pub use safe_memory::StdMemoryProvider;
 pub use safe_memory::{
-    NoStdProvider,
-    Provider as MemoryProvider,
-    SafeMemoryHandler,
-    Slice as SafeSlice,
-    SliceMut as SafeSliceMut,
-    Stats as MemoryStats,
+    NoStdProvider, Provider as MemoryProvider, SafeMemoryHandler, Slice as SafeSlice,
+    SliceMut as SafeSliceMut, Stats as MemoryStats,
 };
 
 // Type aliases for backward compatibility
@@ -466,98 +408,58 @@ pub use budget_aware_provider::CrateId;
 #[allow(deprecated)]
 pub use budget_provider::BudgetProvider;
 // Re-export modern memory system types
-pub use budget_verification::{
-    CRATE_BUDGETS,
-    TOTAL_MEMORY_BUDGET,
-};
+pub use budget_verification::{CRATE_BUDGETS, TOTAL_MEMORY_BUDGET};
 // Re-export clean core types (provider-free core WebAssembly types)
 #[cfg(any(feature = "std", feature = "alloc"))]
 pub use clean_core_types::{
-    CoreFuncType as CleanCoreFuncType,
-    CoreGlobalType as CleanCoreGlobalType,
-    CoreMemoryType as CleanCoreMemoryType,
-    CoreTableType as CleanCoreTableType,
+    CoreFuncType as CleanCoreFuncType, CoreGlobalType as CleanCoreGlobalType,
+    CoreMemoryType as CleanCoreMemoryType, CoreTableType as CleanCoreTableType,
 };
 // Re-export clean types (provider-free) - only when allocation is available
 #[cfg(any(feature = "std", feature = "alloc"))]
 pub use clean_types::{
-    Case as CleanCase,
-    ComponentType as CleanComponentType,
-    ComponentTypeDefinition as CleanComponentTypeDefinition,
-    Enum as CleanEnum,
-    ExternType as CleanExternType,
-    Field as CleanField,
-    Flags as CleanFlags,
-    FuncType as CleanFuncType,
-    GlobalType as CleanGlobalType,
-    InstanceType as CleanInstanceType,
-    Limits as CleanLimits,
-    MemoryType as CleanMemoryType,
-    Record as CleanRecord,
-    RefType as CleanRefType,
-    Result_ as CleanResult,
-    TableType as CleanTableType,
-    Tuple as CleanTuple,
-    ValType as CleanValType,
-    Value as CleanValue,
-    Variant as CleanVariant,
+    Case as CleanCase, ComponentType as CleanComponentType,
+    ComponentTypeDefinition as CleanComponentTypeDefinition, Enum as CleanEnum,
+    ExternType as CleanExternType, Field as CleanField, Flags as CleanFlags,
+    FuncType as CleanFuncType, GlobalType as CleanGlobalType, InstanceType as CleanInstanceType,
+    Limits as CleanLimits, MemoryType as CleanMemoryType, Record as CleanRecord,
+    RefType as CleanRefType, Result_ as CleanResult, TableType as CleanTableType,
+    Tuple as CleanTuple, ValType as CleanValType, Value as CleanValue, Variant as CleanVariant,
 };
 pub use compile_time_bounds::{
-    CollectionBoundsValidator,
-    CompileTimeBoundsValidator,
-    MemoryLayoutValidator,
-    ResourceLimitsValidator,
-    StackBoundsValidator,
-    SystemBoundsValidator,
+    CollectionBoundsValidator, CompileTimeBoundsValidator, MemoryLayoutValidator,
+    ResourceLimitsValidator, StackBoundsValidator, SystemBoundsValidator,
 };
 // Capability-based memory system replaces legacy global coordinator
 // Use memory_init::get_global_capability_context() for modern memory management
 
 #[allow(deprecated)]
-pub use enforcement::{
-    AllocationToken,
-    EnforcedAllocation,
-    MemoryManaged,
-};
-pub use generic_memory_guard::{
-    GenericMemoryGuard,
-    ManagedMemoryProvider,
-    MemoryCoordinator,
-};
+pub use enforcement::{AllocationToken, EnforcedAllocation, MemoryManaged};
+pub use generic_memory_guard::{GenericMemoryGuard, ManagedMemoryProvider, MemoryCoordinator};
 // Re-export hierarchical budget types
-pub use hierarchical_budgets::{
-    HierarchicalBudget,
-    MemoryPriority,
-};
-pub use memory_coordinator::{
-    AllocationId,
-    CrateIdentifier,
-    GenericMemoryCoordinator,
-};
+pub use hierarchical_budgets::{HierarchicalBudget, MemoryPriority};
+pub use memory_coordinator::{AllocationId, CrateIdentifier, GenericMemoryCoordinator};
 pub use memory_init::MemoryInitializer;
 // Re-export monitoring types
 pub use monitoring::{
+    MemoryMonitor, MemoryStatistics, SystemHealth, SystemReport,
     convenience as monitoring_convenience,
-    MemoryMonitor,
-    MemoryStatistics,
-    SystemHealth,
-    SystemReport,
 };
 // Re-export platform abstraction std types
 #[cfg(feature = "std")]
 pub use platform_abstraction::SystemTimeProvider;
 // Re-export platform abstraction types
 pub use platform_abstraction::{
-    current_time_ns,
-    get_platform_limits,
-    get_platform_services,
-    // Factory functions
-    initialize_platform_services,
     CounterTimeProvider,
     // Core platform types
     PlatformLimits,
     PlatformServices,
     TimeProvider,
+    current_time_ns,
+    get_platform_limits,
+    get_platform_services,
+    // Factory functions
+    initialize_platform_services,
 };
 // Re-export safety system types
 pub use safety_system::{
@@ -581,82 +483,61 @@ pub use safety_system::{
     SilLevel,
     UniversalSafetyContext,
 };
-pub use traits::{
-    BoundedCapacity,
-    Checksummed,
-    FromFormat,
-    ToFormat,
-    Validatable,
-};
+pub use traits::{BoundedCapacity, Checksummed, FromFormat, ToFormat, Validatable};
 #[cfg(feature = "std")]
 pub use traits::{HostImportHandler, MemoryAccessor, SliceMemory};
 // Re-export type factory types - only when allocation is available
 #[cfg(any(feature = "std", feature = "alloc"))]
 pub use type_factory::{
-    ComponentFactory1M,
-    ComponentFactory64K,
-    ComponentFactory8K,
-    ComponentTypeFactory,
-    FactoryBuilder,
-    RuntimeFactory1M,
-    RuntimeFactory64K,
-    RuntimeFactory8K,
-    RuntimeTypeFactory,
-    TypeConverter,
-    TypeFactory,
+    ComponentFactory1M, ComponentFactory8K, ComponentFactory64K, ComponentTypeFactory,
+    FactoryBuilder, RuntimeFactory1M, RuntimeFactory8K, RuntimeFactory64K, RuntimeTypeFactory,
+    TypeConverter, TypeFactory,
 };
 pub use types::{
-    // Core types
-    BlockType,
-    DataMode,
-    ElementMode,
-    FuncType,
-    GlobalType,
-    Limits,
-    MemArg,
-    MemoryType,
-    RefType,
-    TableType,
-    ValueType,
     // GC types (WebAssembly 3.0)
     ArrayType,
+    // Core types
+    BlockType,
     CompositeType,
+    DataMode,
+    ElementMode,
     FieldType,
-    HeapType,
+    FuncType,
     GcRefType,
+    GlobalType,
+    HeapType,
+    Limits,
+    MAX_ARRAY_ELEMENTS,
+    MAX_REC_GROUP_SIZE,
+    // GC constants
+    MAX_STRUCT_FIELDS,
+    MAX_SUPERTYPES,
+    MemArg,
+    MemoryType,
     PackedType,
+    RefType,
     StorageType,
     StructType,
     SubType,
-    // GC constants
-    MAX_STRUCT_FIELDS,
-    MAX_ARRAY_ELEMENTS,
-    MAX_SUPERTYPES,
-    MAX_REC_GROUP_SIZE,
+    TableType,
+    ValueType,
 };
 // Re-export unified types for backward compatibility and new functionality
 pub use unified_types_simple::{
-    DefaultTypes,
-    DesktopTypes,
-    EmbeddedTypes,
-    PlatformCapacities,
-    SafetyCriticalTypes,
+    DefaultTypes, DesktopTypes, EmbeddedTypes, PlatformCapacities, SafetyCriticalTypes,
     UnifiedTypes,
 };
 pub use values::Value;
-pub use verification::{
-    Checksum,
-    VerificationLevel,
-};
+pub use verification::{Checksum, VerificationLevel};
 // Re-export runtime limits for safety-critical configurations
 pub use runtime_limits::{
     // Resource limits
     AGGREGATE_RESOURCES_LIMIT,
-    RECORD_FIELDS_LIMIT,
-    RESOURCE_TABLE_LIMIT,
     // Execution limits
     FUNCTIONS_PER_MODULE_LIMIT,
     MODULE_SIZE_LIMIT,
+    RECORD_FIELDS_LIMIT,
+    RESOURCE_TABLE_LIMIT,
     STACK_DEPTH_LIMIT,
 };
 // Re-export capability-based memory factory and deprecated coordinator for compatibility
@@ -700,27 +581,13 @@ pub mod async_executor_simple;
 #[cfg(feature = "async-api")]
 pub use async_bridge::with_async as with_async_bridge;
 #[cfg(all(feature = "async-api", feature = "component-model-async"))]
-pub use async_bridge::{
-    ComponentAsyncExt,
-    ComponentFutureBridge,
-    ComponentStreamBridge,
-};
+pub use async_bridge::{ComponentAsyncExt, ComponentFutureBridge, ComponentStreamBridge};
 #[cfg(feature = "async-api")]
-pub use async_executor_simple::{
-    is_using_fallback,
-    with_async,
-    AsyncRuntime,
-    ExecutorError,
-};
+pub use async_executor_simple::{AsyncRuntime, ExecutorError, is_using_fallback, with_async};
 #[cfg(feature = "component-model-async")]
 pub use async_types::{
-    ComponentFuture,
-    ComponentFutureStatus,
-    ComponentStream,
-    ErrorContext,
-    FutureHandle,
-    StreamHandle,
-    StreamState,
+    ComponentFuture, ComponentFutureStatus, ComponentStream, ErrorContext, FutureHandle,
+    StreamHandle, StreamState,
 };
 
 // Panic handler disabled to avoid conflicts with other crates
@@ -738,10 +605,7 @@ mod tests {
         bounded::BoundedVec,
         budget_aware_provider::CrateId,
         safe_managed_alloc,
-        safe_memory::{
-            NoStdProvider,
-            SafeMemoryHandler,
-        },
+        safe_memory::{NoStdProvider, SafeMemoryHandler},
         traits::BoundedCapacity,
     };
 
@@ -749,7 +613,6 @@ mod tests {
     fn init_test_memory_system() {
         // Memory system is automatically initialized
     }
-
 
     // TODO: Add comprehensive tests for all public functionality in
     // kiln-foundation, ensuring coverage for different VerificationLevels,

@@ -23,8 +23,8 @@ use kiln_foundation::no_std_hashmap::BoundedHashMap;
 use kiln_foundation::{
     CrateId, NoStdProvider,
     bounded::{BoundedString, BoundedVec},
-    verification::Checksum,
     kiln_provider,
+    verification::Checksum,
 };
 
 use crate::{bounded_debug_infra, runtime_memory::MemoryInspector};

@@ -7,14 +7,8 @@
 use alloc::vec::Vec;
 
 use kiln_foundation::{
-    traits::{
-        Checksummable,
-        FromBytes,
-        ReadStream,
-        ToBytes,
-        WriteStream,
-    },
     MemoryProvider,
+    traits::{Checksummable, FromBytes, ReadStream, ToBytes, WriteStream},
 };
 
 use crate::prelude::*;
@@ -31,26 +25,26 @@ pub trait FromFormatBridge<FormatData> {
 #[derive(Debug, Clone)]
 pub struct RuntimeContext {
     /// Memory providers available
-    pub memory_providers:         Vec<RuntimeMemoryProvider>,
+    pub memory_providers: Vec<RuntimeMemoryProvider>,
     /// Table providers available  
-    pub table_providers:          Vec<RuntimeTableProvider>,
+    pub table_providers: Vec<RuntimeTableProvider>,
     /// Maximum initialization steps allowed
     pub max_initialization_steps: usize,
     /// ASIL level constraints
-    pub asil_constraints:         ASILConstraints,
+    pub asil_constraints: ASILConstraints,
 }
 
 /// Memory provider for runtime operations
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RuntimeMemoryProvider {
     /// Memory index
-    pub index:        u32,
+    pub index: u32,
     /// Current size in pages
     pub current_size: u32,
     /// Maximum size in pages
-    pub max_size:     Option<u32>,
+    pub max_size: Option<u32>,
     /// Whether memory is shared
-    pub is_shared:    bool,
+    pub is_shared: bool,
 }
 
 impl Checksummable for RuntimeMemoryProvider {
@@ -98,11 +92,11 @@ impl FromBytes for RuntimeMemoryProvider {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RuntimeTableProvider {
     /// Table index
-    pub index:        u32,
+    pub index: u32,
     /// Current size in elements
     pub current_size: u32,
     /// Maximum size in elements
-    pub max_size:     Option<u32>,
+    pub max_size: Option<u32>,
     /// Element type
     pub element_type: RuntimeRefType,
 }
@@ -149,8 +143,7 @@ impl FromBytes for RuntimeTableProvider {
 }
 
 /// Runtime reference type
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RuntimeRefType {
     /// Function reference
     #[default]
@@ -228,28 +221,28 @@ pub enum ASILLevel {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeDataSegment {
     /// Segment index
-    pub index:                u32,
+    pub index: u32,
     /// Memory index for active segments
-    pub memory_index:         Option<u32>,
+    pub memory_index: Option<u32>,
     /// Evaluated offset (runtime computed)
-    pub evaluated_offset:     Option<u32>,
+    pub evaluated_offset: Option<u32>,
     /// Data bytes (owned by runtime)
-    pub data:                 Vec<u8>,
+    pub data: Vec<u8>,
     /// Initialization state
     pub initialization_state: InitializationState,
     /// Runtime handle for tracking
-    pub runtime_handle:       u32,
+    pub runtime_handle: u32,
 }
 
 impl Default for RuntimeDataSegment {
     fn default() -> Self {
         Self {
-            index:                0,
-            memory_index:         None,
-            evaluated_offset:     None,
-            data:                 Vec::new(),
+            index: 0,
+            memory_index: None,
+            evaluated_offset: None,
+            data: Vec::new(),
             initialization_state: InitializationState::Pending,
-            runtime_handle:       0,
+            runtime_handle: 0,
         }
     }
 }
@@ -330,28 +323,28 @@ impl FromBytes for RuntimeDataSegment {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeElementSegment {
     /// Segment index
-    pub index:                u32,
+    pub index: u32,
     /// Table index for active segments
-    pub table_index:          Option<u32>,
+    pub table_index: Option<u32>,
     /// Evaluated offset (runtime computed)
-    pub evaluated_offset:     Option<u32>,
+    pub evaluated_offset: Option<u32>,
     /// Element data (function indices or evaluated expressions)
-    pub elements:             Vec<RuntimeElement>,
+    pub elements: Vec<RuntimeElement>,
     /// Initialization state
     pub initialization_state: InitializationState,
     /// Runtime handle for tracking
-    pub runtime_handle:       u32,
+    pub runtime_handle: u32,
 }
 
 impl Default for RuntimeElementSegment {
     fn default() -> Self {
         Self {
-            index:                0,
-            table_index:          None,
-            evaluated_offset:     None,
-            elements:             Vec::new(),
+            index: 0,
+            table_index: None,
+            evaluated_offset: None,
+            elements: Vec::new(),
             initialization_state: InitializationState::Pending,
-            runtime_handle:       0,
+            runtime_handle: 0,
         }
     }
 }
@@ -497,7 +490,7 @@ pub struct RuntimeReference {
     /// Reference type
     pub ref_type: RuntimeRefType,
     /// Runtime handle to the referenced object
-    pub handle:   u32,
+    pub handle: u32,
 }
 
 impl Checksummable for RuntimeReference {
@@ -594,17 +587,17 @@ impl FromBytes for InitializationState {
 #[derive(Debug)]
 pub struct RuntimeModuleInitializer {
     /// Runtime context
-    pub context:          RuntimeContext,
+    pub context: RuntimeContext,
     /// Data segments being managed
-    pub data_segments:    Vec<RuntimeDataSegment>,
+    pub data_segments: Vec<RuntimeDataSegment>,
     /// Element segments being managed
     pub element_segments: Vec<RuntimeElementSegment>,
     /// Start function index
-    pub start_function:   Option<u32>,
+    pub start_function: Option<u32>,
     /// Current initialization step
-    pub current_step:     usize,
+    pub current_step: usize,
     /// Total steps required
-    pub total_steps:      usize,
+    pub total_steps: usize,
 }
 
 impl RuntimeModuleInitializer {
@@ -798,25 +791,24 @@ impl RuntimeModuleInitializer {
 #[derive(Debug, Clone)]
 pub struct FormatModuleRuntimeData {
     /// Start function index
-    pub start_function:                 Option<u32>,
+    pub start_function: Option<u32>,
     /// Data extraction results
-    pub data_extractions:               Vec<FormatDataExtraction>,
+    pub data_extractions: Vec<FormatDataExtraction>,
     /// Element extraction results
-    pub element_extractions:            Vec<FormatElementExtraction>,
+    pub element_extractions: Vec<FormatElementExtraction>,
     /// Estimated initialization steps
     pub estimated_initialization_steps: usize,
 }
 
 /// Format data extraction (received from kiln-format bridge)
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct FormatDataExtraction {
     /// Memory index for active segments
-    pub memory_index:            Option<u32>,
+    pub memory_index: Option<u32>,
     /// Raw offset expression bytes
-    pub offset_expr_bytes:       Vec<u8>,
+    pub offset_expr_bytes: Vec<u8>,
     /// Data size
-    pub data_size:               usize,
+    pub data_size: usize,
     /// Whether initialization is required
     pub requires_initialization: bool,
 }
@@ -882,11 +874,11 @@ impl FromBytes for FormatDataExtraction {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FormatElementExtraction {
     /// Table index for active segments
-    pub table_index:             Option<u32>,
+    pub table_index: Option<u32>,
     /// Raw offset expression bytes
-    pub offset_expr_bytes:       Vec<u8>,
+    pub offset_expr_bytes: Vec<u8>,
     /// Element initialization type
-    pub init_data_type:          FormatElementInitType,
+    pub init_data_type: FormatElementInitType,
     /// Whether initialization is required
     pub requires_initialization: bool,
 }
@@ -894,9 +886,9 @@ pub struct FormatElementExtraction {
 impl Default for FormatElementExtraction {
     fn default() -> Self {
         Self {
-            table_index:             None,
-            offset_expr_bytes:       Vec::new(),
-            init_data_type:          FormatElementInitType::FunctionIndices,
+            table_index: None,
+            offset_expr_bytes: Vec::new(),
+            init_data_type: FormatElementInitType::FunctionIndices,
             requires_initialization: false,
         }
     }
@@ -1012,10 +1004,10 @@ impl FromBytes for FormatElementInitType {
 impl Default for RuntimeContext {
     fn default() -> Self {
         Self {
-            memory_providers:         Vec::new(),
-            table_providers:          Vec::new(),
+            memory_providers: Vec::new(),
+            table_providers: Vec::new(),
             max_initialization_steps: 1000,
-            asil_constraints:         ASILConstraints::default(),
+            asil_constraints: ASILConstraints::default(),
         }
     }
 }

@@ -8,19 +8,12 @@ use core::fmt::Debug;
 use std::{
     collections::VecDeque,
     sync::{
-        atomic::{
-            AtomicU64,
-            AtomicUsize,
-            Ordering,
-        },
         Mutex,
+        atomic::{AtomicU64, AtomicUsize, Ordering},
     },
 };
 
-use kiln_foundation::{
-    safe_memory::NoStdProvider,
-    BoundedVec,
-};
+use kiln_foundation::{BoundedVec, safe_memory::NoStdProvider};
 use kiln_platform::side_channel_resistance::constant_time;
 
 use crate::prelude::*;
@@ -67,7 +60,9 @@ impl From<kiln_foundation::verification::VerificationLevel> for NNVerificationLe
     fn from(level: kiln_foundation::verification::VerificationLevel) -> Self {
         match level {
             kiln_foundation::verification::VerificationLevel::Off => NNVerificationLevel::Standard,
-            kiln_foundation::verification::VerificationLevel::Basic => NNVerificationLevel::Standard,
+            kiln_foundation::verification::VerificationLevel::Basic => {
+                NNVerificationLevel::Standard
+            },
             kiln_foundation::verification::VerificationLevel::Standard => {
                 NNVerificationLevel::Standard
             },
@@ -101,10 +96,7 @@ pub enum NNOperation {
     /// Create execution context
     CreateContext { model_id: u32 },
     /// Set input tensor
-    SetInput {
-        size:       usize,
-        dimensions: Vec<u32>,
-    },
+    SetInput { size: usize, dimensions: Vec<u32> },
     /// Execute inference
     Compute { estimated_flops: u64 },
     /// Get output tensor
@@ -135,22 +127,22 @@ pub enum ModelFormat {
 #[derive(Debug, Clone, PartialEq)]
 pub struct RateLimits {
     /// Maximum model loads per minute
-    pub max_loads_per_minute:      u32,
+    pub max_loads_per_minute: u32,
     /// Maximum inferences per second
     pub max_inferences_per_second: u32,
     /// Maximum concurrent operations
     pub max_concurrent_operations: u32,
     /// Sliding window size in milliseconds
-    pub window_size_ms:            u64,
+    pub window_size_ms: u64,
 }
 
 impl Default for RateLimits {
     fn default() -> Self {
         Self {
-            max_loads_per_minute:      10,
+            max_loads_per_minute: 10,
             max_inferences_per_second: 100,
             max_concurrent_operations: 5,
-            window_size_ms:            60_000, // 1 minute
+            window_size_ms: 60_000, // 1 minute
         }
     }
 }
@@ -159,8 +151,8 @@ impl Default for RateLimits {
 #[derive(Debug, Clone)]
 struct OperationRecord {
     operation_type: NNOperationType,
-    timestamp:      u64,
-    resource_cost:  usize,
+    timestamp: u64,
+    resource_cost: usize,
 }
 
 /// Types of operations for rate limiting
@@ -177,15 +169,15 @@ enum NNOperationType {
 #[derive(Debug, Clone, PartialEq)]
 pub struct NNResourceLimits {
     /// Maximum model size in bytes
-    pub max_model_size:          usize,
+    pub max_model_size: usize,
     /// Maximum memory for all tensors during inference
-    pub max_tensor_memory:       usize,
+    pub max_tensor_memory: usize,
     /// Maximum number of dimensions per tensor
-    pub max_tensor_dimensions:   usize,
+    pub max_tensor_dimensions: usize,
     /// Maximum execution time in microseconds (0 = unlimited)
-    pub max_execution_time_us:   u64,
+    pub max_execution_time_us: u64,
     /// Maximum number of concurrent models
-    pub max_concurrent_models:   usize,
+    pub max_concurrent_models: usize,
     /// Maximum number of concurrent execution contexts
     pub max_concurrent_contexts: usize,
 }
@@ -193,11 +185,11 @@ pub struct NNResourceLimits {
 impl Default for NNResourceLimits {
     fn default() -> Self {
         Self {
-            max_model_size:          100 * 1024 * 1024, // 100MB
-            max_tensor_memory:       50 * 1024 * 1024,  // 50MB
-            max_tensor_dimensions:   8,
-            max_execution_time_us:   0, // Unlimited
-            max_concurrent_models:   4,
+            max_model_size: 100 * 1024 * 1024,   // 100MB
+            max_tensor_memory: 50 * 1024 * 1024, // 50MB
+            max_tensor_dimensions: 8,
+            max_execution_time_us: 0, // Unlimited
+            max_concurrent_models: 4,
             max_concurrent_contexts: 8,
         }
     }
@@ -207,17 +199,17 @@ impl Default for NNResourceLimits {
 #[derive(Debug)]
 pub struct ResourceTracker {
     // Current usage counters (atomic for thread safety)
-    active_models:         AtomicUsize,
-    active_contexts:       AtomicUsize,
-    total_memory_used:     AtomicUsize,
+    active_models: AtomicUsize,
+    active_contexts: AtomicUsize,
+    total_memory_used: AtomicUsize,
     concurrent_operations: AtomicUsize,
 
     // Rate limiting (protected by mutex)
     operations_window: Mutex<VecDeque<OperationRecord>>,
-    last_cleanup:      AtomicU64,
+    last_cleanup: AtomicU64,
 
     // Configuration
-    limits:      NNResourceLimits,
+    limits: NNResourceLimits,
     rate_limits: RateLimits,
 }
 
@@ -279,8 +271,8 @@ impl ResourceTracker {
                         logger.log_security(
                             crate::nn::monitoring::SecurityEvent::QuotaExceeded {
                                 resource_type: "models".to_string(),
-                                current:       current_models,
-                                limit:         self.limits.max_concurrent_models,
+                                current: current_models,
+                                limit: self.limits.max_concurrent_models,
                             },
                             "resource_tracker",
                         );
@@ -296,8 +288,8 @@ impl ResourceTracker {
                         logger.log_security(
                             crate::nn::monitoring::SecurityEvent::QuotaExceeded {
                                 resource_type: "model_size".to_string(),
-                                current:       *size,
-                                limit:         self.limits.max_model_size,
+                                current: *size,
+                                limit: self.limits.max_model_size,
                             },
                             "resource_tracker",
                         );
@@ -312,8 +304,8 @@ impl ResourceTracker {
                         logger.log_security(
                             crate::nn::monitoring::SecurityEvent::QuotaExceeded {
                                 resource_type: "tensor_memory".to_string(),
-                                current:       current_memory + size,
-                                limit:         self.limits.max_tensor_memory,
+                                current: current_memory + size,
+                                limit: self.limits.max_tensor_memory,
                             },
                             "resource_tracker",
                         );
@@ -330,8 +322,8 @@ impl ResourceTracker {
                         logger.log_security(
                             crate::nn::monitoring::SecurityEvent::QuotaExceeded {
                                 resource_type: "contexts".to_string(),
-                                current:       current_contexts,
-                                limit:         self.limits.max_concurrent_contexts,
+                                current: current_contexts,
+                                limit: self.limits.max_concurrent_contexts,
                             },
                             "resource_tracker",
                         );
@@ -348,8 +340,8 @@ impl ResourceTracker {
                         logger.log_security(
                             crate::nn::monitoring::SecurityEvent::QuotaExceeded {
                                 resource_type: "tensor_memory".to_string(),
-                                current:       current_memory + size,
-                                limit:         self.limits.max_tensor_memory,
+                                current: current_memory + size,
+                                limit: self.limits.max_tensor_memory,
                             },
                             "resource_tracker",
                         );
@@ -416,7 +408,7 @@ impl ResourceTracker {
             if let Some(logger) = crate::nn::monitoring::get_logger() {
                 logger.log_security(
                     crate::nn::monitoring::SecurityEvent::RateLimitExceeded {
-                        operation:  format!("{:?}", operation_type),
+                        operation: format!("{:?}", operation_type),
                         limit_type: match operation_type {
                             NNOperationType::Load => "per_minute".to_string(),
                             NNOperationType::Inference => "per_second".to_string(),
@@ -505,8 +497,8 @@ impl ResourceTracker {
             logger.log_resource(
                 crate::nn::monitoring::ResourceEvent::Allocated {
                     resource_type: "context".to_string(),
-                    amount:        1,
-                    total_used:    total_contexts,
+                    amount: 1,
+                    total_used: total_contexts,
                 },
                 "resource_tracker",
             );
@@ -524,8 +516,8 @@ impl ResourceTracker {
             logger.log_resource(
                 crate::nn::monitoring::ResourceEvent::Deallocated {
                     resource_type: "context".to_string(),
-                    amount:        1,
-                    total_used:    total_contexts,
+                    amount: 1,
+                    total_used: total_contexts,
                 },
                 "resource_tracker",
             );
@@ -535,9 +527,9 @@ impl ResourceTracker {
     /// Get current resource usage statistics
     pub fn get_usage_stats(&self) -> ResourceUsageStats {
         ResourceUsageStats {
-            active_models:         self.active_models.load(Ordering::Acquire),
-            active_contexts:       self.active_contexts.load(Ordering::Acquire),
-            total_memory_used:     self.total_memory_used.load(Ordering::Acquire),
+            active_models: self.active_models.load(Ordering::Acquire),
+            active_contexts: self.active_contexts.load(Ordering::Acquire),
+            total_memory_used: self.total_memory_used.load(Ordering::Acquire),
             concurrent_operations: self.concurrent_operations.load(Ordering::Acquire),
         }
     }
@@ -545,7 +537,7 @@ impl ResourceTracker {
 
 /// RAII guard for operation tracking
 pub struct OperationGuard<'a> {
-    tracker:        &'a ResourceTracker,
+    tracker: &'a ResourceTracker,
     operation_type: NNOperationType,
 }
 
@@ -568,9 +560,9 @@ impl<'a> Drop for OperationGuard<'a> {
 /// Resource usage statistics
 #[derive(Debug, Clone)]
 pub struct ResourceUsageStats {
-    pub active_models:         usize,
-    pub active_contexts:       usize,
-    pub total_memory_used:     usize,
+    pub active_models: usize,
+    pub active_contexts: usize,
+    pub total_memory_used: usize,
     pub concurrent_operations: usize,
 }
 
@@ -578,10 +570,7 @@ pub struct ResourceUsageStats {
 fn get_current_time_ms() -> u64 {
     #[cfg(feature = "std")]
     {
-        use std::time::{
-            SystemTime,
-            UNIX_EPOCH,
-        };
+        use std::time::{SystemTime, UNIX_EPOCH};
         SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64
     }
     #[cfg(not(feature = "std"))]
@@ -619,8 +608,8 @@ pub trait NeuralNetworkCapability: Send + Sync + Debug {
 /// Dynamic neural network capability (Standard/QM level)
 #[derive(Debug)]
 pub struct DynamicNNCapability {
-    limits:           NNResourceLimits,
-    allowed_formats:  Vec<ModelFormat>,
+    limits: NNResourceLimits,
+    allowed_formats: Vec<ModelFormat>,
     resource_tracker: Option<ResourceTracker>,
 }
 
@@ -628,8 +617,8 @@ impl DynamicNNCapability {
     /// Create a new dynamic capability with default limits
     pub fn new() -> Self {
         Self {
-            limits:           NNResourceLimits::default(),
-            allowed_formats:  vec![
+            limits: NNResourceLimits::default(),
+            allowed_formats: vec![
                 ModelFormat::ONNX,
                 ModelFormat::TensorFlow,
                 ModelFormat::PyTorch,
@@ -711,7 +700,7 @@ impl NeuralNetworkCapability for DynamicNNCapability {
                     if let Some(logger) = crate::nn::monitoring::get_logger() {
                         logger.log_security(
                             crate::nn::monitoring::SecurityEvent::CapabilityVerificationFailed {
-                                operation:        "load".to_string(),
+                                operation: "load".to_string(),
                                 capability_level: "Standard".to_string(),
                             },
                             "dynamic_capability",
@@ -723,7 +712,7 @@ impl NeuralNetworkCapability for DynamicNNCapability {
                     if let Some(logger) = crate::nn::monitoring::get_logger() {
                         logger.log_security(
                             crate::nn::monitoring::SecurityEvent::ModelValidationFailed {
-                                reason:     "Format not allowed".to_string(),
+                                reason: "Format not allowed".to_string(),
                                 model_size: *size,
                             },
                             "dynamic_capability",
@@ -738,7 +727,7 @@ impl NeuralNetworkCapability for DynamicNNCapability {
                     if let Some(logger) = crate::nn::monitoring::get_logger() {
                         logger.log_security(
                             crate::nn::monitoring::SecurityEvent::CapabilityVerificationFailed {
-                                operation:        "set_input".to_string(),
+                                operation: "set_input".to_string(),
                                 capability_level: "Standard".to_string(),
                             },
                             "dynamic_capability",
@@ -750,7 +739,7 @@ impl NeuralNetworkCapability for DynamicNNCapability {
                     if let Some(logger) = crate::nn::monitoring::get_logger() {
                         logger.log_security(
                             crate::nn::monitoring::SecurityEvent::CapabilityVerificationFailed {
-                                operation:        "set_input".to_string(),
+                                operation: "set_input".to_string(),
                                 capability_level: "Standard".to_string(),
                             },
                             "dynamic_capability",
@@ -789,8 +778,8 @@ impl NeuralNetworkCapability for DynamicNNCapability {
 /// Bounded neural network capability (Sampling/ASIL-A level)
 #[derive(Debug)]
 pub struct BoundedNNCapability {
-    limits:             NNResourceLimits,
-    allowed_formats:    Vec<ModelFormat>,
+    limits: NNResourceLimits,
+    allowed_formats: Vec<ModelFormat>,
     runtime_monitoring: bool,
 }
 
@@ -805,11 +794,11 @@ impl BoundedNNCapability {
 
         Ok(Self {
             limits: NNResourceLimits {
-                max_model_size:          50 * 1024 * 1024, // 50MB
-                max_tensor_memory:       20 * 1024 * 1024, // 20MB
-                max_tensor_dimensions:   6,
-                max_execution_time_us:   10_000_000, // 10 seconds
-                max_concurrent_models:   2,
+                max_model_size: 50 * 1024 * 1024,    // 50MB
+                max_tensor_memory: 20 * 1024 * 1024, // 20MB
+                max_tensor_dimensions: 6,
+                max_execution_time_us: 10_000_000, // 10 seconds
+                max_concurrent_models: 2,
                 max_concurrent_contexts: 4,
             },
             allowed_formats,
@@ -883,8 +872,8 @@ impl NeuralNetworkCapability for BoundedNNCapability {
 /// Static neural network capability (Continuous/ASIL-B level)
 #[derive(Debug)]
 pub struct StaticNNCapability {
-    limits:                  NNResourceLimits,
-    approved_models:         Vec<[u8; 32]>,
+    limits: NNResourceLimits,
+    approved_models: Vec<[u8; 32]>,
     deterministic_execution: bool,
 }
 
@@ -899,11 +888,11 @@ impl StaticNNCapability {
 
         Ok(Self {
             limits: NNResourceLimits {
-                max_model_size:          20 * 1024 * 1024, // 20MB
-                max_tensor_memory:       10 * 1024 * 1024, // 10MB
-                max_tensor_dimensions:   4,
-                max_execution_time_us:   1_000_000, // 1 second (deterministic)
-                max_concurrent_models:   1,
+                max_model_size: 20 * 1024 * 1024,    // 20MB
+                max_tensor_memory: 10 * 1024 * 1024, // 10MB
+                max_tensor_dimensions: 4,
+                max_execution_time_us: 1_000_000, // 1 second (deterministic)
+                max_concurrent_models: 1,
                 max_concurrent_contexts: 2,
             },
             approved_models,
@@ -1016,7 +1005,7 @@ mod tests {
 
         // Should allow large models
         let load_op = NNOperation::Load {
-            size:   50 * 1024 * 1024,
+            size: 50 * 1024 * 1024,
             format: ModelFormat::ONNX,
         };
         assert!(cap.verify_operation(&load_op).is_ok());
@@ -1029,7 +1018,7 @@ mod tests {
 
         // Should reject oversized models
         let load_op = NNOperation::Load {
-            size:   100 * 1024 * 1024,
+            size: 100 * 1024 * 1024,
             format: ModelFormat::ONNX,
         };
         assert!(cap.verify_operation(&load_op).is_err());
@@ -1043,7 +1032,7 @@ mod tests {
 
         // Should only allow verified formats
         let load_op = NNOperation::Load {
-            size:   10 * 1024 * 1024,
+            size: 10 * 1024 * 1024,
             format: ModelFormat::PyTorch,
         };
         assert!(cap.verify_operation(&load_op).is_err());

@@ -10,15 +10,9 @@ use crate::prelude::*;
 extern crate alloc;
 
 #[cfg(not(feature = "std"))]
-use alloc::{
-    vec,
-    vec::Vec,
-};
+use alloc::{vec, vec::Vec};
 #[cfg(feature = "std")]
-use std::{
-    vec,
-    vec::Vec,
-};
+use std::{vec, vec::Vec};
 
 /// Pure data segment mode (format representation only)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,7 +21,7 @@ pub enum PureDataMode {
     /// expression data)
     Active {
         /// Memory index reference
-        memory_index:    u32,
+        memory_index: u32,
         /// Offset expression length (for parsing validation)
         offset_expr_len: u32,
     },
@@ -48,7 +42,7 @@ pub enum PureElementMode {
     /// expression data)
     Active {
         /// Table index reference
-        table_index:     u32,
+        table_index: u32,
         /// Offset expression length (for parsing validation)
         offset_expr_len: u32,
     },
@@ -68,24 +62,24 @@ impl Default for PureElementMode {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PureDataSegment {
     /// Data mode (pure format representation)
-    pub mode:              PureDataMode,
+    pub mode: PureDataMode,
     /// Raw offset expression bytes (format-only, runtime interprets)
     pub offset_expr_bytes: Vec<u8>,
     /// Data bytes
-    pub data_bytes:        Vec<u8>,
+    pub data_bytes: Vec<u8>,
 }
 
 /// Pure element segment (format representation only)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PureElementSegment {
     /// Element mode (pure format representation)
-    pub mode:              PureElementMode,
+    pub mode: PureElementMode,
     /// Element type (funcref, externref, etc.)
-    pub element_type:      crate::types::RefType,
+    pub element_type: crate::types::RefType,
     /// Raw offset expression bytes (format-only, runtime interprets)
     pub offset_expr_bytes: Vec<u8>,
     /// Element initialization data (indices or expression bytes)
-    pub init_data:         PureElementInit,
+    pub init_data: PureElementInit,
 }
 
 /// Pure element initialization data (format representation only)
@@ -100,9 +94,9 @@ pub enum PureElementInit {
 impl Default for PureDataSegment {
     fn default() -> Self {
         Self {
-            mode:              PureDataMode::default(),
+            mode: PureDataMode::default(),
             offset_expr_bytes: Vec::new(),
-            data_bytes:        Vec::new(),
+            data_bytes: Vec::new(),
         }
     }
 }
@@ -110,10 +104,10 @@ impl Default for PureDataSegment {
 impl Default for PureElementSegment {
     fn default() -> Self {
         Self {
-            mode:              PureElementMode::default(),
-            element_type:      crate::types::RefType::Funcref,
+            mode: PureElementMode::default(),
+            element_type: crate::types::RefType::Funcref,
             offset_expr_bytes: Vec::new(),
-            init_data:         PureElementInit::FunctionIndices(Vec::new()),
+            init_data: PureElementInit::FunctionIndices(Vec::new()),
         }
     }
 }
@@ -128,21 +122,21 @@ impl PureDataSegment {
     /// Create new active data segment
     pub fn new_active(memory_index: u32, offset_expr: Vec<u8>, data: Vec<u8>) -> Self {
         Self {
-            mode:              PureDataMode::Active {
+            mode: PureDataMode::Active {
                 memory_index,
                 offset_expr_len: offset_expr.len() as u32,
             },
             offset_expr_bytes: offset_expr,
-            data_bytes:        data,
+            data_bytes: data,
         }
     }
 
     /// Create new passive data segment
     pub fn new_passive(data: Vec<u8>) -> Self {
         Self {
-            mode:              PureDataMode::Passive,
+            mode: PureDataMode::Passive,
             offset_expr_bytes: Vec::new(),
-            data_bytes:        data,
+            data_bytes: data,
         }
     }
 
@@ -592,7 +586,7 @@ impl kiln_foundation::traits::FromBytes for PureElementSegment {
             _ => {
                 return Err(kiln_error::Error::runtime_execution_error(
                     "Invalid element type",
-                ))
+                ));
             },
         };
 

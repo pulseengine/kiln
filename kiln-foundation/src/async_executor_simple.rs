@@ -6,10 +6,7 @@
 use core::{
     future::Future,
     pin::Pin,
-    task::{
-        Context,
-        Poll,
-    },
+    task::{Context, Poll},
 };
 
 /// Simple executor error type
@@ -75,11 +72,7 @@ pub fn is_using_fallback() -> bool {
 
 /// Create a no-op waker for simple polling
 fn create_noop_waker() -> core::task::Waker {
-    use core::task::{
-        RawWaker,
-        RawWakerVTable,
-        Waker,
-    };
+    use core::task::{RawWaker, RawWakerVTable, Waker};
 
     const VTABLE: RawWakerVTable = RawWakerVTable::new(
         |_| RawWaker::new(core::ptr::null(), &VTABLE), // clone

@@ -127,7 +127,8 @@ fn extract_module_from_section(_section_bytes: &[u8]) -> Option<alloc::vec::Vec<
 #[cfg(not(feature = "std"))]
 fn extract_module_from_section(
     _section_bytes: &[u8],
-) -> Option<kiln_foundation::BoundedVec<u8, 128, kiln_foundation::safe_memory::NoStdProvider<2048>>> {
+) -> Option<kiln_foundation::BoundedVec<u8, 128, kiln_foundation::safe_memory::NoStdProvider<2048>>>
+{
     // This is a simplified version - the real implementation would parse the
     // section structure to extract the module bytes
 
@@ -631,8 +632,9 @@ impl kiln_foundation::traits::FromBytes for ExtendedExportInfo {
                 kiln_foundation::budget_aware_provider::CrateId::Decoder
             )
             .map_err(|_| kiln_foundation::traits::SerializationError::InvalidFormat)?;
-            let mut vec = kiln_foundation::BoundedVec::<u8, 256, NoStdProvider<8192>>::new(provider)
-                .map_err(|_| kiln_foundation::traits::SerializationError::InvalidFormat)?;
+            let mut vec =
+                kiln_foundation::BoundedVec::<u8, 256, NoStdProvider<8192>>::new(provider)
+                    .map_err(|_| kiln_foundation::traits::SerializationError::InvalidFormat)?;
             vec.resize(name_len, 0u8)
                 .map_err(|_| kiln_foundation::traits::SerializationError::InvalidFormat)?;
             vec
@@ -652,8 +654,9 @@ impl kiln_foundation::traits::FromBytes for ExtendedExportInfo {
                 kiln_foundation::budget_aware_provider::CrateId::Decoder
             )
             .map_err(|_| kiln_foundation::traits::SerializationError::InvalidFormat)?;
-            let mut vec = kiln_foundation::BoundedVec::<u8, 256, NoStdProvider<8192>>::new(provider)
-                .map_err(|_| kiln_foundation::traits::SerializationError::InvalidFormat)?;
+            let mut vec =
+                kiln_foundation::BoundedVec::<u8, 256, NoStdProvider<8192>>::new(provider)
+                    .map_err(|_| kiln_foundation::traits::SerializationError::InvalidFormat)?;
             vec.resize(kind_len, 0u8)
                 .map_err(|_| kiln_foundation::traits::SerializationError::InvalidFormat)?;
             vec

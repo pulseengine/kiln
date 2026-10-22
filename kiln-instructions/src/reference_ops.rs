@@ -9,32 +9,15 @@
 //! These operations support the WebAssembly reference types proposal
 //! and work across std, `no_std+alloc`, and pure `no_std` environments.
 
-use kiln_error::{
-    Error,
-    Result,
-};
+use kiln_error::{Error, Result};
 use kiln_foundation::{
-    types::{
-        RefType,
-        ValueType,
-    },
-    values::{
-        FuncRef,
-        Value,
-    },
+    types::{RefType, ValueType},
+    values::{FuncRef, Value},
 };
 
 use crate::{
-    prelude::{
-        Debug,
-        Eq,
-        PartialEq,
-    },
-    validation::{
-        validate_ref_op,
-        Validate,
-        ValidationContext,
-    },
+    prelude::{Debug, Eq, PartialEq},
+    validation::{Validate, ValidationContext, validate_ref_op},
 };
 
 /// Reference null operation - creates a null reference of specified type
@@ -126,7 +109,9 @@ impl RefFunc {
         // 1. Validate that function_index exists in the module
         // 2. Create a proper function reference with the function's type signature
         // For now, we create a basic function reference
-        Ok(Value::FuncRef(Some(FuncRef::from_index(self.function_index))))
+        Ok(Value::FuncRef(Some(FuncRef::from_index(
+            self.function_index,
+        ))))
     }
 }
 
@@ -308,11 +293,7 @@ mod tests {
     impl ReferenceOperations for MockReferenceContext {
         fn get_function(&self, function_index: u32) -> Result<Option<u32>> {
             // Mock: functions 0-9 exist
-            if function_index < 10 {
-                Ok(Some(function_index))
-            } else {
-                Ok(None)
-            }
+            if function_index < 10 { Ok(Some(function_index)) } else { Ok(None) }
         }
 
         fn validate_function_index(&self, function_index: u32) -> Result<()> {
@@ -348,7 +329,12 @@ mod tests {
     #[test]
     fn test_ref_is_null_with_non_null_funcref() {
         let op = RefIsNull::new();
-        let result = op.execute(&Value::FuncRef(Some(FuncRef { index: 42, instance_id: None }))).unwrap();
+        let result = op
+            .execute(&Value::FuncRef(Some(FuncRef {
+                index: 42,
+                instance_id: None,
+            })))
+            .unwrap();
         assert_eq!(result, Value::I32(0));
     }
 
@@ -377,13 +363,22 @@ mod tests {
     fn test_ref_func_valid_index() {
         let op = RefFunc::new(5);
         let result = op.execute().unwrap();
-        assert_eq!(result, Value::FuncRef(Some(FuncRef { index: 5, instance_id: None })));
+        assert_eq!(
+            result,
+            Value::FuncRef(Some(FuncRef {
+                index: 5,
+                instance_id: None
+            }))
+        );
     }
 
     #[test]
     fn test_ref_as_non_null_with_valid_funcref() {
         let op = RefAsNonNull::new();
-        let input = Value::FuncRef(Some(FuncRef { index: 42, instance_id: None }));
+        let input = Value::FuncRef(Some(FuncRef {
+            index: 42,
+            instance_id: None,
+        }));
         let result = op.execute(input.clone()).unwrap();
         assert_eq!(result, input);
     }
@@ -434,7 +429,13 @@ mod tests {
         // Test RefFunc with valid index
         let ref_func_op = ReferenceOp::RefFunc(RefFunc::new(3));
         let result = ref_func_op.execute(&context, &[]).unwrap();
-        assert_eq!(result, Value::FuncRef(Some(FuncRef { index: 3, instance_id: None })));
+        assert_eq!(
+            result,
+            Value::FuncRef(Some(FuncRef {
+                index: 3,
+                instance_id: None
+            }))
+        );
 
         // Test RefFunc with invalid index
         let ref_func_op = ReferenceOp::RefFunc(RefFunc::new(15));
@@ -444,9 +445,21 @@ mod tests {
         // Test RefAsNonNull
         let ref_as_non_null_op = ReferenceOp::RefAsNonNull(RefAsNonNull::new());
         let result = ref_as_non_null_op
-            .execute(&context, &[Value::FuncRef(Some(FuncRef { index: 5, instance_id: None }))])
+            .execute(
+                &context,
+                &[Value::FuncRef(Some(FuncRef {
+                    index: 5,
+                    instance_id: None,
+                }))],
+            )
             .unwrap();
-        assert_eq!(result, Value::FuncRef(Some(FuncRef { index: 5, instance_id: None })));
+        assert_eq!(
+            result,
+            Value::FuncRef(Some(FuncRef {
+                index: 5,
+                instance_id: None
+            }))
+        );
     }
 
     #[test]
@@ -466,8 +479,14 @@ mod tests {
     #[test]
     fn test_ref_eq_same_funcref() {
         let op = RefEq::new();
-        let ref1 = Value::FuncRef(Some(FuncRef { index: 42, instance_id: None }));
-        let ref2 = Value::FuncRef(Some(FuncRef { index: 42, instance_id: None }));
+        let ref1 = Value::FuncRef(Some(FuncRef {
+            index: 42,
+            instance_id: None,
+        }));
+        let ref2 = Value::FuncRef(Some(FuncRef {
+            index: 42,
+            instance_id: None,
+        }));
         let result = op.execute(ref1, ref2).unwrap();
         assert_eq!(result, Value::I32(1)); // same index == equal
     }
@@ -475,8 +494,14 @@ mod tests {
     #[test]
     fn test_ref_eq_different_funcrefs() {
         let op = RefEq::new();
-        let ref1 = Value::FuncRef(Some(FuncRef { index: 42, instance_id: None }));
-        let ref2 = Value::FuncRef(Some(FuncRef { index: 43, instance_id: None }));
+        let ref1 = Value::FuncRef(Some(FuncRef {
+            index: 42,
+            instance_id: None,
+        }));
+        let ref2 = Value::FuncRef(Some(FuncRef {
+            index: 43,
+            instance_id: None,
+        }));
         let result = op.execute(ref1, ref2).unwrap();
         assert_eq!(result, Value::I32(0)); // different indices == not equal
     }
@@ -485,7 +510,10 @@ mod tests {
     fn test_ref_eq_null_vs_non_null() {
         let op = RefEq::new();
         let ref1 = Value::FuncRef(None);
-        let ref2 = Value::FuncRef(Some(FuncRef { index: 42, instance_id: None }));
+        let ref2 = Value::FuncRef(Some(FuncRef {
+            index: 42,
+            instance_id: None,
+        }));
         let result = op.execute(ref1, ref2).unwrap();
         assert_eq!(result, Value::I32(0)); // null != non-null
     }
@@ -497,7 +525,7 @@ mod tests {
         let ref2 = Value::ExternRef(None);
         let result = op.execute(ref1, ref2).unwrap();
         assert_eq!(result, Value::I32(0)); // funcref != externref even if both
-                                           // null
+        // null
     }
 
     #[test]
@@ -519,8 +547,14 @@ mod tests {
         assert_eq!(result, Value::I32(1));
 
         // Test different refs
-        let ref1 = Value::FuncRef(Some(FuncRef { index: 1, instance_id: None }));
-        let ref2 = Value::FuncRef(Some(FuncRef { index: 2, instance_id: None }));
+        let ref1 = Value::FuncRef(Some(FuncRef {
+            index: 1,
+            instance_id: None,
+        }));
+        let ref2 = Value::FuncRef(Some(FuncRef {
+            index: 2,
+            instance_id: None,
+        }));
         let result = ref_eq_op.execute(&context, &[ref1, ref2]).unwrap();
         assert_eq!(result, Value::I32(0));
     }
@@ -582,7 +616,7 @@ impl Validate for RefEq {
                 _ => {
                     return Err(Error::type_error(
                         "ref.eq requires two references of same type",
-                    ))
+                    ));
                 },
             }
         }

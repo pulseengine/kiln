@@ -48,9 +48,9 @@ pub fn build_counters_json(snapshot: &BTreeMap<String, i64>, prefix: &str) -> Re
         let id_str = name.strip_prefix(prefix).ok_or_else(|| {
             Error::runtime_error("witness counter global is missing the expected prefix")
         })?;
-        let id: u32 = id_str.parse().map_err(|_| {
-            Error::runtime_error("witness counter id is not a numeric u32")
-        })?;
+        let id: u32 = id_str
+            .parse()
+            .map_err(|_| Error::runtime_error("witness counter id is not a numeric u32"))?;
         counters.insert(id, *value);
     }
 
@@ -122,9 +122,11 @@ pub fn run(module_path: &std::path::Path, output_path: &std::path::Path) -> Resu
     // needs the same WASI host the normal run path wires. No preopens: the
     // harness grants no filesystem access.
     #[cfg(feature = "wasi")]
-    engine.set_host_handler(Box::new(kiln_wasi::WasiDispatcher::with_defaults().map_err(
-        |_| Error::runtime_error("failed to create the WASI dispatcher for the harness"),
-    )?));
+    engine.set_host_handler(Box::new(
+        kiln_wasi::WasiDispatcher::with_defaults().map_err(|_| {
+            Error::runtime_error("failed to create the WASI dispatcher for the harness")
+        })?,
+    ));
 
     let module_handle = engine
         .load_module(&wasm)
@@ -349,6 +351,9 @@ mod tests {
             "noentry",
         );
         assert!(result.is_err(), "must refuse instead of guessing an entry");
-        assert!(got.is_none(), "no snapshot may be written for a run that did not happen");
+        assert!(
+            got.is_none(),
+            "no snapshot may be written for a run that did not happen"
+        );
     }
 }

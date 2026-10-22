@@ -96,12 +96,16 @@ fn parse_call_args(
     let mut out = Vec::with_capacity(declared.len());
     for (idx, (ty, raw)) in declared.iter().zip(supplied.iter()).enumerate() {
         let value = match ty {
-            ValueType::I32 => raw.trim().parse::<i32>().map(Value::I32).map_err(|_| {
-                Error::runtime_type_mismatch("argument is not a valid i32")
-            }),
-            ValueType::I64 => raw.trim().parse::<i64>().map(Value::I64).map_err(|_| {
-                Error::runtime_type_mismatch("argument is not a valid i64")
-            }),
+            ValueType::I32 => raw
+                .trim()
+                .parse::<i32>()
+                .map(Value::I32)
+                .map_err(|_| Error::runtime_type_mismatch("argument is not a valid i32")),
+            ValueType::I64 => raw
+                .trim()
+                .parse::<i64>()
+                .map(Value::I64)
+                .map_err(|_| Error::runtime_type_mismatch("argument is not a valid i64")),
             ValueType::F32 => raw
                 .trim()
                 .parse::<f32>()
@@ -1180,7 +1184,8 @@ impl KilndEngine {
                     ));
                 }
 
-                let parsed_args = parse_call_args(function_name, &declared_param_types, &call_args)?;
+                let parsed_args =
+                    parse_call_args(function_name, &declared_param_types, &call_args)?;
 
                 // Propagate the engine's error verbatim so the actual cause
                 // (e.g. "fuel exhausted", a trap message) reaches the user
@@ -1193,8 +1198,7 @@ impl KilndEngine {
                 // the computation. Read the return area, decode each field by
                 // its WIT type, run the post-return, and only then print.
                 #[cfg(feature = "component-model")]
-                let return_area_sig =
-                    manifest_sig.as_ref().filter(|sig| sig.return_area.is_some());
+                let return_area_sig = manifest_sig.as_ref().filter(|sig| sig.return_area.is_some());
                 #[cfg(not(feature = "component-model"))]
                 let return_area_sig: Option<&()> = None;
 

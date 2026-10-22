@@ -74,18 +74,14 @@
 #[cfg(feature = "std")]
 extern crate std;
 
-use core::sync::atomic::{
-    AtomicU32,
-    AtomicU8,
-    Ordering,
-};
+use core::sync::atomic::{AtomicU8, AtomicU32, Ordering};
 
 /// ASIL (Automotive Safety Integrity Level) as defined by ISO 26262
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum AsilLevel {
     /// Quality Management (no safety requirements)
-    QM    = 0,
+    QM = 0,
     /// ASIL-A (lowest safety integrity level)
     AsilA = 1,
     /// ASIL-B (medium-low safety integrity level)
@@ -128,32 +124,32 @@ pub const MAX_STACK_TRACE_ENTRIES: usize = 16;
 #[repr(C, packed)]
 pub struct KilnPanicInfo {
     /// Magic number for debugger recognition (0xDEADBEEF)
-    pub magic:             u32,
+    pub magic: u32,
     /// ASIL level at time of panic
-    pub asil_level:        u8,
+    pub asil_level: u8,
     /// Reserved for alignment
-    pub reserved:          [u8; 3],
+    pub reserved: [u8; 3],
     /// Error code (hash of panic message)
-    pub error_code:        u32,
+    pub error_code: u32,
     /// Location hash (file + line combination)
-    pub location_hash:     u32,
+    pub location_hash: u32,
     /// Timestamp if available (0 if not available)
-    pub timestamp:         u64,
+    pub timestamp: u64,
     /// Stack trace entries count
     pub stack_trace_count: u8,
     /// Reserved for future use
-    pub reserved2:         [u8; 3],
+    pub reserved2: [u8; 3],
     /// Variable length stack trace (depends on memory budget)
-    pub stack_trace:       [u32; MAX_STACK_TRACE_ENTRIES],
+    pub stack_trace: [u32; MAX_STACK_TRACE_ENTRIES],
     /// Checksum of all above data
-    pub checksum:          u32,
+    pub checksum: u32,
 }
 
 /// Panic context configuration
 pub struct PanicContext<P: MemoryProvider> {
-    safety_level:    AsilLevel,
+    safety_level: AsilLevel,
     memory_provider: P,
-    memory_budget:   usize,
+    memory_budget: usize,
 }
 
 /// Global panic context storage
@@ -162,9 +158,9 @@ static PANIC_MEMORY_BUDGET: AtomicU32 = AtomicU32::new(DEFAULT_PANIC_MEMORY_BUDG
 
 /// Builder for panic context configuration
 pub struct PanicContextBuilder<P: MemoryProvider> {
-    safety_level:    AsilLevel,
+    safety_level: AsilLevel,
     memory_provider: Option<P>,
-    memory_budget:   usize,
+    memory_budget: usize,
 }
 
 impl<P: MemoryProvider> Default for PanicContextBuilder<P> {
@@ -177,9 +173,9 @@ impl<P: MemoryProvider> PanicContextBuilder<P> {
     /// Create a new panic context builder with ASIL-D defaults
     pub const fn new() -> Self {
         Self {
-            safety_level:    AsilLevel::AsilD,
+            safety_level: AsilLevel::AsilD,
             memory_provider: None,
-            memory_budget:   DEFAULT_PANIC_MEMORY_BUDGET,
+            memory_budget: DEFAULT_PANIC_MEMORY_BUDGET,
         }
     }
 
@@ -211,9 +207,9 @@ impl<P: MemoryProvider> PanicContextBuilder<P> {
         }
 
         Ok(PanicContext {
-            safety_level:    self.safety_level,
+            safety_level: self.safety_level,
             memory_provider: provider,
-            memory_budget:   self.memory_budget,
+            memory_budget: self.memory_budget,
         })
     }
 }
@@ -307,16 +303,16 @@ fn store_panic_info(info: &core::panic::PanicInfo) {
 
     // Store in a static location that debuggers can easily find
     static mut PANIC_INFO_STORAGE: KilnPanicInfo = KilnPanicInfo {
-        magic:             0,
-        asil_level:        0,
-        reserved:          [0; 3],
-        error_code:        0,
-        location_hash:     0,
-        timestamp:         0,
+        magic: 0,
+        asil_level: 0,
+        reserved: [0; 3],
+        error_code: 0,
+        location_hash: 0,
+        timestamp: 0,
         stack_trace_count: 0,
-        reserved2:         [0; 3],
-        stack_trace:       [0; MAX_STACK_TRACE_ENTRIES],
-        checksum:          0,
+        reserved2: [0; 3],
+        stack_trace: [0; MAX_STACK_TRACE_ENTRIES],
+        checksum: 0,
     };
 
     // Safe to write since we're in a panic handler (single-threaded at this point)

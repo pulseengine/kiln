@@ -80,6 +80,15 @@ pub use stack_trace::{StackFrame, StackTrace, StackTraceBuilder};
 pub use strings::{DebugString, StringTable};
 pub use types::{DebugSection, DebugSectionRef, DwarfSections};
 // WIT integration exports
+use kiln_error::{Error, Result};
+use kiln_foundation::prelude::*;
+#[cfg(feature = "abbrev")]
+use kiln_foundation::{
+    NoStdProvider,
+    bounded::{BoundedVec, MAX_DWARF_ABBREV_CACHE},
+    budget_aware_provider::CrateId,
+    safe_managed_alloc,
+};
 #[cfg(feature = "wit-integration")]
 pub use wit_aware_debugger::{
     ComponentError, ComponentMetadata, FunctionMetadata, TypeMetadata, WitAwareDebugger,
@@ -90,15 +99,6 @@ pub use wit_source_map::{
     ComponentBoundary, ComponentId, ContextLine, DiagnosticSeverity, FunctionId,
     MemoryRegion as WitMemoryRegion, MemoryRegionType as WitMemoryRegionType, SourceContext,
     SourceSpan, TypeId, WitDiagnostic, WitSourceFile, WitSourceMap, WitTypeInfo, WitTypeKind,
-};
-use kiln_error::{Error, Result};
-use kiln_foundation::prelude::*;
-#[cfg(feature = "abbrev")]
-use kiln_foundation::{
-    NoStdProvider,
-    bounded::{BoundedVec, MAX_DWARF_ABBREV_CACHE},
-    budget_aware_provider::CrateId,
-    safe_managed_alloc,
 };
 
 #[cfg(feature = "abbrev")]

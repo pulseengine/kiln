@@ -6,142 +6,73 @@
 // Re-export from std
 pub use std::{
     boxed::Box,
-    collections::{
-        HashMap,
-        HashSet,
-    },
+    collections::{HashMap, HashSet},
     format,
-    string::{
-        String,
-        ToString,
-    },
-    sync::{
-        Arc,
-        Mutex,
-        MutexGuard,
-        RwLock,
-        RwLockReadGuard,
-        RwLockWriteGuard,
-    },
+    string::{String, ToString},
+    sync::{Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard},
     vec,
     vec::Vec,
 };
 
 pub use core::{
     any::Any,
-    cmp::{
-        Eq,
-        Ord,
-        PartialEq,
-        PartialOrd,
-    },
-    convert::{
-        TryFrom,
-        TryInto,
-    },
+    cmp::{Eq, Ord, PartialEq, PartialOrd},
+    convert::{TryFrom, TryInto},
     fmt,
-    fmt::{
-        Debug,
-        Display,
-    },
+    fmt::{Debug, Display},
     marker::PhantomData,
     mem,
-    ops::{
-        Deref,
-        DerefMut,
-    },
-    slice,
-    str,
-    sync::atomic::{
-        AtomicUsize,
-        Ordering as AtomicOrdering,
-    },
+    ops::{Deref, DerefMut},
+    slice, str,
+    sync::atomic::{AtomicUsize, Ordering as AtomicOrdering},
 };
 
 // Re-export from kiln-error for error handling
 pub use kiln_error::prelude::{
+    Error, ErrorCategory, Result,
     kinds::{
-        self,
-        ComponentError,
-        InvalidType,
-        OutOfBoundsError,
-        ParseError,
-        ResourceError,
-        RuntimeError,
-        ValidationError,
+        self, ComponentError, InvalidType, OutOfBoundsError, ParseError, ResourceError,
+        RuntimeError, ValidationError,
     },
-    Error,
-    ErrorCategory,
-    Result,
 };
 
 // Re-export from kiln-format
 pub use kiln_format::component::Component as FormatComponent;
 pub use kiln_format::{
     module::{
-        Element as FormatElement,
-        Export as FormatExport,
-        ExportKind as FormatExportKind,
-        Function as FormatFunction,
-        Global as FormatGlobal,
-        Import as FormatImport,
-        ImportDesc as FormatImportDesc,
-        Memory as FormatMemory,
-        Table as FormatTable,
+        Element as FormatElement, Export as FormatExport, ExportKind as FormatExportKind,
+        Function as FormatFunction, Global as FormatGlobal, Import as FormatImport,
+        ImportDesc as FormatImportDesc, Memory as FormatMemory, Table as FormatTable,
     },
     pure_format_types::PureDataSegment as FormatData,
     section::CustomSection as FormatCustomSection,
 };
 
 // Clean core WebAssembly types (for runtime use)
-pub use kiln_foundation::clean_core_types::{
-    CoreGlobalType,
-    CoreMemoryType,
-    CoreTableType,
-};
+pub use kiln_foundation::clean_core_types::{CoreGlobalType, CoreMemoryType, CoreTableType};
 pub use kiln_foundation::clean_types::ExternType as CleanExternType;
 pub use kiln_foundation::component::ComponentType;
 
 // Import required traits
-pub use kiln_foundation::traits::{
-    Checksummable,
-    FromBytes,
-    ToBytes,
-};
+pub use kiln_foundation::traits::{Checksummable, FromBytes, ToBytes};
 
 // Re-export core types from kiln_foundation
 pub use kiln_foundation::types::CustomSection;
 pub use kiln_foundation::{
+    MemoryStats,
     prelude::{
-        BoundedStack,
-        BoundedVec,
-        ComponentValue,
-        ResourceType,
-        SafeMemoryHandler,
-        SafeSlice,
-        ValType as ComponentValType,
-        ValueType,
-        VerificationLevel,
+        BoundedStack, BoundedVec, ComponentValue, ResourceType, SafeMemoryHandler, SafeSlice,
+        ValType as ComponentValType, ValueType, VerificationLevel,
     },
     safe_memory::SafeStack,
     traits::BoundedCapacity,
-    types::{
-        DataSegment,
-        ElementSegment,
-        Limits,
-        RefValue,
-    },
-    MemoryStats,
+    types::{DataSegment, ElementSegment, Limits, RefValue},
 };
 
 // Use foundation Value directly for runtime
 pub use kiln_foundation::{
-    types::FuncType as CleanFuncType,
-    types::ValueType as CleanValType,
-    GlobalType as CleanGlobalType,
-    MemoryType as CleanMemoryType,
-    TableType as CleanTableType,
-    Value as CleanValue,
+    GlobalType as CleanGlobalType, MemoryType as CleanMemoryType, TableType as CleanTableType,
+    Value as CleanValue, types::FuncType as CleanFuncType, types::ValueType as CleanValType,
 };
 
 /// Core function type
@@ -173,22 +104,16 @@ pub use kiln_host::prelude::HostFunctionHandler as HostFunction;
 
 pub use kiln_instructions::{
     arithmetic_ops::ArithmeticOp,
-    control_ops::{
-        BranchTarget as Label,
-        ControlOp,
-    },
+    control_ops::{BranchTarget as Label, ControlOp},
     instruction_traits::PureInstruction as InstructionExecutor,
 };
 
 pub use crate::module::{
-    GlobalWrapper as RuntimeGlobal,
-    MemoryWrapper as RuntimeMemory,
-    TableWrapper as RuntimeTable,
+    GlobalWrapper as RuntimeGlobal, MemoryWrapper as RuntimeMemory, TableWrapper as RuntimeTable,
 };
 
 /// Unified instruction type for WebAssembly operations
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum Instruction {
     /// No operation instruction
     #[default]
@@ -275,31 +200,17 @@ impl kiln_foundation::traits::FromBytes for Instruction {
 
 // Re-export from kiln-intercept
 pub use kiln_intercept::prelude::{
-    LinkInterceptor as InterceptorRegistry,
-    LinkInterceptorStrategy as InterceptStrategy,
+    LinkInterceptor as InterceptorRegistry, LinkInterceptorStrategy as InterceptStrategy,
 };
 
 // Execution related types
-pub use crate::execution::{
-    ExecutionContext,
-    ExecutionStats,
-};
+pub use crate::execution::{ExecutionContext, ExecutionStats};
 
 pub use crate::global::Global;
 
-pub use crate::module::{
-    Data,
-    Element,
-    Export,
-    ExportItem,
-    ExportKind,
-    Import,
-    OtherExport,
-};
+pub use crate::module::{Data, Element, Export, ExportItem, ExportKind, Import, OtherExport};
 
 pub use crate::{
-    memory::Memory,
-    module::Module as RuntimeModule,
-    module_instance::ModuleInstance as RuntimeModuleInstance,
-    table::Table,
+    memory::Memory, module::Module as RuntimeModule,
+    module_instance::ModuleInstance as RuntimeModuleInstance, table::Table,
 };

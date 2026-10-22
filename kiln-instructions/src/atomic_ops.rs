@@ -9,12 +9,7 @@
 
 use kiln_foundation::MemArg;
 
-use crate::prelude::{
-    Debug,
-    Eq,
-    PartialEq,
-    Result,
-};
+use crate::prelude::{Debug, Eq, PartialEq, Result};
 
 /// Memory ordering for atomic operations
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -354,7 +349,7 @@ pub trait AtomicOperations {
     ///
     /// Returns an error if memory access fails or address is misaligned
     fn atomic_rmw_cmpxchg_i32(&mut self, addr: u32, expected: i32, replacement: i32)
-        -> Result<i32>;
+    -> Result<i32>;
 
     /// Atomic RMW compare and exchange 64-bit value
     ///
@@ -362,7 +357,7 @@ pub trait AtomicOperations {
     ///
     /// Returns an error if memory access fails or address is misaligned
     fn atomic_rmw_cmpxchg_i64(&mut self, addr: u32, expected: i64, replacement: i64)
-        -> Result<i64>;
+    -> Result<i64>;
 }
 
 /// WebAssembly opcodes for atomic operations
@@ -462,72 +457,25 @@ impl AtomicOp {
     #[must_use]
     pub fn opcode(&self) -> u8 {
         use opcodes::{
-            ATOMIC_FENCE,
-            I32_ATOMIC_LOAD,
-            I32_ATOMIC_LOAD16_U,
-            I32_ATOMIC_LOAD8_U,
-            I32_ATOMIC_RMW16_ADD_U,
-            I32_ATOMIC_RMW16_AND_U,
-            I32_ATOMIC_RMW16_CMPXCHG_U,
-            I32_ATOMIC_RMW16_OR_U,
-            I32_ATOMIC_RMW16_SUB_U,
-            I32_ATOMIC_RMW16_XCHG_U,
-            I32_ATOMIC_RMW16_XOR_U,
-            I32_ATOMIC_RMW8_ADD_U,
-            I32_ATOMIC_RMW8_AND_U,
-            I32_ATOMIC_RMW8_CMPXCHG_U,
-            I32_ATOMIC_RMW8_OR_U,
-            I32_ATOMIC_RMW8_SUB_U,
-            I32_ATOMIC_RMW8_XCHG_U,
-            I32_ATOMIC_RMW8_XOR_U,
-            I32_ATOMIC_RMW_ADD,
-            I32_ATOMIC_RMW_AND,
-            I32_ATOMIC_RMW_CMPXCHG,
-            I32_ATOMIC_RMW_OR,
-            I32_ATOMIC_RMW_SUB,
-            I32_ATOMIC_RMW_XCHG,
-            I32_ATOMIC_RMW_XOR,
-            I32_ATOMIC_STORE,
-            I32_ATOMIC_STORE16,
-            I32_ATOMIC_STORE8,
-            I64_ATOMIC_LOAD,
-            I64_ATOMIC_LOAD16_U,
-            I64_ATOMIC_LOAD32_U,
-            I64_ATOMIC_LOAD8_U,
-            I64_ATOMIC_RMW16_ADD_U,
-            I64_ATOMIC_RMW16_AND_U,
-            I64_ATOMIC_RMW16_CMPXCHG_U,
-            I64_ATOMIC_RMW16_OR_U,
-            I64_ATOMIC_RMW16_SUB_U,
-            I64_ATOMIC_RMW16_XCHG_U,
-            I64_ATOMIC_RMW16_XOR_U,
-            I64_ATOMIC_RMW32_ADD_U,
-            I64_ATOMIC_RMW32_AND_U,
-            I64_ATOMIC_RMW32_CMPXCHG_U,
-            I64_ATOMIC_RMW32_OR_U,
-            I64_ATOMIC_RMW32_SUB_U,
-            I64_ATOMIC_RMW32_XCHG_U,
-            I64_ATOMIC_RMW32_XOR_U,
-            I64_ATOMIC_RMW8_ADD_U,
-            I64_ATOMIC_RMW8_AND_U,
-            I64_ATOMIC_RMW8_CMPXCHG_U,
-            I64_ATOMIC_RMW8_OR_U,
-            I64_ATOMIC_RMW8_SUB_U,
-            I64_ATOMIC_RMW8_XCHG_U,
-            I64_ATOMIC_RMW8_XOR_U,
-            I64_ATOMIC_RMW_ADD,
-            I64_ATOMIC_RMW_AND,
-            I64_ATOMIC_RMW_CMPXCHG,
-            I64_ATOMIC_RMW_OR,
-            I64_ATOMIC_RMW_SUB,
-            I64_ATOMIC_RMW_XCHG,
-            I64_ATOMIC_RMW_XOR,
-            I64_ATOMIC_STORE,
-            I64_ATOMIC_STORE16,
-            I64_ATOMIC_STORE32,
-            I64_ATOMIC_STORE8,
-            MEMORY_ATOMIC_NOTIFY,
-            MEMORY_ATOMIC_WAIT32,
+            ATOMIC_FENCE, I32_ATOMIC_LOAD, I32_ATOMIC_LOAD8_U, I32_ATOMIC_LOAD16_U,
+            I32_ATOMIC_RMW_ADD, I32_ATOMIC_RMW_AND, I32_ATOMIC_RMW_CMPXCHG, I32_ATOMIC_RMW_OR,
+            I32_ATOMIC_RMW_SUB, I32_ATOMIC_RMW_XCHG, I32_ATOMIC_RMW_XOR, I32_ATOMIC_RMW8_ADD_U,
+            I32_ATOMIC_RMW8_AND_U, I32_ATOMIC_RMW8_CMPXCHG_U, I32_ATOMIC_RMW8_OR_U,
+            I32_ATOMIC_RMW8_SUB_U, I32_ATOMIC_RMW8_XCHG_U, I32_ATOMIC_RMW8_XOR_U,
+            I32_ATOMIC_RMW16_ADD_U, I32_ATOMIC_RMW16_AND_U, I32_ATOMIC_RMW16_CMPXCHG_U,
+            I32_ATOMIC_RMW16_OR_U, I32_ATOMIC_RMW16_SUB_U, I32_ATOMIC_RMW16_XCHG_U,
+            I32_ATOMIC_RMW16_XOR_U, I32_ATOMIC_STORE, I32_ATOMIC_STORE8, I32_ATOMIC_STORE16,
+            I64_ATOMIC_LOAD, I64_ATOMIC_LOAD8_U, I64_ATOMIC_LOAD16_U, I64_ATOMIC_LOAD32_U,
+            I64_ATOMIC_RMW_ADD, I64_ATOMIC_RMW_AND, I64_ATOMIC_RMW_CMPXCHG, I64_ATOMIC_RMW_OR,
+            I64_ATOMIC_RMW_SUB, I64_ATOMIC_RMW_XCHG, I64_ATOMIC_RMW_XOR, I64_ATOMIC_RMW8_ADD_U,
+            I64_ATOMIC_RMW8_AND_U, I64_ATOMIC_RMW8_CMPXCHG_U, I64_ATOMIC_RMW8_OR_U,
+            I64_ATOMIC_RMW8_SUB_U, I64_ATOMIC_RMW8_XCHG_U, I64_ATOMIC_RMW8_XOR_U,
+            I64_ATOMIC_RMW16_ADD_U, I64_ATOMIC_RMW16_AND_U, I64_ATOMIC_RMW16_CMPXCHG_U,
+            I64_ATOMIC_RMW16_OR_U, I64_ATOMIC_RMW16_SUB_U, I64_ATOMIC_RMW16_XCHG_U,
+            I64_ATOMIC_RMW16_XOR_U, I64_ATOMIC_RMW32_ADD_U, I64_ATOMIC_RMW32_AND_U,
+            I64_ATOMIC_RMW32_CMPXCHG_U, I64_ATOMIC_RMW32_OR_U, I64_ATOMIC_RMW32_SUB_U,
+            I64_ATOMIC_RMW32_XCHG_U, I64_ATOMIC_RMW32_XOR_U, I64_ATOMIC_STORE, I64_ATOMIC_STORE8,
+            I64_ATOMIC_STORE16, I64_ATOMIC_STORE32, MEMORY_ATOMIC_NOTIFY, MEMORY_ATOMIC_WAIT32,
             MEMORY_ATOMIC_WAIT64,
         };
 
@@ -621,8 +569,8 @@ impl AtomicOp {
 #[cfg(test)]
 mod tests {
     extern crate alloc;
-    use alloc::vec;
     use super::*;
+    use alloc::vec;
 
     #[test]
     fn test_memory_ordering_default() {
@@ -633,7 +581,7 @@ mod tests {
     fn test_atomic_load_opcodes() {
         let memarg = MemArg {
             offset: 0,
-            align_exponent:  2,
+            align_exponent: 2,
             memory_index: 0,
         };
 
@@ -665,7 +613,7 @@ mod tests {
     fn test_atomic_store_opcodes() {
         let memarg = MemArg {
             offset: 0,
-            align_exponent:  2,
+            align_exponent: 2,
             memory_index: 0,
         };
 
@@ -697,7 +645,7 @@ mod tests {
     fn test_atomic_rmw_opcodes() {
         let memarg = MemArg {
             offset: 0,
-            align_exponent:  2,
+            align_exponent: 2,
             memory_index: 0,
         };
 
@@ -737,7 +685,7 @@ mod tests {
     fn test_atomic_cmpxchg_opcodes() {
         let memarg = MemArg {
             offset: 0,
-            align_exponent:  2,
+            align_exponent: 2,
             memory_index: 0,
         };
 
@@ -765,7 +713,7 @@ mod tests {
     fn test_wait_notify_opcodes() {
         let memarg = MemArg {
             offset: 0,
-            align_exponent:  2,
+            align_exponent: 2,
             memory_index: 0,
         };
 

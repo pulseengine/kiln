@@ -7,13 +7,7 @@
 //! This module provides pure implementations for WebAssembly variable access
 //! instructions, including local and global variable operations.
 
-use crate::prelude::{
-    Debug,
-    Error,
-    PureInstruction,
-    Result,
-    Value,
-};
+use crate::prelude::{Debug, Error, PureInstruction, Result, Value};
 
 // ToString is brought in through the prelude for both std and no_std
 // configurations so we don't need explicit imports
@@ -109,24 +103,21 @@ impl<T: VariableContext> PureInstruction<T, Error> for VariableOp {
 #[cfg(all(test, feature = "std"))]
 mod tests {
     // Import Vec and vec! based on feature flags
-    use std::{
-        vec,
-        vec::Vec,
-    };
+    use std::{vec, vec::Vec};
 
     use super::*;
 
     // Mock variable context for testing
     struct MockVariableContext {
-        locals:  Vec<Value>,
+        locals: Vec<Value>,
         globals: Vec<Value>,
-        stack:   Vec<Value>,
+        stack: Vec<Value>,
     }
 
     impl MockVariableContext {
         fn new() -> Self {
             Self {
-                locals:  {
+                locals: {
                     let mut v = Vec::with_capacity(10);
                     for _ in 0..10 {
                         v.push(Value::I32(0));
@@ -140,7 +131,7 @@ mod tests {
                     }
                     v
                 },
-                stack:   Vec::new(),
+                stack: Vec::new(),
             }
         }
     }

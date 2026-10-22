@@ -2,36 +2,25 @@ use std::sync::Arc;
 
 use kiln_error::Result;
 use kiln_foundation::{
-    safe_memory::SafeSlice,
     clean_core_types::CoreMemoryType,
-    types::{
-        Limits,
-        RefType,
-        TableType,
-    },
-    values::{
-        FuncRef,
-        Value,
-    },
+    safe_memory::SafeSlice,
+    types::{Limits, RefType, TableType},
+    values::{FuncRef, Value},
     verification::VerificationLevel,
 };
-use kiln_runtime::{
-    memory::Memory,
-    module::Module,
-    table::Table,
-};
+use kiln_runtime::{memory::Memory, module::Module, table::Table};
 
 #[test]
 #[ignore = "#565: Memory::copy_within_or_between returns Runtime error 1005"]
 fn test_safe_memory_integration() -> Result<()> {
     // Create memory with full verification level
     let mem_type = CoreMemoryType {
-        limits:    Limits {
+        limits: Limits {
             min: 1,
             max: Some(2),
         },
-        shared:    false,
-        memory64:  false,
+        shared: false,
+        memory64: false,
         page_size: None,
     };
     let mut memory = Memory::new(mem_type)?;
@@ -40,11 +29,11 @@ fn test_safe_memory_integration() -> Result<()> {
     // Create table with full verification level
     let table_type = TableType {
         element_type: RefType::Funcref,
-        limits:       Limits {
+        limits: Limits {
             min: 10,
             max: Some(20),
         },
-        table64:      false,
+        table64: false,
     };
     let mut table = Table::new(table_type)?;
     table.set_verification_level(VerificationLevel::Full);

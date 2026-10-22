@@ -15,15 +15,10 @@ use alloc::vec::Vec;
 use std::vec::Vec;
 
 use kiln_foundation::{
-    budget_aware_provider::CrateId,
-    safe_managed_alloc,
-    traits::BoundedCapacity,
+    budget_aware_provider::CrateId, safe_managed_alloc, traits::BoundedCapacity,
 };
 
-use crate::{
-    prelude::*,
-    pure_format_types::*,
-};
+use crate::{prelude::*, pure_format_types::*};
 
 // Simplified type aliases - use Vec when available
 #[cfg(feature = "std")]
@@ -115,7 +110,9 @@ pub struct DataSegmentBridge;
 
 impl DataSegmentBridge {
     /// Extract runtime initialization data from pure format data segment
-    pub fn extract_runtime_data(segment: &PureDataSegment) -> kiln_error::Result<RuntimeDataExtraction> {
+    pub fn extract_runtime_data(
+        segment: &PureDataSegment,
+    ) -> kiln_error::Result<RuntimeDataExtraction> {
         // Convert Vec to appropriate type for no_std
         #[cfg(feature = "std")]
         let offset_expr_bytes = segment.offset_expr_bytes.clone();
@@ -141,16 +138,16 @@ impl DataSegmentBridge {
     /// Create runtime initialization hint for data segment
     pub fn create_initialization_hint(segment: &PureDataSegment) -> DataInitializationHint {
         DataInitializationHint {
-            segment_type:             if segment.is_active() {
+            segment_type: if segment.is_active() {
                 DataSegmentType::Active
             } else {
                 DataSegmentType::Passive
             },
-            memory_target:            segment.memory_index(),
+            memory_target: segment.memory_index(),
             offset_evaluation_needed: segment.is_active() && !segment.offset_expr_bytes.is_empty(),
-            data_bytes_ref:           DataBytesReference {
-                start_offset:  0,
-                length:        segment.data_bytes.len(),
+            data_bytes_ref: DataBytesReference {
+                start_offset: 0,
+                length: segment.data_bytes.len(),
                 requires_copy: true,
             },
         }
@@ -162,7 +159,9 @@ pub struct ElementSegmentBridge;
 
 impl ElementSegmentBridge {
     /// Extract runtime initialization data from pure format element segment
-    pub fn extract_runtime_data(segment: &PureElementSegment) -> kiln_error::Result<RuntimeElementExtraction> {
+    pub fn extract_runtime_data(
+        segment: &PureElementSegment,
+    ) -> kiln_error::Result<RuntimeElementExtraction> {
         // Convert Vec to appropriate type for no_std
         #[cfg(feature = "std")]
         let offset_expr_bytes = segment.offset_expr_bytes.clone();
@@ -192,14 +191,14 @@ impl ElementSegmentBridge {
     /// Create runtime initialization hint for element segment
     pub fn create_initialization_hint(segment: &PureElementSegment) -> ElementInitializationHint {
         ElementInitializationHint {
-            segment_type:             match segment.mode {
+            segment_type: match segment.mode {
                 PureElementMode::Active { .. } => ElementSegmentType::Active,
                 PureElementMode::Passive => ElementSegmentType::Passive,
                 PureElementMode::Declared => ElementSegmentType::Declared,
             },
-            table_target:             segment.table_index(),
+            table_target: segment.table_index(),
             offset_evaluation_needed: segment.is_active() && !segment.offset_expr_bytes.is_empty(),
-            element_count:            match &segment.init_data {
+            element_count: match &segment.init_data {
                 PureElementInit::FunctionIndices(indices) => indices.len(),
                 PureElementInit::ExpressionBytes(exprs) => exprs.len(),
             },
@@ -211,13 +210,13 @@ impl ElementSegmentBridge {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct RuntimeDataExtraction {
     /// Whether this is an active segment requiring initialization
-    pub is_active:               bool,
+    pub is_active: bool,
     /// Memory index for active segments
-    pub memory_index:            Option<u32>,
+    pub memory_index: Option<u32>,
     /// Raw offset expression bytes (for runtime evaluation)
-    pub offset_expr_bytes:       OffsetExprBytes,
+    pub offset_expr_bytes: OffsetExprBytes,
     /// Size of data in bytes
-    pub data_size:               usize,
+    pub data_size: usize,
     /// Whether runtime initialization is required
     pub requires_initialization: bool,
 }
@@ -226,15 +225,15 @@ pub struct RuntimeDataExtraction {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct RuntimeElementExtraction {
     /// Whether this is an active segment requiring initialization
-    pub is_active:               bool,
+    pub is_active: bool,
     /// Table index for active segments
-    pub table_index:             Option<u32>,
+    pub table_index: Option<u32>,
     /// Element type
-    pub element_type:            crate::types::RefType,
+    pub element_type: crate::types::RefType,
     /// Raw offset expression bytes (for runtime evaluation)
-    pub offset_expr_bytes:       OffsetExprBytes,
+    pub offset_expr_bytes: OffsetExprBytes,
     /// Type of initialization data
-    pub init_data_type:          ElementInitType,
+    pub init_data_type: ElementInitType,
     /// Whether runtime initialization is required
     pub requires_initialization: bool,
 }
@@ -275,26 +274,26 @@ pub enum ElementInitType {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct DataInitializationHint {
     /// Type of data segment
-    pub segment_type:             DataSegmentType,
+    pub segment_type: DataSegmentType,
     /// Target memory index
-    pub memory_target:            Option<u32>,
+    pub memory_target: Option<u32>,
     /// Whether offset expression evaluation is needed
     pub offset_evaluation_needed: bool,
     /// Reference to data bytes
-    pub data_bytes_ref:           DataBytesReference,
+    pub data_bytes_ref: DataBytesReference,
 }
 
 /// Element initialization hint for runtime
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ElementInitializationHint {
     /// Type of element segment
-    pub segment_type:             ElementSegmentType,
+    pub segment_type: ElementSegmentType,
     /// Target table index
-    pub table_target:             Option<u32>,
+    pub table_target: Option<u32>,
     /// Whether offset expression evaluation is needed
     pub offset_evaluation_needed: bool,
     /// Number of elements to initialize
-    pub element_count:            usize,
+    pub element_count: usize,
 }
 
 impl kiln_foundation::traits::Checksummable for ElementSegmentType {
@@ -408,9 +407,9 @@ impl kiln_foundation::traits::FromBytes for ElementInitializationHint {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct DataBytesReference {
     /// Start offset in the data
-    pub start_offset:  usize,
+    pub start_offset: usize,
     /// Length of data
-    pub length:        usize,
+    pub length: usize,
     /// Whether runtime needs to copy the data
     pub requires_copy: bool,
 }
@@ -420,7 +419,9 @@ pub struct ModuleBridge;
 
 impl ModuleBridge {
     /// Extract all runtime initialization data from a module
-    pub fn extract_module_runtime_data(module: &crate::module::Module) -> kiln_error::Result<ModuleRuntimeData> {
+    pub fn extract_module_runtime_data(
+        module: &crate::module::Module,
+    ) -> kiln_error::Result<ModuleRuntimeData> {
         // Convert module data segments to runtime extractions
         #[cfg(feature = "std")]
         let mut data_extractions = DataExtractionVec::new();
@@ -432,9 +433,9 @@ impl ModuleBridge {
         for data_segment in module.data.iter() {
             // Convert module::Data to runtime extraction
             let extraction = RuntimeDataExtraction {
-                is_active:               is_data_active(&data_segment),
-                memory_index:            data_segment.memory_index(),
-                offset_expr_bytes:       {
+                is_active: is_data_active(&data_segment),
+                memory_index: data_segment.memory_index(),
+                offset_expr_bytes: {
                     #[cfg(feature = "std")]
                     {
                         data_segment.offset_expr_bytes.clone()
@@ -449,7 +450,7 @@ impl ModuleBridge {
                         bounded
                     }
                 },
-                data_size:               data_segment.data_bytes.len(),
+                data_size: data_segment.data_bytes.len(),
                 requires_initialization: is_data_active(&data_segment),
             };
             #[cfg(feature = "std")]
@@ -468,10 +469,10 @@ impl ModuleBridge {
         };
         for element_segment in module.elements.iter() {
             let extraction = RuntimeElementExtraction {
-                is_active:               is_element_active(&element_segment),
-                table_index:             get_element_table_index(&element_segment),
-                element_type:            element_segment.element_type.clone(),
-                offset_expr_bytes:       {
+                is_active: is_element_active(&element_segment),
+                table_index: get_element_table_index(&element_segment),
+                element_type: element_segment.element_type.clone(),
+                offset_expr_bytes: {
                     #[cfg(feature = "std")]
                     {
                         element_segment.offset_expr_bytes.clone()
@@ -486,7 +487,7 @@ impl ModuleBridge {
                         bounded
                     }
                 },
-                init_data_type:          match &element_segment.init_data {
+                init_data_type: match &element_segment.init_data {
                     crate::pure_format_types::PureElementInit::FunctionIndices(_) => {
                         ElementInitType::FunctionIndices
                     },
@@ -513,7 +514,9 @@ impl ModuleBridge {
     }
 
     /// Create initialization plan for a module
-    pub fn create_initialization_plan(module: &crate::module::Module) -> kiln_error::Result<ModuleInitializationPlan> {
+    pub fn create_initialization_plan(
+        module: &crate::module::Module,
+    ) -> kiln_error::Result<ModuleInitializationPlan> {
         // Create data initialization hints directly from module data
         #[cfg(feature = "std")]
         let mut data_hints = Vec::new();
@@ -524,16 +527,16 @@ impl ModuleBridge {
         };
         for (index, data_segment) in module.data.iter().enumerate() {
             let hint = DataInitializationHint {
-                segment_type:             if data_segment.is_active() {
+                segment_type: if data_segment.is_active() {
                     DataSegmentType::Active
                 } else {
                     DataSegmentType::Passive
                 },
-                memory_target:            data_segment.memory_index(),
+                memory_target: data_segment.memory_index(),
                 offset_evaluation_needed: data_segment.is_active(),
-                data_bytes_ref:           DataBytesReference {
-                    start_offset:  0,
-                    length:        data_segment.data_bytes.len(),
+                data_bytes_ref: DataBytesReference {
+                    start_offset: 0,
+                    length: data_segment.data_bytes.len(),
                     requires_copy: true,
                 },
             };
@@ -553,10 +556,10 @@ impl ModuleBridge {
         };
         for (index, element_segment) in module.elements.iter().enumerate() {
             let hint = ElementInitializationHint {
-                segment_type:             get_element_segment_type(&element_segment),
-                table_target:             get_element_table_index(&element_segment),
+                segment_type: get_element_segment_type(&element_segment),
+                table_target: get_element_table_index(&element_segment),
                 offset_evaluation_needed: is_element_active(&element_segment),
-                element_count:            match &element_segment.init_data {
+                element_count: match &element_segment.init_data {
                     crate::pure_format_types::PureElementInit::FunctionIndices(indices) => {
                         indices.len()
                     },
@@ -572,9 +575,9 @@ impl ModuleBridge {
         }
 
         Ok(ModuleInitializationPlan {
-            start_function:                 module.start,
-            data_initialization_order:      data_hints,
-            element_initialization_order:   element_hints,
+            start_function: module.start,
+            data_initialization_order: data_hints,
+            element_initialization_order: element_hints,
             estimated_initialization_steps: calculate_initialization_steps(module),
         })
     }
@@ -584,11 +587,11 @@ impl ModuleBridge {
 #[derive(Debug, Clone)]
 pub struct ModuleRuntimeData {
     /// Start function index
-    pub start_function:          Option<u32>,
+    pub start_function: Option<u32>,
     /// Runtime data for all data segments
-    pub data_extractions:        DataExtractionVec,
+    pub data_extractions: DataExtractionVec,
     /// Runtime data for all element segments
-    pub element_extractions:     ElementExtractionVec,
+    pub element_extractions: ElementExtractionVec,
     /// Whether any initialization is required
     pub requires_initialization: bool,
 }
@@ -597,11 +600,11 @@ pub struct ModuleRuntimeData {
 #[derive(Debug, Clone)]
 pub struct ModuleInitializationPlan {
     /// Start function to call after initialization
-    pub start_function:                 Option<u32>,
+    pub start_function: Option<u32>,
     /// Data segments with their initialization hints (index, hint)
-    pub data_initialization_order:      DataInitVec,
+    pub data_initialization_order: DataInitVec,
     /// Element segments with their initialization hints (index, hint)
-    pub element_initialization_order:   ElementInitVec,
+    pub element_initialization_order: ElementInitVec,
     /// Estimated number of initialization steps
     pub estimated_initialization_steps: usize,
 }

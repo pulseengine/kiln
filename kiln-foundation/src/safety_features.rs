@@ -270,7 +270,7 @@ pub mod runtime {
                     || (!cfg!(feature = "verified-static-allocation")
                         && !cfg!(feature = "static-allocation")
                         && !cfg!(feature = "bounded-collections"))
-            }
+            },
             "static-allocation" => cfg!(feature = "static-allocation"),
             "verified-static-allocation" => cfg!(feature = "verified-static-allocation"),
             "bounded-collections" => cfg!(feature = "bounded-collections"),
@@ -385,10 +385,7 @@ mod tests {
     #[test]
     fn test_capability_consistency() {
         // Verify that enabled features are consistent
-        use standards::{
-            AsilLevel,
-            SafetyStandardMapping,
-        };
+        use standards::{AsilLevel, SafetyStandardMapping};
 
         assert!(
             AsilLevel::validates_current_config(),

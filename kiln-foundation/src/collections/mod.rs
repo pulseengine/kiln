@@ -58,10 +58,10 @@
 //! - REQ_TEMPORAL_001: Bounded execution time
 //! - REQ_LFUNC_026: Minimize complexity for certification
 
-mod static_vec;
-mod static_queue;
 mod static_map;
+mod static_queue;
+mod static_vec;
 
-pub use static_vec::StaticVec;
-pub use static_queue::StaticQueue;
 pub use static_map::StaticMap;
+pub use static_queue::StaticQueue;
+pub use static_vec::StaticVec;

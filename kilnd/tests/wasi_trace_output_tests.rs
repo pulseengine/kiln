@@ -38,7 +38,11 @@ const WRITER: &str = r#"(module
 
 fn run_writer(name: &str) -> (String, String) {
     let path = std::env::temp_dir().join(name);
-    fs::write(&path, wat::parse_str(WRITER).expect("fixture must assemble")).unwrap();
+    fs::write(
+        &path,
+        wat::parse_str(WRITER).expect("fixture must assemble"),
+    )
+    .unwrap();
     let out = Command::new(KILN)
         .arg("--wasi")
         .arg(&path)

@@ -20,10 +20,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::{
-    prelude::*,
-    Value,
-};
+use crate::{Value, prelude::*};
 
 // ============================================================================
 // Pollable Resource System
@@ -111,15 +108,9 @@ impl Pollable {
         }
 
         let is_ready = match self.kind {
-            PollableKind::InputStream(stream_handle) => {
-                check_input_stream_ready(stream_handle)
-            },
-            PollableKind::OutputStream(stream_handle) => {
-                check_output_stream_ready(stream_handle)
-            },
-            PollableKind::Timer { deadline_ns } => {
-                check_timer_ready(deadline_ns)
-            },
+            PollableKind::InputStream(stream_handle) => check_input_stream_ready(stream_handle),
+            PollableKind::OutputStream(stream_handle) => check_output_stream_ready(stream_handle),
+            PollableKind::Timer { deadline_ns } => check_timer_ready(deadline_ns),
             PollableKind::Generic => true,
         };
 
@@ -222,11 +213,12 @@ impl PollableTable {
 
         loop {
             // Check each pollable
-            let mut results: Vec<bool> = handles.iter().map(|&handle| {
-                self.pollables.get_mut(&handle)
-                    .map(Pollable::check_ready)
-                    .unwrap_or(false)
-            }).collect();
+            let mut results: Vec<bool> = handles
+                .iter()
+                .map(|&handle| {
+                    self.pollables.get_mut(&handle).map(Pollable::check_ready).unwrap_or(false)
+                })
+                .collect();
 
             // If any are ready, return
             if results.iter().any(|&ready| ready) {
@@ -244,11 +236,12 @@ impl PollableTable {
             std::thread::sleep(Duration::from_millis(1));
 
             // Re-check in case of quick readiness
-            results = handles.iter().map(|&handle| {
-                self.pollables.get_mut(&handle)
-                    .map(Pollable::check_ready)
-                    .unwrap_or(false)
-            }).collect();
+            results = handles
+                .iter()
+                .map(|&handle| {
+                    self.pollables.get_mut(&handle).map(Pollable::check_ready).unwrap_or(false)
+                })
+                .collect();
 
             if results.iter().any(|&ready| ready) {
                 return results;
@@ -267,7 +260,8 @@ impl Default for PollableTable {
 /// Initialize or get the pollable table
 #[cfg(feature = "std")]
 fn ensure_pollable_table() -> Result<()> {
-    let mut table = POLLABLE_TABLE.write()
+    let mut table = POLLABLE_TABLE
+        .write()
         .map_err(|_| Error::wasi_capability_unavailable("Failed to acquire pollable table lock"))?;
     if table.is_none() {
         *table = Some(PollableTable::new());
@@ -290,7 +284,7 @@ fn check_input_stream_ready(stream_handle: u32) -> bool {
             // File descriptors from filesystem - assume ready
             // A full implementation would use select/poll/epoll
             true
-        }
+        },
     }
 }
 
@@ -497,7 +491,8 @@ pub fn wasi_stream_blocking_skip(_target: &mut dyn Any, args: &[Value]) -> Resul
 /// - The underlying read or write operations fail
 pub fn wasi_stream_splice(_target: &mut dyn Any, args: &[Value]) -> Result<Vec<Value>> {
     let output_stream = extract_stream_handle(args)?;
-    let input_stream = args.get(1)
+    let input_stream = args
+        .get(1)
         .and_then(|v| match v {
             Value::U32(h) => Some(*h),
             _ => None,
@@ -537,7 +532,8 @@ pub fn wasi_stream_blocking_splice(_target: &mut dyn Any, args: &[Value]) -> Res
 /// - The underlying read or write operations fail during forwarding
 pub fn wasi_stream_forward(_target: &mut dyn Any, args: &[Value]) -> Result<Vec<Value>> {
     let output_stream = extract_stream_handle(args)?;
-    let input_stream = args.get(1)
+    let input_stream = args
+        .get(1)
         .and_then(|v| match v {
             Value::U32(h) => Some(*h),
             _ => None,
@@ -621,9 +617,11 @@ pub fn wasi_stream_subscribe(_target: &mut dyn Any, args: &[Value]) -> Result<Ve
     {
         ensure_pollable_table()?;
 
-        let mut table = POLLABLE_TABLE.write()
-            .map_err(|_| Error::wasi_capability_unavailable("Failed to acquire pollable table lock"))?;
-        let table = table.as_mut()
+        let mut table = POLLABLE_TABLE.write().map_err(|_| {
+            Error::wasi_capability_unavailable("Failed to acquire pollable table lock")
+        })?;
+        let table = table
+            .as_mut()
             .ok_or_else(|| Error::wasi_capability_unavailable("Pollable table not initialized"))?;
 
         // Determine if this is an input or output stream
@@ -661,9 +659,11 @@ pub fn wasi_subscribe_timer(_target: &mut dyn Any, args: &[Value]) -> Result<Vec
     {
         ensure_pollable_table()?;
 
-        let mut table = POLLABLE_TABLE.write()
-            .map_err(|_| Error::wasi_capability_unavailable("Failed to acquire pollable table lock"))?;
-        let table = table.as_mut()
+        let mut table = POLLABLE_TABLE.write().map_err(|_| {
+            Error::wasi_capability_unavailable("Failed to acquire pollable table lock")
+        })?;
+        let table = table
+            .as_mut()
             .ok_or_else(|| Error::wasi_capability_unavailable("Pollable table not initialized"))?;
 
         let pollable_handle = table.create_for_timer(deadline_ns);
@@ -695,9 +695,11 @@ pub fn wasi_poll_one_off(_target: &mut dyn Any, args: &[Value]) -> Result<Vec<Va
     {
         ensure_pollable_table()?;
 
-        let mut table = POLLABLE_TABLE.write()
-            .map_err(|_| Error::wasi_capability_unavailable("Failed to acquire pollable table lock"))?;
-        let table = table.as_mut()
+        let mut table = POLLABLE_TABLE.write().map_err(|_| {
+            Error::wasi_capability_unavailable("Failed to acquire pollable table lock")
+        })?;
+        let table = table
+            .as_mut()
             .ok_or_else(|| Error::wasi_capability_unavailable("Pollable table not initialized"))?;
 
         // Use blocking poll with no timeout (blocks until ready)
@@ -739,9 +741,11 @@ pub fn wasi_poll_with_timeout(_target: &mut dyn Any, args: &[Value]) -> Result<V
     {
         ensure_pollable_table()?;
 
-        let mut table = POLLABLE_TABLE.write()
-            .map_err(|_| Error::wasi_capability_unavailable("Failed to acquire pollable table lock"))?;
-        let table = table.as_mut()
+        let mut table = POLLABLE_TABLE.write().map_err(|_| {
+            Error::wasi_capability_unavailable("Failed to acquire pollable table lock")
+        })?;
+        let table = table
+            .as_mut()
             .ok_or_else(|| Error::wasi_capability_unavailable("Pollable table not initialized"))?;
 
         let timeout = timeout_ns.map(Duration::from_nanos);
@@ -773,7 +777,8 @@ pub fn wasi_poll_with_timeout(_target: &mut dyn Any, args: &[Value]) -> Result<V
 /// - The pollable table is not initialized
 /// - The pollable handle does not exist in the table
 pub fn wasi_drop_pollable(_target: &mut dyn Any, args: &[Value]) -> Result<Vec<Value>> {
-    let pollable_handle = args.first()
+    let pollable_handle = args
+        .first()
         .and_then(|v| match v {
             Value::U32(h) => Some(*h),
             _ => None,
@@ -784,9 +789,11 @@ pub fn wasi_drop_pollable(_target: &mut dyn Any, args: &[Value]) -> Result<Vec<V
     {
         ensure_pollable_table()?;
 
-        let mut table = POLLABLE_TABLE.write()
-            .map_err(|_| Error::wasi_capability_unavailable("Failed to acquire pollable table lock"))?;
-        let table = table.as_mut()
+        let mut table = POLLABLE_TABLE.write().map_err(|_| {
+            Error::wasi_capability_unavailable("Failed to acquire pollable table lock")
+        })?;
+        let table = table
+            .as_mut()
             .ok_or_else(|| Error::wasi_capability_unavailable("Pollable table not initialized"))?;
 
         if table.drop_pollable(pollable_handle) {
@@ -904,10 +911,7 @@ fn perform_stream_read(stream_handle: u32, len: u64) -> Result<Vec<u8>> {
             // stdin - in a real implementation, read from platform stdin
             #[cfg(feature = "std")]
             {
-                use std::io::{
-                    self,
-                    Read,
-                };
+                use std::io::{self, Read};
                 let mut buffer = vec![0u8; len.min(4096) as usize];
                 let bytes_read = io::stdin()
                     .read(&mut buffer)
@@ -941,10 +945,7 @@ fn perform_stream_write(stream_handle: u32, data: &[u8]) -> Result<u64> {
             // stdout - in a real implementation, write to platform stdout
             #[cfg(feature = "std")]
             {
-                use std::io::{
-                    self,
-                    Write,
-                };
+                use std::io::{self, Write};
                 io::stdout()
                     .write_all(data)
                     .map_err(|_| Error::wasi_capability_unavailable("Failed to write to stdout"))?;
@@ -963,10 +964,7 @@ fn perform_stream_write(stream_handle: u32, data: &[u8]) -> Result<u64> {
             // stderr - in a real implementation, write to platform stderr
             #[cfg(feature = "std")]
             {
-                use std::io::{
-                    self,
-                    Write,
-                };
+                use std::io::{self, Write};
                 io::stderr()
                     .write_all(data)
                     .map_err(|_| Error::wasi_capability_unavailable("Failed to write to stderr"))?;
@@ -995,10 +993,7 @@ fn perform_stream_flush(stream_handle: u32) -> Result<()> {
             // stdout flush
             #[cfg(feature = "std")]
             {
-                use std::io::{
-                    self,
-                    Write,
-                };
+                use std::io::{self, Write};
                 io::stdout()
                     .flush()
                     .map_err(|_| Error::wasi_capability_unavailable("Failed to flush stdout"))?;
@@ -1009,10 +1004,7 @@ fn perform_stream_flush(stream_handle: u32) -> Result<()> {
             // stderr flush
             #[cfg(feature = "std")]
             {
-                use std::io::{
-                    self,
-                    Write,
-                };
+                use std::io::{self, Write};
                 io::stderr()
                     .flush()
                     .map_err(|_| Error::wasi_capability_unavailable("Failed to flush stderr"))?;
@@ -1088,12 +1080,12 @@ fn check_stream_ready(stream_handle: u32) -> Result<bool> {
         0 => {
             // stdin - in no_std, assume not ready (conservative)
             Ok(false)
-        }
+        },
         1 | 2 => {
             // stdout/stderr - always ready for writing
             // These are typically buffered and non-blocking
             Ok(true)
-        }
+        },
         _ => {
             // For file descriptors from the filesystem, we'd need to check
             // using platform-specific mechanisms. For now, assume ready
@@ -1106,7 +1098,7 @@ fn check_stream_ready(stream_handle: u32) -> Result<bool> {
                 // Unknown handle
                 Ok(false)
             }
-        }
+        },
     }
 }
 

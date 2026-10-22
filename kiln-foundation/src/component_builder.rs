@@ -28,42 +28,17 @@ const MAX_BUILDER_CORE_TYPES: usize = 128;
 use kiln_error::Result;
 
 use crate::{
-    bounded::{
-        BoundedString,
-        BoundedVec,
-        WasmName,
-        MAX_WASM_NAME_LENGTH,
-    },
+    Error, MemoryProvider,
+    bounded::{BoundedString, BoundedVec, MAX_WASM_NAME_LENGTH, WasmName},
     component::{
-        ComponentAlias,
-        ComponentInstance,
-        ComponentType,
-        CoreInstance,
-        CoreType,
-        Export,
-        ExternType,
-        Import,
-        ImportKey,
-        Namespace,
-        MAX_COMPONENT_ALIASES,
-        MAX_COMPONENT_EXPORTS,
-        MAX_COMPONENT_IMPORTS,
-        MAX_COMPONENT_INSTANCES,
-        MAX_COMPONENT_TYPES,
-        MAX_CORE_INSTANCES,
-        MAX_CORE_TYPES,
-        MAX_NAMESPACE_ELEMENTS,
-        MAX_NAME_LEN,
+        ComponentAlias, ComponentInstance, ComponentType, CoreInstance, CoreType, Export,
+        ExternType, Import, ImportKey, MAX_COMPONENT_ALIASES, MAX_COMPONENT_EXPORTS,
+        MAX_COMPONENT_IMPORTS, MAX_COMPONENT_INSTANCES, MAX_COMPONENT_TYPES, MAX_CORE_INSTANCES,
+        MAX_CORE_TYPES, MAX_NAME_LEN, MAX_NAMESPACE_ELEMENTS, Namespace,
     },
     component_type_store::TypeRef,
-    resource::{
-        Resource,
-        ResourceRepr,
-        ResourceType,
-    },
+    resource::{Resource, ResourceRepr, ResourceType},
     verification::VerificationLevel,
-    Error,
-    MemoryProvider,
 };
 
 /// Builder for `ComponentType` instances.
@@ -72,14 +47,14 @@ use crate::{
 /// proper initialization of all collections using bounded collections.
 #[derive(Debug)]
 pub struct ComponentTypeBuilder<P: MemoryProvider + Default + Clone + PartialEq + Eq> {
-    provider:        P,
-    imports:         BoundedVec<Import<P>, MAX_BUILDER_IMPORTS, P>,
-    exports:         BoundedVec<Export<P>, MAX_BUILDER_EXPORTS, P>,
-    aliases:         BoundedVec<ComponentAlias<P>, MAX_BUILDER_ALIASES, P>,
-    instances:       BoundedVec<ComponentInstance<P>, MAX_BUILDER_INSTANCES, P>,
-    core_instances:  BoundedVec<CoreInstance<P>, MAX_BUILDER_CORE_INSTANCES, P>,
+    provider: P,
+    imports: BoundedVec<Import<P>, MAX_BUILDER_IMPORTS, P>,
+    exports: BoundedVec<Export<P>, MAX_BUILDER_EXPORTS, P>,
+    aliases: BoundedVec<ComponentAlias<P>, MAX_BUILDER_ALIASES, P>,
+    instances: BoundedVec<ComponentInstance<P>, MAX_BUILDER_INSTANCES, P>,
+    core_instances: BoundedVec<CoreInstance<P>, MAX_BUILDER_CORE_INSTANCES, P>,
     component_types: BoundedVec<TypeRef, MAX_BUILDER_COMPONENT_TYPES, P>,
-    core_types:      BoundedVec<CoreType, MAX_BUILDER_CORE_TYPES, P>,
+    core_types: BoundedVec<CoreType, MAX_BUILDER_CORE_TYPES, P>,
 }
 
 impl<P: MemoryProvider + Default + Clone + PartialEq + Eq> ComponentTypeBuilder<P> {
@@ -273,20 +248,20 @@ impl<P: MemoryProvider + Default + Clone + PartialEq + Eq> ComponentTypeBuilder<
 /// Builder for `Import` instances.
 #[derive(Debug)]
 pub struct ImportBuilder<P: MemoryProvider + Default + Clone + PartialEq + Eq> {
-    provider:  P,
+    provider: P,
     namespace: Option<Namespace<P>>,
-    name:      Option<WasmName<MAX_NAME_LEN>>,
-    ty:        Option<ExternType<P>>,
+    name: Option<WasmName<MAX_NAME_LEN>>,
+    ty: Option<ExternType<P>>,
 }
 
 #[cfg(feature = "std")]
 impl<P: MemoryProvider + Default + Clone + PartialEq + Eq> Default for ImportBuilder<P> {
     fn default() -> Self {
         Self {
-            provider:  P::default(),
+            provider: P::default(),
             namespace: None,
-            name:      None,
-            ty:        None,
+            name: None,
+            ty: None,
         }
     }
 }
@@ -358,9 +333,9 @@ impl<P: MemoryProvider + Default + Clone + PartialEq + Eq> ImportBuilder<P> {
 #[derive(Debug)]
 pub struct ExportBuilder<P: MemoryProvider + Default + Clone + PartialEq + Eq> {
     provider: P,
-    name:     Option<WasmName<MAX_NAME_LEN>>,
-    ty:       Option<ExternType<P>>,
-    desc:     Option<WasmName<MAX_NAME_LEN>>,
+    name: Option<WasmName<MAX_NAME_LEN>>,
+    ty: Option<ExternType<P>>,
+    desc: Option<WasmName<MAX_NAME_LEN>>,
 }
 
 #[cfg(feature = "std")]
@@ -368,9 +343,9 @@ impl<P: MemoryProvider + Default + Clone + PartialEq + Eq> Default for ExportBui
     fn default() -> Self {
         Self {
             provider: P::default(),
-            name:     None,
-            ty:       None,
-            desc:     None,
+            name: None,
+            ty: None,
+            desc: None,
         }
     }
 }
@@ -515,7 +490,7 @@ impl<P: MemoryProvider + Default + Clone + PartialEq + Eq> NamespaceBuilder<P> {
 #[derive(Debug)]
 pub struct ResourceTypeBuilder<P: MemoryProvider + Default + Clone + PartialEq + Eq> {
     provider: P,
-    variant:  Option<ResourceTypeVariant<P>>,
+    variant: Option<ResourceTypeVariant<P>>,
 }
 
 #[cfg(feature = "std")]
@@ -531,7 +506,7 @@ impl<P: MemoryProvider + Default + Clone + PartialEq + Eq> Default for ResourceT
     fn default() -> Self {
         Self {
             provider: P::default(),
-            variant:  None,
+            variant: None,
         }
     }
 }
@@ -599,12 +574,7 @@ impl<P: MemoryProvider + Default + Clone + PartialEq + Eq> ResourceTypeBuilder<P
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        budget_aware_provider::CrateId,
-        safe_managed_alloc,
-        traits::BoundedCapacity,
-    };
-
+    use crate::{budget_aware_provider::CrateId, safe_managed_alloc, traits::BoundedCapacity};
 
     #[test]
     #[ignore = "#576: BoundedVec::new rejects BoundedString elements (zero-size default)"]

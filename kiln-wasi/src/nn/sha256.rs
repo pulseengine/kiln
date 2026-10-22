@@ -36,23 +36,23 @@ const H0: [u32; 8] = [
 #[derive(Debug, Clone)]
 pub struct Sha256 {
     /// Current hash state
-    state:      [u32; 8],
+    state: [u32; 8],
     /// Buffer for incomplete blocks
-    buffer:     [u8; 64],
+    buffer: [u8; 64],
     /// Number of bytes in buffer
     buffer_len: usize,
     /// Total message length in bits
-    bit_len:    u64,
+    bit_len: u64,
 }
 
 impl Sha256 {
     /// Create a new SHA-256 context
     pub const fn new() -> Self {
         Self {
-            state:      H0,
-            buffer:     [0u8; 64],
+            state: H0,
+            buffer: [0u8; 64],
             buffer_len: 0,
-            bit_len:    0,
+            bit_len: 0,
         }
     }
 

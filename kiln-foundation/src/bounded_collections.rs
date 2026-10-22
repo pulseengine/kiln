@@ -30,35 +30,13 @@ use std::vec::Vec;
 // Crate-level imports
 use crate::traits::DefaultMemoryProvider;
 use crate::{
-    bounded::{
-        BoundedError,
-        BoundedErrorKind,
-        BoundedVec,
-    },
+    Error, ErrorCategory, MemoryProvider,
+    bounded::{BoundedError, BoundedErrorKind, BoundedVec},
     codes,
-    operations::{
-        record_global_operation,
-        Type as OperationType,
-    },
-    safe_memory::{
-        SafeMemoryHandler,
-        SliceMut,
-    },
-    traits::{
-        BoundedCapacity,
-        Checksummable,
-        FromBytes,
-        ReadStream,
-        ToBytes,
-        WriteStream,
-    },
-    verification::{
-        Checksum,
-        VerificationLevel,
-    },
-    Error,
-    ErrorCategory,
-    MemoryProvider,
+    operations::{Type as OperationType, record_global_operation},
+    safe_memory::{SafeMemoryHandler, SliceMut},
+    traits::{BoundedCapacity, Checksummable, FromBytes, ReadStream, ToBytes, WriteStream},
+    verification::{Checksum, VerificationLevel},
 };
 
 /// A bounded queue (FIFO data structure) with a fixed maximum capacity.
@@ -72,21 +50,21 @@ where
     T: Sized + Checksummable + ToBytes + FromBytes + Default,
 {
     /// The underlying memory handler
-    handler:              SafeMemoryHandler<P>,
+    handler: SafeMemoryHandler<P>,
     /// Current number of elements in the queue
-    length:               usize,
+    length: usize,
     /// Index of the first element in the queue (head)
-    head:                 usize,
+    head: usize,
     /// Index of the next available position (tail)
-    tail:                 usize,
+    tail: usize,
     /// Size of a single element T in bytes
     item_serialized_size: usize,
     /// Checksum for verifying data integrity
-    checksum:             Checksum,
+    checksum: Checksum,
     /// Verification level for this queue
-    verification_level:   VerificationLevel,
+    verification_level: VerificationLevel,
     /// Phantom data for type T
-    _phantom:             PhantomData<T>,
+    _phantom: PhantomData<T>,
 }
 
 impl<T, const N_ELEMENTS: usize, P: MemoryProvider> BoundedQueue<T, N_ELEMENTS, P>
@@ -390,7 +368,7 @@ where
     V: Sized + Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq,
 {
     // Using a Vec of key-value pairs for simplicity
-    entries:            BoundedVec<(K, V), N_ELEMENTS, P>,
+    entries: BoundedVec<(K, V), N_ELEMENTS, P>,
     verification_level: VerificationLevel,
 }
 
@@ -555,7 +533,7 @@ where
     /// Returns an iterator over the values in the map.
     pub fn values(&self) -> BoundedMapValues<'_, K, V, N_ELEMENTS, P> {
         BoundedMapValues {
-            map:   self,
+            map: self,
             index: 0,
         }
     }
@@ -573,7 +551,7 @@ where
     V: Sized + Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq,
     P: Default + Clone + PartialEq + Eq,
 {
-    map:   &'a BoundedMap<K, V, N_ELEMENTS, P>,
+    map: &'a BoundedMap<K, V, N_ELEMENTS, P>,
     index: usize,
 }
 
@@ -657,7 +635,7 @@ where
     T: Sized + Checksummable + ToBytes + FromBytes + Default + Eq + Clone + PartialEq,
 {
     // Using a Vec for simplicity, ensuring uniqueness via operations
-    elements:           BoundedVec<T, N_ELEMENTS, P>,
+    elements: BoundedVec<T, N_ELEMENTS, P>,
     verification_level: VerificationLevel,
 }
 
@@ -789,21 +767,21 @@ where
     T: Sized + Checksummable + ToBytes + FromBytes + Default,
 {
     /// The underlying memory handler
-    handler:              SafeMemoryHandler<P>,
+    handler: SafeMemoryHandler<P>,
     /// Current number of elements in the deque
-    length:               usize,
+    length: usize,
     /// Index of the first element in the deque (front)
-    front:                usize,
+    front: usize,
     /// Index of the last element in the deque (back)
-    back:                 usize,
+    back: usize,
     /// Size of a single element T in bytes
     item_serialized_size: usize,
     /// Checksum for verifying data integrity
-    checksum:             Checksum,
+    checksum: Checksum,
     /// Verification level for this deque
-    verification_level:   VerificationLevel,
+    verification_level: VerificationLevel,
     /// Phantom data for type T
-    _phantom:             PhantomData<T>,
+    _phantom: PhantomData<T>,
 }
 
 impl<T, const N_ELEMENTS: usize, P: MemoryProvider> BoundedDeque<T, N_ELEMENTS, P>
@@ -1013,15 +991,15 @@ where
 
             // Deserialize the item
             let mut read_stream = ReadStream::new(slice_view);
-            
 
-            T::from_bytes_with_provider(&mut read_stream, self.handler.provider())
-                .map_err(|_| {
+            T::from_bytes_with_provider(&mut read_stream, self.handler.provider()).map_err(
+                |_| {
                     BoundedError::new(
                         BoundedErrorKind::ConversionError,
                         "Failed to deserialize from bytes",
                     )
-                })?
+                },
+            )?
         };
 
         // Update deque state
@@ -1067,15 +1045,15 @@ where
 
             // Deserialize the item
             let mut read_stream = ReadStream::new(slice_view);
-            
 
-            T::from_bytes_with_provider(&mut read_stream, self.handler.provider())
-                .map_err(|_| {
+            T::from_bytes_with_provider(&mut read_stream, self.handler.provider()).map_err(
+                |_| {
                     BoundedError::new(
                         BoundedErrorKind::ConversionError,
                         "Failed to deserialize from bytes",
                     )
-                })?
+                },
+            )?
         };
 
         // Update deque state
@@ -1304,9 +1282,9 @@ where
 pub struct BoundedBitSet<const N_BITS: usize> {
     /// The underlying storage, using `u32` for efficient bit operations
     /// Each `u32` holds 32 bits, so we need N_BITS/32 (rounded up) elements
-    storage:            Vec<(u32, Checksum)>,
+    storage: Vec<(u32, Checksum)>,
     /// Count of set bits (1s) for efficient size queries
-    count:              usize,
+    count: usize,
     /// Verification level for this bitset
     verification_level: VerificationLevel,
 }
@@ -1794,7 +1772,7 @@ impl<const N_BITS: usize> BoundedBitSet<N_BITS> {
                 // remaining_bits)
                 let mask = (1u32 << remaining_bits) - 1;
                 *bits = (*bits ^ mask) & mask; // XOR with mask and keep only
-                                               // valid bits
+                // valid bits
             }
 
             if self.verification_level >= VerificationLevel::Full {
@@ -2754,7 +2732,7 @@ impl<const N_BITS: usize> BoundedBitSet<N_BITS> {
     /// ```
     pub fn iter_ones(&self) -> BitSetOnesIterator<'_, N_BITS> {
         BitSetOnesIterator {
-            bitset:     self,
+            bitset: self,
             next_index: 0,
         }
     }
@@ -2775,7 +2753,7 @@ impl<const N_BITS: usize> BoundedBitSet<N_BITS> {
     /// ```
     pub fn iter_zeros(&self) -> BitSetZerosIterator<'_, N_BITS> {
         BitSetZerosIterator {
-            bitset:     self,
+            bitset: self,
             next_index: 0,
         }
     }
@@ -2895,7 +2873,7 @@ where
 /// Iterator over the set bits (1s) in a `BoundedBitSet`.
 #[cfg(feature = "std")]
 pub struct BitSetOnesIterator<'a, const N_BITS: usize> {
-    bitset:     &'a BoundedBitSet<N_BITS>,
+    bitset: &'a BoundedBitSet<N_BITS>,
     next_index: usize,
 }
 
@@ -2924,7 +2902,7 @@ impl<'a, const N_BITS: usize> Iterator for BitSetOnesIterator<'a, N_BITS> {
 /// Iterator over the clear bits (0s) in a `BoundedBitSet`.
 #[cfg(feature = "std")]
 pub struct BitSetZerosIterator<'a, const N_BITS: usize> {
-    bitset:     &'a BoundedBitSet<N_BITS>,
+    bitset: &'a BoundedBitSet<N_BITS>,
     next_index: usize,
 }
 
@@ -3131,13 +3109,9 @@ impl<const N_BITS: usize> FromBytes for BoundedBitSet<N_BITS> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{budget_aware_provider::CrateId, safe_managed_alloc, safe_memory::NoStdProvider};
     #[allow(unused_imports)]
     use std::vec;
-    use crate::{
-        budget_aware_provider::CrateId,
-        safe_managed_alloc,
-        safe_memory::NoStdProvider,
-    };
 
     // Helper function to initialize memory system for tests
     fn init_test_memory_system() {

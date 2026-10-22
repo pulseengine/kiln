@@ -10,16 +10,9 @@ use kiln_error::Error;
 use kiln_foundation::Box;
 use kiln_foundation::{
     budget_aware_provider::CrateId,
-    capabilities::{
-        CapabilityAwareProvider,
-        DynamicMemoryCapability,
-        MemoryCapability,
-    },
+    capabilities::{CapabilityAwareProvider, DynamicMemoryCapability, MemoryCapability},
     heap_provider::HeapProvider,
-    safe_memory::{
-        NoStdProvider,
-        Provider,
-    },
+    safe_memory::{NoStdProvider, Provider},
     verification::VerificationLevel,
 };
 

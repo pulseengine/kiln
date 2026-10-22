@@ -9,23 +9,16 @@
 //! SW-REQ-ID: REQ_CAP_001 - Capability-based access control
 
 // Legacy imports removed - migrated to capability-only system
-use core::sync::atomic::{
-    AtomicBool,
-    Ordering,
-};
+use core::sync::atomic::{AtomicBool, Ordering};
 #[cfg(feature = "std")]
 use std::sync::OnceLock;
 
 use crate::{
+    Error, Result,
     budget_aware_provider::CrateId,
-    budget_verification::{
-        CRATE_BUDGETS,
-        TOTAL_MEMORY_BUDGET,
-    },
+    budget_verification::{CRATE_BUDGETS, TOTAL_MEMORY_BUDGET},
     capabilities::MemoryCapabilityContext,
     verification::VerificationLevel,
-    Error,
-    Result,
 };
 
 /// Global initialization state
@@ -192,11 +185,7 @@ impl MemoryInitializer {
     /// initialized and only initializes it if needed. Safe to call from any
     /// context.
     pub fn ensure_initialized() -> Result<()> {
-        if Self::is_initialized() {
-            Ok(())
-        } else {
-            Self::initialize()
-        }
+        if Self::is_initialized() { Ok(()) } else { Self::initialize() }
     }
 }
 

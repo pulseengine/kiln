@@ -18,9 +18,9 @@ use crate::level::LogLevel;
 #[derive(Debug, Clone)]
 pub struct LogOperation {
     /// Log level
-    pub level:        LogLevel,
+    pub level: LogLevel,
     /// Log message
-    pub message:      String,
+    pub message: String,
     /// Component ID (optional)
     pub component_id: Option<String>,
 }
@@ -31,9 +31,9 @@ pub struct LogOperation {
 #[derive(Debug, Clone)]
 pub struct LogOperation {
     /// Log level
-    pub level:        LogLevel,
+    pub level: LogLevel,
     /// Log message
-    pub message:      kiln_foundation::BoundedString<256>,
+    pub message: kiln_foundation::BoundedString<256>,
     /// Component ID (optional)
     pub component_id: Option<kiln_foundation::BoundedString<64>>,
 }
@@ -136,10 +136,7 @@ mod tests {
 
         #[cfg(not(feature = "std"))]
         {
-            use kiln_foundation::{
-                budget_aware_provider::CrateId,
-                safe_managed_alloc,
-            };
+            use kiln_foundation::{budget_aware_provider::CrateId, safe_managed_alloc};
 
             // Test basic creation
             let op = LogOperation::new(LogLevel::Info, "test message").unwrap();
@@ -148,12 +145,8 @@ mod tests {
             assert!(op.component_id.is_none());
 
             // Test with component ID
-            let op = LogOperation::with_component(
-                LogLevel::Debug,
-                "test message",
-                "component-1",
-            )
-            .unwrap();
+            let op = LogOperation::with_component(LogLevel::Debug, "test message", "component-1")
+                .unwrap();
             assert_eq!(op.level, LogLevel::Debug);
             assert_eq!(op.message.as_str().unwrap(), "test message");
             assert_eq!(

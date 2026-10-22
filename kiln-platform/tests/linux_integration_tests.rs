@@ -6,12 +6,7 @@
 
 #[cfg(all(feature = "platform-linux", target_os = "linux"))]
 mod linux_tests {
-    use kiln_platform::{
-        LinuxAllocator,
-        LinuxAllocatorBuilder,
-        LinuxFutex,
-        LinuxFutexBuilder,
-    };
+    use kiln_platform::{LinuxAllocator, LinuxAllocatorBuilder, LinuxFutex, LinuxFutexBuilder};
 
     #[test]
     fn test_linux_allocator_creation() {
@@ -50,11 +45,7 @@ mod linux_tests {
     target_os = "linux"
 ))]
 mod linux_mte_tests {
-    use kiln_platform::{
-        LinuxArm64MteAllocator,
-        LinuxArm64MteAllocatorBuilder,
-        MteMode,
-    };
+    use kiln_platform::{LinuxArm64MteAllocator, LinuxArm64MteAllocatorBuilder, MteMode};
 
     #[test]
     fn test_linux_mte_allocator_creation() {

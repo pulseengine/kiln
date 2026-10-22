@@ -18,12 +18,8 @@ pub use core::fmt::Write as FmtWrite;
 
 #[cfg(not(feature = "std"))]
 pub use kiln_foundation::{
-    bounded::{
-        BoundedString as String,
-        BoundedVec as Vec,
-    },
-    BoundedMap as HashMap,
-    BoundedSet as HashSet,
+    BoundedMap as HashMap, BoundedSet as HashSet,
+    bounded::{BoundedString as String, BoundedVec as Vec},
 };
 
 // Arc is not available in pure no_std, use a reference wrapper
@@ -94,38 +90,20 @@ impl<T> core::ops::DerefMut for Box<T> {
 // Drop and Debug are automatically derived for our simple Box implementation
 pub use core::{
     any::Any,
-    cmp::{
-        Eq,
-        Ord,
-        PartialEq,
-        PartialOrd,
-    },
-    convert::{
-        TryFrom,
-        TryInto,
-    },
+    cmp::{Eq, Ord, PartialEq, PartialOrd},
+    convert::{TryFrom, TryInto},
     fmt,
-    fmt::{
-        Debug,
-        Display,
-    },
+    fmt::{Debug, Display},
     marker::PhantomData,
     mem,
-    ops::{
-        Deref,
-        DerefMut,
-    },
-    slice,
-    str,
+    ops::{Deref, DerefMut},
+    slice, str,
 };
 // Re-export from std when the std feature is enabled
 #[cfg(feature = "std")]
 pub use alloc::{
     boxed::Box,
-    string::{
-        String,
-        ToString,
-    },
+    string::{String, ToString},
     sync::Arc,
     vec,
     vec::Vec,
@@ -136,70 +114,41 @@ pub use core::fmt::Write as FmtWrite;
 
 #[cfg(feature = "std")]
 pub use std::{
-    collections::{
-        HashMap,
-        HashSet,
-    },
+    collections::{HashMap, HashSet},
     format,
-    sync::{
-        Mutex,
-        RwLock,
-    },
+    sync::{Mutex, RwLock},
 };
 
 // Re-export from kiln-error
-pub use kiln_error::{
-    codes,
-    kinds,
-    Error,
-    ErrorCategory,
-    Result,
-};
+pub use kiln_error::{Error, ErrorCategory, Result, codes, kinds};
 // Binary std/no_std choice
 #[cfg(feature = "std")]
 pub use kiln_foundation::component_value::ComponentValue;
 // Re-export from kiln-foundation
 pub use kiln_foundation::{
+    // CrateId for budget allocation
+    CrateId,
     // Builtin types
     builtin::BuiltinType,
     // Memory allocation
     safe_managed_alloc,
     // SafeMemory types
-    safe_memory::{
-        SafeMemoryHandler,
-        SafeSlice,
-        SafeStack,
-    },
+    safe_memory::{SafeMemoryHandler, SafeSlice, SafeStack},
     // Common types
-    types::{
-        BlockType,
-        FuncType,
-        GlobalType,
-        MemoryType,
-        TableType,
-        ValueType,
-    },
+    types::{BlockType, FuncType, GlobalType, MemoryType, TableType, ValueType},
     values::Value,
     // Verification types
     verification::VerificationLevel,
-    // CrateId for budget allocation
-    CrateId,
 };
 // Binary std/no_std choice
 #[cfg(feature = "std")]
 pub use kiln_intercept::{
-    BeforeBuiltinResult,
-    BuiltinInterceptor,
-    InterceptContext,
-    LinkInterceptor,
+    BeforeBuiltinResult, BuiltinInterceptor, InterceptContext, LinkInterceptor,
     LinkInterceptorStrategy,
 };
 // Import synchronization primitives for no_std
 #[cfg(not(feature = "std"))]
-pub use kiln_sync::{
-    Mutex,
-    RwLock,
-};
+pub use kiln_sync::{Mutex, RwLock};
 
 /// Memory size for host function allocations in no_std mode
 ///
@@ -211,13 +160,7 @@ pub const HOST_MEMORY_SIZE: usize = 65536; // 64KB for host functions
 // Re-export from this crate
 pub use crate::{
     builder::HostBuilder,
-    callback::{
-        CallbackRegistry,
-        CallbackType,
-    },
-    function::{
-        CloneableFn,
-        HostFunctionHandler,
-    },
+    callback::{CallbackRegistry, CallbackType},
+    function::{CloneableFn, HostFunctionHandler},
     host::BuiltinHost,
 };

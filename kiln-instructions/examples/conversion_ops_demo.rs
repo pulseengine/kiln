@@ -9,16 +9,8 @@
 use std::vec::Vec;
 
 use kiln_error::Result;
-use kiln_foundation::{
-    FloatBits32,
-    FloatBits64,
-    Value,
-};
-use kiln_instructions::{
-    ConversionContext,
-    ConversionOp,
-    PureInstruction,
-};
+use kiln_foundation::{FloatBits32, FloatBits64, Value};
+use kiln_instructions::{ConversionContext, ConversionOp, PureInstruction};
 
 // Mock execution context for demonstration
 #[cfg(feature = "std")]

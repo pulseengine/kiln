@@ -216,7 +216,7 @@ impl<
             // no-op per the Waker contract.
             None | Some(TaskState::Ready | TaskState::Completed | TaskState::Cancelled) => {
                 Ok(false)
-            }
+            },
             Some(TaskState::Blocked) => {
                 // Enqueue before the FSM step: if the (invariant-unreachable)
                 // push fails, the task is still consistently Blocked. The Wake
@@ -225,7 +225,7 @@ impl<
                 self.ready.push(id)?;
                 self.tasks.transition(id, TaskEvent::Wake)?;
                 Ok(true)
-            }
+            },
             Some(TaskState::Spawned) => Err(Error::invalid_state_error(
                 "kiln-async: wake of a task that was never admitted",
             )),
@@ -455,22 +455,22 @@ impl<
             TaskOutcome::Yielded => {
                 self.ready.push(id)?;
                 self.tasks.transition(id, TaskEvent::Yield)?;
-            }
+            },
             TaskOutcome::Waited => {
                 self.tasks.transition(id, TaskEvent::Wait)?;
                 if woke_mid_poll {
                     // The wakeup raced the park: re-admit immediately.
                     self.mark_ready(id)?;
                 }
-            }
+            },
             TaskOutcome::Completed => {
                 self.tasks.transition(id, TaskEvent::Complete)?;
                 self.tasks.remove(id)?;
-            }
+            },
             TaskOutcome::Cancelled => {
                 self.tasks.transition(id, TaskEvent::Cancel)?;
                 self.tasks.remove(id)?;
-            }
+            },
         }
         Ok(PollRound::Polled(id))
     }
@@ -581,9 +581,7 @@ mod tests {
     #[test]
     fn poll_round_on_an_empty_ready_set_is_idle() {
         let mut s = Sched::new(SchedConfig::DEFAULT);
-        let round = s
-            .poll_round(|_, _, _| unreachable!("nothing to poll"))
-            .unwrap();
+        let round = s.poll_round(|_, _, _| unreachable!("nothing to poll")).unwrap();
         assert_eq!(round, PollRound::Idle);
     }
 
@@ -836,7 +834,9 @@ mod tests {
             assert_eq!(tid, writer);
             assert_eq!(
                 sched.stream_write(st, tid).unwrap(),
-                StreamWrite::Buffered { wake_reader: Some(reader) }
+                StreamWrite::Buffered {
+                    wake_reader: Some(reader)
+                }
             );
             Ok(TaskOutcome::Completed)
         })
@@ -866,7 +866,10 @@ mod tests {
         s.poll_round(|sched, tid, _| {
             assert_eq!(tid, writer);
             sched.stream_write(st, tid).unwrap(); // buffers (count 1)
-            assert_eq!(sched.stream_write(st, tid).unwrap(), StreamWrite::Backpressured);
+            assert_eq!(
+                sched.stream_write(st, tid).unwrap(),
+                StreamWrite::Backpressured
+            );
             Ok(TaskOutcome::Waited)
         })
         .unwrap();
@@ -877,7 +880,9 @@ mod tests {
             assert_eq!(tid, reader);
             assert_eq!(
                 sched.stream_read(st, tid).unwrap(),
-                StreamRead::Consumed { wake_writer: Some(writer) }
+                StreamRead::Consumed {
+                    wake_writer: Some(writer)
+                }
             );
             Ok(TaskOutcome::Completed)
         })

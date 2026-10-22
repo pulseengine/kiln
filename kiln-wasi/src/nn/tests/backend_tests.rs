@@ -1,9 +1,6 @@
 //! Backend implementation tests for WASI-NN
 
-use crate::{
-    nn::*,
-    prelude::*,
-};
+use crate::{nn::*, prelude::*};
 
 /// Test basic backend functionality
 mod backend_basic_tests {
@@ -111,8 +108,8 @@ mod model_loading_tests {
 
         // Test acceptable model data
         let small_data = vec![0u8; 10 * 1024 * 1024]; // 10MB
-                                                      // Note: This will still fail because it's not valid ONNX data, but size check
-                                                      // should pass
+        // Note: This will still fail because it's not valid ONNX data, but size check
+        // should pass
         let small_model_result = tract_backend.load_model(&small_data, GraphEncoding::ONNX);
         // The error should be about invalid encoding, not size
         if let Err(e) = small_model_result {
@@ -161,8 +158,8 @@ mod execution_tests {
     fn test_execution_context_creation() {
         // Create a mock model capability
         struct MockModel {
-            id:          u32,
-            num_inputs:  usize,
+            id: u32,
+            num_inputs: usize,
             num_outputs: usize,
         }
 
@@ -229,8 +226,8 @@ mod execution_tests {
 
         // Create mock graph
         let model = MockModel {
-            id:          1,
-            num_inputs:  1,
+            id: 1,
+            num_inputs: 1,
             num_outputs: 1,
         };
         let capability = capabilities::DynamicNNCapability::new();
@@ -335,10 +332,7 @@ mod store_tests {
 /// Test thread safety and concurrency
 #[cfg(feature = "std")]
 mod concurrency_tests {
-    use std::{
-        sync::Arc,
-        thread,
-    };
+    use std::{sync::Arc, thread};
 
     use super::*;
 
@@ -357,7 +351,7 @@ mod concurrency_tests {
                     assert!(tensor_result.is_ok());
 
                     let op = capabilities::NNOperation::Load {
-                        size:   1024 * i, // Different sizes per thread
+                        size: 1024 * i, // Different sizes per thread
                         format: capabilities::ModelFormat::ONNX,
                     };
                     assert!(cap.verify_operation(&op).is_ok());

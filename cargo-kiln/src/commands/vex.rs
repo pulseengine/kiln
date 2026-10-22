@@ -123,15 +123,14 @@ pub fn parse_audit(json_text: &str) -> Result<Vec<Finding>> {
             .get("title")
             .and_then(Value::as_str)
             .with_context(|| format!("advisory {id} has no title"))?;
-        let package = entry
-            .pointer("/package/name")
-            .and_then(Value::as_str)
-            .map(str::to_string);
-        let version = entry
-            .pointer("/package/version")
-            .and_then(Value::as_str)
-            .map(str::to_string);
-        let finding = Finding { id: id.to_string(), title: title.to_string(), package, version };
+        let package = entry.pointer("/package/name").and_then(Value::as_str).map(str::to_string);
+        let version = entry.pointer("/package/version").and_then(Value::as_str).map(str::to_string);
+        let finding = Finding {
+            id: id.to_string(),
+            title: title.to_string(),
+            package,
+            version,
+        };
         if !findings.contains(&finding) {
             findings.push(finding);
         }
@@ -212,7 +211,11 @@ pub fn classify(
         .filter(|(_, tree)| tree.contains(&key))
         .map(|(target, _)| target.clone())
         .collect();
-    if targets.is_empty() { Verdict::NotAffected } else { Verdict::Affected { targets } }
+    if targets.is_empty() {
+        Verdict::NotAffected
+    } else {
+        Verdict::Affected { targets }
+    }
 }
 
 /// Build the CycloneDX VEX document.
@@ -230,9 +233,10 @@ pub fn build_vex(
     }
     let bom_link_prefix = format!(
         "urn:cdx:{}/{}#",
-        sbom.serial_number
-            .strip_prefix("urn:uuid:")
-            .with_context(|| format!("SBOM serialNumber {} is not a urn:uuid", sbom.serial_number))?,
+        sbom.serial_number.strip_prefix("urn:uuid:").with_context(|| format!(
+            "SBOM serialNumber {} is not a urn:uuid",
+            sbom.serial_number
+        ))?,
         sbom.bom_version
     );
 
@@ -365,14 +369,20 @@ pub fn execute(args: VexArgs, output: &OutputManager) -> Result<()> {
             output.progress("Running cargo audit --json");
             // `cargo audit` exits non-zero when it finds vulnerabilities but
             // still prints the JSON report; an unparseable report is an error.
-            run_stdout(Command::new("cargo").args(["audit", "--json"]), "cargo audit")?.1
+            run_stdout(
+                Command::new("cargo").args(["audit", "--json"]),
+                "cargo audit",
+            )?
+            .1
         },
     };
     let findings = parse_audit(&audit_text)?;
 
     let mut reach = BTreeMap::new();
     for target in &args.targets {
-        output.progress(&format!("Resolving kilnd normal dependency tree for {target}"));
+        output.progress(&format!(
+            "Resolving kilnd normal dependency tree for {target}"
+        ));
         let (status, tree_text) = run_stdout(
             Command::new("cargo").args([
                 "tree", "-p", "kilnd", "-e", "normal", "--target", target, "--prefix", "none",
@@ -500,10 +510,15 @@ mod tests {
             ("x86_64-unknown-linux-gnu", "kilnd v0.6.0 (/w)\n"),
             ("aarch64-apple-darwin", TREE),
         ]);
-        let verdict = classify(&finding("RUSTSEC-2026-0382", "rustls-webpki", "0.103.12"), &reach);
+        let verdict = classify(
+            &finding("RUSTSEC-2026-0382", "rustls-webpki", "0.103.12"),
+            &reach,
+        );
         assert_eq!(
             verdict,
-            Verdict::Affected { targets: vec!["aarch64-apple-darwin".to_string()] }
+            Verdict::Affected {
+                targets: vec!["aarch64-apple-darwin".to_string()]
+            }
         );
     }
 
@@ -520,7 +535,10 @@ mod tests {
     fn classify_not_affected_when_only_a_different_version_is_in_tree() {
         let reach = reach_of(&[("x86_64-unknown-linux-gnu", TREE)]);
         assert_eq!(
-            classify(&finding("RUSTSEC-2026-0382", "rustls-webpki", "0.103.99"), &reach),
+            classify(
+                &finding("RUSTSEC-2026-0382", "rustls-webpki", "0.103.99"),
+                &reach
+            ),
             Verdict::NotAffected
         );
     }
@@ -534,7 +552,10 @@ mod tests {
             package: None,
             version: None,
         };
-        assert!(matches!(classify(&incomplete, &reach), Verdict::InTriage { .. }));
+        assert!(matches!(
+            classify(&incomplete, &reach),
+            Verdict::InTriage { .. }
+        ));
     }
 
     fn sample_vex() -> Value {
@@ -604,9 +625,11 @@ mod tests {
         assert_eq!(vuln["analysis"]["justification"], "code_not_present");
         assert_eq!(vuln["affects"][0]["ref"], "pkg:cargo/atty@0.2.14");
         let components = vex["components"].as_array().unwrap();
-        assert!(components.iter().any(|c| c["bom-ref"] == "pkg:cargo/atty@0.2.14"
-            && c["purl"] == "pkg:cargo/atty@0.2.14"
-            && c["name"] == "atty"));
+        assert!(
+            components.iter().any(|c| c["bom-ref"] == "pkg:cargo/atty@0.2.14"
+                && c["purl"] == "pkg:cargo/atty@0.2.14"
+                && c["name"] == "atty")
+        );
     }
 
     #[test]
@@ -634,7 +657,17 @@ mod tests {
     fn build_vex_rejects_affected_package_missing_from_sbom() {
         let sbom = parse_sbom(SBOM).unwrap();
         let f = finding("RUSTSEC-2099-0002", "ghost", "1.0.0");
-        let verdict = Verdict::Affected { targets: vec!["t".to_string()] };
-        assert!(build_vex(&sbom, &[(f, verdict)], &["t".to_string()], "2026-10-21T00:00:00Z").is_err());
+        let verdict = Verdict::Affected {
+            targets: vec!["t".to_string()],
+        };
+        assert!(
+            build_vex(
+                &sbom,
+                &[(f, verdict)],
+                &["t".to_string()],
+                "2026-10-21T00:00:00Z"
+            )
+            .is_err()
+        );
     }
 }

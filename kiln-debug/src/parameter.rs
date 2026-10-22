@@ -229,9 +229,7 @@ pub struct ParameterList<'a> {
 
 impl<'a> core::fmt::Debug for ParameterList<'a> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("ParameterList")
-            .field("count", &self.count)
-            .finish()
+        f.debug_struct("ParameterList").field("count", &self.count).finish()
     }
 }
 
@@ -268,9 +266,7 @@ impl<'a> ParameterList<'a> {
 
     /// Check if function has variadic parameters
     pub fn is_variadic(&self) -> bool {
-        self.parameters[..self.count]
-            .iter()
-            .any(|p| p.map_or(false, |p| p.is_variadic))
+        self.parameters[..self.count].iter().any(|p| p.map_or(false, |p| p.is_variadic))
     }
 
     /// Get parameter by position
@@ -288,10 +284,8 @@ impl<'a> ParameterList<'a> {
     {
         writer("(")?;
 
-        for (i, param) in self.parameters[..self.count]
-            .iter()
-            .filter_map(|p| p.as_ref())
-            .enumerate()
+        for (i, param) in
+            self.parameters[..self.count].iter().filter_map(|p| p.as_ref()).enumerate()
         {
             if i > 0 {
                 writer(", ")?;
@@ -446,9 +440,7 @@ pub struct InlinedFunctions<'a> {
 
 impl<'a> core::fmt::Debug for InlinedFunctions<'a> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("InlinedFunctions")
-            .field("count", &self.count)
-            .finish()
+        f.debug_struct("InlinedFunctions").field("count", &self.count).finish()
     }
 }
 

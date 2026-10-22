@@ -12,21 +12,13 @@ use core::fmt;
 #[cfg(feature = "std")]
 use std::sync::Arc;
 
+use kiln_foundation::verification::VerificationLevel;
 #[cfg(feature = "tract")]
 use tract_onnx::prelude::*;
-use kiln_foundation::verification::VerificationLevel;
 
 use super::{
-    BackendProvider,
-    ComputeCapable,
-    DynBackend,
-    GraphEncoding,
-    ModelCapability,
-    NeuralNetworkBackend,
-    NeuralNetworkCapability,
-    Tensor,
-    TensorCapability,
-    TensorDimensions,
+    BackendProvider, ComputeCapable, DynBackend, GraphEncoding, ModelCapability,
+    NeuralNetworkBackend, NeuralNetworkCapability, Tensor, TensorCapability, TensorDimensions,
     TensorType,
 };
 use crate::prelude::*;
@@ -34,7 +26,7 @@ use crate::prelude::*;
 /// Tract backend implementation
 pub struct TractBackend<C: NeuralNetworkCapability> {
     capability: C,
-    name:       &'static str,
+    name: &'static str,
 }
 
 impl<C: NeuralNetworkCapability> TractBackend<C> {
@@ -58,14 +50,14 @@ impl<C: NeuralNetworkCapability> fmt::Debug for TractBackend<C> {
 
 /// Tract model wrapper implementing ModelCapability
 pub struct TractModel {
-    id:          u32,
-    size:        usize,
-    hash:        [u8; 32],
+    id: u32,
+    size: usize,
+    hash: [u8; 32],
     #[cfg(feature = "tract")]
-    model:       TypedModel,
+    model: TypedModel,
     #[cfg(feature = "tract")]
-    runnable:    TypedRunnableModel<TypedModel>,
-    input_info:  Vec<(TensorDimensions, TensorType)>,
+    runnable: TypedRunnableModel<TypedModel>,
+    input_info: Vec<(TensorDimensions, TensorType)>,
     output_info: Vec<(TensorDimensions, TensorType)>,
 }
 
@@ -125,9 +117,9 @@ impl ModelCapability for TractModel {
 /// Tract tensor wrapper implementing TensorCapability
 #[derive(Debug)]
 pub struct TractTensor {
-    dimensions:   TensorDimensions,
-    data_type:    TensorType,
-    data:         Vec<u8>,
+    dimensions: TensorDimensions,
+    data_type: TensorType,
+    data: Vec<u8>,
     #[cfg(feature = "tract")]
     tract_tensor: Option<tract_onnx::prelude::Tensor>,
 }
@@ -171,15 +163,15 @@ impl TensorCapability for TractTensor {
 
 /// Tract execution context
 pub struct TractContext {
-    model_id:         u32,
-    encoding:         GraphEncoding,
+    model_id: u32,
+    encoding: GraphEncoding,
     capability_level: VerificationLevel,
     #[cfg(feature = "tract")]
-    inputs:           Vec<Option<tract_onnx::prelude::Tensor>>,
+    inputs: Vec<Option<tract_onnx::prelude::Tensor>>,
     #[cfg(feature = "tract")]
-    outputs:          Option<TVec<Arc<tract_onnx::prelude::Tensor>>>,
+    outputs: Option<TVec<Arc<tract_onnx::prelude::Tensor>>>,
     #[cfg(feature = "tract")]
-    runnable:         TypedRunnableModel<TypedModel>,
+    runnable: TypedRunnableModel<TypedModel>,
 }
 
 impl fmt::Debug for TractContext {
@@ -246,7 +238,7 @@ impl ComputeCapable for TractContext {
                     _ => {
                         return Err(Error::wasi_unsupported_operation(
                             "Unsupported tensor type for safe conversion",
-                        ))
+                        ));
                     },
                 };
 
@@ -263,10 +255,7 @@ impl ComputeCapable for TractContext {
             let mut result = Vec::new();
 
             // Create capability based on the stored verification level
-            use crate::nn::capabilities::{
-                create_nn_capability,
-                NNVerificationLevel,
-            };
+            use crate::nn::capabilities::{NNVerificationLevel, create_nn_capability};
             let nn_level: NNVerificationLevel = self.capability_level.into();
             let capability = create_nn_capability(nn_level)?;
 
@@ -384,7 +373,7 @@ impl<C: NeuralNetworkCapability + 'static> NeuralNetworkBackend for TractBackend
                 _ => {
                     return Err(Error::wasi_invalid_encoding(
                         "Only ONNX is currently supported",
-                    ))
+                    ));
                 },
             };
 
@@ -456,20 +445,20 @@ impl<C: NeuralNetworkCapability + 'static> NeuralNetworkBackend for TractBackend
         {
             let num_inputs = model.num_inputs();
             Ok(TractContext {
-                model_id:         model.id(),
-                encoding:         GraphEncoding::ONNX, // We know this backend only supports ONNX
+                model_id: model.id(),
+                encoding: GraphEncoding::ONNX, // We know this backend only supports ONNX
                 capability_level: self.capability.verification_level().into(),
-                inputs:           vec![None; num_inputs],
-                outputs:          None,
-                runnable:         model.runnable.clone(),
+                inputs: vec![None; num_inputs],
+                outputs: None,
+                runnable: model.runnable.clone(),
             })
         }
 
         #[cfg(not(feature = "tract"))]
         {
             Ok(TractContext {
-                model_id:         model.id(),
-                encoding:         GraphEncoding::ONNX,
+                model_id: model.id(),
+                encoding: GraphEncoding::ONNX,
                 capability_level: self.capability.verification_level(),
             })
         }
@@ -545,7 +534,7 @@ impl<C: NeuralNetworkCapability + 'static> NeuralNetworkBackend for TractBackend
                 _ => {
                     return Err(Error::wasi_unsupported_operation(
                         "Unsupported tensor type for safe conversion",
-                    ))
+                    ));
                 },
             };
 
@@ -728,12 +717,12 @@ impl<B: NeuralNetworkBackend + 'static> DynBackend for TractDynBackend<B> {
             if let Some(tract_model) = model.as_any().downcast_ref::<TractModel>() {
                 let num_inputs = tract_model.num_inputs();
                 let context = TractContext {
-                    model_id:         tract_model.id(),
-                    encoding:         GraphEncoding::ONNX,
+                    model_id: tract_model.id(),
+                    encoding: GraphEncoding::ONNX,
                     capability_level: kiln_foundation::verification::VerificationLevel::Standard,
-                    inputs:           vec![None; num_inputs],
-                    outputs:          None,
-                    runnable:         tract_model.runnable.clone(),
+                    inputs: vec![None; num_inputs],
+                    outputs: None,
+                    runnable: tract_model.runnable.clone(),
                 };
                 Ok(Box::new(context))
             } else {
@@ -747,8 +736,8 @@ impl<B: NeuralNetworkBackend + 'static> DynBackend for TractDynBackend<B> {
         {
             let num_inputs = model.num_inputs();
             let context = TractContext {
-                model_id:         model.id(),
-                encoding:         GraphEncoding::ONNX,
+                model_id: model.id(),
+                encoding: GraphEncoding::ONNX,
                 capability_level: kiln_foundation::verification::VerificationLevel::Standard,
             };
             Ok(Box::new(context))
@@ -778,10 +767,7 @@ fn calculate_model_hash(data: &[u8]) -> [u8; 32] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::nn::capabilities::{
-        DynamicNNCapability,
-        StaticNNCapability,
-    };
+    use crate::nn::capabilities::{DynamicNNCapability, StaticNNCapability};
 
     #[test]
     fn test_tract_backend_creation() {

@@ -12,11 +12,7 @@
 
 #![allow(dead_code)] // Allow during stub phase
 
-use kiln_error::{
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result};
 use kiln_foundation::safe_memory::NoStdProvider;
 
 /// Temporary stub for unified memory provider
@@ -29,14 +25,14 @@ pub trait UnifiedMemoryProvider: Send + Sync {
 
 /// Temporary stub for configurable memory provider
 pub struct ConfigurableProvider<const SIZE: usize> {
-    buffer:    [u8; SIZE],
+    buffer: [u8; SIZE],
     allocated: usize,
 }
 
 impl<const SIZE: usize> ConfigurableProvider<SIZE> {
     pub fn new() -> Self {
         Self {
-            buffer:    [0u8; SIZE],
+            buffer: [0u8; SIZE],
             allocated: 0,
         }
     }
@@ -119,14 +115,14 @@ pub enum AsilLevel {
 #[derive(Debug, Clone)]
 pub struct SafetyContext {
     pub compile_time_asil: AsilLevel,
-    pub runtime_asil:      Option<AsilLevel>,
+    pub runtime_asil: Option<AsilLevel>,
 }
 
 impl SafetyContext {
     pub const fn new(compile_time: AsilLevel) -> Self {
         Self {
             compile_time_asil: compile_time,
-            runtime_asil:      None,
+            runtime_asil: None,
         }
     }
 

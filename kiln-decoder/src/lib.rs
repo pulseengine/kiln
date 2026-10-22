@@ -134,11 +134,11 @@ pub use streaming_validator::{
     WasmRequirements,
 };
 // Unified loader exports
+pub use kiln_error::{Error, Result, codes, kinds};
 pub use unified_loader::{
     ComponentInfo, ExportInfo, ExportType, ImportInfo, ImportType, ModuleInfo, WasmFormat,
     WasmInfo, load_wasm_unified,
 };
-pub use kiln_error::{Error, Result, codes, kinds};
 // Essential re-exports only
 #[cfg(feature = "std")]
 pub use kiln_foundation::safe_memory::StdProvider as StdMemoryProvider;

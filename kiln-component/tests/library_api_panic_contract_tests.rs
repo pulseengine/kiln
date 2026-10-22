@@ -36,9 +36,8 @@ fn function_exporting_component() -> Vec<u8> {
 #[test]
 fn from_parsed_library_does_not_panic_on_function_exports() {
     let bytes = function_exporting_component();
-    let mut parsed = Box::new(
-        kiln_decoder::component::decode_component(&bytes).expect("fixture must decode"),
-    );
+    let mut parsed =
+        Box::new(kiln_decoder::component::decode_component(&bytes).expect("fixture must decode"));
 
     // The assertion is that this call RETURNS (Ok or Err) rather than
     // panicking. A panic here is the #427 defect and fails the test.

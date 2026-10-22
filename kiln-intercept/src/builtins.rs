@@ -6,21 +6,14 @@
 #[cfg(feature = "std")]
 use std::sync::Arc;
 
-#[cfg(feature = "std")]
-use kiln_foundation::component_value::{
-    ComponentValue,
-    ValType,
-};
-#[cfg(feature = "std")]
-use kiln_foundation::values::Value;
 #[allow(unused_imports)] // Used in feature-gated code
 use kiln_error::Error;
+#[cfg(feature = "std")]
+use kiln_foundation::component_value::{ComponentValue, ValType};
+#[cfg(feature = "std")]
+use kiln_foundation::values::Value;
 
-use crate::prelude::{
-    str,
-    BuiltinType,
-    Debug,
-};
+use crate::prelude::{BuiltinType, Debug, str};
 
 /// Context for built-in interception
 ///
@@ -36,16 +29,16 @@ pub struct InterceptContext {
     #[cfg(not(feature = "std"))]
     pub component_name: &'static str,
     /// The built-in function being called
-    pub builtin_type:   BuiltinType,
+    pub builtin_type: BuiltinType,
     /// The host environment's unique identifier
     #[cfg(feature = "std")]
-    pub host_id:        String,
+    pub host_id: String,
     /// The host environment's unique identifier (static in `no_std`)
     #[cfg(not(feature = "std"))]
-    pub host_id:        &'static str,
+    pub host_id: &'static str,
     /// Additional context data (if any)
     #[cfg(feature = "std")]
-    pub context_data:   std::collections::BTreeMap<String, Value>,
+    pub context_data: std::collections::BTreeMap<String, Value>,
 }
 
 impl InterceptContext {
@@ -87,7 +80,7 @@ impl InterceptContext {
 
     /// Get context data (only available with `std` feature)
     #[cfg(feature = "std")]
-    #[must_use] 
+    #[must_use]
     pub fn get_data(&self, key: &str) -> Option<&Value> {
         self.context_data.get(key)
     }
@@ -131,7 +124,7 @@ impl BuiltinSerialization {
                 _ => {
                     return Err(Error::runtime_execution_error(
                         "unsupported component value type for serialization",
-                    ))
+                    ));
                 },
             };
             result.extend(bytes);
@@ -222,7 +215,7 @@ impl BuiltinSerialization {
                         kiln_error::ErrorCategory::Type,
                         kiln_error::codes::INVALID_TYPE,
                         "unsupported value type for deserialization",
-                    ))
+                    ));
                 },
             }
         }

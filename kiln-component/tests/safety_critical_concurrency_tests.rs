@@ -16,8 +16,7 @@ use std::{
 };
 
 use kiln_component::{
-    bounded_component_infra::*,
-    resource_management::ResourceTable,
+    bounded_component_infra::*, resource_management::ResourceTable,
     resources::resource_lifecycle::ResourceLifecycleManager,
 };
 use kiln_error::codes;

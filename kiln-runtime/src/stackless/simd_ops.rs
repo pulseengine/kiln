@@ -19,21 +19,13 @@ const CANONICAL_NAN_F64: u64 = 0x7FF8_0000_0000_0000;
 /// If the f32 value is NaN, replace with canonical quiet NaN.
 #[inline]
 pub fn canonicalize_f32(v: f32) -> f32 {
-    if v.is_nan() {
-        f32::from_bits(CANONICAL_NAN_F32)
-    } else {
-        v
-    }
+    if v.is_nan() { f32::from_bits(CANONICAL_NAN_F32) } else { v }
 }
 
 /// If the f64 value is NaN, replace with canonical quiet NaN.
 #[inline]
 pub fn canonicalize_f64(v: f64) -> f64 {
-    if v.is_nan() {
-        f64::from_bits(CANONICAL_NAN_F64)
-    } else {
-        v
-    }
+    if v.is_nan() { f64::from_bits(CANONICAL_NAN_F64) } else { v }
 }
 
 // ============================================================
@@ -1137,8 +1129,12 @@ pub fn i64x2_all_true(v: &[u8; 16]) -> bool {
 #[inline]
 pub fn i64x2_bitmask(v: &[u8; 16]) -> u32 {
     let mut mask = 0u32;
-    if get_i64(v, 0) < 0 { mask |= 1; }
-    if get_i64(v, 1) < 0 { mask |= 2; }
+    if get_i64(v, 0) < 0 {
+        mask |= 1;
+    }
+    if get_i64(v, 1) < 0 {
+        mask |= 2;
+    }
     mask
 }
 
@@ -1467,11 +1463,7 @@ fn wasm_nearest_f32(f: f32) -> f32 {
     } else {
         rounded
     };
-    if result == 0.0 && f.is_sign_negative() {
-        -0.0_f32
-    } else {
-        result
-    }
+    if result == 0.0 && f.is_sign_negative() { -0.0_f32 } else { result }
 }
 
 #[inline]
@@ -1528,11 +1520,7 @@ fn wasm_nearest_f64(f: f64) -> f64 {
     } else {
         rounded
     };
-    if result == 0.0 && f.is_sign_negative() {
-        -0.0_f64
-    } else {
-        result
-    }
+    if result == 0.0 && f.is_sign_negative() { -0.0_f64 } else { result }
 }
 
 // ============================================================
@@ -1717,11 +1705,7 @@ pub fn i16x8_relaxed_dot_i8x16_i7x16_s(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
 /// producing i32 results with accumulator addition. Groups of 4 i8 lanes are
 /// multiplied pairwise with i7 lanes and accumulated into i32 lanes.
 #[inline]
-pub fn i32x4_relaxed_dot_i8x16_i7x16_add_s(
-    a: &[u8; 16],
-    b: &[u8; 16],
-    c: &[u8; 16],
-) -> [u8; 16] {
+pub fn i32x4_relaxed_dot_i8x16_i7x16_add_s(a: &[u8; 16], b: &[u8; 16], c: &[u8; 16]) -> [u8; 16] {
     // First compute i16x8 dot products
     let mut intermediate = [0i16; 8];
     for i in 0..8 {

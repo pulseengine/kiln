@@ -7,15 +7,7 @@
 //! This module provides implementations for WebAssembly parametric instructions
 //! including drop, select, and typed select operations.
 
-use crate::prelude::{
-    Debug,
-    Error,
-    PartialEq,
-    PureInstruction,
-    Result,
-    Value,
-    ValueType,
-};
+use crate::prelude::{Debug, Error, PartialEq, PureInstruction, Result, Value, ValueType};
 
 /// Represents a parametric operation for WebAssembly.
 #[derive(Debug, Clone, PartialEq)]

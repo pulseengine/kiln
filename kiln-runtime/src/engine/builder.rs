@@ -6,23 +6,17 @@
 
 use kiln_decoder::resource_limits_section::extract_resource_limits_from_binary;
 use kiln_error::{Error, Result};
-use kiln_foundation::{
-    capabilities::MemoryCapabilityContext,
-    execution::ASILExecutionMode,
-};
+use kiln_foundation::{capabilities::MemoryCapabilityContext, execution::ASILExecutionMode};
 
-use crate::engine::{
-    CapabilityAwareEngine,
-    EnginePreset,
-};
+use crate::engine::{CapabilityAwareEngine, EnginePreset};
 
 /// Builder for creating capability-aware WebAssembly engines
 #[derive(Debug)]
 pub struct EngineBuilder {
     /// Target ASIL level for the engine
-    asil_level:     Option<ASILExecutionMode>,
+    asil_level: Option<ASILExecutionMode>,
     /// Engine preset (overrides ASIL level if set)
-    preset:         Option<EnginePreset>,
+    preset: Option<EnginePreset>,
     /// Custom capability context (overrides both ASIL level and preset)
     custom_context: Option<MemoryCapabilityContext>,
 }
@@ -31,8 +25,8 @@ impl EngineBuilder {
     /// Create a new engine builder
     pub fn new() -> Self {
         Self {
-            asil_level:     None,
-            preset:         None,
+            asil_level: None,
+            preset: None,
             custom_context: None,
         }
     }

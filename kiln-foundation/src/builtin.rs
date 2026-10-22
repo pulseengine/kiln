@@ -7,24 +7,14 @@
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
-use core::{
-    fmt,
-    str::FromStr,
-};
+use core::{fmt, str::FromStr};
 
 // Error types are imported through crate root
 use crate::{
     bounded::BoundedVec,
     prelude::*,
     safe_memory::NoStdProvider,
-    traits::{
-        Checksummable,
-        FromBytes,
-        ReadStream,
-        SerializationError,
-        ToBytes,
-        WriteStream,
-    },
+    traits::{Checksummable, FromBytes, ReadStream, SerializationError, ToBytes, WriteStream},
     verification::Checksum,
 };
 
@@ -236,7 +226,7 @@ impl Checksummable for BuiltinType {
             BuiltinType::ThreadingSync => 0x23,
         };
         checksum.update_slice(&[discriminant_byte]); // Use update_slice for
-                                                     // &[u8]
+        // &[u8]
     }
 }
 
@@ -651,8 +641,8 @@ impl BuiltinType {
 
     /// Get all available built-in types in the current configuration
     #[must_use]
-    pub fn all_available(
-    ) -> BoundedVec<Self, MAX_BUILTIN_TYPES, NoStdProvider<ALL_AVAILABLE_PROVIDER_CAPACITY>> {
+    pub fn all_available()
+    -> BoundedVec<Self, MAX_BUILTIN_TYPES, NoStdProvider<ALL_AVAILABLE_PROVIDER_CAPACITY>> {
         let provider = NoStdProvider::<ALL_AVAILABLE_PROVIDER_CAPACITY>::default();
         let mut result: BoundedVec<Self, MAX_BUILTIN_TYPES, _> = BoundedVec::new(provider)
             .expect("Static BoundedVec init failed for BuiltinType::all_available");
@@ -701,7 +691,9 @@ impl BuiltinType {
             result.push(Self::ErrorTrace).expect("Static capacity push failed");
             result.push(Self::ErrorContextNew).expect("Static capacity push failed");
             result.push(Self::ErrorContextDrop).expect("Static capacity push failed");
-            result.push(Self::ErrorContextDebugMessage).expect("Static capacity push failed");
+            result
+                .push(Self::ErrorContextDebugMessage)
+                .expect("Static capacity push failed");
         }
 
         // Threading built-ins

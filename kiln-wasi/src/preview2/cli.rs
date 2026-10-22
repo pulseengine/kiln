@@ -7,15 +7,9 @@ use core::any::Any;
 
 // Import capability-aware functions
 use crate::preview2::cli_capability_aware::{
-    wasi_cli_get_arguments_bridge,
-    wasi_cli_get_environment_bridge,
-    wasi_get_initial_cwd_bridge,
+    wasi_cli_get_arguments_bridge, wasi_cli_get_environment_bridge, wasi_get_initial_cwd_bridge,
 };
-use crate::{
-    capabilities::WasiEnvironmentCapabilities,
-    prelude::*,
-    Value,
-};
+use crate::{Value, capabilities::WasiEnvironmentCapabilities, prelude::*};
 
 /// WASI get arguments operation
 ///
@@ -67,10 +61,7 @@ pub fn wasi_get_initial_cwd(target: &mut dyn Any, args: Vec<Value>) -> Result<Ve
 pub fn wasi_get_terminal_stdin(_target: &mut dyn Any, _args: Vec<Value>) -> Result<Vec<Value>> {
     #[cfg(feature = "std")]
     {
-        use std::io::{
-            self,
-            IsTerminal,
-        };
+        use std::io::{self, IsTerminal};
 
         // Check if stdin is a terminal
         let is_terminal = io::stdin().is_terminal();
@@ -101,10 +92,7 @@ pub fn wasi_get_terminal_stdin(_target: &mut dyn Any, _args: Vec<Value>) -> Resu
 pub fn wasi_get_terminal_stdout(_target: &mut dyn Any, _args: Vec<Value>) -> Result<Vec<Value>> {
     #[cfg(feature = "std")]
     {
-        use std::io::{
-            self,
-            IsTerminal,
-        };
+        use std::io::{self, IsTerminal};
 
         // Check if stdout is a terminal
         let is_terminal = io::stdout().is_terminal();
@@ -135,10 +123,7 @@ pub fn wasi_get_terminal_stdout(_target: &mut dyn Any, _args: Vec<Value>) -> Res
 pub fn wasi_get_terminal_stderr(_target: &mut dyn Any, _args: Vec<Value>) -> Result<Vec<Value>> {
     #[cfg(feature = "std")]
     {
-        use std::io::{
-            self,
-            IsTerminal,
-        };
+        use std::io::{self, IsTerminal};
 
         // Check if stderr is a terminal
         let is_terminal = io::stderr().is_terminal();

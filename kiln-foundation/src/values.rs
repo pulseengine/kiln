@@ -21,54 +21,31 @@ use std::fmt;
 // to implement WebAssembly GC reference semantics where multiple locals/stack
 // entries can refer to the same struct/array heap object.
 // Uses Arc<Mutex> for thread safety (Send + Sync).
-#[cfg(feature = "std")]
-use std::sync::{Arc, Mutex};
 #[cfg(not(feature = "std"))]
 use alloc::sync::Arc;
 #[cfg(not(feature = "std"))]
 use kiln_sync::Mutex;
+#[cfg(feature = "std")]
+use std::sync::{Arc, Mutex};
 
 // Core imports
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 
 // Publicly re-export FloatBits32 and FloatBits64 from the local float_repr module
-pub use crate::float_repr::{
-    FloatBits32,
-    FloatBits64,
-};
+pub use crate::float_repr::{FloatBits32, FloatBits64};
 // // use std::format; // Removed: format! should come from prelude
 use crate::traits::LittleEndian as TraitLittleEndian; // Alias trait
 // Use the canonical LittleEndian trait and BytesWriter from crate::traits
 use crate::traits::{
-    BoundedCapacity,
-    BytesWriter,
-    Checksummable,
-    DefaultMemoryProvider,
-    FromBytes,
-    LittleEndian,
-    ReadStream,
-    ToBytes,
-    WriteStream,
+    BoundedCapacity, BytesWriter, Checksummable, DefaultMemoryProvider, FromBytes, LittleEndian,
+    ReadStream, ToBytes, WriteStream,
 };
-use crate::types::{
-    ValueType,
-    MAX_ARRAY_ELEMENTS,
-    MAX_STRUCT_FIELDS,
-}; // Import ValueType and RefType
+use crate::types::{MAX_ARRAY_ELEMENTS, MAX_STRUCT_FIELDS, ValueType}; // Import ValueType and RefType
 use crate::{
-    bounded::BoundedVec,
-    prelude::{
-        Debug,
-        Eq,
-        PartialEq,
-    },
-    verification::Checksum,
     MemoryProvider,
+    bounded::BoundedVec,
+    prelude::{Debug, Eq, PartialEq},
+    verification::Checksum,
 }; // Added for Checksummable
 
 /// GC-managed struct reference for WebAssembly 3.0
@@ -79,7 +56,7 @@ pub struct StructRef<
     /// Type index of the struct
     pub type_index: u32,
     /// Field values
-    pub fields:     BoundedVec<Value, MAX_STRUCT_FIELDS, P>,
+    pub fields: BoundedVec<Value, MAX_STRUCT_FIELDS, P>,
 }
 
 impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> StructRef<P> {
@@ -126,7 +103,7 @@ pub struct ArrayRef<
     /// Type index of the array
     pub type_index: u32,
     /// Array elements (serialized via BoundedVec)
-    pub elements:   BoundedVec<Value, MAX_ARRAY_ELEMENTS, P>,
+    pub elements: BoundedVec<Value, MAX_ARRAY_ELEMENTS, P>,
     /// Side storage for GC reference values that lose heap data during
     /// BoundedVec serialization. Indexed by element position. When a
     /// Value::ArrayRef or Value::StructRef is stored, the original value
@@ -272,8 +249,14 @@ impl GcStructRef {
 
     /// Create a sentinel value used in WAST test comparison.
     pub fn sentinel() -> Self {
-        Self::new(StructRef::new(u32::MAX, DefaultMemoryProvider::default())
-            .unwrap_or_else(|_| StructRef { type_index: u32::MAX, fields: Default::default() }))
+        Self::new(
+            StructRef::new(u32::MAX, DefaultMemoryProvider::default()).unwrap_or_else(|_| {
+                StructRef {
+                    type_index: u32::MAX,
+                    fields: Default::default(),
+                }
+            }),
+        )
     }
 
     /// Check if this is a sentinel (used for "any non-null" matching).
@@ -357,13 +340,16 @@ impl GcArrayRef {
     /// Create a sentinel value used in WAST test comparison.
     /// Matches any non-null array reference.
     pub fn sentinel() -> Self {
-        Self::new(ArrayRef::new(u32::MAX, DefaultMemoryProvider::default())
-            .unwrap_or_else(|_| ArrayRef {
-                type_index: u32::MAX,
-                elements: Default::default(),
-                #[cfg(feature = "std")]
-                gc_refs: std::vec::Vec::new(),
-            }))
+        Self::new(
+            ArrayRef::new(u32::MAX, DefaultMemoryProvider::default()).unwrap_or_else(|_| {
+                ArrayRef {
+                    type_index: u32::MAX,
+                    elements: Default::default(),
+                    #[cfg(feature = "std")]
+                    gc_refs: std::vec::Vec::new(),
+                }
+            }),
+        )
     }
 
     /// Check if this is a sentinel (used for "any non-null" matching).
@@ -421,7 +407,12 @@ impl GcArrayRef {
 
 impl fmt::Debug for GcArrayRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "GcArrayRef(type={}, len={})", self.type_index(), self.len())
+        write!(
+            f,
+            "GcArrayRef(type={}, len={})",
+            self.type_index(),
+            self.len()
+        )
     }
 }
 
@@ -611,13 +602,19 @@ impl FuncRef {
     /// Creates a new `FuncRef` from an index (local to current instance)
     #[must_use]
     pub fn from_index(index: u32) -> Self {
-        Self { index, instance_id: None }
+        Self {
+            index,
+            instance_id: None,
+        }
     }
 
     /// Creates a new `FuncRef` with a specific instance ID (cross-instance)
     #[must_use]
     pub fn from_index_with_instance(index: u32, instance_id: u32) -> Self {
-        Self { index, instance_id: Some(instance_id) }
+        Self {
+            index,
+            instance_id: Some(instance_id),
+        }
     }
 }
 
@@ -652,9 +649,9 @@ impl Value {
             ValueType::AnyRef => Value::ExternRef(None), // AnyRef uses externref representation
             ValueType::EqRef => Value::I31Ref(None),     // EqRef defaults to i31ref
             ValueType::TypedFuncRef(_, _) => Value::FuncRef(None), // Typed funcref defaults to null
-            ValueType::NoneRef => Value::StructRef(None),     // Bottom of any hierarchy
+            ValueType::NoneRef => Value::StructRef(None), // Bottom of any hierarchy
             ValueType::NoExternRef => Value::ExternRef(None), // Bottom of extern hierarchy
-            ValueType::NoExnRef => Value::ExnRef(None),       // Bottom of exn hierarchy
+            ValueType::NoExnRef => Value::ExnRef(None),  // Bottom of exn hierarchy
         }
     }
 
@@ -679,12 +676,30 @@ impl Value {
             Self::I31Ref(_) => ValueType::I31Ref,
             // Component Model types - these are not standard WebAssembly types
             // Stream/Future handles are represented as I32 in the canonical ABI
-            Self::Bool(_) | Self::S8(_) | Self::U8(_) | Self::S16(_) | Self::U16(_) |
-            Self::S32(_) | Self::U32(_) | Self::S64(_) | Self::U64(_) | Self::Char(_) |
-            Self::String(_) | Self::List(_) | Self::Tuple(_) | Self::Record(_) |
-            Self::Variant(_, _) | Self::Enum(_) | Self::Option(_) | Self::Result(_) |
-            Self::Flags(_) | Self::Own(_) | Self::Borrow(_) | Self::Void |
-            Self::Stream(_) | Self::Future(_) => ValueType::I32,
+            Self::Bool(_)
+            | Self::S8(_)
+            | Self::U8(_)
+            | Self::S16(_)
+            | Self::U16(_)
+            | Self::S32(_)
+            | Self::U32(_)
+            | Self::S64(_)
+            | Self::U64(_)
+            | Self::Char(_)
+            | Self::String(_)
+            | Self::List(_)
+            | Self::Tuple(_)
+            | Self::Record(_)
+            | Self::Variant(_, _)
+            | Self::Enum(_)
+            | Self::Option(_)
+            | Self::Result(_)
+            | Self::Flags(_)
+            | Self::Own(_)
+            | Self::Borrow(_)
+            | Self::Void
+            | Self::Stream(_)
+            | Self::Future(_) => ValueType::I32,
         }
     }
 
@@ -708,8 +723,8 @@ impl Value {
             (Self::ArrayRef(None), ValueType::ArrayRef(_)) => true, // Null matches any array type
             // GC reference types
             (Self::I31Ref(_), ValueType::I31Ref) => true,
-            (Self::I31Ref(_), ValueType::EqRef) => true,   // i31ref <: eqref
-            (Self::I31Ref(_), ValueType::AnyRef) => true,   // i31ref <: anyref
+            (Self::I31Ref(_), ValueType::EqRef) => true, // i31ref <: eqref
+            (Self::I31Ref(_), ValueType::AnyRef) => true, // i31ref <: anyref
             // TypedFuncRef is used for any concrete typed reference (ref null? $t)
             // Match with the appropriate Value variant based on the value's actual type
             (Self::FuncRef(_), ValueType::TypedFuncRef(_, _)) => true,
@@ -906,9 +921,7 @@ impl Value {
     /// Attempts to extract variant data if this `Value` is a `Variant`.
     pub fn as_variant(&self) -> Option<(&str, Option<&Value>)> {
         match self {
-            Self::Variant(name, val) => {
-                Some((name.as_str(), val.as_ref().map(|b| b.as_ref())))
-            },
+            Self::Variant(name, val) => Some((name.as_str(), val.as_ref().map(|b| b.as_ref()))),
             _ => None,
         }
     }
@@ -975,10 +988,17 @@ impl Value {
             Self::Stream(v) => Self::Stream(*v),
             Self::Future(v) => Self::Future(*v),
             // GC types and complex types - fall back to clone
-            Self::StructRef(_) | Self::ArrayRef(_) |
-            Self::String(_) | Self::List(_) | Self::Tuple(_) | Self::Record(_) |
-            Self::Variant(_, _) | Self::Enum(_) | Self::Option(_) | Self::Result(_) |
-            Self::Flags(_) => self.clone(),
+            Self::StructRef(_)
+            | Self::ArrayRef(_)
+            | Self::String(_)
+            | Self::List(_)
+            | Self::Tuple(_)
+            | Self::Record(_)
+            | Self::Variant(_, _)
+            | Self::Enum(_)
+            | Self::Option(_)
+            | Self::Result(_)
+            | Self::Flags(_) => self.clone(),
         }
     }
 
@@ -1067,9 +1087,16 @@ impl Value {
             Value::S64(v) => writer.write_all(&v.to_le_bytes()),
             Value::U64(v) => writer.write_all(&v.to_le_bytes()),
             Value::Char(c) => writer.write_all(&(*c as u32).to_le_bytes()),
-            Value::String(_) | Value::List(_) | Value::Tuple(_) | Value::Record(_) |
-            Value::Variant(_, _) | Value::Enum(_) | Value::Option(_) | Value::Result(_) |
-            Value::Flags(_) | Value::Void => {
+            Value::String(_)
+            | Value::List(_)
+            | Value::Tuple(_)
+            | Value::Record(_)
+            | Value::Variant(_, _)
+            | Value::Enum(_)
+            | Value::Option(_)
+            | Value::Result(_)
+            | Value::Flags(_)
+            | Value::Void => {
                 // For complex types, write as 0 (handle would go here in full implementation)
                 writer.write_all(&0u32.to_le_bytes())
             },
@@ -1181,11 +1208,7 @@ impl Value {
                     Error::runtime_execution_error("Failed to convert bytes to I31Ref")
                 })?);
                 // Zero is interpreted as null
-                if val == 0 {
-                    Ok(Value::I31Ref(None))
-                } else {
-                    Ok(Value::I31Ref(Some(val)))
-                }
+                if val == 0 { Ok(Value::I31Ref(None)) } else { Ok(Value::I31Ref(Some(val))) }
             },
             ValueType::AnyRef => {
                 // AnyRef uses externref representation for now
@@ -1199,9 +1222,9 @@ impl Value {
                 // Typed function references not yet supported for byte deserialization
                 Ok(Value::FuncRef(None))
             },
-            ValueType::NoneRef => Ok(Value::StructRef(None)),     // Bottom of any hierarchy
+            ValueType::NoneRef => Ok(Value::StructRef(None)), // Bottom of any hierarchy
             ValueType::NoExternRef => Ok(Value::ExternRef(None)), // Bottom of extern hierarchy
-            ValueType::NoExnRef => Ok(Value::ExnRef(None)),       // Bottom of exn hierarchy
+            ValueType::NoExnRef => Ok(Value::ExnRef(None)),   // Bottom of exn hierarchy
         }
     }
 }
@@ -1503,14 +1526,14 @@ impl Checksummable for Value {
                     v.update_checksum(checksum);
                 }
             },
-            Value::Result(res) => {
-                match res {
-                    Ok(v) | Err(v) => v.update_checksum(checksum),
-                }
+            Value::Result(res) => match res {
+                Ok(v) | Err(v) => v.update_checksum(checksum),
             },
             Value::Flags(flags) => {
                 flags.len().update_checksum(checksum);
-                flags.iter().for_each(|f| f.as_bytes().iter().for_each(|b| b.update_checksum(checksum)));
+                flags
+                    .iter()
+                    .for_each(|f| f.as_bytes().iter().for_each(|b| b.update_checksum(checksum)));
             },
             Value::Own(h) | Value::Borrow(h) | Value::Stream(h) | Value::Future(h) => {
                 h.update_checksum(checksum);
@@ -1637,8 +1660,14 @@ impl ToBytes for Value {
                 // All ref types write exactly REF_SERIALIZED_SIZE (9) bytes
                 writer.write_u8(if opt_v.is_some() { 1 } else { 0 })?;
                 match opt_v {
-                    Some(v) => { v.to_bytes_with_provider(writer, provider)?; writer.write_u32_le(0)?; },
-                    None => { writer.write_u32_le(0)?; writer.write_u32_le(0)?; },
+                    Some(v) => {
+                        v.to_bytes_with_provider(writer, provider)?;
+                        writer.write_u32_le(0)?;
+                    },
+                    None => {
+                        writer.write_u32_le(0)?;
+                        writer.write_u32_le(0)?;
+                    },
                 }
             },
             Value::Ref(v) => {
@@ -1651,16 +1680,28 @@ impl ToBytes for Value {
                 // Write fixed-size: flag + type_index + padding (GC data lives in Arc heap)
                 writer.write_u8(if opt_v.is_some() { 1 } else { 0 })?;
                 match opt_v {
-                    Some(v) => { writer.write_u32_le(v.type_index())?; writer.write_u32_le(0)?; },
-                    None => { writer.write_u32_le(0)?; writer.write_u32_le(0)?; },
+                    Some(v) => {
+                        writer.write_u32_le(v.type_index())?;
+                        writer.write_u32_le(0)?;
+                    },
+                    None => {
+                        writer.write_u32_le(0)?;
+                        writer.write_u32_le(0)?;
+                    },
                 }
             },
             Value::ArrayRef(opt_v) => {
                 // Write fixed-size: flag + type_index + padding (GC data lives in Arc heap)
                 writer.write_u8(if opt_v.is_some() { 1 } else { 0 })?;
                 match opt_v {
-                    Some(v) => { writer.write_u32_le(v.type_index())?; writer.write_u32_le(0)?; },
-                    None => { writer.write_u32_le(0)?; writer.write_u32_le(0)?; },
+                    Some(v) => {
+                        writer.write_u32_le(v.type_index())?;
+                        writer.write_u32_le(0)?;
+                    },
+                    None => {
+                        writer.write_u32_le(0)?;
+                        writer.write_u32_le(0)?;
+                    },
                 }
             },
             // Component Model types - simplified serialization
@@ -1674,9 +1715,15 @@ impl ToBytes for Value {
             Value::S64(v) => writer.write_i64_le(*v)?,
             Value::U64(v) => writer.write_u64_le(*v)?,
             Value::Char(v) => writer.write_u32_le(*v as u32)?,
-            Value::String(_) | Value::List(_) | Value::Tuple(_) | Value::Record(_) |
-            Value::Variant(_, _) | Value::Enum(_) | Value::Option(_) | Value::Result(_) |
-            Value::Flags(_) => {
+            Value::String(_)
+            | Value::List(_)
+            | Value::Tuple(_)
+            | Value::Record(_)
+            | Value::Variant(_, _)
+            | Value::Enum(_)
+            | Value::Option(_)
+            | Value::Result(_)
+            | Value::Flags(_) => {
                 // Complex types - not fully serializable in this simplified form
                 writer.write_u32_le(0)?
             },
@@ -1688,16 +1735,28 @@ impl ToBytes for Value {
                 // All ref types write exactly REF_SERIALIZED_SIZE (9) bytes
                 writer.write_u8(if opt_v.is_some() { 1 } else { 0 })?;
                 match opt_v {
-                    Some(v) => { writer.write_u32_le(*v)?; writer.write_u32_le(0)?; },
-                    None => { writer.write_u32_le(0)?; writer.write_u32_le(0)?; },
+                    Some(v) => {
+                        writer.write_u32_le(*v)?;
+                        writer.write_u32_le(0)?;
+                    },
+                    None => {
+                        writer.write_u32_le(0)?;
+                        writer.write_u32_le(0)?;
+                    },
                 }
             },
             Value::I31Ref(opt_v) => {
                 // All ref types write exactly REF_SERIALIZED_SIZE (9) bytes
                 writer.write_u8(if opt_v.is_some() { 1 } else { 0 })?;
                 match opt_v {
-                    Some(v) => { writer.write_i32_le(*v)?; writer.write_u32_le(0)?; },
-                    None => { writer.write_i32_le(0)?; writer.write_u32_le(0)?; },
+                    Some(v) => {
+                        writer.write_i32_le(*v)?;
+                        writer.write_u32_le(0)?;
+                    },
+                    None => {
+                        writer.write_i32_le(0)?;
+                        writer.write_u32_le(0)?;
+                    },
                 }
             },
         }
@@ -1781,7 +1840,9 @@ impl FromBytes for Value {
                     let type_index = reader.read_u32_le()?;
                     let _ = reader.read_u32_le()?; // Skip padding
                     let sref = StructRef::new(type_index, DefaultMemoryProvider::default())
-                        .map_err(|_| Error::runtime_execution_error("Failed to create StructRef"))?;
+                        .map_err(|_| {
+                            Error::runtime_execution_error("Failed to create StructRef")
+                        })?;
                     Ok(Value::StructRef(Some(GcStructRef::new(sref))))
                 } else {
                     let _ = reader.read_u32_le()?; // Skip data
@@ -1963,4 +2024,3 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> Fr
         Ok(array_ref)
     }
 }
-

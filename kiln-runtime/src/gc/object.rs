@@ -116,12 +116,7 @@ impl<'a> GcObjectRef<'a> {
         ObjectHeader {
             flags: self.data[0],
             reserved: [self.data[1], self.data[2], self.data[3]],
-            size: u32::from_le_bytes([
-                self.data[4],
-                self.data[5],
-                self.data[6],
-                self.data[7],
-            ]),
+            size: u32::from_le_bytes([self.data[4], self.data[5], self.data[6], self.data[7]]),
         }
     }
 
@@ -159,12 +154,7 @@ impl<'a> GcObjectMut<'a> {
         ObjectHeader {
             flags: self.data[0],
             reserved: [self.data[1], self.data[2], self.data[3]],
-            size: u32::from_le_bytes([
-                self.data[4],
-                self.data[5],
-                self.data[6],
-                self.data[7],
-            ]),
+            size: u32::from_le_bytes([self.data[4], self.data[5], self.data[6], self.data[7]]),
         }
     }
 

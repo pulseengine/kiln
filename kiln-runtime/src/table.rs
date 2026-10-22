@@ -9,16 +9,10 @@ use kiln_foundation::{
     bounded::BoundedVec,
     safe_memory::NoStdMemoryProvider,
     types::{
-        Limits as KilnLimits,
-        RefType as KilnRefType,
-        TableType as KilnTableType,
+        Limits as KilnLimits, RefType as KilnRefType, TableType as KilnTableType,
         ValueType as KilnValueType,
     },
-    values::{
-        ExternRef as KilnExternRef,
-        FuncRef as KilnFuncRef,
-        Value as KilnValue,
-    },
+    values::{ExternRef as KilnExternRef, FuncRef as KilnFuncRef, Value as KilnValue},
     // Use clean collections instead of runtime allocator types
     verification::VerificationLevel,
 };
@@ -33,16 +27,7 @@ use std::format;
 use kiln_instructions::table_ops::TableOperations;
 
 use crate::prelude::{
-    Arc,
-    BoundedCapacity,
-    Debug,
-    Eq,
-    Error,
-    ErrorCategory,
-    Ord,
-    PartialEq,
-    Result,
-    RuntimeString,
+    Arc, BoundedCapacity, Debug, Eq, Error, ErrorCategory, Ord, PartialEq, Result, RuntimeString,
     TryFrom,
 };
 
@@ -96,12 +81,12 @@ type TableElements = Vec<Option<KilnValue>>;
 /// Uses interior mutability (Mutex) for thread-safe element access.
 pub struct Table {
     /// The table type, using the canonical `KilnTableType`
-    pub ty:                 KilnTableType,
+    pub ty: KilnTableType,
     /// The table elements - wrapped in Mutex for interior mutability
     /// This allows setting elements through Arc<Table> references
     elements: Mutex<TableElements>,
     /// A debug name for the table (optional)
-    pub debug_name:         Option<RuntimeString>,
+    pub debug_name: Option<RuntimeString>,
     /// Verification level for table operations
     pub verification_level: VerificationLevel,
     /// Runtime element cap (0 = unlimited). Enforced in `grow`/`grow_shared` in
@@ -131,12 +116,11 @@ impl Clone for Table {
         reason = "Clone cannot return an error; a poisoned table lock means a thread panicked mid-access and the contents must not be copied"
     )]
     fn clone(&self) -> Self {
-        let source_elements = self.elements.lock()
-            .expect("Table mutex poisoned during clone");
+        let source_elements = self.elements.lock().expect("Table mutex poisoned during clone");
         Self {
-            ty:                 self.ty.clone(),
-            elements:           Mutex::new(source_elements.clone()),
-            debug_name:         self.debug_name.clone(),
+            ty: self.ty.clone(),
+            elements: Mutex::new(source_elements.clone()),
+            debug_name: self.debug_name.clone(),
             verification_level: self.verification_level,
             runtime_max_elements: core::sync::atomic::AtomicU32::new(
                 self.runtime_max_elements.load(core::sync::atomic::Ordering::Relaxed),
@@ -157,10 +141,8 @@ impl PartialEq for Table {
         {
             return false;
         }
-        let self_elements = self.elements.lock()
-            .expect("Table mutex poisoned during comparison");
-        let other_elements = other.elements.lock()
-            .expect("Table mutex poisoned during comparison");
+        let self_elements = self.elements.lock().expect("Table mutex poisoned during comparison");
+        let other_elements = other.elements.lock().expect("Table mutex poisoned during comparison");
         *self_elements == *other_elements
     }
 }
@@ -175,13 +157,10 @@ impl Eq for Table {}
 )]
 impl Default for Table {
     fn default() -> Self {
-        use kiln_foundation::types::{
-            Limits,
-            TableType,
-        };
+        use kiln_foundation::types::{Limits, TableType};
         let table_type = TableType {
             element_type: KilnRefType::Funcref,
-            limits:       Limits {
+            limits: Limits {
                 min: 0,
                 max: Some(1),
             },
@@ -242,10 +221,7 @@ impl kiln_foundation::traits::FromBytes for Table {
         reader.read_exact(&mut min_bytes)?;
         let min = u32::from_le_bytes(min_bytes);
 
-        use kiln_foundation::types::{
-            Limits,
-            TableType,
-        };
+        use kiln_foundation::types::{Limits, TableType};
         let table_type = TableType {
             element_type,
             limits: Limits {
@@ -269,9 +245,13 @@ impl Table {
             KilnRefType::Gc(gc) => {
                 use kiln_foundation::types::HeapType;
                 match gc.heap_type {
-                    HeapType::Func | HeapType::NoFunc | HeapType::Concrete(_) => Some(KilnValue::FuncRef(None)),
+                    HeapType::Func | HeapType::NoFunc | HeapType::Concrete(_) => {
+                        Some(KilnValue::FuncRef(None))
+                    },
                     HeapType::Extern | HeapType::NoExtern => Some(KilnValue::ExternRef(None)),
-                    HeapType::I31 | HeapType::Eq | HeapType::Any | HeapType::None => Some(KilnValue::I31Ref(None)),
+                    HeapType::I31 | HeapType::Eq | HeapType::Any | HeapType::None => {
+                        Some(KilnValue::I31Ref(None))
+                    },
                     HeapType::Struct => Some(KilnValue::StructRef(None)),
                     HeapType::Array => Some(KilnValue::ArrayRef(None)),
                     HeapType::Exn => Some(KilnValue::ExnRef(None)),
@@ -300,8 +280,7 @@ impl Table {
     /// in addition to the module-declared `ty.limits.max` (SR-44). Set before
     /// execution.
     pub fn set_runtime_max_elements(&self, n: u32) {
-        self.runtime_max_elements
-            .store(n, core::sync::atomic::Ordering::Relaxed);
+        self.runtime_max_elements.store(n, core::sync::atomic::Ordering::Relaxed);
     }
 
     /// Creates a new table with the specified capacity and element type
@@ -321,7 +300,7 @@ impl Table {
     pub fn with_capacity(capacity: u32, element_type: &KilnRefType) -> Result<Self> {
         let table_type = KilnTableType {
             element_type: *element_type,
-            limits:       KilnLimits {
+            limits: KilnLimits {
                 min: capacity,
                 max: Some(capacity),
             },
@@ -357,7 +336,9 @@ impl Table {
     pub fn get(&self, idx: u32) -> Result<Option<KilnValue>> {
         let idx_usize = wasm_index_to_usize(idx)?;
 
-        let elements = self.elements.lock()
+        let elements = self
+            .elements
+            .lock()
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
 
         if idx_usize >= elements.len() {
@@ -386,7 +367,9 @@ impl Table {
     pub fn set(&mut self, idx: u32, value: Option<KilnValue>) -> Result<()> {
         let idx_usize = wasm_index_to_usize(idx)?;
 
-        let mut elements = self.elements.lock()
+        let mut elements = self
+            .elements
+            .lock()
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
 
         if idx_usize >= elements.len() {
@@ -397,13 +380,13 @@ impl Table {
             let val_matches = matches!(
                 (&val, &self.ty.element_type),
                 (KilnValue::FuncRef(_), KilnRefType::Funcref)
-                | (KilnValue::FuncRef(_), KilnRefType::Gc(_))
-                | (KilnValue::ExternRef(_), KilnRefType::Externref)
-                | (KilnValue::ExternRef(_), KilnRefType::Gc(_))
-                | (KilnValue::I31Ref(_), KilnRefType::Gc(_))
-                | (KilnValue::StructRef(_), KilnRefType::Gc(_))
-                | (KilnValue::ArrayRef(_), KilnRefType::Gc(_))
-                | (KilnValue::Ref(_), KilnRefType::Gc(_)) // internalized extern (any.convert_extern)
+                    | (KilnValue::FuncRef(_), KilnRefType::Gc(_))
+                    | (KilnValue::ExternRef(_), KilnRefType::Externref)
+                    | (KilnValue::ExternRef(_), KilnRefType::Gc(_))
+                    | (KilnValue::I31Ref(_), KilnRefType::Gc(_))
+                    | (KilnValue::StructRef(_), KilnRefType::Gc(_))
+                    | (KilnValue::ArrayRef(_), KilnRefType::Gc(_))
+                    | (KilnValue::Ref(_), KilnRefType::Gc(_)) // internalized extern (any.convert_extern)
             );
             if !val_matches {
                 return Err(Error::validation_error(
@@ -420,7 +403,9 @@ impl Table {
     pub fn set_shared(&self, idx: u32, value: Option<KilnValue>) -> Result<()> {
         let idx_usize = wasm_index_to_usize(idx)?;
 
-        let mut elements = self.elements.lock()
+        let mut elements = self
+            .elements
+            .lock()
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
 
         if idx_usize >= elements.len() {
@@ -452,11 +437,11 @@ impl Table {
         let init_val_matches = matches!(
             (&init_value_from_arg, &self.ty.element_type),
             (KilnValue::FuncRef(_), KilnRefType::Funcref)
-            | (KilnValue::ExternRef(_), KilnRefType::Externref)
-            | (KilnValue::ExternRef(_), KilnRefType::Gc(_))
-            | (KilnValue::I31Ref(_), KilnRefType::Gc(_))
-            | (KilnValue::StructRef(_), KilnRefType::Gc(_))
-            | (KilnValue::ArrayRef(_), KilnRefType::Gc(_))
+                | (KilnValue::ExternRef(_), KilnRefType::Externref)
+                | (KilnValue::ExternRef(_), KilnRefType::Gc(_))
+                | (KilnValue::I31Ref(_), KilnRefType::Gc(_))
+                | (KilnValue::StructRef(_), KilnRefType::Gc(_))
+                | (KilnValue::ArrayRef(_), KilnRefType::Gc(_))
         );
         if !init_val_matches {
             return Err(Error::validation_error(
@@ -481,9 +466,7 @@ impl Table {
         }
 
         // Runtime host cap (SR-44), in addition to the module-declared max; 0 = unlimited.
-        let rt_cap = self
-            .runtime_max_elements
-            .load(core::sync::atomic::Ordering::Relaxed);
+        let rt_cap = self.runtime_max_elements.load(core::sync::atomic::Ordering::Relaxed);
         if rt_cap != 0 && new_size > rt_cap {
             return Err(Error::new(
                 ErrorCategory::Runtime,
@@ -493,7 +476,9 @@ impl Table {
         }
 
         // Lock elements and push new values
-        let mut elements = self.elements.lock()
+        let mut elements = self
+            .elements
+            .lock()
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
 
         for _ in 0..delta {
@@ -512,11 +497,14 @@ impl Table {
         value: Option<KilnValue>,
         len: usize,
     ) -> Result<()> {
-        let mut elements = self.elements.lock()
+        let mut elements = self
+            .elements
+            .lock()
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
 
         // Verify bounds - use checked arithmetic to prevent overflow
-        let end = offset.checked_add(len)
+        let end = offset
+            .checked_add(len)
             .ok_or_else(|| Error::runtime_trap("out of bounds table access"))?;
         if end > elements.len() {
             return Err(Error::runtime_trap("out of bounds table access"));
@@ -539,13 +527,17 @@ impl Table {
     /// This method provides interior mutability for use when the table is
     /// wrapped in an Arc.
     pub fn copy_elements_shared(&self, dst: usize, src: usize, len: usize) -> Result<()> {
-        let mut elements = self.elements.lock()
+        let mut elements = self
+            .elements
+            .lock()
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
 
         // Verify bounds - use checked arithmetic to prevent overflow
-        let src_end = src.checked_add(len)
+        let src_end = src
+            .checked_add(len)
             .ok_or_else(|| Error::runtime_trap("out of bounds table access"))?;
-        let dst_end = dst.checked_add(len)
+        let dst_end = dst
+            .checked_add(len)
             .ok_or_else(|| Error::runtime_trap("out of bounds table access"))?;
         if src_end > elements.len() || dst_end > elements.len() {
             return Err(Error::runtime_trap("out of bounds table access"));
@@ -557,9 +549,7 @@ impl Table {
         }
 
         // Copy source elements to temp buffer, then write to destination
-        let temp: Vec<Option<KilnValue>> = (0..len)
-            .map(|i| elements[src + i].clone())
-            .collect();
+        let temp: Vec<Option<KilnValue>> = (0..len).map(|i| elements[src + i].clone()).collect();
 
         for (i, val) in temp.into_iter().enumerate() {
             elements[dst + i] = val;
@@ -572,7 +562,9 @@ impl Table {
     /// This method provides interior mutability for use when the table is
     /// wrapped in an Arc.
     pub fn init_shared(&self, offset: u32, init_data: &[Option<KilnValue>]) -> Result<()> {
-        let mut elements = self.elements.lock()
+        let mut elements = self
+            .elements
+            .lock()
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
 
         if offset as usize + init_data.len() > elements.len() {
@@ -582,7 +574,12 @@ impl Table {
         }
         for (i, val_opt) in init_data.iter().enumerate() {
             if let Some(val) = val_opt {
-                let val_matches = matches!((&val, &self.ty.element_type), (KilnValue::FuncRef(_), KilnRefType::Funcref) | (KilnValue::ExternRef(_), KilnRefType::Externref) | (KilnValue::ExternRef(_), KilnRefType::Gc(_)));
+                let val_matches = matches!(
+                    (&val, &self.ty.element_type),
+                    (KilnValue::FuncRef(_), KilnRefType::Funcref)
+                        | (KilnValue::ExternRef(_), KilnRefType::Externref)
+                        | (KilnValue::ExternRef(_), KilnRefType::Gc(_))
+                );
                 if !val_matches {
                     return Err(Error::validation_error("Table init value type mismatch"));
                 }
@@ -610,11 +607,11 @@ impl Table {
         let init_val_matches = matches!(
             (&init_value_from_arg, &self.ty.element_type),
             (KilnValue::FuncRef(_), KilnRefType::Funcref)
-            | (KilnValue::ExternRef(_), KilnRefType::Externref)
-            | (KilnValue::ExternRef(_), KilnRefType::Gc(_))
-            | (KilnValue::I31Ref(_), KilnRefType::Gc(_))
-            | (KilnValue::StructRef(_), KilnRefType::Gc(_))
-            | (KilnValue::ArrayRef(_), KilnRefType::Gc(_))
+                | (KilnValue::ExternRef(_), KilnRefType::Externref)
+                | (KilnValue::ExternRef(_), KilnRefType::Gc(_))
+                | (KilnValue::I31Ref(_), KilnRefType::Gc(_))
+                | (KilnValue::StructRef(_), KilnRefType::Gc(_))
+                | (KilnValue::ArrayRef(_), KilnRefType::Gc(_))
         );
         if !init_val_matches {
             return Err(Error::validation_error(
@@ -641,9 +638,7 @@ impl Table {
 
         // Runtime host cap (SR-44), in addition to the module-declared max; 0 = unlimited.
         // Kept in sync with grow_shared so neither path can bypass the cap.
-        let rt_cap = self
-            .runtime_max_elements
-            .load(core::sync::atomic::Ordering::Relaxed);
+        let rt_cap = self.runtime_max_elements.load(core::sync::atomic::Ordering::Relaxed);
         if rt_cap != 0 && new_size > rt_cap {
             return Err(Error::new(
                 ErrorCategory::Runtime,
@@ -653,7 +648,9 @@ impl Table {
         }
 
         // Lock elements and push new values
-        let mut elements = self.elements.lock()
+        let mut elements = self
+            .elements
+            .lock()
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
 
         for _ in 0..delta {
@@ -708,7 +705,9 @@ impl Table {
     ///
     /// Returns an error if the operation fails
     pub fn init(&mut self, offset: u32, init_data: &[Option<KilnValue>]) -> Result<()> {
-        let mut elements = self.elements.lock()
+        let mut elements = self
+            .elements
+            .lock()
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
 
         if offset as usize + init_data.len() > elements.len() {
@@ -718,7 +717,12 @@ impl Table {
         }
         for (i, val_opt) in init_data.iter().enumerate() {
             if let Some(val) = val_opt {
-                let val_matches = matches!((&val, &self.ty.element_type), (KilnValue::FuncRef(_), KilnRefType::Funcref) | (KilnValue::ExternRef(_), KilnRefType::Externref) | (KilnValue::ExternRef(_), KilnRefType::Gc(_)));
+                let val_matches = matches!(
+                    (&val, &self.ty.element_type),
+                    (KilnValue::FuncRef(_), KilnRefType::Funcref)
+                        | (KilnValue::ExternRef(_), KilnRefType::Externref)
+                        | (KilnValue::ExternRef(_), KilnRefType::Gc(_))
+                );
                 if !val_matches {
                     return Err(Error::validation_error("Table init value type mismatch"));
                 }
@@ -730,13 +734,17 @@ impl Table {
 
     /// Copy elements from one region of a table to another
     pub fn copy_elements(&mut self, dst: usize, src: usize, len: usize) -> Result<()> {
-        let mut elements = self.elements.lock()
+        let mut elements = self
+            .elements
+            .lock()
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
 
         // Verify bounds - use checked arithmetic to prevent overflow
-        let src_end = src.checked_add(len)
+        let src_end = src
+            .checked_add(len)
             .ok_or_else(|| Error::runtime_trap("out of bounds table access"))?;
-        let dst_end = dst.checked_add(len)
+        let dst_end = dst
+            .checked_add(len)
             .ok_or_else(|| Error::runtime_trap("out of bounds table access"))?;
         if src_end > elements.len() || dst_end > elements.len() {
             return Err(Error::runtime_trap("out of bounds table access"));
@@ -748,9 +756,7 @@ impl Table {
         }
 
         // Copy source elements to temp buffer, then write to destination
-        let temp: Vec<Option<KilnValue>> = (0..len)
-            .map(|i| elements[src + i].clone())
-            .collect();
+        let temp: Vec<Option<KilnValue>> = (0..len).map(|i| elements[src + i].clone()).collect();
         for (i, val) in temp.into_iter().enumerate() {
             elements[dst + i] = val;
         }
@@ -765,10 +771,13 @@ impl Table {
         value: Option<KilnValue>,
         len: usize,
     ) -> Result<()> {
-        let mut elements = self.elements.lock()
+        let mut elements = self
+            .elements
+            .lock()
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
 
-        let end = offset.checked_add(len)
+        let end = offset
+            .checked_add(len)
             .ok_or_else(|| Error::runtime_trap("out of bounds table access"))?;
         if end > elements.len() {
             return Err(Error::runtime_trap("out of bounds table access"));
@@ -808,7 +817,9 @@ impl Table {
 
     /// Sets an element at the given index.
     pub fn init_element(&mut self, idx: usize, value: Option<KilnValue>) -> Result<()> {
-        let mut elements = self.elements.lock()
+        let mut elements = self
+            .elements
+            .lock()
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
 
         // Check bounds
@@ -831,8 +842,7 @@ impl Table {
     /// A string containing the statistics
     pub fn safety_stats(&self) -> kiln_foundation::bounded::BoundedString<256> {
         let stats_text = "Table Safety Stats: [Runtime table]";
-        kiln_foundation::bounded::BoundedString::try_from_str(stats_text)
-            .unwrap_or_default()
+        kiln_foundation::bounded::BoundedString::try_from_str(stats_text).unwrap_or_default()
     }
 }
 
@@ -884,9 +894,12 @@ impl ArcTableExt for Arc<Table> {
 
     fn set_func(&self, idx: u32, func_idx: u32) -> Result<()> {
         // Use interior mutability via Mutex
-        self.as_ref().set_shared(idx, Some(KilnValue::FuncRef(Some(
-            kiln_foundation::values::FuncRef::from_index(func_idx),
-        ))))
+        self.as_ref().set_shared(
+            idx,
+            Some(KilnValue::FuncRef(Some(
+                kiln_foundation::values::FuncRef::from_index(func_idx),
+            ))),
+        )
     }
 
     fn init(&self, offset: u32, init: &[Option<KilnValue>]) -> Result<()> {
@@ -984,7 +997,10 @@ mod sr44_cap_tests {
         let t = table(0, Some(10)); // declared max 10
         t.set_runtime_max_elements(3); // host caps at 3
         let nullref = KilnValue::FuncRef(None);
-        assert!(t.grow_shared(3, nullref.clone()).is_ok(), "grow to the cap succeeds");
+        assert!(
+            t.grow_shared(3, nullref.clone()).is_ok(),
+            "grow to the cap succeeds"
+        );
         assert_eq!(t.size(), 3);
         assert!(
             t.grow_shared(1, nullref).is_err(),
@@ -999,9 +1015,15 @@ mod sr44_cap_tests {
     fn runtime_cap_zero_is_unlimited_for_tables() {
         let t = table(0, Some(5));
         let nullref = KilnValue::FuncRef(None);
-        assert!(t.grow_shared(5, nullref.clone()).is_ok(), "grow to declared max with no cap");
+        assert!(
+            t.grow_shared(5, nullref.clone()).is_ok(),
+            "grow to declared max with no cap"
+        );
         assert_eq!(t.size(), 5);
-        assert!(t.grow_shared(1, nullref).is_err(), "declared max still enforced");
+        assert!(
+            t.grow_shared(1, nullref).is_err(),
+            "declared max still enforced"
+        );
     }
 
     /// SR-44: the &mut self `grow` path must ALSO honour the runtime cap (a
@@ -1012,7 +1034,10 @@ mod sr44_cap_tests {
         let mut t = table(0, Some(10));
         t.set_runtime_max_elements(3);
         let nullref = KilnValue::FuncRef(None);
-        assert!(t.grow(3, nullref.clone()).is_ok(), "&mut grow to the cap succeeds");
+        assert!(
+            t.grow(3, nullref.clone()).is_ok(),
+            "&mut grow to the cap succeeds"
+        );
         assert_eq!(t.size(), 3);
         assert!(
             t.grow(1, nullref).is_err(),
@@ -1021,4 +1046,3 @@ mod sr44_cap_tests {
         assert_eq!(t.size(), 3);
     }
 }
-

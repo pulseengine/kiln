@@ -9,42 +9,19 @@
 // Import platform ordering from kiln-foundation abstraction layer
 use core::sync::atomic::Ordering as AtomicOrdering;
 
-use kiln_error::{
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result};
 use kiln_foundation::{
-    budget_aware_provider::CrateId,
-    safe_managed_alloc,
-    traits::BoundedCapacity,
+    budget_aware_provider::CrateId, safe_managed_alloc, traits::BoundedCapacity,
 };
-use kiln_instructions::atomic_ops::{
-    AtomicOp,
-    MemoryOrdering,
-};
+use kiln_instructions::atomic_ops::{AtomicOp, MemoryOrdering};
 
 use crate::{
-    atomic_execution::{
-        AtomicExecutionStats,
-        AtomicMemoryContext,
-    },
+    atomic_execution::{AtomicExecutionStats, AtomicMemoryContext},
     bounded_runtime_infra::{
-        create_runtime_provider,
-        new_thread_map,
-        BoundedThreadMap,
-        RuntimeProvider,
+        BoundedThreadMap, RuntimeProvider, create_runtime_provider, new_thread_map,
     },
-    prelude::{
-        Debug,
-        Eq,
-        PartialEq,
-    },
-    thread_manager::{
-        ThreadId,
-        ThreadManager,
-        ThreadState,
-    },
+    prelude::{Debug, Eq, PartialEq},
+    thread_manager::{ThreadId, ThreadManager, ThreadState},
 };
 
 // Type aliases for capability-based memory allocation - imported above on line
@@ -61,23 +38,20 @@ type ResourceVec = kiln_foundation::bounded::BoundedVec<usize, 16, AtomicProvide
 type ViolationString = kiln_foundation::bounded::BoundedString<64>;
 type OperationTypeVec = kiln_foundation::bounded::BoundedVec<ViolationString, 16, AtomicProvider1K>;
 
-use alloc::{
-    sync::Arc,
-    vec::Vec,
-};
+use alloc::{sync::Arc, vec::Vec};
 use std::time::Instant;
 
 /// WebAssembly atomic memory model implementation
 #[derive(Debug)]
 pub struct AtomicMemoryModel {
     /// Atomic memory execution context
-    pub atomic_context:  AtomicMemoryContext,
+    pub atomic_context: AtomicMemoryContext,
     /// Memory ordering enforcement policy
     pub ordering_policy: MemoryOrderingPolicy,
     /// Thread synchronization state
-    pub sync_state:      ThreadSyncState,
+    pub sync_state: ThreadSyncState,
     /// Model execution statistics
-    pub model_stats:     MemoryModelStats,
+    pub model_stats: MemoryModelStats,
 }
 
 impl AtomicMemoryModel {
@@ -222,11 +196,11 @@ impl AtomicMemoryModel {
     /// Get memory model performance metrics
     pub fn get_performance_metrics(&self) -> MemoryModelPerformanceMetrics {
         MemoryModelPerformanceMetrics {
-            operations_per_second:   self.calculate_operations_per_second(),
-            average_operation_time:  self.calculate_average_operation_time(),
-            memory_utilization:      self.calculate_memory_utilization(),
+            operations_per_second: self.calculate_operations_per_second(),
+            average_operation_time: self.calculate_average_operation_time(),
+            memory_utilization: self.calculate_memory_utilization(),
             thread_contention_ratio: self.calculate_thread_contention_ratio(),
-            consistency_overhead:    self.calculate_consistency_overhead(),
+            consistency_overhead: self.calculate_consistency_overhead(),
         }
     }
 
@@ -418,8 +392,8 @@ impl AtomicMemoryModel {
         OperationPatterns {
             mostly_sequential: self.model_stats.fence_operations
                 > self.model_stats.total_operations / 4,
-            high_contention:   self.model_stats.wait_notify_operations > 10,
-            spatial_locality:  true, // Simplified
+            high_contention: self.model_stats.wait_notify_operations > 10,
+            spatial_locality: true, // Simplified
         }
     }
 
@@ -477,37 +451,37 @@ impl ThreadSyncState {
 #[derive(Debug, Clone)]
 pub struct MemoryModelStats {
     /// Total atomic operations executed
-    pub total_operations:       u64,
+    pub total_operations: u64,
     /// Load operations
-    pub load_operations:        u64,
+    pub load_operations: u64,
     /// Store operations
-    pub store_operations:       u64,
+    pub store_operations: u64,
     /// Read-modify-write operations
-    pub rmw_operations:         u64,
+    pub rmw_operations: u64,
     /// Compare-exchange operations
-    pub cmpxchg_operations:     u64,
+    pub cmpxchg_operations: u64,
     /// Wait/notify operations
     pub wait_notify_operations: u64,
     /// Fence operations
-    pub fence_operations:       u64,
+    pub fence_operations: u64,
     /// Total execution time (nanoseconds)
-    pub total_execution_time:   u64,
+    pub total_execution_time: u64,
     /// Maximum single operation time (nanoseconds)
-    pub max_operation_time:     u64,
+    pub max_operation_time: u64,
 }
 
 impl MemoryModelStats {
     fn new() -> Self {
         Self {
-            total_operations:       0,
-            load_operations:        0,
-            store_operations:       0,
-            rmw_operations:         0,
-            cmpxchg_operations:     0,
+            total_operations: 0,
+            load_operations: 0,
+            store_operations: 0,
+            rmw_operations: 0,
+            cmpxchg_operations: 0,
             wait_notify_operations: 0,
-            fence_operations:       0,
-            total_execution_time:   0,
-            max_operation_time:     0,
+            fence_operations: 0,
+            total_execution_time: 0,
+            max_operation_time: 0,
         }
     }
 }
@@ -516,37 +490,33 @@ impl MemoryModelStats {
 #[derive(Debug)]
 pub struct ConsistencyValidationResult {
     /// Whether memory is consistent
-    pub is_consistent:       bool,
+    pub is_consistent: bool,
     /// Detected data races
-    pub data_races:          DataRaceVec,
+    pub data_races: DataRaceVec,
     /// Memory ordering violations
     pub ordering_violations: OrderingViolationVec,
     /// Potential deadlocks
     pub potential_deadlocks: DeadlockVec,
     /// Synchronization violations
-    pub sync_violations:     SyncViolationVec,
+    pub sync_violations: SyncViolationVec,
 }
 
 impl ConsistencyValidationResult {
     fn new() -> Result<Self> {
         Ok(Self {
-            is_consistent:       true,
-            data_races:          kiln_foundation::bounded::BoundedVec::new(
-                create_runtime_provider()?
-            )
-            .map_err(|_| Error::memory_error("Failed to create data races vector"))?,
+            is_consistent: true,
+            data_races: kiln_foundation::bounded::BoundedVec::new(create_runtime_provider()?)
+                .map_err(|_| Error::memory_error("Failed to create data races vector"))?,
             ordering_violations: kiln_foundation::bounded::BoundedVec::new(
-                create_runtime_provider()?
+                create_runtime_provider()?,
             )
             .map_err(|_| Error::memory_error("Failed to create ordering violations vector"))?,
             potential_deadlocks: kiln_foundation::bounded::BoundedVec::new(
-                create_runtime_provider()?
+                create_runtime_provider()?,
             )
             .map_err(|_| Error::memory_error("Failed to create potential deadlocks vector"))?,
-            sync_violations:     kiln_foundation::bounded::BoundedVec::new(
-                create_runtime_provider()?
-            )
-            .map_err(|_| Error::memory_error("Failed to create sync violations vector"))?,
+            sync_violations: kiln_foundation::bounded::BoundedVec::new(create_runtime_provider()?)
+                .map_err(|_| Error::memory_error("Failed to create sync violations vector"))?,
         })
     }
 }
@@ -555,37 +525,37 @@ impl ConsistencyValidationResult {
 #[derive(Debug, Clone)]
 pub struct MemoryModelPerformanceMetrics {
     /// Operations executed per second
-    pub operations_per_second:   f64,
+    pub operations_per_second: f64,
     /// Average operation execution time (nanoseconds)
-    pub average_operation_time:  f64,
+    pub average_operation_time: f64,
     /// Memory utilization ratio (0.0 to 1.0)
-    pub memory_utilization:      f64,
+    pub memory_utilization: f64,
     /// Thread contention ratio (0.0 to 1.0)
     pub thread_contention_ratio: f64,
     /// Consistency checking overhead ratio (0.0 to 1.0)
-    pub consistency_overhead:    f64,
+    pub consistency_overhead: f64,
 }
 
 /// Optimization result
 #[derive(Debug)]
 pub struct OptimizationResult {
     /// Whether memory ordering was optimized
-    pub ordering_optimized:   bool,
+    pub ordering_optimized: bool,
     /// Whether thread scheduling was optimized
     pub scheduling_optimized: bool,
     /// Whether memory layout was optimized
-    pub layout_optimized:     bool,
+    pub layout_optimized: bool,
     /// Total number of optimizations applied
-    pub total_optimizations:  u32,
+    pub total_optimizations: u32,
 }
 
 impl OptimizationResult {
     fn new() -> Self {
         Self {
-            ordering_optimized:   false,
+            ordering_optimized: false,
             scheduling_optimized: false,
-            layout_optimized:     false,
-            total_optimizations:  0,
+            layout_optimized: false,
+            total_optimizations: 0,
         }
     }
 }
@@ -594,17 +564,17 @@ impl OptimizationResult {
 #[derive(Debug)]
 struct OperationPatterns {
     mostly_sequential: bool,
-    high_contention:   bool,
-    spatial_locality:  bool,
+    high_contention: bool,
+    spatial_locality: bool,
 }
 
 /// Data race report
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DataRaceReport {
     /// Threads involved in the race
-    pub thread_ids:      ThreadIdVec,
+    pub thread_ids: ThreadIdVec,
     /// Memory address of the race
-    pub memory_address:  usize,
+    pub memory_address: usize,
     /// Type of operations that raced
     pub operation_types: OperationTypeVec,
 }
@@ -648,11 +618,11 @@ impl kiln_foundation::traits::FromBytes for DataRaceReport {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct OrderingViolationReport {
     /// Thread that caused the violation
-    pub thread_id:         ThreadId,
+    pub thread_id: ThreadId,
     /// Expected ordering
     pub expected_ordering: MemoryOrdering,
     /// Actual ordering observed
-    pub actual_ordering:   MemoryOrdering,
+    pub actual_ordering: MemoryOrdering,
 }
 
 impl kiln_foundation::traits::Checksummable for OrderingViolationReport {
@@ -696,7 +666,7 @@ pub struct DeadlockReport {
     /// Threads involved in potential deadlock
     pub thread_ids: ThreadIdVec,
     /// Resources being waited on
-    pub resources:  ResourceVec,
+    pub resources: ResourceVec,
 }
 
 impl kiln_foundation::traits::Checksummable for DeadlockReport {
@@ -732,7 +702,7 @@ impl kiln_foundation::traits::FromBytes for DeadlockReport {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SyncViolationReport {
     /// Thread that violated synchronization
-    pub thread_id:      ThreadId,
+    pub thread_id: ThreadId,
     /// Type of violation
     pub violation_type: ViolationString,
 }

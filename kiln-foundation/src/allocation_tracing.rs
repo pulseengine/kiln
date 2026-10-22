@@ -169,19 +169,19 @@ pub mod log {
                 Phase::Decode => {
                     decode_count += 1;
                     decode_size += record.size;
-                }
+                },
                 Phase::Link => {
                     link_count += 1;
                     link_size += record.size;
-                }
+                },
                 Phase::Execute => {
                     execute_count += 1;
                     execute_size += record.size;
-                }
+                },
                 _ => {
                     other_count += 1;
                     other_size += record.size;
-                }
+                },
             }
         }
 

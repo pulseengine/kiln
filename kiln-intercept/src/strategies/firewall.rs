@@ -6,24 +6,14 @@
 #[cfg(feature = "std")]
 use std::{
     collections::HashSet,
-    sync::{
-        Arc,
-        RwLock,
-    },
+    sync::{Arc, RwLock},
 };
 
-use kiln_error::{
-    Error,
-    Result,
-};
+use kiln_error::{Error, Result};
 
 use crate::{
-    prelude::{
-        str,
-        Debug,
-        Value,
-    },
     LinkInterceptorStrategy,
+    prelude::{Debug, Value, str},
 };
 
 /// A rule to enforce on function calls
@@ -59,9 +49,9 @@ pub enum FirewallRule {
 #[derive(Debug, Clone, Default)]
 pub struct FirewallConfig {
     /// Default policy (true = allow by default, false = deny by default)
-    pub default_allow:    bool,
+    pub default_allow: bool,
     /// Rules to enforce
-    pub rules:            Vec<FirewallRule>,
+    pub rules: Vec<FirewallRule>,
     /// Whether to check function parameters
     pub check_parameters: bool,
 }
@@ -71,7 +61,7 @@ pub struct FirewallConfig {
 #[derive(Debug, Clone, Default)]
 pub struct FirewallConfig {
     /// Default policy (true = allow by default, false = deny by default)
-    pub default_allow:    bool,
+    pub default_allow: bool,
     /// Whether to check function parameters
     pub check_parameters: bool,
 }
@@ -80,13 +70,13 @@ pub struct FirewallConfig {
 #[cfg(feature = "std")]
 pub struct FirewallStrategy {
     /// Configuration for this strategy
-    config:            FirewallConfig,
+    config: FirewallConfig,
     /// Cache of allowed function calls for performance
     #[cfg(feature = "std")]
     allowed_functions: RwLock<HashSet<String>>,
     /// Cache of denied function calls for performance
     #[cfg(feature = "std")]
-    denied_functions:  RwLock<HashSet<String>>,
+    denied_functions: RwLock<HashSet<String>>,
 }
 
 /// A strategy that enforces security rules on function calls (`no_std` version)
@@ -295,8 +285,8 @@ mod tests {
     #[test]
     fn test_firewall_allow_by_default() {
         let config = FirewallConfig {
-            default_allow:    true,
-            rules:            vec![FirewallRule::DenyFunction(
+            default_allow: true,
+            rules: vec![FirewallRule::DenyFunction(
                 "source".to_string(),
                 "target".to_string(),
                 "denied_function".to_string(),
@@ -318,8 +308,8 @@ mod tests {
     #[test]
     fn test_firewall_deny_by_default() {
         let config = FirewallConfig {
-            default_allow:    false,
-            rules:            vec![FirewallRule::AllowFunction(
+            default_allow: false,
+            rules: vec![FirewallRule::AllowFunction(
                 "source".to_string(),
                 "target".to_string(),
                 "allowed_function".to_string(),
@@ -341,8 +331,8 @@ mod tests {
     #[test]
     fn test_firewall_allow_source() {
         let config = FirewallConfig {
-            default_allow:    false,
-            rules:            vec![FirewallRule::AllowSource(
+            default_allow: false,
+            rules: vec![FirewallRule::AllowSource(
                 "source".to_string(),
                 "target".to_string(),
             )],
@@ -363,8 +353,8 @@ mod tests {
     #[test]
     fn test_firewall_rule_precedence() {
         let config = FirewallConfig {
-            default_allow:    false,
-            rules:            vec![
+            default_allow: false,
+            rules: vec![
                 FirewallRule::AllowSource("source".to_string(), "target".to_string()),
                 FirewallRule::DenyFunction(
                     "source".to_string(),

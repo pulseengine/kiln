@@ -3,17 +3,9 @@
 //! This module provides essential platform services that can be injected
 //! into the runtime, keeping the core runtime platform-agnostic.
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 
-use crate::safety_system::{
-    AsilLevel,
-    SafetyContext,
-};
+use crate::safety_system::{AsilLevel, SafetyContext};
 
 #[cfg(any(feature = "std", feature = "alloc"))]
 extern crate alloc;
@@ -23,16 +15,16 @@ use alloc::boxed::Box;
 /// Platform limits for resource management
 #[derive(Debug, Clone, Copy)]
 pub struct PlatformLimits {
-    pub max_memory:     usize,
-    pub max_stack:      usize,
+    pub max_memory: usize,
+    pub max_stack: usize,
     pub max_components: usize,
 }
 
 impl Default for PlatformLimits {
     fn default() -> Self {
         Self {
-            max_memory:     256 * 1024 * 1024, // 256MB
-            max_stack:      8 * 1024 * 1024,   // 8MB
+            max_memory: 256 * 1024 * 1024, // 256MB
+            max_stack: 8 * 1024 * 1024,    // 8MB
             max_components: 256,
         }
     }
@@ -41,8 +33,8 @@ impl Default for PlatformLimits {
 impl PlatformLimits {
     pub const fn minimal() -> Self {
         Self {
-            max_memory:     64 * 1024, // 64KB
-            max_stack:      16 * 1024, // 16KB
+            max_memory: 64 * 1024, // 64KB
+            max_stack: 16 * 1024,  // 16KB
             max_components: 8,
         }
     }
@@ -87,10 +79,7 @@ pub struct SystemTimeProvider;
 #[cfg(feature = "std")]
 impl TimeProvider for SystemTimeProvider {
     fn current_time_ns(&self) -> u64 {
-        use std::time::{
-            SystemTime,
-            UNIX_EPOCH,
-        };
+        use std::time::{SystemTime, UNIX_EPOCH};
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_nanos() as u64)
@@ -100,8 +89,8 @@ impl TimeProvider for SystemTimeProvider {
 
 /// Simple platform services interface
 pub struct PlatformServices {
-    pub limits:         PlatformLimits,
-    pub time_provider:  &'static dyn TimeProvider,
+    pub limits: PlatformLimits,
+    pub time_provider: &'static dyn TimeProvider,
     pub safety_context: SafetyContext,
 }
 
@@ -109,8 +98,8 @@ impl PlatformServices {
     pub fn minimal() -> Self {
         static TIME_PROVIDER: CounterTimeProvider = CounterTimeProvider::new();
         Self {
-            limits:         PlatformLimits::minimal(),
-            time_provider:  &TIME_PROVIDER,
+            limits: PlatformLimits::minimal(),
+            time_provider: &TIME_PROVIDER,
             safety_context: SafetyContext::new(AsilLevel::AsilD),
         }
     }
@@ -119,8 +108,8 @@ impl PlatformServices {
     pub fn standard() -> Self {
         static TIME_PROVIDER: SystemTimeProvider = SystemTimeProvider;
         Self {
-            limits:         PlatformLimits::default(),
-            time_provider:  &TIME_PROVIDER,
+            limits: PlatformLimits::default(),
+            time_provider: &TIME_PROVIDER,
             safety_context: SafetyContext::new(AsilLevel::QM),
         }
     }
@@ -137,10 +126,7 @@ impl Default for PlatformServices {
     }
 }
 
-use core::sync::atomic::{
-    AtomicPtr,
-    Ordering,
-};
+use core::sync::atomic::{AtomicPtr, Ordering};
 
 /// Global platform services instance using safer atomic pointer
 static PLATFORM_SERVICES: AtomicPtr<PlatformServices> = AtomicPtr::new(core::ptr::null_mut());
@@ -190,8 +176,8 @@ pub fn get_platform_services() -> &'static PlatformServices {
         // Return static minimal services as fallback
         static MINIMAL_TIME_PROVIDER: CounterTimeProvider = CounterTimeProvider::new();
         static MINIMAL_SERVICES: PlatformServices = PlatformServices {
-            limits:         PlatformLimits::minimal(),
-            time_provider:  &MINIMAL_TIME_PROVIDER,
+            limits: PlatformLimits::minimal(),
+            time_provider: &MINIMAL_TIME_PROVIDER,
             safety_context: SafetyContext::new(AsilLevel::AsilD),
         };
         &MINIMAL_SERVICES

@@ -539,15 +539,15 @@ mod placeholder_types {
 }
 
 // Use the same types in both std and no_std modes for consistency
-use placeholder_types::{ComponentExport, ComponentImport, FunctionParam};
-#[cfg(not(feature = "std"))]
-use placeholder_types::{ComponentType, ComponentTypeDefinition, ExternType, FormatValType};
 use kiln_foundation::{
     BoundedVec, VerificationLevel,
     budget_aware_provider::CrateId,
     safe_memory::{NoStdMemoryProvider, NoStdProvider},
     traits::BoundedCapacity,
 };
+use placeholder_types::{ComponentExport, ComponentImport, FunctionParam};
+#[cfg(not(feature = "std"))]
+use placeholder_types::{ComponentType, ComponentTypeDefinition, ExternType, FormatValType};
 
 // Import the unified bounded decoder infrastructure
 #[cfg(not(feature = "std"))]

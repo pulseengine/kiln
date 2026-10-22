@@ -11,19 +11,15 @@
 #[cfg(target_arch = "aarch64")]
 use core::arch::aarch64::*;
 
-use super::{
-    scalar::ScalarSimdProvider,
-    SimdLevel,
-    SimdProvider,
-};
+use super::{SimdLevel, SimdProvider, scalar::ScalarSimdProvider};
 
 /// AArch64 SIMD provider with NEON support
 #[derive(Debug, Clone)]
 pub struct AArch64SimdProvider {
-    level:           SimdLevel,
-    has_neon:        bool,
+    level: SimdLevel,
+    has_neon: bool,
     #[allow(dead_code)]
-    has_sve:         bool,
+    has_sve: bool,
     scalar_fallback: ScalarSimdProvider,
 }
 
@@ -31,9 +27,9 @@ impl AArch64SimdProvider {
     /// Create a new NEON-only provider
     pub const fn new_neon() -> Self {
         Self {
-            level:           SimdLevel::Basic,
-            has_neon:        true,
-            has_sve:         false,
+            level: SimdLevel::Basic,
+            has_neon: true,
+            has_sve: false,
             scalar_fallback: ScalarSimdProvider::new(),
         }
     }
@@ -41,9 +37,9 @@ impl AArch64SimdProvider {
     /// Create a new SVE provider (includes NEON)
     pub const fn new_sve() -> Self {
         Self {
-            level:           SimdLevel::Advanced,
-            has_neon:        true,
-            has_sve:         true,
+            level: SimdLevel::Advanced,
+            has_neon: true,
+            has_sve: true,
             scalar_fallback: ScalarSimdProvider::new(),
         }
     }

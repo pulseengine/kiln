@@ -3,9 +3,7 @@
 //! This module provides simple integration examples for the capability system.
 
 use kiln_foundation::capabilities::{
-    PlatformAllocator,
-    PlatformCapabilityBuilder,
-    PlatformCapabilityProvider,
+    PlatformAllocator, PlatformCapabilityBuilder, PlatformCapabilityProvider,
 };
 
 use crate::prelude::*;

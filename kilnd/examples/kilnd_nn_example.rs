@@ -9,18 +9,10 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use kiln_foundation::verification::VerificationLevel;
     use kiln_wasi::{
-        nn::{
-            capabilities::create_nn_capability,
-            initialize_nn,
-        },
-        WasiCapabilities,
-        WasiNeuralNetworkCapabilities,
+        WasiCapabilities, WasiNeuralNetworkCapabilities,
+        nn::{capabilities::create_nn_capability, initialize_nn},
     };
-    use kilnd::{
-        EngineMode,
-        KilndConfig,
-        KilndEngine,
-    };
+    use kilnd::{EngineMode, KilndConfig, KilndEngine};
 
     // Create kilnd configuration
     let mut config = KilndConfig::default();
@@ -65,10 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         initialize_backends()?;
 
         // Initialize stores
-        use kiln_wasi::nn::{
-            execution::initialize_context_store,
-            graph::initialize_graph_store,
-        };
+        use kiln_wasi::nn::{execution::initialize_context_store, graph::initialize_graph_store};
         initialize_graph_store()?;
         initialize_context_store()?;
 

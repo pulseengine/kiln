@@ -9,40 +9,31 @@
 use std::vec::Vec;
 
 use kiln_error::Result;
-use kiln_foundation::{
-    FloatBits32,
-    Value,
-};
+use kiln_foundation::{FloatBits32, Value};
 use kiln_instructions::{
-    Block,
-    BrTable,
-    CallIndirect,
-    ControlContext,
-    ControlOp,
-    FunctionOperations,
-    PureInstruction,
+    Block, BrTable, CallIndirect, ControlContext, ControlOp, FunctionOperations, PureInstruction,
     Return,
 };
 
 // Mock execution context for demonstration
 #[cfg(feature = "std")]
 struct DemoContext {
-    stack:           Vec<Value>,
-    returned:        bool,
+    stack: Vec<Value>,
+    returned: bool,
     called_function: Option<u32>,
-    indirect_call:   Option<(u32, u32)>,
-    branch_target:   Option<u32>,
+    indirect_call: Option<(u32, u32)>,
+    branch_target: Option<u32>,
 }
 
 #[cfg(feature = "std")]
 impl DemoContext {
     fn new() -> Self {
         Self {
-            stack:           Vec::new(),
-            returned:        false,
+            stack: Vec::new(),
+            returned: false,
             called_function: None,
-            indirect_call:   None,
-            branch_target:   None,
+            indirect_call: None,
+            branch_target: None,
         }
     }
 }
@@ -247,7 +238,7 @@ fn main() -> Result<()> {
     context.push_control_value(Value::I32(7))?;
     let control_call_indirect = ControlOp::CallIndirect {
         table_idx: 1,
-        type_idx:  3,
+        type_idx: 3,
     };
     context.indirect_call = None;
     control_call_indirect.execute(&mut context)?;
@@ -261,7 +252,7 @@ fn main() -> Result<()> {
     {
         context.push_control_value(Value::I32(0))?;
         let control_br_table = ControlOp::BrTable {
-            table:   vec![100, 200, 300],
+            table: vec![100, 200, 300],
             default: 999,
         };
 

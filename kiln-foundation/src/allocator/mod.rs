@@ -49,31 +49,13 @@ pub use std::vec::Vec as KilnVec;
 
 #[cfg(feature = "kiln-allocator")]
 pub use collections::aliases::{
-    ComponentHashMap,
-    ComponentString,
-    ComponentVec,
-    FoundationHashMap,
-    FoundationString,
-    FoundationVec,
-    HostHashMap,
-    HostString,
-    HostVec,
-    RuntimeHashMap,
-    RuntimeString,
-    RuntimeVec,
+    ComponentHashMap, ComponentString, ComponentVec, FoundationHashMap, FoundationString,
+    FoundationVec, HostHashMap, HostString, HostVec, RuntimeHashMap, RuntimeString, RuntimeVec,
 };
 #[cfg(feature = "kiln-allocator")]
-pub use collections::{
-    KilnHashMap,
-    KilnString,
-    KilnVec,
-};
+pub use collections::{KilnHashMap, KilnString, KilnVec};
 #[cfg(feature = "kiln-allocator")]
-pub use phantom_budgets::{
-    CapacityError,
-    CrateId,
-    CRATE_BUDGETS,
-};
+pub use phantom_budgets::{CRATE_BUDGETS, CapacityError, CrateId};
 
 // For no_std without allocator feature, use bounded collections
 #[cfg(all(not(feature = "kiln-allocator"), not(feature = "std")))]

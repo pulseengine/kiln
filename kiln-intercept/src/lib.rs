@@ -421,7 +421,7 @@ pub trait LinkInterceptorStrategy: Send + Sync {
     /// # Errors
     /// Returns error if interception fails
     fn before_call(&self, source: &str, target: &str, function: &str, args: &[Value])
-        -> Result<()>;
+    -> Result<()>;
 
     /// Called after a function call completes
     ///
@@ -492,9 +492,9 @@ pub trait LinkInterceptorStrategy: Send + Sync {
 pub struct LinkInterceptor {
     /// Name of this interceptor for identification
     #[cfg(feature = "std")]
-    name:           String,
+    name: String,
     #[cfg(not(feature = "std"))]
-    name:           &'static str,
+    name: &'static str,
     /// Collection of strategies to apply
     #[cfg(feature = "std")]
     pub strategies: Vec<Arc<dyn LinkInterceptorStrategy>>,
@@ -515,11 +515,11 @@ impl LinkInterceptor {
     pub fn new(name: &str) -> Self {
         Self {
             #[cfg(feature = "std")]
-            name:                               name.to_string(),
+            name: name.to_string(),
             #[cfg(not(feature = "std"))]
-            name:                               "default",
+            name: "default",
             #[cfg(feature = "std")]
-            strategies:                         Vec::new(),
+            strategies: Vec::new(),
         }
     }
 
@@ -612,7 +612,7 @@ impl LinkInterceptor {
     /// * `Option<&dyn LinkInterceptorStrategy>` - The first strategy, or None
     ///   if none exists
     #[cfg(feature = "std")]
-    #[must_use] 
+    #[must_use]
     pub fn get_strategy(&self) -> Option<&dyn LinkInterceptorStrategy> {
         self.strategies.first().map(std::convert::AsRef::as_ref)
     }
@@ -643,7 +643,7 @@ impl LinkInterceptor {
     ) -> Result<InterceptionResult> {
         // Create default result (no modifications)
         let mut result = InterceptionResult {
-            modified:      false,
+            modified: false,
             modifications: Vec::new(),
         };
 
@@ -735,7 +735,7 @@ impl LinkInterceptor {
 #[derive(Debug, Clone)]
 pub struct InterceptionResult {
     /// Whether the data has been modified
-    pub modified:      bool,
+    pub modified: bool,
     /// Modifications to apply to the serialized data
     #[cfg(feature = "std")]
     pub modifications: Vec<Modification>,
@@ -749,8 +749,7 @@ pub struct InterceptionResult {
 }
 
 /// Modification to apply to serialized data
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum Modification {
     /// No modification (default)
     #[default]
@@ -761,7 +760,7 @@ pub enum Modification {
         offset: usize,
         /// New data to insert at the offset
         #[cfg(feature = "std")]
-        data:   Vec<u8>,
+        data: Vec<u8>,
         /// New data to insert at the offset
         #[cfg(not(feature = "std"))]
         data: kiln_foundation::bounded::BoundedVec<
@@ -776,7 +775,7 @@ pub enum Modification {
         offset: usize,
         /// Data to insert at the offset
         #[cfg(feature = "std")]
-        data:   Vec<u8>,
+        data: Vec<u8>,
         /// New data to insert at the offset
         #[cfg(not(feature = "std"))]
         data: kiln_foundation::bounded::BoundedVec<
@@ -793,7 +792,6 @@ pub enum Modification {
         length: usize,
     },
 }
-
 
 // Implement required traits for BoundedVec compatibility
 impl kiln_foundation::traits::Checksummable for Modification {
@@ -922,9 +920,7 @@ impl kiln_foundation::traits::FromBytes for Modification {
                 #[cfg(not(feature = "std"))]
                 let data = {
                     use kiln_foundation::{
-                        bounded::BoundedVec,
-                        budget_aware_provider::CrateId,
-                        safe_managed_alloc,
+                        bounded::BoundedVec, budget_aware_provider::CrateId, safe_managed_alloc,
                     };
                     let provider = safe_managed_alloc!(4096, CrateId::Intercept).map_err(|_| {
                         Error::memory_error("Failed to allocate for modification data")
@@ -957,9 +953,7 @@ impl kiln_foundation::traits::FromBytes for Modification {
                 #[cfg(not(feature = "std"))]
                 let data = {
                     use kiln_foundation::{
-                        bounded::BoundedVec,
-                        budget_aware_provider::CrateId,
-                        safe_managed_alloc,
+                        bounded::BoundedVec, budget_aware_provider::CrateId, safe_managed_alloc,
                     };
                     let provider = safe_managed_alloc!(4096, CrateId::Intercept).map_err(|_| {
                         Error::memory_error("Failed to allocate for modification data")
@@ -1014,8 +1008,8 @@ mod tests {
     use alloc::{vec, vec::Vec};
 
     struct TestStrategy {
-        bypass:        bool,
-        modify_args:   bool,
+        bypass: bool,
+        modify_args: bool,
         modify_result: bool,
     }
 
@@ -1028,11 +1022,7 @@ mod tests {
             _function: &str,
             args: &[Value],
         ) -> Result<Vec<Value>> {
-            if self.modify_args {
-                Ok(vec![Value::I32(42)])
-            } else {
-                Ok(args.to_vec())
-            }
+            if self.modify_args { Ok(vec![Value::I32(42)]) } else { Ok(args.to_vec()) }
         }
 
         fn after_call(
@@ -1078,8 +1068,8 @@ mod tests {
     #[cfg(feature = "std")]
     fn test_interceptor_passthrough() {
         let strategy = Arc::new(TestStrategy {
-            bypass:        false,
-            modify_args:   false,
+            bypass: false,
+            modify_args: false,
             modify_result: false,
         });
 
@@ -1098,8 +1088,8 @@ mod tests {
     #[cfg(feature = "std")]
     fn test_interceptor_modify_args() {
         let strategy = Arc::new(TestStrategy {
-            bypass:        false,
-            modify_args:   true,
+            bypass: false,
+            modify_args: true,
             modify_result: false,
         });
 
@@ -1118,8 +1108,8 @@ mod tests {
     #[cfg(feature = "std")]
     fn test_interceptor_modify_result() {
         let strategy = Arc::new(TestStrategy {
-            bypass:        false,
-            modify_args:   false,
+            bypass: false,
+            modify_args: false,
             modify_result: true,
         });
 
@@ -1138,8 +1128,8 @@ mod tests {
     #[cfg(feature = "std")]
     fn test_interceptor_bypass() {
         let strategy = Arc::new(TestStrategy {
-            bypass:        true,
-            modify_args:   true,
+            bypass: true,
+            modify_args: true,
             modify_result: false,
         });
 
@@ -1157,14 +1147,14 @@ mod tests {
     #[cfg(feature = "std")]
     fn test_multiple_strategies() {
         let strategy1 = Arc::new(TestStrategy {
-            bypass:        false,
-            modify_args:   true,
+            bypass: false,
+            modify_args: true,
             modify_result: false,
         });
 
         let strategy2 = Arc::new(TestStrategy {
-            bypass:        false,
-            modify_args:   false,
+            bypass: false,
+            modify_args: false,
             modify_result: true,
         });
 

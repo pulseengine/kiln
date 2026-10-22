@@ -2,10 +2,7 @@
 //!
 //! This module provides the implementation for WebAssembly function types.
 
-use kiln_foundation::{
-    budget_aware_provider::CrateId,
-    safe_managed_alloc,
-};
+use kiln_foundation::{budget_aware_provider::CrateId, safe_managed_alloc};
 
 use crate::prelude::Debug;
 use crate::prelude::RuntimeFuncType;
@@ -14,7 +11,7 @@ use crate::prelude::RuntimeFuncType;
 #[derive(Debug, Clone)]
 pub struct Function {
     /// Function type signature
-    pub func_type:      RuntimeFuncType,
+    pub func_type: RuntimeFuncType,
     /// Function body (placeholder)
     pub body: kiln_foundation::bounded::BoundedVec<
         u8,

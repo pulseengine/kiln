@@ -19,36 +19,29 @@
 
 use std::format;
 
-use crate::prelude::{
-    str,
-    Debug,
-    Error,
-    ErrorCategory,
-    Ord,
-    Result,
-};
+use crate::prelude::{Debug, Error, ErrorCategory, Ord, Result, str};
 
 /// Structure to track execution statistics
 #[derive(Debug, Default, Clone)]
 pub struct ExecutionStats {
     /// Number of instructions executed
-    pub instructions_executed:    u64,
+    pub instructions_executed: u64,
     /// Memory usage in bytes
-    pub memory_usage:             usize,
+    pub memory_usage: usize,
     /// Maximum stack depth reached
-    pub max_stack_depth:          usize,
+    pub max_stack_depth: usize,
     /// Number of function calls
-    pub function_calls:           u64,
+    pub function_calls: u64,
     /// Number of memory reads
-    pub memory_reads:             u64,
+    pub memory_reads: u64,
     /// Number of memory writes
-    pub memory_writes:            u64,
+    pub memory_writes: u64,
     /// Execution time in microseconds
-    pub execution_time_us:        u64,
+    pub execution_time_us: u64,
     /// Gas used (if metering is enabled)
-    pub gas_used:                 u64,
+    pub gas_used: u64,
     /// Gas limit (if metering is enabled)
-    pub gas_limit:                u64,
+    pub gas_limit: u64,
     /// Number of SIMD operations executed
     pub simd_operations_executed: u64,
 }
@@ -127,11 +120,11 @@ impl ExecutionStats {
 #[derive(Debug, Clone)]
 pub struct ExecutionContext {
     /// Execution statistics
-    pub stats:              ExecutionStats,
+    pub stats: ExecutionStats,
     /// Whether execution is currently trapped
-    pub trapped:            bool,
+    pub trapped: bool,
     /// Current function depth
-    pub function_depth:     usize,
+    pub function_depth: usize,
     /// Maximum allowed function depth
     pub max_function_depth: usize,
 }
@@ -205,9 +198,9 @@ pub struct CallFrame {
     /// Function index
     pub function_index: u32,
     /// Program counter
-    pub pc:             usize,
+    pub pc: usize,
     /// Local variables count
-    pub locals_count:   u32,
+    pub locals_count: u32,
 }
 
 impl CallFrame {
@@ -226,7 +219,7 @@ impl CallFrame {
 #[derive(Debug, Clone)]
 pub struct InstrumentationPoint {
     /// Location in code
-    pub location:   usize,
+    pub location: usize,
     /// Type of instrumentation
     pub point_type: kiln_foundation::bounded::BoundedString<64>,
 }
@@ -238,9 +231,8 @@ impl InstrumentationPoint {
             1024,
             kiln_foundation::budget_aware_provider::CrateId::Runtime
         )?;
-        let bounded_point_type: kiln_foundation::bounded::BoundedString<
-            64,
-        > = kiln_foundation::bounded::BoundedString::from_str_truncate(point_type)?;
+        let bounded_point_type: kiln_foundation::bounded::BoundedString<64> =
+            kiln_foundation::bounded::BoundedString::from_str_truncate(point_type)?;
         Ok(Self {
             location,
             point_type: bounded_point_type,

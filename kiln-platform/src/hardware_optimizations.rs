@@ -149,7 +149,7 @@ pub mod arm {
     #[derive(Debug, Clone)]
     pub struct MemoryTagging {
         /// Tag check mode (sync/async/asymmetric)
-        pub mode:         MteMode,
+        pub mode: MteMode,
         /// Tag generation strategy
         pub tag_strategy: TagStrategy,
     }
@@ -179,7 +179,7 @@ pub mod arm {
     impl Default for MemoryTagging {
         fn default() -> Self {
             Self {
-                mode:         MteMode::Synchronous,
+                mode: MteMode::Synchronous,
                 tag_strategy: TagStrategy::Random,
             }
         }
@@ -227,13 +227,13 @@ pub mod arm {
     #[derive(Debug, Clone)]
     pub struct BranchTargetIdentification {
         /// Enable BTI for indirect branches
-        pub enable_bti:      bool,
+        pub enable_bti: bool,
         /// BTI exception level (EL0, EL1, or both)
         pub exception_level: BtiExceptionLevel,
         /// Enable guarded page protection
-        pub guarded_pages:   bool,
+        pub guarded_pages: bool,
         /// BTI instruction generation mode
-        pub bti_mode:        BtiMode,
+        pub bti_mode: BtiMode,
     }
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -263,10 +263,10 @@ pub mod arm {
     impl Default for BranchTargetIdentification {
         fn default() -> Self {
             Self {
-                enable_bti:      true,
+                enable_bti: true,
                 exception_level: BtiExceptionLevel::Both,
-                guarded_pages:   true,
-                bti_mode:        BtiMode::CallAndJump,
+                guarded_pages: true,
+                bti_mode: BtiMode::CallAndJump,
             }
         }
     }
@@ -314,7 +314,7 @@ pub mod arm {
     #[derive(Debug, Clone)]
     pub struct TrustZone {
         /// Enable secure world execution
-        pub secure_world:   bool,
+        pub secure_world: bool,
         /// Secure memory regions
         pub secure_regions: &'static [(usize, usize)],
     }
@@ -322,7 +322,7 @@ pub mod arm {
     impl Default for TrustZone {
         fn default() -> Self {
             Self {
-                secure_world:   false,
+                secure_world: false,
                 secure_regions: &[],
             }
         }
@@ -370,7 +370,7 @@ pub mod intel {
     #[derive(Debug, Clone)]
     pub struct ControlFlowEnforcement {
         /// Enable shadow stack
-        pub shadow_stack:             bool,
+        pub shadow_stack: bool,
         /// Enable indirect branch tracking
         pub indirect_branch_tracking: bool,
     }
@@ -378,7 +378,7 @@ pub mod intel {
     impl Default for ControlFlowEnforcement {
         fn default() -> Self {
             Self {
-                shadow_stack:             true,
+                shadow_stack: true,
                 indirect_branch_tracking: true,
             }
         }
@@ -424,16 +424,16 @@ pub mod intel {
         /// Protection key assignments
         pub key_assignments: [u8; 16],
         /// Access rights for each key
-        pub access_rights:   [AccessRights; 16],
+        pub access_rights: [AccessRights; 16],
     }
 
     /// Access rights configuration for memory protection keys
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct AccessRights {
         /// Allow reads
-        pub read:    bool,
+        pub read: bool,
         /// Allow writes  
-        pub write:   bool,
+        pub write: bool,
         /// Allow execution
         pub execute: bool,
     }
@@ -442,9 +442,9 @@ pub mod intel {
         fn default() -> Self {
             Self {
                 key_assignments: [0; 16],
-                access_rights:   [AccessRights {
-                    read:    true,
-                    write:   true,
+                access_rights: [AccessRights {
+                    read: true,
+                    write: true,
                     execute: false,
                 }; 16],
             }
@@ -494,7 +494,7 @@ pub mod riscv {
     #[derive(Debug, Clone)]
     pub struct PhysicalMemoryProtection {
         /// PMP configuration entries
-        pub pmp_entries:    [PmpEntry; 16],
+        pub pmp_entries: [PmpEntry; 16],
         /// Active entries count
         pub active_entries: usize,
     }
@@ -505,18 +505,18 @@ pub mod riscv {
         /// Start address (encoded)
         pub address: usize,
         /// Configuration flags
-        pub config:  PmpConfig,
+        pub config: PmpConfig,
     }
 
     /// RISC-V PMP configuration flags
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct PmpConfig {
         /// Read permission
-        pub read:         bool,
+        pub read: bool,
         /// Write permission
-        pub write:        bool,
+        pub write: bool,
         /// Execute permission
-        pub execute:      bool,
+        pub execute: bool,
         /// Address matching mode
         pub address_mode: AddressMode,
     }
@@ -537,12 +537,12 @@ pub mod riscv {
     impl Default for PhysicalMemoryProtection {
         fn default() -> Self {
             Self {
-                pmp_entries:    [PmpEntry {
+                pmp_entries: [PmpEntry {
                     address: 0,
-                    config:  PmpConfig {
-                        read:         false,
-                        write:        false,
-                        execute:      false,
+                    config: PmpConfig {
+                        read: false,
+                        write: false,
+                        execute: false,
                         address_mode: AddressMode::Off,
                     },
                 }; 16],
@@ -589,15 +589,15 @@ pub mod riscv {
     #[derive(Debug, Clone)]
     pub struct ControlFlowIntegrity {
         /// Enable shadow stack for return address protection
-        pub shadow_stack:      bool,
+        pub shadow_stack: bool,
         /// Enable landing pads for indirect calls/jumps
-        pub landing_pads:      bool,
+        pub landing_pads: bool,
         /// Backward-edge CFI (return address protection)
         pub backward_edge_cfi: bool,
         /// Forward-edge CFI (indirect call/jump protection)
-        pub forward_edge_cfi:  bool,
+        pub forward_edge_cfi: bool,
         /// CFI exception handling mode
-        pub exception_mode:    CfiExceptionMode,
+        pub exception_mode: CfiExceptionMode,
     }
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -614,11 +614,11 @@ pub mod riscv {
     impl Default for ControlFlowIntegrity {
         fn default() -> Self {
             Self {
-                shadow_stack:      true,
-                landing_pads:      true,
+                shadow_stack: true,
+                landing_pads: true,
                 backward_edge_cfi: true,
-                forward_edge_cfi:  true,
-                exception_mode:    CfiExceptionMode::Exception,
+                forward_edge_cfi: true,
+                exception_mode: CfiExceptionMode::Exception,
             }
         }
     }
@@ -670,9 +670,9 @@ pub mod riscv {
 #[derive(Debug)]
 pub struct HardwareOptimizer<A> {
     /// Architecture marker
-    _arch:          PhantomData<A>,
+    _arch: PhantomData<A>,
     /// Available optimizations
-    optimizations:  &'static [&'static str],
+    optimizations: &'static [&'static str],
     /// Security level achieved
     security_level: SecurityLevel,
 }
@@ -681,8 +681,8 @@ impl<A> HardwareOptimizer<A> {
     /// Create new hardware optimizer
     pub fn new() -> Self {
         Self {
-            _arch:          PhantomData,
-            optimizations:  &[],
+            _arch: PhantomData,
+            optimizations: &[],
             security_level: SecurityLevel::None,
         }
     }

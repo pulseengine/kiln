@@ -84,28 +84,14 @@ pub mod verify;
 // Reexport types for convenience (use fully qualified paths)
 // Re-export Agent C deliverables
 pub use bounded_host_integration::{
-    create_echo_function,
-    create_memory_info_function,
+    BoundedCallContext, BoundedCallResult, BoundedHostFunction, BoundedHostIntegrationManager,
+    ComponentInstanceId, HostFunctionId, HostIntegrationLimits, HostIntegrationStatistics,
+    SimpleBoundedHostFunction, create_echo_function, create_memory_info_function,
     create_safety_check_function,
-    BoundedCallContext,
-    BoundedCallResult,
-    BoundedHostFunction,
-    BoundedHostIntegrationManager,
-    ComponentInstanceId,
-    HostFunctionId,
-    HostIntegrationLimits,
-    HostIntegrationStatistics,
-    SimpleBoundedHostFunction,
 };
 pub use builder::HostBuilder;
-pub use callback::{
-    CallbackRegistry,
-    CallbackType,
-};
-pub use function::{
-    CloneableFn,
-    HostFunctionHandler,
-};
+pub use callback::{CallbackRegistry, CallbackType};
+pub use function::{CloneableFn, HostFunctionHandler};
 pub use host::BuiltinHost;
 // Re-export prelude for convenience
 pub use prelude::*;

@@ -16,17 +16,19 @@ pub mod simd_ops;
 
 pub mod tail_call;
 
-pub use engine::{
-    StacklessCallbackRegistry,
-    StacklessEngine,
-    StacklessStack,
-};
+pub use engine::{StacklessCallbackRegistry, StacklessEngine, StacklessStack};
 
 /// Result of stackless execution containing completion status and return values.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExecutionResult {
     /// Execution completed successfully with return values.
-    Completed(kiln_foundation::bounded::BoundedVec<kiln_foundation::Value, 16, kiln_foundation::safe_memory::NoStdProvider<1024>>),
+    Completed(
+        kiln_foundation::bounded::BoundedVec<
+            kiln_foundation::Value,
+            16,
+            kiln_foundation::safe_memory::NoStdProvider<1024>,
+        >,
+    ),
     /// Execution yielded and can be resumed.
     Yielded(YieldInfo),
     /// Execution is waiting for an external resource.
@@ -41,11 +43,23 @@ pub struct YieldInfo {
     /// Current instruction pointer position.
     pub instruction_pointer: u32,
     /// Current operand stack state.
-    pub operand_stack:       kiln_foundation::bounded::BoundedVec<kiln_foundation::Value, 256, kiln_foundation::safe_memory::NoStdProvider<4096>>,
+    pub operand_stack: kiln_foundation::bounded::BoundedVec<
+        kiln_foundation::Value,
+        256,
+        kiln_foundation::safe_memory::NoStdProvider<4096>,
+    >,
     /// Current local variables.
-    pub locals:              kiln_foundation::bounded::BoundedVec<kiln_foundation::Value, 128, kiln_foundation::safe_memory::NoStdProvider<2048>>,
+    pub locals: kiln_foundation::bounded::BoundedVec<
+        kiln_foundation::Value,
+        128,
+        kiln_foundation::safe_memory::NoStdProvider<2048>,
+    >,
     /// Current call stack.
-    pub call_stack:          kiln_foundation::bounded::BoundedVec<u32, 64, kiln_foundation::safe_memory::NoStdProvider<512>>,
+    pub call_stack: kiln_foundation::bounded::BoundedVec<
+        u32,
+        64,
+        kiln_foundation::safe_memory::NoStdProvider<512>,
+    >,
 }
 
 /// Internal state of the stackless execution engine.
@@ -54,11 +68,23 @@ pub struct EngineState {
     /// Current instruction pointer position.
     pub instruction_pointer: u32,
     /// Current operand stack state.
-    pub operand_stack:       kiln_foundation::bounded::BoundedVec<kiln_foundation::Value, 256, kiln_foundation::safe_memory::NoStdProvider<4096>>,
+    pub operand_stack: kiln_foundation::bounded::BoundedVec<
+        kiln_foundation::Value,
+        256,
+        kiln_foundation::safe_memory::NoStdProvider<4096>,
+    >,
     /// Current local variables.
-    pub locals:              kiln_foundation::bounded::BoundedVec<kiln_foundation::Value, 128, kiln_foundation::safe_memory::NoStdProvider<2048>>,
+    pub locals: kiln_foundation::bounded::BoundedVec<
+        kiln_foundation::Value,
+        128,
+        kiln_foundation::safe_memory::NoStdProvider<2048>,
+    >,
     /// Current call stack.
-    pub call_stack:          kiln_foundation::bounded::BoundedVec<u32, 64, kiln_foundation::safe_memory::NoStdProvider<512>>,
+    pub call_stack: kiln_foundation::bounded::BoundedVec<
+        u32,
+        64,
+        kiln_foundation::safe_memory::NoStdProvider<512>,
+    >,
 }
 
 /// Type alias for stackless execution state.

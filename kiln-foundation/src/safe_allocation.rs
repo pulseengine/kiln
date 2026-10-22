@@ -12,33 +12,17 @@
 
 // Legacy imports for backward compatibility (deprecated)
 #[allow(deprecated)]
-use crate::kiln_memory_system::{
-    CapabilityKilnFactory,
-    NoStdProviderFactory,
-};
+use crate::kiln_memory_system::{CapabilityKilnFactory, NoStdProviderFactory};
 use crate::{
-    bounded::{
-        BoundedString,
-        BoundedVec,
-    },
+    Error, ErrorCategory, Result,
+    bounded::{BoundedString, BoundedVec},
     bounded_collections::BoundedMap,
     budget_aware_provider::CrateId,
-    capabilities::{
-        DynamicMemoryCapability,
-        MemoryCapabilityContext,
-        StaticMemoryCapability,
-    },
+    capabilities::{DynamicMemoryCapability, MemoryCapabilityContext, StaticMemoryCapability},
     codes,
     safe_memory::NoStdProvider,
-    traits::{
-        Checksummable,
-        FromBytes,
-        ToBytes,
-    },
+    traits::{Checksummable, FromBytes, ToBytes},
     verification::VerificationLevel,
-    Error,
-    ErrorCategory,
-    Result,
 };
 
 /// Capability-based safe factory for memory providers

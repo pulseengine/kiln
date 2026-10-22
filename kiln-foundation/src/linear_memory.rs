@@ -15,28 +15,15 @@
 use core::{
     fmt::Debug,
     ptr::NonNull,
-    sync::atomic::{
-        AtomicUsize,
-        Ordering,
-    },
+    sync::atomic::{AtomicUsize, Ordering},
 };
 
 use kiln_error::Result;
-use kiln_platform::memory::{
-    PageAllocator,
-    WASM_PAGE_SIZE,
-};
+use kiln_platform::memory::{PageAllocator, WASM_PAGE_SIZE};
 
 use crate::{
     prelude::*,
-    safe_memory::{
-        Allocator,
-        Provider,
-        SafeMemoryHandler,
-        Slice,
-        SliceMut,
-        Stats,
-    },
+    safe_memory::{Allocator, Provider, SafeMemoryHandler, Slice, SliceMut, Stats},
     verification::VerificationLevel,
 };
 
@@ -47,12 +34,7 @@ use crate::{
 mod safe_memory_ops {
     use core::ptr::NonNull;
 
-    use crate::{
-        codes,
-        Error,
-        ErrorCategory,
-        Result,
-    };
+    use crate::{Error, ErrorCategory, Result, codes};
 
     /// Safely create a slice from verified memory bounds
     ///
@@ -174,16 +156,16 @@ impl<A: PageAllocator + Send + Sync + Clone + 'static> Allocator for PageAllocat
 /// a platform-specific `PageAllocator`.
 #[derive(Debug)]
 pub struct PalMemoryProvider<A: PageAllocator + Send + Sync + Clone + 'static> {
-    allocator:               A,
-    adapter:                 PageAllocatorAdapter<A>,
-    base_ptr:                Option<NonNull<u8>>,
-    current_pages:           u32,
-    maximum_pages:           Option<u32>,
+    allocator: A,
+    adapter: PageAllocatorAdapter<A>,
+    base_ptr: Option<NonNull<u8>>,
+    current_pages: u32,
+    maximum_pages: Option<u32>,
     initial_allocation_size: usize, // Binary std/no_std choice
-    verification_level:      VerificationLevel,
+    verification_level: VerificationLevel,
     // Binary std/no_std choice
-    access_count:            AtomicUsize,
-    max_access_size:         AtomicUsize,
+    access_count: AtomicUsize,
+    max_access_size: AtomicUsize,
 }
 
 // SAFETY: The PalMemoryProvider is Send if the PageAllocator A is Send.
@@ -204,15 +186,15 @@ unsafe impl<A: PageAllocator + Send + Sync + Clone + 'static> Sync for PalMemory
 impl<A: PageAllocator + Send + Sync + Clone + 'static> Clone for PalMemoryProvider<A> {
     fn clone(&self) -> Self {
         Self {
-            allocator:               self.allocator.clone(),
-            adapter:                 self.adapter.clone(),
-            base_ptr:                self.base_ptr,
-            current_pages:           self.current_pages,
-            maximum_pages:           self.maximum_pages,
+            allocator: self.allocator.clone(),
+            adapter: self.adapter.clone(),
+            base_ptr: self.base_ptr,
+            current_pages: self.current_pages,
+            maximum_pages: self.maximum_pages,
             initial_allocation_size: self.initial_allocation_size,
-            verification_level:      self.verification_level,
-            access_count:            AtomicUsize::new(self.access_count.load(Ordering::Relaxed)),
-            max_access_size:         AtomicUsize::new(self.max_access_size.load(Ordering::Relaxed)),
+            verification_level: self.verification_level,
+            access_count: AtomicUsize::new(self.access_count.load(Ordering::Relaxed)),
+            max_access_size: AtomicUsize::new(self.max_access_size.load(Ordering::Relaxed)),
         }
     }
 }
@@ -426,9 +408,9 @@ impl<A: PageAllocator + Send + Sync + Clone + 'static + Default> Provider for Pa
 
     fn memory_stats(&self) -> Stats {
         Stats {
-            total_size:      self.size(),
-            access_count:    self.access_count.load(Ordering::Relaxed),
-            unique_regions:  0, // Not tracked by this basic provider yet
+            total_size: self.size(),
+            access_count: self.access_count.load(Ordering::Relaxed),
+            unique_regions: 0, // Not tracked by this basic provider yet
             max_access_size: self.max_access_size.load(Ordering::Relaxed),
         }
     }

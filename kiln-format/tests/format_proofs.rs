@@ -2,10 +2,7 @@
 //!
 //! This module contains tests for the format module functionality.
 
-use kiln_format::{
-    CustomSection,
-    Module,
-};
+use kiln_format::{CustomSection, Module};
 
 /// Test basic module and custom section functionality
 #[test]

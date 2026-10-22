@@ -6,38 +6,19 @@
 // ToString comes from prelude
 use core::fmt::Debug;
 
-use kiln_error::{
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{ErrorCategory, Result};
 
 #[cfg(feature = "std")]
 use crate::component_type_store::TypeRef;
 // --- Traits needed for BoundedVec items ---
-use crate::traits::{
-    FromBytes,
-    ReadStream,
-    SerializationError,
-    ToBytes,
-    WriteStream,
-};
+use crate::traits::{FromBytes, ReadStream, SerializationError, ToBytes, WriteStream};
 use crate::{
-    bounded::{
-        BoundedVec,
-        WasmName,
-        MAX_WASM_NAME_LENGTH,
-    },
+    Error, MemoryProvider,
+    bounded::{BoundedVec, MAX_WASM_NAME_LENGTH, WasmName},
     codes,
     prelude::*,
     traits::Checksummable,
-    types::{
-        FuncType,
-        GlobalType,
-        MemoryType,
-        TableType,
-    },
-    Error,
-    MemoryProvider,
+    types::{FuncType, GlobalType, MemoryType, TableType},
 };
 
 // Binary std/no_std choice
@@ -109,13 +90,13 @@ pub struct ComponentType<P>
 where
     P: MemoryProvider + Clone + Default + Eq + core::fmt::Debug,
 {
-    pub imports:         BoundedVec<Import<P>, MAX_COMPONENT_IMPORTS, P>,
-    pub exports:         BoundedVec<Export<P>, MAX_COMPONENT_EXPORTS, P>,
-    pub aliases:         BoundedVec<ComponentAlias<P>, MAX_COMPONENT_ALIASES, P>,
-    pub instances:       BoundedVec<ComponentInstance<P>, MAX_COMPONENT_INSTANCES, P>,
-    pub core_instances:  BoundedVec<CoreInstance<P>, MAX_CORE_INSTANCES, P>,
+    pub imports: BoundedVec<Import<P>, MAX_COMPONENT_IMPORTS, P>,
+    pub exports: BoundedVec<Export<P>, MAX_COMPONENT_EXPORTS, P>,
+    pub aliases: BoundedVec<ComponentAlias<P>, MAX_COMPONENT_ALIASES, P>,
+    pub instances: BoundedVec<ComponentInstance<P>, MAX_COMPONENT_INSTANCES, P>,
+    pub core_instances: BoundedVec<CoreInstance<P>, MAX_CORE_INSTANCES, P>,
     pub component_types: BoundedVec<TypeRef, MAX_COMPONENT_TYPES, P>,
-    pub core_types:      BoundedVec<CoreType, MAX_CORE_TYPES, P>,
+    pub core_types: BoundedVec<CoreType, MAX_CORE_TYPES, P>,
 }
 
 impl<P> ComponentType<P>
@@ -125,13 +106,13 @@ where
     /// Creates a unit component type (empty component with no imports/exports)
     pub fn unit(provider: P) -> kiln_error::Result<Self> {
         Ok(Self {
-            imports:         BoundedVec::new(provider.clone())?,
-            exports:         BoundedVec::new(provider.clone())?,
-            aliases:         BoundedVec::new(provider.clone())?,
-            instances:       BoundedVec::new(provider.clone())?,
-            core_instances:  BoundedVec::new(provider.clone())?,
+            imports: BoundedVec::new(provider.clone())?,
+            exports: BoundedVec::new(provider.clone())?,
+            aliases: BoundedVec::new(provider.clone())?,
+            instances: BoundedVec::new(provider.clone())?,
+            core_instances: BoundedVec::new(provider.clone())?,
             component_types: BoundedVec::new(provider.clone())?,
-            core_types:      BoundedVec::new(provider)?,
+            core_types: BoundedVec::new(provider)?,
         })
     }
 
@@ -150,7 +131,7 @@ where
                                                                   * struct becomes Default */
 {
     pub key: ImportKey<P>,
-    pub ty:  ExternType<P>,
+    pub ty: ExternType<P>,
 }
 
 /// Represents an export from a component or core module.
@@ -161,7 +142,7 @@ where
                                                                   * BoundedVec usage */
 {
     pub name: WasmName<MAX_NAME_LEN>,
-    pub ty:   ExternType<P>,
+    pub ty: ExternType<P>,
     pub desc: Option<WasmName<MAX_NAME_LEN>>,
 }
 
@@ -173,7 +154,7 @@ where
                                                                   * Namespace default */
 {
     pub namespace: Namespace<P>,
-    pub name:      WasmName<MAX_NAME_LEN>,
+    pub name: WasmName<MAX_NAME_LEN>,
 }
 
 /// Namespace for imports.
@@ -261,32 +242,32 @@ where
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ComponentAliasInstanceExport {
     pub instance_idx: u32,
-    pub name:         WasmName<MAX_NAME_LEN>,
-    pub kind:         ComponentAliasExportKind,
+    pub name: WasmName<MAX_NAME_LEN>,
+    pub kind: ComponentAliasExportKind,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ComponentAliasCoreInstanceExport {
     pub core_instance_idx: u32,
-    pub name:              WasmName<MAX_NAME_LEN>,
+    pub name: WasmName<MAX_NAME_LEN>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Default, Hash)]
 pub struct ComponentAliasOuter {
     pub count: u32, // Number of levels to go up
     pub index: u32, // Index in the outer component's items (types, instances etc)
-    pub kind:  ComponentAliasOuterKind,
+    pub kind: ComponentAliasOuterKind,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Copy, Hash, Default)]
 #[repr(u8)]
 pub enum ComponentAliasExportKind {
     #[default]
-    Func     = 0,
-    Table    = 1,
-    Memory   = 2,
-    Global   = 3,
-    TypeDef  = 4,
+    Func = 0,
+    Table = 1,
+    Memory = 2,
+    Global = 3,
+    TypeDef = 4,
     Resource = 5, // Added for resource aliasing
 }
 
@@ -294,9 +275,9 @@ pub enum ComponentAliasExportKind {
 #[repr(u8)]
 pub enum ComponentAliasOuterKind {
     #[default]
-    Type       = 0,
-    Component  = 1,
-    CoreType   = 2,
+    Type = 0,
+    Component = 1,
+    CoreType = 2,
     CoreModule = 3,
 }
 
@@ -352,7 +333,7 @@ where
     Unknown,
     Instantiate {
         component_idx: u32,
-        args:          BoundedVec<ComponentInstantiationArg<P>, MAX_COMPONENT_IMPORTS, P>,
+        args: BoundedVec<ComponentInstantiationArg<P>, MAX_COMPONENT_IMPORTS, P>,
     },
     FromExports {
         exports: BoundedVec<Export<P>, MAX_COMPONENT_EXPORTS, P>,
@@ -361,9 +342,9 @@ where
 
 #[derive(Clone, Debug, PartialEq, Eq, Default, Hash)]
 pub struct ComponentInstantiationArg<P> {
-    pub name:  WasmName<MAX_NAME_LEN>,
+    pub name: WasmName<MAX_NAME_LEN>,
     pub index: u32, // Index of the item being passed as argument (e.g. func_idx, table_idx)
-    pub kind:  ExternKind, // The kind of the item being passed
+    pub kind: ExternKind, // The kind of the item being passed
     #[doc(hidden)]
     _phantom: core::marker::PhantomData<P>,
 }
@@ -386,7 +367,7 @@ where
     Unknown,
     Instantiate {
         module_idx: u32, // Index of the core module type
-        args:       BoundedVec<CoreInstantiationArg<P>, MAX_COMPONENT_IMPORTS, P>,
+        args: BoundedVec<CoreInstantiationArg<P>, MAX_COMPONENT_IMPORTS, P>,
     },
     FromExports {
         exports: BoundedVec<Export<P>, MAX_COMPONENT_EXPORTS, P>,
@@ -395,9 +376,9 @@ where
 
 #[derive(Clone, Debug, PartialEq, Eq, Default, Hash)]
 pub struct CoreInstantiationArg<P> {
-    pub name:  WasmName<MAX_NAME_LEN>,
+    pub name: WasmName<MAX_NAME_LEN>,
     pub index: u32,
-    pub kind:  ExternKind,
+    pub kind: ExternKind,
     #[doc(hidden)]
     _phantom: core::marker::PhantomData<P>,
 }
@@ -421,16 +402,16 @@ pub enum CoreType {
 #[repr(u8)]
 pub enum ExternKind {
     #[default]
-    Func       = 0,
-    Table      = 1,
-    Memory     = 2,
-    Global     = 3,
-    Tag        = 4,
-    Component  = 5,
-    Instance   = 6,
+    Func = 0,
+    Table = 1,
+    Memory = 2,
+    Global = 3,
+    Tag = 4,
+    Component = 5,
+    Instance = 6,
     CoreModule = 7,
-    TypeDef    = 8,
-    Resource   = 9,
+    TypeDef = 8,
+    Resource = 9,
 }
 
 impl Checksummable for ExternKind {
@@ -527,7 +508,7 @@ where
         // WasmName).
         Self {
             key: ImportKey::default(),
-            ty:  ExternType::default(),
+            ty: ExternType::default(),
         }
     }
 }
@@ -543,7 +524,7 @@ where
         // Assumes WasmName<P> and ExternType<P> have correct Default impls.
         Self {
             name: WasmName::default(),
-            ty:   ExternType::default(),
+            ty: ExternType::default(),
             desc: None, // Option<WasmName> can be None by default
         }
     }
@@ -559,7 +540,7 @@ where
     fn default() -> Self {
         Self {
             namespace: Namespace::default(),
-            name:      WasmName::default(),
+            name: WasmName::default(),
         }
     }
 }
@@ -607,7 +588,7 @@ impl Default for ComponentAliasCoreInstanceExport {
     fn default() -> Self {
         Self {
             core_instance_idx: 0,
-            name:              WasmName::default(), // Assuming WasmName has a suitable default
+            name: WasmName::default(), // Assuming WasmName has a suitable default
         }
     }
 }
@@ -617,8 +598,8 @@ impl Default for ComponentAliasInstanceExport {
     fn default() -> Self {
         Self {
             instance_idx: 0,
-            name:         WasmName::default(), // Assuming WasmName also has a sensible Default
-            kind:         ComponentAliasExportKind::default(),
+            name: WasmName::default(), // Assuming WasmName also has a sensible Default
+            kind: ComponentAliasExportKind::default(),
         }
     }
 }
@@ -966,9 +947,9 @@ where
             4 => Ok(Self::Tag(FuncType::from_bytes_with_provider(
                 reader, provider,
             )?)),
-            5 => Ok(Self::Component(ComponentType::<P>::from_bytes_with_provider(
-                reader, provider,
-            )?)),
+            5 => Ok(Self::Component(
+                ComponentType::<P>::from_bytes_with_provider(reader, provider)?,
+            )),
             6 => Ok(Self::Instance(InstanceType::<P>::from_bytes_with_provider(
                 reader, provider,
             )?)),
@@ -1153,9 +1134,8 @@ where
                 Ok(ComponentAlias::InstanceExport(inner))
             },
             1 => {
-                let inner = ComponentAliasCoreInstanceExport::from_bytes_with_provider(
-                    reader, provider,
-                )?;
+                let inner =
+                    ComponentAliasCoreInstanceExport::from_bytes_with_provider(reader, provider)?;
                 Ok(ComponentAlias::CoreInstanceExport(inner))
             },
             2 => {
@@ -1465,7 +1445,7 @@ impl Checksummable for ComponentAliasOuter {
         self.count.update_checksum(checksum);
         self.index.update_checksum(checksum);
         self.kind.update_checksum(checksum); // ComponentAliasOuterKind impls
-                                             // Checksummable
+        // Checksummable
     }
 }
 impl ToBytes for ComponentAliasOuter {

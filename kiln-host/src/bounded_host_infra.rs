@@ -6,16 +6,11 @@
 #[cfg(any(feature = "std", feature = "alloc"))]
 use kiln_foundation::capabilities::CapabilityAwareProvider;
 use kiln_foundation::{
-    bounded::{
-        BoundedString,
-        BoundedVec,
-    },
-    bounded_collections::BoundedMap as BoundedHashMap,
-    capability_context,
-    safe_capability_alloc,
-    safe_managed_alloc,
-    safe_memory::NoStdProvider,
     CrateId,
+    bounded::{BoundedString, BoundedVec},
+    bounded_collections::BoundedMap as BoundedHashMap,
+    capability_context, safe_capability_alloc, safe_managed_alloc,
+    safe_memory::NoStdProvider,
 };
 
 /// Budget-aware memory size for host (64KB)
@@ -175,36 +170,47 @@ where
 /// Create a new bounded host function name
 pub fn new_host_function_name() -> kiln_error::Result<BoundedHostFunctionName> {
     let provider = create_host_provider()?;
-    BoundedString::<MAX_HOST_FUNCTION_NAME_LEN>::try_from_str("")
-        .map_err(|_| kiln_error::Error::platform_memory_allocation_failed("Failed to create empty bounded string"))
+    BoundedString::<MAX_HOST_FUNCTION_NAME_LEN>::try_from_str("").map_err(|_| {
+        kiln_error::Error::platform_memory_allocation_failed(
+            "Failed to create empty bounded string",
+        )
+    })
 }
 
 /// Create a bounded host function name from str
 pub fn bounded_host_function_name_from_str(s: &str) -> kiln_error::Result<BoundedHostFunctionName> {
     let provider = create_host_provider()?;
-    BoundedString::<MAX_HOST_FUNCTION_NAME_LEN>::try_from_str(s)
-        .map_err(|_| kiln_error::Error::validation_error("String too long for bounded host function name"))
+    BoundedString::<MAX_HOST_FUNCTION_NAME_LEN>::try_from_str(s).map_err(|_| {
+        kiln_error::Error::validation_error("String too long for bounded host function name")
+    })
 }
 
 /// Create a new bounded host module name
 pub fn new_host_module_name() -> kiln_error::Result<BoundedHostModuleName> {
     let provider = create_host_provider()?;
-    BoundedString::<MAX_HOST_MODULE_NAME_LEN>::try_from_str("")
-        .map_err(|_| kiln_error::Error::platform_memory_allocation_failed("Failed to create empty bounded string"))
+    BoundedString::<MAX_HOST_MODULE_NAME_LEN>::try_from_str("").map_err(|_| {
+        kiln_error::Error::platform_memory_allocation_failed(
+            "Failed to create empty bounded string",
+        )
+    })
 }
 
 /// Create a bounded host module name from str
 pub fn bounded_host_module_name_from_str(s: &str) -> kiln_error::Result<BoundedHostModuleName> {
     let provider = create_host_provider()?;
-    BoundedString::<MAX_HOST_MODULE_NAME_LEN>::try_from_str(s)
-        .map_err(|_| kiln_error::Error::validation_error("String too long for bounded host module name"))
+    BoundedString::<MAX_HOST_MODULE_NAME_LEN>::try_from_str(s).map_err(|_| {
+        kiln_error::Error::validation_error("String too long for bounded host module name")
+    })
 }
 
 /// Create a new bounded host ID
 pub fn new_host_id() -> kiln_error::Result<BoundedHostId> {
     let provider = create_host_provider()?;
-    BoundedString::<MAX_HOST_ID_LEN>::try_from_str("")
-        .map_err(|_| kiln_error::Error::platform_memory_allocation_failed("Failed to create empty bounded string"))
+    BoundedString::<MAX_HOST_ID_LEN>::try_from_str("").map_err(|_| {
+        kiln_error::Error::platform_memory_allocation_failed(
+            "Failed to create empty bounded string",
+        )
+    })
 }
 
 /// Create a bounded host ID from str

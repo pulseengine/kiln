@@ -372,7 +372,9 @@ impl ComponentExecutionEngine {
         let result = self
             .runtime_bridge
             .execute_component_function(instance_id, &function_name, &component_values)
-            .map_err(|_| kiln_error::Error::runtime_error("Failed to execute component function"))?;
+            .map_err(|_| {
+                kiln_error::Error::runtime_error("Failed to execute component function")
+            })?;
 
         // Convert result back to engine value format
         self.convert_component_value_to_value(&result)
@@ -637,8 +639,9 @@ impl ComponentExecutionEngine {
                 let provider = safe_managed_alloc!(512, CrateId::Component)
                     .map_err(|_| kiln_error::Error::validation_invalid_input("Invalid input"))?;
                 let bounded: kiln_foundation::bounded::BoundedString<256> =
-                    kiln_foundation::bounded::BoundedString::try_from_str(module_name)
-                        .map_err(|_| kiln_error::Error::validation_invalid_input("Invalid input"))?;
+                    kiln_foundation::bounded::BoundedString::try_from_str(module_name).map_err(
+                        |_| kiln_error::Error::validation_invalid_input("Invalid input"),
+                    )?;
                 let str_slice = bounded.as_str().map_err(|_| {
                     kiln_error::Error::validation_invalid_input(
                         "Failed to convert BoundedString to str",

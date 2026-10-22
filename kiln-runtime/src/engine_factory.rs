@@ -4,16 +4,9 @@
 //! WebAssembly engines with clear separation of concerns and configurable
 //! capabilities.
 
-use alloc::{
-    boxed::Box,
-    vec,
-    vec::Vec,
-};
+use alloc::{boxed::Box, vec, vec::Vec};
 
-use kiln_error::{
-    Error,
-    Result,
-};
+use kiln_error::{Error, Result};
 use kiln_foundation::CrateId;
 
 use crate::prelude::*;
@@ -44,25 +37,25 @@ pub enum MemoryProviderType {
 #[derive(Debug, Clone)]
 pub struct EngineConfig {
     /// Type of engine to create
-    pub engine_type:     EngineType,
+    pub engine_type: EngineType,
     /// Memory provider configuration
     pub memory_provider: MemoryProviderType,
     /// Initial memory budget in bytes
-    pub memory_budget:   usize,
+    pub memory_budget: usize,
     /// Whether to enable debug features
-    pub debug_mode:      bool,
+    pub debug_mode: bool,
     /// Maximum number of function calls
-    pub max_call_depth:  Option<u32>,
+    pub max_call_depth: Option<u32>,
 }
 
 impl Default for EngineConfig {
     fn default() -> Self {
         Self {
-            engine_type:     EngineType::Stackless,
+            engine_type: EngineType::Stackless,
             memory_provider: MemoryProviderType::Basic,
-            memory_budget:   65536, // 64KB default
-            debug_mode:      false,
-            max_call_depth:  Some(1024),
+            memory_budget: 65536, // 64KB default
+            debug_mode: false,
+            max_call_depth: Some(1024),
         }
     }
 }
@@ -133,10 +126,7 @@ impl EngineFactory {
 
     /// Create a memory provider based on configuration
     fn create_memory_provider(provider_type: MemoryProviderType, _budget: usize) -> Result<()> {
-        use kiln_foundation::{
-            capabilities::MemoryFactory,
-            CrateId,
-        };
+        use kiln_foundation::{CrateId, capabilities::MemoryFactory};
 
         match provider_type {
             MemoryProviderType::Basic => {
@@ -235,15 +225,15 @@ impl RuntimeEngine for crate::stackless::StacklessEngine {
 #[derive(Debug, Default, Clone)]
 pub struct EngineStatistics {
     /// Number of modules loaded.
-    pub modules_loaded:          u32,
+    pub modules_loaded: u32,
     /// Number of functions executed.
-    pub functions_executed:      u64,
+    pub functions_executed: u64,
     /// Total execution time in milliseconds.
     pub total_execution_time_ms: u64,
     /// Current memory usage in bytes.
-    pub memory_used:             usize,
+    pub memory_used: usize,
     /// Maximum memory usage observed in bytes.
-    pub max_memory_used:         usize,
+    pub max_memory_used: usize,
 }
 
 // WAST engine adapter removed - using StacklessEngine directly for now

@@ -15,27 +15,16 @@
 //! tagging on ARM64 platforms that support MTE, while falling back to standard
 //! protection mechanisms on systems without MTE support.
 
-use core::ptr::{
-    self,
-    NonNull,
-};
+use core::ptr::{self, NonNull};
 
 // Safety: NonNull<u8> is safe to send between threads as it's just a pointer
 // wrapper
 unsafe impl Send for LinuxArm64MteAllocator {}
 unsafe impl Sync for LinuxArm64MteAllocator {}
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 
-use crate::memory::{
-    PageAllocator,
-    WASM_PAGE_SIZE,
-};
+use crate::memory::{PageAllocator, WASM_PAGE_SIZE};
 
 /// ARM64 syscall numbers
 mod syscalls {
@@ -84,14 +73,14 @@ pub enum MteMode {
 /// A `PageAllocator` implementation for Linux ARM64 with MTE support.
 #[derive(Debug)]
 pub struct LinuxArm64MteAllocator {
-    base_ptr:                Option<NonNull<u8>>,
-    total_reserved_bytes:    usize,   // Total bytes reserved
-    current_committed_bytes: usize,   // Bytes currently committed
-    max_capacity_bytes:      usize,   // Maximum bytes this instance can manage
-    use_guard_pages:         bool,    // Whether to use guard pages
-    mte_mode:                MteMode, // MTE configuration
-    mte_available:           bool,    // Whether MTE is available on this system
-    current_tag:             u8,      // Current memory tag (0-15)
+    base_ptr: Option<NonNull<u8>>,
+    total_reserved_bytes: usize,    // Total bytes reserved
+    current_committed_bytes: usize, // Bytes currently committed
+    max_capacity_bytes: usize,      // Maximum bytes this instance can manage
+    use_guard_pages: bool,          // Whether to use guard pages
+    mte_mode: MteMode,              // MTE configuration
+    mte_available: bool,            // Whether MTE is available on this system
+    current_tag: u8,                // Current memory tag (0-15)
 }
 
 impl LinuxArm64MteAllocator {
@@ -190,11 +179,7 @@ impl LinuxArm64MteAllocator {
         );
 
         // Linux syscalls return negative errno on error
-        if result < 0 && result >= -4095 {
-            MAP_FAILED
-        } else {
-            result as *mut u8
-        }
+        if result < 0 && result >= -4095 { MAP_FAILED } else { result as *mut u8 }
     }
 
     /// Performs the munmap syscall directly without libc
@@ -292,16 +277,16 @@ impl LinuxArm64MteAllocator {
 #[derive(Debug)]
 pub struct LinuxArm64MteAllocatorBuilder {
     maximum_pages: Option<u32>,
-    guard_pages:   bool,
-    mte_mode:      MteMode,
+    guard_pages: bool,
+    mte_mode: MteMode,
 }
 
 impl Default for LinuxArm64MteAllocatorBuilder {
     fn default() -> Self {
         Self {
             maximum_pages: None,
-            guard_pages:   false,
-            mte_mode:      MteMode::Disabled,
+            guard_pages: false,
+            mte_mode: MteMode::Disabled,
         }
     }
 }

@@ -11,22 +11,11 @@
 //! macOS-specific `FutexLike` implementation using direct syscalls without
 //! libc.
 
-use core::{
-    marker::PhantomData,
-    sync::atomic::AtomicU32,
-    time::Duration,
-};
+use core::{marker::PhantomData, sync::atomic::AtomicU32, time::Duration};
 
-use kiln_error::{
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result};
 
-use crate::sync::{
-    FutexLike,
-    TimeoutResult,
-};
+use crate::sync::{FutexLike, TimeoutResult};
 
 // Darwin / macOS specific ulock operations syscall numbers
 const SYSCALL_ULOCK_WAIT: u64 = 515; // __MAC_OS_X_VERSION_MIN_REQUIRED >= 101200
@@ -52,11 +41,11 @@ const ULOCK_WAIT_TIMEOUT_INFINITE: u32 = u32::MAX;
 #[derive(Debug)]
 pub struct MacOsFutex {
     /// The atomic value used for synchronization
-    value:    AtomicU32,
+    value: AtomicU32,
     /// Padding to ensure the value is on its own cache line
     _padding: [u8; 60], // 64 - sizeof(AtomicU32)
     /// Safety: We're carefully managing the lifetime of the value
-    _marker:  PhantomData<*mut ()>,
+    _marker: PhantomData<*mut ()>,
 }
 
 // Safety: MacOsFutex can be shared between threads safely because:
@@ -70,9 +59,9 @@ impl MacOsFutex {
     /// Creates a new `MacOsFutex` with the given initial value.
     pub fn new(initial_value: u32) -> Self {
         Self {
-            value:    AtomicU32::new(initial_value),
+            value: AtomicU32::new(initial_value),
             _padding: [0; 60],
-            _marker:  PhantomData,
+            _marker: PhantomData,
         }
     }
 
@@ -216,7 +205,7 @@ impl FutexLike for MacOsFutex {
         // self.
         let result = unsafe {
             Self::ulock_wake(operation, addr, count as u64) // Wake 'count'
-                                                            // waiters
+            // waiters
         };
 
         if result >= 0 {

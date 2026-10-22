@@ -7,15 +7,11 @@
 
 #[cfg(kani)]
 use crate::{
+    Error, Result,
     budget_aware_provider::CrateId,
     budget_verification::CRATE_BUDGETS,
-    memory_coordinator::{
-        CrateIdentifier,
-        GenericMemoryCoordinator,
-    },
     kiln_memory_system::CapabilityKilnFactory,
-    Error,
-    Result,
+    memory_coordinator::{CrateIdentifier, GenericMemoryCoordinator},
 };
 
 #[cfg(kani)]

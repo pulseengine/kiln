@@ -16,66 +16,40 @@ extern crate alloc;
 use std::format;
 
 // External crate imports
-use kiln_error::{
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{ErrorCategory, Result};
 
 #[cfg(feature = "std")]
 use crate::prelude::BTreeMap;
 // Internal imports organized by module
 use crate::{
+    Error,
+    MemoryProvider,
+    SafeMemoryHandler,
     // Bounded collections
     bounded::{
-        BoundedError,
-        BoundedString,
-        BoundedVec,
-        WasmName,
-        MAX_COMPONENT_ERROR_CONTEXT_ITEMS,
-        MAX_COMPONENT_FLAGS,
-        MAX_COMPONENT_TUPLE_ITEMS,
-        MAX_WASM_NAME_LENGTH,
-        MAX_WASM_STRING_LENGTH,
+        BoundedError, BoundedString, BoundedVec, MAX_COMPONENT_ERROR_CONTEXT_ITEMS,
+        MAX_COMPONENT_FLAGS, MAX_COMPONENT_TUPLE_ITEMS, MAX_WASM_NAME_LENGTH,
+        MAX_WASM_STRING_LENGTH, WasmName,
     },
 
     // Re-exported items
     codes,
     // Component value types
-    component_value::{
-        ComponentValue,
-        ValType,
-        ValTypeRef,
-        MAX_STORED_COMPONENT_VALUES,
-    },
+    component_value::{ComponentValue, MAX_STORED_COMPONENT_VALUES, ValType, ValTypeRef},
 
     // Other types
     prelude::Debug,
     // Traits
     traits::{
-        BytesWriter,
-        Checksummable,
-        FromBytes,
-        ReadStream,
-        SerializationError,
-        ToBytes,
-        WriteStream,
+        BytesWriter, Checksummable, FromBytes, ReadStream, SerializationError, ToBytes, WriteStream,
     },
 
-    types::{
-        Limits,
-        ValueType,
-    },
+    types::{Limits, ValueType},
     values::Value,
 
     verification::Checksum,
-    Error,
-    MemoryProvider,
-    SafeMemoryHandler,
 };
-use crate::{
-    prelude::*,
-    traits::BoundedCapacity,
-}; // Added import
+use crate::{prelude::*, traits::BoundedCapacity}; // Added import
 
 /// An opaque reference (index) to a `ComponentValue` within the store.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
@@ -135,10 +109,10 @@ pub const MAX_TYPE_TO_REF_MAP_ENTRIES: usize = MAX_STORE_TYPES; // Binary std/no
 /// Stores component values and their types, managing references between them.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ComponentValueStore<P: MemoryProvider + Default + Clone + PartialEq + Eq> {
-    provider:        P,
-    values:          BoundedVec<ComponentValue<P>, MAX_STORE_VALUES, P>,
+    provider: P,
+    values: BoundedVec<ComponentValue<P>, MAX_STORE_VALUES, P>,
     // ValType is also P-generic, if we store ValTypes here, P needs to be consistent.
-    types:           BoundedVec<ValType<P>, MAX_STORE_TYPES, P>,
+    types: BoundedVec<ValType<P>, MAX_STORE_TYPES, P>,
     // TODO: Implement BoundedHashMap - using a vec pair for now
     type_to_ref_map: BoundedVec<(ValType<P>, ValTypeRef), MAX_TYPE_TO_REF_MAP_ENTRIES, P>,
 }
@@ -348,10 +322,9 @@ impl<P: MemoryProvider + Default + Clone + PartialEq + Eq> ComponentValueStore<P
         .map_err(|_e| Error::runtime_execution_error("Failed to create BoundedVec for flags"))?;
 
         for (name_str, val) in flags {
-            let name =
-                WasmName::try_from_str(name_str.as_ref()).map_err(|_e| {
-                    Error::runtime_execution_error("Failed to create WasmName from string")
-                })?;
+            let name = WasmName::try_from_str(name_str.as_ref()).map_err(|_e| {
+                Error::runtime_execution_error("Failed to create WasmName from string")
+            })?;
             flag_values.push((name, val)).map_err(|_e| {
                 Error::new(
                     kiln_error::ErrorCategory::Resource,
@@ -434,7 +407,7 @@ impl<P: MemoryProvider + Default + Clone + PartialEq + Eq> ComponentValueStore<P
     /// Returns `None` if the `ValTypeRef` is invalid (e.g., out of bounds).
     pub fn resolve_type(&self, type_ref: ValTypeRef) -> Option<ValType<P>> {
         self.types.get(type_ref.0 as usize).ok() // Assuming ValTypeRef.0 is the
-                                                 // index
+        // index
     }
 
     /// Returns a clone of the provider used by this store.

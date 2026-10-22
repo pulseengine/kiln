@@ -6,21 +6,10 @@
 use core::fmt;
 
 use super::{
-    context::{
-        CapabilityGuardedProvider,
-        MemoryCapabilityContext,
-    },
-    CapabilityMask,
-    MemoryOperation,
-    MemoryOperationType,
+    CapabilityMask, MemoryOperation, MemoryOperationType,
+    context::{CapabilityGuardedProvider, MemoryCapabilityContext},
 };
-use crate::{
-    budget_aware_provider::CrateId,
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
+use crate::{Error, ErrorCategory, Result, budget_aware_provider::CrateId, codes};
 
 /// Standard memory operations that can be performed with capability
 /// verification
@@ -97,10 +86,10 @@ pub fn capability_managed_alloc<const N: usize>(
 /// Memory operation builder for complex operations
 pub struct MemoryOperationBuilder {
     operation_type: Option<MemoryOperationType>,
-    offset:         Option<usize>,
-    length:         Option<usize>,
-    size:           Option<usize>,
-    mask:           Option<CapabilityMask>,
+    offset: Option<usize>,
+    length: Option<usize>,
+    size: Option<usize>,
+    mask: Option<CapabilityMask>,
 }
 
 impl MemoryOperationBuilder {
@@ -108,10 +97,10 @@ impl MemoryOperationBuilder {
     pub fn new() -> Self {
         Self {
             operation_type: None,
-            offset:         None,
-            length:         None,
-            size:           None,
-            mask:           None,
+            offset: None,
+            length: None,
+            size: None,
+            mask: None,
         }
     }
 
@@ -249,32 +238,32 @@ impl CapabilityVerifier {
 #[derive(Debug, Clone, PartialEq)]
 pub struct CapabilityMemoryStats {
     /// Total number of operations performed
-    pub total_operations:        u64,
+    pub total_operations: u64,
     /// Number of read operations
-    pub read_operations:         u64,
+    pub read_operations: u64,
     /// Number of write operations
-    pub write_operations:        u64,
+    pub write_operations: u64,
     /// Number of allocation operations
-    pub allocation_operations:   u64,
+    pub allocation_operations: u64,
     /// Number of deallocation operations
     pub deallocation_operations: u64,
     /// Number of delegation operations
-    pub delegation_operations:   u64,
+    pub delegation_operations: u64,
     /// Number of capability violations
-    pub violations:              u64,
+    pub violations: u64,
 }
 
 impl CapabilityMemoryStats {
     /// Create new empty statistics
     pub fn new() -> Self {
         Self {
-            total_operations:        0,
-            read_operations:         0,
-            write_operations:        0,
-            allocation_operations:   0,
+            total_operations: 0,
+            read_operations: 0,
+            write_operations: 0,
+            allocation_operations: 0,
             deallocation_operations: 0,
-            delegation_operations:   0,
-            violations:              0,
+            delegation_operations: 0,
+            violations: 0,
         }
     }
 
@@ -350,7 +339,7 @@ mod tests {
 
         let read_op = MemoryOperation::Read {
             offset: 0,
-            len:    100,
+            len: 100,
         };
         stats.record_operation(&read_op);
 

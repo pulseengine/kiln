@@ -21,28 +21,14 @@
 //! - Proper capability-based memory access verification
 //! - Thread-safe coordination with wait/notify semantics
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 use kiln_foundation::values::Value;
 use kiln_instructions::atomic_ops::{
-    AtomicCmpxchgInstr,
-    AtomicFence,
-    AtomicLoadOp,
-    AtomicOp,
-    AtomicRMWInstr,
-    AtomicStoreOp,
-    AtomicWaitNotifyOp,
-    MemoryOrdering,
+    AtomicCmpxchgInstr, AtomicFence, AtomicLoadOp, AtomicOp, AtomicRMWInstr, AtomicStoreOp,
+    AtomicWaitNotifyOp, MemoryOrdering,
 };
 
-use crate::atomic_execution::{
-    AtomicExecutionStats,
-    AtomicMemoryContext,
-};
+use crate::atomic_execution::{AtomicExecutionStats, AtomicMemoryContext};
 
 use crate::thread_manager::ThreadId;
 

@@ -8,10 +8,7 @@
 
 //! Provides implementations for platform-specific memory management.
 
-use core::{
-    fmt::Debug,
-    ptr::NonNull,
-};
+use core::{fmt::Debug, ptr::NonNull};
 
 use kiln_error::Result;
 
@@ -169,7 +166,7 @@ pub trait MemoryProvider: Send + Sync {
 #[derive(Debug)]
 pub struct NoStdProvider {
     /// The underlying buffer for storing data
-    buffer:             &'static mut [u8],
+    buffer: &'static mut [u8],
     /// The current verification level
     verification_level: VerificationLevel,
 }
@@ -208,7 +205,7 @@ impl NoStdProvider {
 )]
 #[derive(Debug)]
 pub struct NoStdProviderBuilder {
-    size:               usize,
+    size: usize,
     verification_level: VerificationLevel,
 }
 
@@ -216,7 +213,7 @@ pub struct NoStdProviderBuilder {
 impl Default for NoStdProviderBuilder {
     fn default() -> Self {
         Self {
-            size:               4096,
+            size: 4096,
             verification_level: VerificationLevel::Standard,
         }
     }
@@ -249,7 +246,7 @@ impl NoStdProviderBuilder {
         // Note: This is a temporary workaround for the deprecated NoStdProvider
         // This entire module should be migrated to use kiln-foundation's memory system
         NoStdProvider {
-            buffer:             unsafe {
+            buffer: unsafe {
                 static mut DUMMY_BUFFER: [u8; 4096] = [0; 4096];
                 let actual_size = core::cmp::min(self.size, 4096);
                 &mut DUMMY_BUFFER[0..actual_size]
@@ -310,11 +307,7 @@ impl MemoryProvider for NoStdProvider {
 #[cfg(test)]
 #[allow(clippy::panic, clippy::unwrap_used)] // Allow panic/unwrap in tests
 mod tests {
-    use kiln_error::{
-        codes,
-        Error,
-        ErrorCategory,
-    };
+    use kiln_error::{Error, ErrorCategory, codes};
 
     use super::*;
 
@@ -322,18 +315,18 @@ mod tests {
     #[cfg(not(feature = "std"))]
     #[derive(Debug)]
     struct MockAllocator {
-        allocated_ptr:  Option<NonNull<u8>>,
+        allocated_ptr: Option<NonNull<u8>>,
         allocated_size: usize,
-        max_pages:      Option<u32>,
+        max_pages: Option<u32>,
     }
 
     #[cfg(not(feature = "std"))]
     impl Default for MockAllocator {
         fn default() -> Self {
             Self {
-                allocated_ptr:  None,
+                allocated_ptr: None,
                 allocated_size: 0,
-                max_pages:      None,
+                max_pages: None,
             }
         }
     }

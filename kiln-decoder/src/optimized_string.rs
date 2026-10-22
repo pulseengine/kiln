@@ -25,8 +25,8 @@ pub fn parse_utf8_string_inplace(
     let (name_bytes, new_offset) = read_name(bytes, offset)?;
 
     // Validate UTF-8 without creating intermediate Vec
-    let string_str = str::from_utf8(name_bytes)
-        .map_err(|_| Error::parse_error("malformed UTF-8 encoding"))?;
+    let string_str =
+        str::from_utf8(name_bytes).map_err(|_| Error::parse_error("malformed UTF-8 encoding"))?;
 
     Ok((alloc::string::String::from(string_str), new_offset))
 }
@@ -39,9 +39,8 @@ pub fn parse_utf8_string_inplace(
     let (name_bytes, new_offset) = read_name(bytes, offset)?;
 
     // Validate UTF-8 without creating intermediate Vec
-    let string_str = str::from_utf8(name_bytes).map_err(|_| {
-        Error::parse_error("malformed UTF-8 encoding")
-    })?;
+    let string_str =
+        str::from_utf8(name_bytes).map_err(|_| Error::parse_error("malformed UTF-8 encoding"))?;
 
     use kiln_foundation::{CrateId, safe_managed_alloc};
     let provider = safe_managed_alloc!(4096, CrateId::Decoder)?;
@@ -54,9 +53,8 @@ pub fn parse_utf8_string_inplace(
 pub fn validate_utf8_name(bytes: &[u8], offset: usize) -> Result<(&str, usize)> {
     let (name_bytes, new_offset) = read_name(bytes, offset)?;
 
-    let string_str = str::from_utf8(name_bytes).map_err(|_| {
-        Error::parse_error("malformed UTF-8 encoding")
-    })?;
+    let string_str =
+        str::from_utf8(name_bytes).map_err(|_| Error::parse_error("malformed UTF-8 encoding"))?;
 
     Ok((string_str, new_offset))
 }
@@ -71,8 +69,7 @@ pub fn copy_utf8_to_bounded(
     let (name_bytes, new_offset) = read_name(bytes, offset)?;
 
     // Validate UTF-8 first
-    str::from_utf8(name_bytes)
-        .map_err(|_| Error::parse_error("malformed UTF-8 encoding"))?;
+    str::from_utf8(name_bytes).map_err(|_| Error::parse_error("malformed UTF-8 encoding"))?;
 
     // Check if it fits in the buffer
     if name_bytes.len() > buffer.len() {

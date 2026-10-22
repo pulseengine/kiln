@@ -5,10 +5,7 @@
 #[cfg(feature = "std")]
 use alloc::boxed::Box;
 
-use kiln_host::{
-    CallbackRegistry,
-    CallbackType,
-};
+use kiln_host::{CallbackRegistry, CallbackType};
 
 use crate::operation::LogOperation;
 
@@ -80,14 +77,14 @@ impl LoggingExt for CallbackRegistry {
         // In no_std mode, we can't store dynamic handlers
         // This is a limitation - only one handler per type can be stored
         let _ = handler; // Acknowledge the parameter
-                         // Note: Actual registration would require a more
-                         // complex design
+        // Note: Actual registration would require a more
+        // complex design
     }
 
     fn handle_log(&self, operation: LogOperation) -> kiln_error::Result<()> {
         // In no_std mode, we can't dynamically dispatch to handlers
         let _ = operation; // Acknowledge the parameter
-                           // Default no-op implementation for no_std
+        // Default no-op implementation for no_std
         Ok(())
     }
 
@@ -100,10 +97,7 @@ impl LoggingExt for CallbackRegistry {
 #[cfg(test)]
 #[cfg(feature = "std")]
 mod tests {
-    use std::sync::{
-        Arc,
-        Mutex,
-    };
+    use std::sync::{Arc, Mutex};
 
     use super::*;
     use crate::level::LogLevel;
@@ -167,10 +161,7 @@ mod no_std_alloc_tests {
         assert!(!registry.has_log_handler());
 
         // Logging without handler should not panic
-        let _ = registry.handle_log(LogOperation::new(
-            LogLevel::Info,
-            "test message",
-        ).unwrap());
+        let _ = registry.handle_log(LogOperation::new(LogLevel::Info, "test message").unwrap());
 
         // Register a simple function handler
         fn simple_handler(_log_op: LogOperation) {
@@ -183,14 +174,8 @@ mod no_std_alloc_tests {
         assert!(!registry.has_log_handler());
 
         // Log some messages (no_std mode is no-op)
-        let _ = registry.handle_log(LogOperation::new(
-            LogLevel::Info,
-            "info message",
-        ).unwrap());
-        let _ = registry.handle_log(LogOperation::new(
-            LogLevel::Error,
-            "error message",
-        ).unwrap());
+        let _ = registry.handle_log(LogOperation::new(LogLevel::Info, "info message").unwrap());
+        let _ = registry.handle_log(LogOperation::new(LogLevel::Error, "error message").unwrap());
 
         // In no_std mode, handlers are not actually registered or called
         // This test just verifies the API compiles and doesn't panic

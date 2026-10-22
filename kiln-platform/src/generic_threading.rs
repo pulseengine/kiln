@@ -7,52 +7,29 @@
 
 extern crate alloc;
 
-use alloc::{
-    boxed::Box,
-    collections::BTreeMap,
-    sync::Arc,
-    vec::Vec,
-};
+use alloc::{boxed::Box, collections::BTreeMap, sync::Arc, vec::Vec};
 use core::{
-    sync::atomic::{
-        AtomicBool,
-        AtomicU64,
-        Ordering,
-    },
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
     time::Duration,
 };
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
-use kiln_sync::{
-    KilnMutex,
-    KilnRwLock,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
+use kiln_sync::{KilnMutex, KilnRwLock};
 
 use crate::threading::{
-    CpuSet,
-    PlatformThreadHandle,
-    PlatformThreadPool,
-    ThreadHandle,
-    ThreadPoolConfig,
-    ThreadPoolStats,
-    ThreadStats,
-    WasmTask,
+    CpuSet, PlatformThreadHandle, PlatformThreadPool, ThreadHandle, ThreadPoolConfig,
+    ThreadPoolStats, ThreadStats, WasmTask,
 };
 
 /// Generic thread handle using std::thread
 #[cfg(feature = "std")]
 struct GenericThreadHandle {
     /// Thread join handle
-    handle:  Option<std::thread::JoinHandle<Result<Vec<u8>>>>,
+    handle: Option<std::thread::JoinHandle<Result<Vec<u8>>>>,
     /// Running flag
     running: Arc<AtomicBool>,
     /// Thread statistics
-    stats:   Arc<KilnMutex<ThreadStats>>,
+    stats: Arc<KilnMutex<ThreadStats>>,
 }
 
 #[cfg(feature = "std")]
@@ -98,17 +75,17 @@ impl PlatformThreadHandle for GenericThreadHandle {
 #[cfg(feature = "std")]
 pub struct GenericThreadPool {
     /// Configuration
-    config:         ThreadPoolConfig,
+    config: ThreadPoolConfig,
     /// Active threads
     active_threads: Arc<KilnRwLock<BTreeMap<u64, Box<dyn PlatformThreadHandle>>>>,
     /// Thread statistics
-    stats:          Arc<KilnMutex<ThreadPoolStats>>,
+    stats: Arc<KilnMutex<ThreadPoolStats>>,
     /// Next thread ID
     next_thread_id: AtomicU64,
     /// Shutdown flag
-    shutdown:       AtomicBool,
+    shutdown: AtomicBool,
     /// Task executor
-    executor:       Arc<dyn Fn(WasmTask) -> Result<Vec<u8>> + Send + Sync>,
+    executor: Arc<dyn Fn(WasmTask) -> Result<Vec<u8>> + Send + Sync>,
 }
 
 #[cfg(feature = "std")]
@@ -236,14 +213,14 @@ impl PlatformThreadPool for GenericThreadPool {
 impl Clone for WasmTask {
     fn clone(&self) -> Self {
         Self {
-            id:           self.id,
-            function_id:  self.function_id,
-            args:         self.args.clone(),
-            priority:     self.priority,
-            stack_size:   self.stack_size,
+            id: self.id,
+            function_id: self.function_id,
+            args: self.args.clone(),
+            priority: self.priority,
+            stack_size: self.stack_size,
             memory_limit: self.memory_limit,
             cpu_affinity: self.cpu_affinity.clone(),
-            deadline:     self.deadline,
+            deadline: self.deadline,
         }
     }
 }
@@ -268,14 +245,14 @@ mod tests {
 
         // Spawn a thread
         let task = WasmTask {
-            id:           1,
-            function_id:  100,
-            args:         vec![1, 2, 3, 4],
-            priority:     ThreadPriority::Normal,
-            stack_size:   None,
+            id: 1,
+            function_id: 100,
+            args: vec![1, 2, 3, 4],
+            priority: ThreadPriority::Normal,
+            stack_size: None,
             memory_limit: None,
             cpu_affinity: None,
-            deadline:     None,
+            deadline: None,
         };
 
         let handle = pool.spawn_wasm_thread(task).unwrap();
@@ -299,14 +276,14 @@ mod tests {
         let pool = GenericThreadPool::new(config).unwrap();
 
         let task = WasmTask {
-            id:           1,
-            function_id:  100,
-            args:         vec![],
-            priority:     ThreadPriority::Normal,
-            stack_size:   None,
+            id: 1,
+            function_id: 100,
+            args: vec![],
+            priority: ThreadPriority::Normal,
+            stack_size: None,
             memory_limit: None,
             cpu_affinity: None,
-            deadline:     None,
+            deadline: None,
         };
 
         // First thread should succeed

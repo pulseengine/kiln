@@ -3,27 +3,10 @@
 //! This module provides safe atomic operations that work with the capability
 //! system, eliminating the need for unsafe code in safety-critical paths.
 
-use core::sync::atomic::{
-    AtomicU16,
-    AtomicU32,
-    AtomicU64,
-    AtomicU8,
-    AtomicUsize,
-    Ordering,
-};
+use core::sync::atomic::{AtomicU8, AtomicU16, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 
-use super::{
-    AnyMemoryCapability,
-    CapabilityMask,
-    MemoryCapability,
-    MemoryOperation,
-};
-use crate::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
+use super::{AnyMemoryCapability, CapabilityMask, MemoryCapability, MemoryOperation};
+use crate::{Error, ErrorCategory, Result, codes};
 
 /// Atomic memory capability extension trait
 pub trait AtomicMemoryCapability: MemoryCapability {
@@ -63,9 +46,9 @@ pub struct CapabilityAtomicMemory<'a> {
     /// Base memory pointer (managed by capability)
     memory_base: &'a [AtomicU8],
     /// Associated capability for verification
-    capability:  &'a dyn AnyMemoryCapability,
+    capability: &'a dyn AnyMemoryCapability,
     /// Size of the memory region
-    size:        usize,
+    size: usize,
 }
 
 impl<'a> CapabilityAtomicMemory<'a> {
@@ -77,7 +60,7 @@ impl<'a> CapabilityAtomicMemory<'a> {
         // Verify the capability allows memory access
         let operation = MemoryOperation::Read {
             offset: 0,
-            len:    memory_base.len(),
+            len: memory_base.len(),
         };
         capability.verify_access(&operation)?;
 
@@ -181,15 +164,15 @@ impl<'a> CapabilityAtomicMemory<'a> {
 #[derive(Debug, Clone, Default)]
 pub struct CapabilityAtomicStats {
     /// Total atomic operations
-    pub total_operations:      u64,
+    pub total_operations: u64,
     /// Successful operations
     pub successful_operations: u64,
     /// Failed due to capability violations
     pub capability_violations: u64,
     /// Failed due to alignment issues
-    pub alignment_failures:    u64,
+    pub alignment_failures: u64,
     /// Failed due to bounds violations
-    pub bounds_violations:     u64,
+    pub bounds_violations: u64,
 }
 
 impl CapabilityAtomicStats {
@@ -235,8 +218,8 @@ impl CapabilityAtomicStats {
 /// Builder for atomic operations with capabilities
 pub struct AtomicOperationBuilder<'a> {
     capability: Option<&'a dyn AnyMemoryCapability>,
-    offset:     Option<usize>,
-    ordering:   Ordering,
+    offset: Option<usize>,
+    ordering: Ordering,
 }
 
 impl<'a> AtomicOperationBuilder<'a> {
@@ -244,8 +227,8 @@ impl<'a> AtomicOperationBuilder<'a> {
     pub fn new() -> Self {
         Self {
             capability: None,
-            offset:     None,
-            ordering:   Ordering::SeqCst,
+            offset: None,
+            ordering: Ordering::SeqCst,
         }
     }
 

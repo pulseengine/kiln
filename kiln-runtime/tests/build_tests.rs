@@ -6,10 +6,7 @@
 #[cfg(test)]
 mod tests {
     #[cfg(any(feature = "std", feature = "alloc"))]
-    use kiln_runtime::engine::{
-        CapabilityAwareEngine,
-        EnginePreset,
-    };
+    use kiln_runtime::engine::{CapabilityAwareEngine, EnginePreset};
 
     #[test]
     #[cfg(any(feature = "std", feature = "alloc"))]
@@ -47,10 +44,7 @@ mod tests {
     #[test]
     #[cfg(any(feature = "std", feature = "alloc"))]
     fn test_engine_handle_types() {
-        use kiln_runtime::engine::{
-            InstanceHandle,
-            ModuleHandle,
-        };
+        use kiln_runtime::engine::{InstanceHandle, ModuleHandle};
 
         // Test handle creation
         let module_handle = ModuleHandle::new();

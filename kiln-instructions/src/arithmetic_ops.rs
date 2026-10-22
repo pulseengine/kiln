@@ -17,26 +17,12 @@
 use kiln_math as math;
 
 use crate::{
-    prelude::{
-        Debug,
-        Error,
-        FloatBits32,
-        FloatBits64,
-        PureInstruction,
-        Result,
-        Value,
-        ValueType,
-    },
-    validation::{
-        validate_arithmetic_op,
-        Validate,
-        ValidationContext,
-    },
+    prelude::{Debug, Error, FloatBits32, FloatBits64, PureInstruction, Result, Value, ValueType},
+    validation::{Validate, ValidationContext, validate_arithmetic_op},
 };
 
 /// Represents a pure arithmetic operation for WebAssembly.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum ArithmeticOp {
     // Integer operations (i32)
     /// Add two 32-bit integers
@@ -175,7 +161,6 @@ pub enum ArithmeticOp {
     /// Copy sign from one 64-bit float to another
     F64Copysign,
 }
-
 
 /// Execution context for arithmetic operations
 pub trait ArithmeticContext {

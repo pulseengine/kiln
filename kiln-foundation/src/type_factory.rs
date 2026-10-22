@@ -14,53 +14,27 @@ pub use factory::*;
 #[cfg(any(feature = "std", feature = "alloc"))]
 mod factory {
     #[cfg(all(not(feature = "std"), feature = "alloc"))]
-    use alloc::{
-        boxed::Box,
-        string::String,
-        vec::Vec,
-    };
+    use alloc::{boxed::Box, string::String, vec::Vec};
     #[cfg(not(feature = "std"))]
     use core::marker::PhantomData;
     #[cfg(feature = "std")]
     use std::marker::PhantomData;
     #[cfg(feature = "std")]
-    use std::{
-        boxed::Box,
-        string::String,
-        vec::Vec,
-    };
+    use std::{boxed::Box, string::String, vec::Vec};
 
     use crate::{
-        bounded::{
-            BoundedString,
-            BoundedVec,
-        },
+        Error, ErrorCategory, Result,
+        bounded::{BoundedString, BoundedVec},
         clean_types::{
-            Case as CleanCase,
-            ComponentType as CleanComponentType,
-            Enum as CleanEnum,
-            ExternType as CleanExternType,
-            Field as CleanField,
-            Flags as CleanFlags,
-            FuncType as CleanFuncType,
-            GlobalType as CleanGlobalType,
-            MemoryType as CleanMemoryType,
-            Record as CleanRecord,
-            Result_ as CleanResult,
-            TableType as CleanTableType,
-            Tuple as CleanTuple,
-            ValType as CleanValType,
-            Value as CleanValue,
-            Variant as CleanVariant,
+            Case as CleanCase, ComponentType as CleanComponentType, Enum as CleanEnum,
+            ExternType as CleanExternType, Field as CleanField, Flags as CleanFlags,
+            FuncType as CleanFuncType, GlobalType as CleanGlobalType,
+            MemoryType as CleanMemoryType, Record as CleanRecord, Result_ as CleanResult,
+            TableType as CleanTableType, Tuple as CleanTuple, ValType as CleanValType,
+            Value as CleanValue, Variant as CleanVariant,
         },
         codes,
-        safe_memory::{
-            MemoryProvider,
-            NoStdProvider,
-        },
-        Error,
-        ErrorCategory,
-        Result,
+        safe_memory::{MemoryProvider, NoStdProvider},
     };
 
     /// Factory trait for creating provider-aware types from clean types
@@ -69,10 +43,7 @@ mod factory {
         type Provider: MemoryProvider + Clone + PartialEq + Eq + Default;
 
         /// Create a bounded string from a clean string
-        fn create_bounded_string<const N: usize>(
-            &self,
-            s: &str,
-        ) -> Result<BoundedString<N>>;
+        fn create_bounded_string<const N: usize>(&self, s: &str) -> Result<BoundedString<N>>;
 
         /// Create a bounded vector from a clean vector
         fn create_bounded_vec<T, const N: usize>(
@@ -141,10 +112,7 @@ mod factory {
     impl<const BUFFER_SIZE: usize> TypeFactory for RuntimeTypeFactory<BUFFER_SIZE> {
         type Provider = NoStdProvider<BUFFER_SIZE>;
 
-        fn create_bounded_string<const N: usize>(
-            &self,
-            s: &str,
-        ) -> Result<BoundedString<N>> {
+        fn create_bounded_string<const N: usize>(&self, s: &str) -> Result<BoundedString<N>> {
             BoundedString::try_from_str(s)
                 .map_err(|_| Error::memory_error("String too long for bounded string"))
         }
@@ -211,10 +179,7 @@ mod factory {
     impl<const BUFFER_SIZE: usize> TypeFactory for ComponentTypeFactory<BUFFER_SIZE> {
         type Provider = NoStdProvider<BUFFER_SIZE>;
 
-        fn create_bounded_string<const N: usize>(
-            &self,
-            s: &str,
-        ) -> Result<BoundedString<N>> {
+        fn create_bounded_string<const N: usize>(&self, s: &str) -> Result<BoundedString<N>> {
             BoundedString::try_from_str(s)
                 .map_err(|_| Error::memory_error("String too long for bounded string"))
         }
@@ -369,7 +334,7 @@ mod factory {
         fn test_type_converter() {
             let field = CleanField {
                 name: "test_field".to_string(),
-                ty:   CleanValType::S32,
+                ty: CleanValType::S32,
             };
 
             let converted = TypeConverter::convert_field_from_bounded(&field);

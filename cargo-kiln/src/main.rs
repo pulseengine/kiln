@@ -2156,9 +2156,7 @@ async fn cmd_coverage(
         }
     } else {
         // Normal mode - fail on errors
-        build_system
-            .run_coverage(generate_html)
-            .context("Coverage analysis failed")?;
+        build_system.run_coverage(generate_html).context("Coverage analysis failed")?;
     }
 
     if open {
@@ -2170,22 +2168,16 @@ async fn cmd_coverage(
             );
             #[cfg(target_os = "macos")]
             {
-                let _ = std::process::Command::new("open")
-                    .arg(html_index)
-                    .spawn();
+                let _ = std::process::Command::new("open").arg(html_index).spawn();
             }
             #[cfg(target_os = "linux")]
             {
-                let _ = std::process::Command::new("xdg-open")
-                    .arg(html_index)
-                    .spawn();
+                let _ = std::process::Command::new("xdg-open").arg(html_index).spawn();
             }
             #[cfg(target_os = "windows")]
             {
-                let _ = std::process::Command::new("cmd")
-                    .args(["/C", "start"])
-                    .arg(html_index)
-                    .spawn();
+                let _ =
+                    std::process::Command::new("cmd").args(["/C", "start"]).arg(html_index).spawn();
             }
         } else {
             println!(

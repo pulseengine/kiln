@@ -4,50 +4,31 @@
 //! offer efficient, secure local communication between processes on Linux
 //! systems.
 
-use core::{
-    fmt,
-    time::Duration,
-};
+use core::{fmt, time::Duration};
 use std::{
     boxed::Box,
     collections::HashMap,
-    os::unix::net::{
-        UnixListener,
-        UnixStream,
-    },
+    os::unix::net::{UnixListener, UnixStream},
     path::Path,
     string::String,
-    sync::{
-        Arc,
-        Mutex,
-    },
+    sync::{Arc, Mutex},
     vec::Vec,
 };
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 
-use crate::ipc::{
-    ChannelId,
-    ClientId,
-    IpcChannel,
-    Message,
-};
+use crate::ipc::{ChannelId, ClientId, IpcChannel, Message};
 
 /// Linux domain socket implementation of IPC channel
 pub struct LinuxDomainSocket {
     /// Socket path for server
-    socket_path:    String,
+    socket_path: String,
     /// Unix listener for accepting connections
-    listener:       Option<Arc<Mutex<UnixListener>>>,
+    listener: Option<Arc<Mutex<UnixListener>>>,
     /// Connected clients
-    clients:        Arc<Mutex<HashMap<u64, UnixStream>>>,
+    clients: Arc<Mutex<HashMap<u64, UnixStream>>>,
     /// Channel ID
-    channel_id:     ChannelId,
+    channel_id: ChannelId,
     /// Next client ID
     next_client_id: Arc<Mutex<u64>>,
 }
@@ -172,10 +153,7 @@ impl IpcChannel for LinuxDomainSocket {
 
 // Simple random number generation for IDs
 mod rand {
-    use std::sync::atomic::{
-        AtomicU64,
-        Ordering,
-    };
+    use std::sync::atomic::{AtomicU64, Ordering};
 
     static COUNTER: AtomicU64 = AtomicU64::new(1);
 

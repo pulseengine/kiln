@@ -12,11 +12,11 @@ pub struct StacklessFrame {
     /// Function index being executed
     pub function_index: usize,
     /// Local variables
-    pub locals:         [Value; 8], // Fixed size for simplicity
+    pub locals: [Value; 8], // Fixed size for simplicity
     /// Number of locals in use
-    pub locals_count:   usize,
+    pub locals_count: usize,
     /// Frame ID for debugging
-    pub frame_id:       u32,
+    pub frame_id: u32,
 }
 
 impl StacklessFrame {
@@ -74,7 +74,7 @@ impl Default for StacklessFrame {
     fn default() -> Self {
         Self {
             function_index: 0,
-            locals:         [
+            locals: [
                 Value::I32(0),
                 Value::I32(0),
                 Value::I32(0),
@@ -84,8 +84,8 @@ impl Default for StacklessFrame {
                 Value::I32(0),
                 Value::I32(0),
             ],
-            locals_count:   0,
-            frame_id:       0,
+            locals_count: 0,
+            frame_id: 0,
         }
     }
 }

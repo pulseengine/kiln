@@ -9,10 +9,7 @@
 use kiln_foundation::tracing::{debug, trace, warn};
 
 use alloc::sync::Arc;
-use core::sync::atomic::{
-    AtomicU32,
-    Ordering,
-};
+use core::sync::atomic::{AtomicU32, Ordering};
 
 // Import decoder function
 use kiln_decoder::decoder::decode_module;
@@ -21,32 +18,20 @@ use kiln_decoder::resource_limits_section::extract_resource_limits_from_binary;
 use kiln_foundation::{
     bounded_collections::BoundedMap,
     budget_aware_provider::CrateId,
-    capabilities::{
-        MemoryCapabilityContext,
-        MemoryOperation,
-    },
+    capabilities::{MemoryCapabilityContext, MemoryOperation},
     direct_map::DirectMap,
     safe_managed_alloc,
     safe_memory::NoStdProvider,
-    traits::{
-        ReadStream,
-        WriteStream,
-    },
+    traits::{ReadStream, WriteStream},
     values::Value,
 };
 use kiln_host::{
-    BoundedHostIntegrationManager,
-    CallbackRegistry,
-    HostBuilder,
-    HostIntegrationLimits,
+    BoundedHostIntegrationManager, CallbackRegistry, HostBuilder, HostIntegrationLimits,
 };
 
 use crate::{
-    bounded_runtime_infra::BaseRuntimeProvider,
-    module::Module,
-    module_instance::ModuleInstance,
-    prelude::*,
-    stackless::StacklessEngine,
+    bounded_runtime_infra::BaseRuntimeProvider, module::Module, module_instance::ModuleInstance,
+    prelude::*, stackless::StacklessEngine,
 };
 
 /// Handle for a loaded module
@@ -253,8 +238,7 @@ impl EngineResourceLimits {
         // Memories: bound the TOTAL declared minimum bytes.
         let mut total_min_bytes: u64 = 0;
         for memory in &decoded.memories {
-            let page_size =
-                memory.page_size.map_or(DEFAULT_WASM_PAGE_SIZE, u64::from);
+            let page_size = memory.page_size.map_or(DEFAULT_WASM_PAGE_SIZE, u64::from);
             if self.max_pages_for_page_size(page_size) == 0 {
                 // The budget cannot express even one page of this memory; a
                 // runtime cap of 0 pages would mean "unlimited" (sentinel),
@@ -320,11 +304,7 @@ pub trait CapabilityEngine: Send + Sync {
     /// Remap import links from a module handle to an instance handle
     /// This should be called after instantiation to fix the ID mismatch between
     /// module handles (used during linking) and instance handles (used at runtime)
-    fn remap_import_links(
-        &mut self,
-        module: ModuleHandle,
-        instance: InstanceHandle,
-    ) -> Result<()>;
+    fn remap_import_links(&mut self, module: ModuleHandle, instance: InstanceHandle) -> Result<()>;
 
     /// Execute a function with capability enforcement
     fn execute(
@@ -346,10 +326,7 @@ const MAX_MODULES: usize = 32;
 const MAX_INSTANCES: usize = 32;
 
 /// Runtime memory provider for engine internals
-use crate::bounded_runtime_infra::{
-    RuntimeProvider,
-    RUNTIME_MEMORY_SIZE,
-};
+use crate::bounded_runtime_infra::{RUNTIME_MEMORY_SIZE, RuntimeProvider};
 
 /// Kind of import for proper ordering during instantiation
 /// Tables, memories, and globals must be applied BEFORE element segment initialization
@@ -369,39 +346,40 @@ enum ImportKind {
 #[derive(Debug, Clone)]
 struct ImportLink {
     provider_instance: InstanceHandle,
-    export_name:       String,
+    export_name: String,
     /// What kind of import this is (function, table, memory, global)
-    import_kind:       ImportKind,
+    import_kind: ImportKind,
 }
 
 /// Capability-aware WebAssembly execution engine
 pub struct CapabilityAwareEngine {
     /// Inner stackless execution engine
-    inner:             StacklessEngine,
+    inner: StacklessEngine,
     /// Capability context for memory operations
-    context:           MemoryCapabilityContext,
+    context: MemoryCapabilityContext,
     /// Engine preset used for resource limit extraction
-    preset:            EnginePreset,
+    preset: EnginePreset,
     /// Loaded modules indexed by handle (using DirectMap to avoid serialization stack overflow)
-    modules:           DirectMap<ModuleHandle, Arc<Module>, MAX_MODULES>,
+    modules: DirectMap<ModuleHandle, Arc<Module>, MAX_MODULES>,
     /// Module instances indexed by handle (using DirectMap to avoid serialization stack overflow)
-    instances:         DirectMap<InstanceHandle, Arc<ModuleInstance>, MAX_INSTANCES>,
+    instances: DirectMap<InstanceHandle, Arc<ModuleInstance>, MAX_INSTANCES>,
     /// Next instance index
     next_instance_idx: usize,
     /// Host function registry for WASI and custom host functions
-    host_registry:     Option<CallbackRegistry>,
+    host_registry: Option<CallbackRegistry>,
     /// Bounded host integration manager for safety-critical environments
-    host_manager:      Option<BoundedHostIntegrationManager>,
+    host_manager: Option<BoundedHostIntegrationManager>,
     /// Import links: module_handle -> (module::name -> ImportLink)
-    import_links:      std::collections::HashMap<ModuleHandle, std::collections::HashMap<String, ImportLink>>,
+    import_links:
+        std::collections::HashMap<ModuleHandle, std::collections::HashMap<String, ImportLink>>,
     /// Instance handle to instance_idx mapping for cross-instance calls
-    handle_to_idx:     std::collections::HashMap<InstanceHandle, usize>,
+    handle_to_idx: std::collections::HashMap<InstanceHandle, usize>,
     /// Host-imposed resource limits (kilnd `--memory`): pre-allocation gate on
     /// declared memory/table minimums + runtime grow caps (SR-46/47/48).
     /// `None` = no host limits configured. Combined per-module with the
     /// module's own `kiln.resource_limits` manifest at load time; the
     /// most-restrictive bound wins (SR-45).
-    resource_limits:   Option<EngineResourceLimits>,
+    resource_limits: Option<EngineResourceLimits>,
 }
 
 impl CapabilityAwareEngine {
@@ -517,9 +495,10 @@ impl CapabilityAwareEngine {
             if links.is_some_and(|links| links.contains_key(&import_key)) {
                 continue;
             }
-            let desc = module.import_types.get(i).ok_or_else(|| {
-                Error::runtime_import_not_found("Import has no recorded type")
-            })?;
+            let desc = module
+                .import_types
+                .get(i)
+                .ok_or_else(|| Error::runtime_import_not_found("Import has no recorded type"))?;
             if matches!(desc, RuntimeImportDesc::Function(_))
                 && self.inner.serves_import(import_module, import_name)
             {
@@ -581,14 +560,14 @@ impl CapabilityAwareEngine {
     {
         {
             if let Some(ref mut registry) = self.host_registry {
-                use kiln_host::CloneableFn;
                 use core::any::Any;
+                use kiln_host::CloneableFn;
 
                 // Wrap the user's function to match the HostFunctionHandler signature
                 // HostFunctionHandler expects: Fn(&mut dyn Any, Vec<Value>) -> Result<Vec<Value>>
-                let wrapped = move |_engine: &mut dyn Any, args: Vec<Value>| -> Result<Vec<Value>> {
-                    func(&args)
-                };
+                let wrapped = move |_engine: &mut dyn Any,
+                                    args: Vec<Value>|
+                      -> Result<Vec<Value>> { func(&args) };
 
                 // Create a CloneableFn from the wrapped closure
                 let handler = CloneableFn::new_with_args(wrapped);
@@ -597,7 +576,11 @@ impl CapabilityAwareEngine {
                 registry.register_host_function(module_name, func_name, handler);
 
                 #[cfg(feature = "tracing")]
-                trace!(module = module_name, function = func_name, "Registered host function");
+                trace!(
+                    module = module_name,
+                    function = func_name,
+                    "Registered host function"
+                );
                 Ok(())
             } else {
                 Err(Error::not_supported_unsupported_operation(
@@ -682,7 +665,9 @@ impl CapabilityAwareEngine {
     #[cfg(feature = "wasi")]
     pub fn pre_allocate_wasi_args(&mut self, instance_handle: InstanceHandle) -> Result<()> {
         // Get the instance index from the handle
-        let instance_idx = self.handle_to_idx.get(&instance_handle)
+        let instance_idx = self
+            .handle_to_idx
+            .get(&instance_handle)
             .ok_or_else(|| Error::resource_not_found("Instance not found"))?;
 
         // Call the inner engine's pre-allocation
@@ -694,7 +679,9 @@ impl CapabilityAwareEngine {
     /// Mirrors [`pre_allocate_wasi_args`] for `wasi:filesystem/preopens::get-directories`.
     #[cfg(feature = "wasi")]
     pub fn pre_allocate_wasi_preopens(&mut self, instance_handle: InstanceHandle) -> Result<()> {
-        let instance_idx = self.handle_to_idx.get(&instance_handle)
+        let instance_idx = self
+            .handle_to_idx
+            .get(&instance_handle)
             .ok_or_else(|| Error::resource_not_found("Instance not found"))?;
 
         self.inner.pre_allocate_wasi_preopens(*instance_idx)
@@ -740,7 +727,11 @@ impl CapabilityEngine for CapabilityAwareEngine {
         trace!(binary_size = binary.len(), "Decoding module");
         let decoded = Box::new(decode_module(binary)?);
         #[cfg(feature = "tracing")]
-        trace!(types = decoded.types.len(), functions = decoded.functions.len(), "Decode successful, converting to runtime module");
+        trace!(
+            types = decoded.types.len(),
+            functions = decoded.functions.len(),
+            "Decode successful, converting to runtime module"
+        );
 
         // SR-45: extract the module's own `kiln.resource_limits` manifest
         // (authored and signed off-target — the on-target end of the
@@ -780,9 +771,7 @@ impl CapabilityEngine for CapabilityAwareEngine {
         if let Some(limits) = effective_limits {
             for memory in &runtime_module.memories {
                 let page_size = memory.0.page_size_bytes() as u64;
-                memory
-                    .0
-                    .set_runtime_max_pages(limits.max_pages_for_page_size(page_size));
+                memory.0.set_runtime_max_pages(limits.max_pages_for_page_size(page_size));
             }
             for table in &runtime_module.tables {
                 table.0.set_runtime_max_elements(limits.max_table_elements());
@@ -892,11 +881,11 @@ impl CapabilityEngine for CapabilityAwareEngine {
                 match link.import_kind {
                     ImportKind::Table => {
                         // Get table from provider instance
-                        let provider_arc = self
-                            .instances
-                            .get(&link.provider_instance)
-                            .ok_or_else(|| {
-                                Error::resource_not_found("Provider instance not found for table import")
+                        let provider_arc =
+                            self.instances.get(&link.provider_instance).ok_or_else(|| {
+                                Error::resource_not_found(
+                                    "Provider instance not found for table import",
+                                )
                             })?;
                         let provider_table = provider_arc.table_by_name(&link.export_name)?;
 
@@ -912,14 +901,14 @@ impl CapabilityEngine for CapabilityAwareEngine {
                             "Table import applied"
                         );
                         instance.set_table(table_idx, provider_table)?;
-                    }
+                    },
                     ImportKind::Memory => {
                         // Get memory from provider instance
-                        let provider_arc = self
-                            .instances
-                            .get(&link.provider_instance)
-                            .ok_or_else(|| {
-                                Error::resource_not_found("Provider instance not found for memory import")
+                        let provider_arc =
+                            self.instances.get(&link.provider_instance).ok_or_else(|| {
+                                Error::resource_not_found(
+                                    "Provider instance not found for memory import",
+                                )
                             })?;
                         let provider_memory = provider_arc.memory_by_name(&link.export_name)?;
 
@@ -935,14 +924,14 @@ impl CapabilityEngine for CapabilityAwareEngine {
                             "Memory import applied"
                         );
                         instance.set_memory(memory_idx, provider_memory)?;
-                    }
+                    },
                     ImportKind::Global => {
                         // Get global from provider instance
-                        let provider_arc = self
-                            .instances
-                            .get(&link.provider_instance)
-                            .ok_or_else(|| {
-                                Error::resource_not_found("Provider instance not found for global import")
+                        let provider_arc =
+                            self.instances.get(&link.provider_instance).ok_or_else(|| {
+                                Error::resource_not_found(
+                                    "Provider instance not found for global import",
+                                )
                             })?;
                         let provider_global = provider_arc.global_by_name(&link.export_name)?;
 
@@ -958,10 +947,10 @@ impl CapabilityEngine for CapabilityAwareEngine {
                             "Global import applied"
                         );
                         instance.set_global(global_idx, provider_global)?;
-                    }
+                    },
                     ImportKind::Function => {
                         // Functions are resolved at call time, skip for now
-                    }
+                    },
                 }
             }
         }
@@ -1009,7 +998,10 @@ impl CapabilityEngine for CapabilityAwareEngine {
 
                 // Parse import_key (format: "module::name" or just "name")
                 let (import_module, import_name) = if let Some(pos) = import_key.rfind("::") {
-                    (import_key[..pos].to_string(), import_key[pos + 2..].to_string())
+                    (
+                        import_key[..pos].to_string(),
+                        import_key[pos + 2..].to_string(),
+                    )
                 } else {
                     (String::new(), import_key.clone())
                 };
@@ -1117,11 +1109,7 @@ impl CapabilityEngine for CapabilityAwareEngine {
         Ok(())
     }
 
-    fn remap_import_links(
-        &mut self,
-        module: ModuleHandle,
-        instance: InstanceHandle,
-    ) -> Result<()> {
+    fn remap_import_links(&mut self, module: ModuleHandle, instance: InstanceHandle) -> Result<()> {
         // Transfer import links from module_id to instance_id
         // This is needed because link_import is called before instantiation (with module handle)
         // but runtime lookup uses instance handle
@@ -1176,7 +1164,7 @@ impl CapabilityEngine for CapabilityAwareEngine {
                             &mut dummy_engine as &mut dyn core::any::Any,
                             module_str,
                             &func_str,
-                            args.to_vec()
+                            args.to_vec(),
                         )?;
 
                         #[cfg(feature = "tracing")]
@@ -1196,7 +1184,7 @@ impl CapabilityEngine for CapabilityAwareEngine {
             // Extract just the function name part (last component after #)
             if let Some(hash_pos) = func_name.rfind('#') {
                 let module_part = &func_name[..hash_pos];
-                let func_part = &func_name[hash_pos+1..];
+                let func_part = &func_name[hash_pos + 1..];
 
                 if let Some(ref registry) = self.host_registry {
                     if registry.has_host_function(module_part, func_part) {
@@ -1212,7 +1200,7 @@ impl CapabilityEngine for CapabilityAwareEngine {
                             &mut dummy_engine as &mut dyn core::any::Any,
                             module_part,
                             func_part,
-                            args.to_vec()
+                            args.to_vec(),
                         )?;
 
                         #[cfg(feature = "tracing")]
@@ -1239,11 +1227,10 @@ impl CapabilityEngine for CapabilityAwareEngine {
         // IMPORTANT: We must NOT call set_current_module here - that creates a new ID!
         // The instance was already registered during instantiate() and import links
         // were registered with that ID. Using a different ID breaks link lookup.
-        let stackless_instance_id = self
-            .handle_to_idx
-            .get(&instance_handle)
-            .copied()
-            .ok_or_else(|| Error::resource_not_found("Instance not registered - call instantiate first"))?;
+        let stackless_instance_id =
+            self.handle_to_idx.get(&instance_handle).copied().ok_or_else(|| {
+                Error::resource_not_found("Instance not registered - call instantiate first")
+            })?;
 
         // Reset call depth before each top-level invocation
         self.inner.reset_call_depth();
@@ -1253,7 +1240,10 @@ impl CapabilityEngine for CapabilityAwareEngine {
             self.inner.execute(stackless_instance_id, func_idx as usize, args.to_vec())?;
 
         #[cfg(feature = "tracing")]
-        trace!(results_len = results.len(), "[CAP_ENGINE] Execution completed");
+        trace!(
+            results_len = results.len(),
+            "[CAP_ENGINE] Execution completed"
+        );
 
         Ok(results)
     }
@@ -1262,7 +1252,9 @@ impl CapabilityEngine for CapabilityAwareEngine {
         if let Some(module) = self.modules.get(&module_handle) {
             let mut func_imports = Vec::new();
             for (i, (module_name, field_name)) in module.import_order.iter().enumerate() {
-                if let Some(crate::module::RuntimeImportDesc::Function(_)) = module.import_types.get(i) {
+                if let Some(crate::module::RuntimeImportDesc::Function(_)) =
+                    module.import_types.get(i)
+                {
                     func_imports.push((module_name.clone(), field_name.clone()));
                 }
             }
@@ -1276,7 +1268,8 @@ impl CapabilityEngine for CapabilityAwareEngine {
 impl CapabilityAwareEngine {
     /// Get an instance by handle (for debugging)
     pub fn get_instance(&self, handle: InstanceHandle) -> Result<&Arc<ModuleInstance>> {
-        self.instances.get(&handle)
+        self.instances
+            .get(&handle)
             .ok_or_else(|| Error::resource_not_found("Instance not found"))
     }
 
@@ -1346,10 +1339,9 @@ impl CapabilityAwareEngine {
         use crate::module::RuntimeImportDesc;
 
         // Get the module
-        let module_arc = self
-            .modules
-            .get(&module_handle)
-            .ok_or_else(|| Error::resource_not_found("Module not found for import kind detection"))?;
+        let module_arc = self.modules.get(&module_handle).ok_or_else(|| {
+            Error::resource_not_found("Module not found for import kind detection")
+        })?;
 
         // Use the parallel import_types vector for fast lookup
         // import_order[i] corresponds to import_types[i]
@@ -1452,7 +1444,7 @@ impl CapabilityAwareEngine {
         // Note: Using read operation as placeholder since Execute variant doesn't exist
         let operation = kiln_foundation::capabilities::MemoryOperation::Read {
             offset: 0,
-            len:    64, // Small placeholder size for function validation
+            len: 64, // Small placeholder size for function validation
         };
         self.context.verify_operation(
             kiln_foundation::budget_aware_provider::CrateId::Runtime,
@@ -1463,4 +1455,3 @@ impl CapabilityAwareEngine {
         self.execute(instance_handle, func_name, args)
     }
 }
-

@@ -8,16 +8,8 @@
 //! - Borrowed handles (borrow<T>) represent temporary access
 //! - Handles are 32-bit integers indexing into type-specific tables
 
-use kiln_error::{
-    Error,
-    ErrorCategory,
-    Result,
-};
-use kiln_foundation::{
-    bounded::BoundedVec,
-    traits::BoundedCapacity,
-    MemoryProvider,
-};
+use kiln_error::{Error, ErrorCategory, Result};
+use kiln_foundation::{MemoryProvider, bounded::BoundedVec, traits::BoundedCapacity};
 
 /// Maximum number of resources per type
 /// Component Model suggests this as a reasonable limit
@@ -84,7 +76,7 @@ where
     T: Clone + PartialEq + Eq,
 {
     /// The actual resource
-    pub resource:  T,
+    pub resource: T,
     /// Ownership type
     pub ownership: ResourceOwnership,
     /// Reference count for borrowed handles
@@ -154,11 +146,11 @@ where
         + kiln_foundation::traits::FromBytes,
 {
     /// Table entries indexed by handle
-    entries:     Vec<Option<ResourceEntry<T>>>,
+    entries: Vec<Option<ResourceEntry<T>>>,
     /// Next available handle
     next_handle: u32,
     /// Memory provider (kept for API compatibility)
-    _provider:   core::marker::PhantomData<P>,
+    _provider: core::marker::PhantomData<P>,
 }
 
 impl<T, P: MemoryProvider + Default + Clone + PartialEq + Eq> ResourceTable<T, P>
@@ -218,10 +210,7 @@ where
 
     /// Get a resource by handle
     pub fn get(&self, handle: ResourceHandle) -> Option<&T> {
-        self.entries
-            .get(handle.0 as usize)?
-            .as_ref()
-            .map(|entry| &entry.resource)
+        self.entries.get(handle.0 as usize)?.as_ref().map(|entry| &entry.resource)
     }
 
     /// Get a mutable resource by handle (only for owned)

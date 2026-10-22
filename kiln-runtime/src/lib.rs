@@ -26,8 +26,8 @@
 // Note: unsafe_code is allowed selectively in specific modules that need it
 // Lints configured in Cargo.toml
 
-extern crate std;
 extern crate alloc;
+extern crate std;
 
 // Re-export prelude module publicly
 pub use prelude::*;
@@ -120,40 +120,21 @@ pub mod state;
 
 // Import platform abstractions from kiln-foundation
 // Re-export commonly used types
-pub use atomic_execution::{
-    AtomicExecutionStats,
-    AtomicMemoryContext,
-};
+pub use atomic_execution::{AtomicExecutionStats, AtomicMemoryContext};
 pub use atomic_memory_model::{
-    AtomicMemoryModel,
-    ConsistencyValidationResult,
-    DataRaceReport,
-    MemoryModelPerformanceMetrics,
-    MemoryOrderingPolicy,
-    OrderingViolationReport,
+    AtomicMemoryModel, ConsistencyValidationResult, DataRaceReport, MemoryModelPerformanceMetrics,
+    MemoryOrderingPolicy, OrderingViolationReport,
 };
 pub use cfi_engine::{
-    CfiEngineStatistics,
-    CfiExecutionEngine,
-    CfiExecutionResult,
-    CfiViolationPolicy,
-    CfiViolationType,
-    ExecutionResult,
+    CfiEngineStatistics, CfiExecutionEngine, CfiExecutionResult, CfiViolationPolicy,
+    CfiViolationType, ExecutionResult,
 };
-pub use core_types::{
-    CallFrame,
-    ComponentExecutionState,
-    ExecutionContext,
-};
+pub use core_types::{CallFrame, ComponentExecutionState, ExecutionContext};
 pub use execution::ExecutionStats;
 pub use func::Function as RuntimeFunction;
 pub use global::Global;
 pub use memory::Memory;
-pub use memory_adapter::{
-    MemoryAdapter,
-    SafeMemoryAdapter,
-    StdMemoryProvider,
-};
+pub use memory_adapter::{MemoryAdapter, SafeMemoryAdapter, StdMemoryProvider};
 pub use memory_helpers::ArcMemoryExt;
 pub use prelude::FuncType;
 pub use table::Table;

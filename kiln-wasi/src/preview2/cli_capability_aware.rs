@@ -8,18 +8,14 @@ extern crate alloc;
 use core::any::Any;
 
 use kiln_foundation::{
-    budget_aware_provider::CrateId,
-    capabilities::MemoryOperation,
+    budget_aware_provider::CrateId, capabilities::MemoryOperation,
     memory_init::get_global_capability_context,
 };
 
 use crate::{
-    prelude::*,
-    value_capability_aware::{
-        CapabilityAwareValue,
-        WasiValueBox,
-    },
     Value,
+    prelude::*,
+    value_capability_aware::{CapabilityAwareValue, WasiValueBox},
 };
 
 /// Capability-aware WASI get arguments operation
@@ -146,8 +142,7 @@ pub fn wasi_get_initial_cwd_capability_aware(
             let cwd_string = cwd.to_string_lossy();
             let cwd_value = CapabilityAwareValue::string_from_str(&cwd_string)?;
             let cwd_boxed = WasiValueBox::new(cwd_value)?;
-            let cwd_option =
-                CapabilityAwareValue::option_from_value(Some(cwd_boxed.into_inner()))?;
+            let cwd_option = CapabilityAwareValue::option_from_value(Some(cwd_boxed.into_inner()))?;
             Ok(vec![cwd_option])
         } else {
             // Return None if current directory cannot be determined

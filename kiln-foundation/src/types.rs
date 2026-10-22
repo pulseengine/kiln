@@ -10,15 +10,8 @@
 //! types.
 
 use core::{
-    fmt::{
-        self,
-        Display,
-        Write,
-    },
-    hash::{
-        Hash,
-        Hasher as CoreHasher,
-    },
+    fmt::{self, Display, Write},
+    hash::{Hash, Hasher as CoreHasher},
     str::FromStr,
 };
 
@@ -27,74 +20,43 @@ extern crate alloc;
 
 // Use HashMap/HashSet in std mode, BTreeMap/BTreeSet in no_std mode
 #[cfg(all(not(feature = "std"), feature = "alloc"))]
-use alloc::collections::{
-    BTreeMap as Map,
-    BTreeSet as Set,
-};
+use alloc::collections::{BTreeMap as Map, BTreeSet as Set};
 #[cfg(all(not(feature = "std"), feature = "alloc"))]
 use alloc::{
     format,
-    string::{
-        String,
-        ToString,
-    },
+    string::{String, ToString},
     vec,
     vec::Vec,
 };
 #[cfg(feature = "std")]
-use std::collections::{
-    HashMap as Map,
-    HashSet as Set,
-};
+use std::collections::{HashMap as Map, HashSet as Set};
 #[cfg(feature = "std")]
 use std::{
-    string::{
-        String,
-        ToString,
-    },
+    string::{String, ToString},
     vec::Vec,
 };
 
 // Import error types
-use kiln_error::{
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result};
 
 // Import bounded types
 use crate::{
+    MemoryProvider,
+    NoStdProvider,
     bounded::{
-        BoundedError,
-        BoundedVec,
-        WasmName,
-        MAX_CUSTOM_SECTION_DATA_SIZE,
+        BoundedError, BoundedVec, MAX_CUSTOM_SECTION_DATA_SIZE,
         MAX_WASM_ITEM_NAME_LENGTH as MAX_ITEM_NAME_LEN,
-        MAX_WASM_MODULE_NAME_LENGTH as MAX_MODULE_NAME_LEN,
-        MAX_WASM_NAME_LENGTH,
+        MAX_WASM_MODULE_NAME_LENGTH as MAX_MODULE_NAME_LEN, MAX_WASM_NAME_LENGTH, WasmName,
     },
     codes,
-    collections::StaticVec,  // New: static collections for migration
+    collections::StaticVec, // New: static collections for migration
     component::Export,
-    prelude::{
-        BoundedCapacity,
-        Eq,
-        Ord,
-        PartialEq,
-        TryFrom,
-    },
+    prelude::{BoundedCapacity, Eq, Ord, PartialEq, TryFrom},
     traits::{
-        Checksummable,
-        DefaultMemoryProvider,
-        FromBytes,
-        ReadStream,
-        SerializationError,
-        ToBytes,
+        Checksummable, DefaultMemoryProvider, FromBytes, ReadStream, SerializationError, ToBytes,
         WriteStream,
     },
     verification::Checksum,
-    MemoryProvider,
-    NoStdProvider,
 };
 
 // Result is already imported from kiln_error - no need for alias
@@ -175,7 +137,7 @@ impl Hasher {
         for &byte in bytes {
             self.hash ^= u32::from(byte);
             self.hash = self.hash.wrapping_mul(0x0100_0193); // FNV prime for
-                                                             // 32-bit
+            // 32-bit
         }
     }
 
@@ -255,7 +217,7 @@ impl core::fmt::Debug for ValueType {
                 } else {
                     write!(f, "(ref ${idx})")
                 }
-            }
+            },
             Self::NoneRef => write!(f, "NoneRef"),
             Self::NoExternRef => write!(f, "NoExternRef"),
             Self::NoExnRef => write!(f, "NoExnRef"),
@@ -280,13 +242,13 @@ impl ValueType {
             0x7B => Ok(ValueType::V128),
             0x79 => Ok(ValueType::I16x8),
             0x70 => Ok(ValueType::FuncRef),
-            0x73 => Ok(ValueType::NullFuncRef),  // nofunc
+            0x73 => Ok(ValueType::NullFuncRef), // nofunc
             0x6F => Ok(ValueType::ExternRef),
-            0x6E => Ok(ValueType::AnyRef),  // GC: any heap type
-            0x6D => Ok(ValueType::EqRef),   // GC: eq heap type
-            0x6C => Ok(ValueType::I31Ref),  // GC: i31 heap type
-            0x6B => Ok(ValueType::StructRef(0)),  // GC: struct (abstract, index lost in round-trip)
-            0x6A => Ok(ValueType::ArrayRef(0)),   // GC: array (abstract, index lost in round-trip)
+            0x6E => Ok(ValueType::AnyRef),       // GC: any heap type
+            0x6D => Ok(ValueType::EqRef),        // GC: eq heap type
+            0x6C => Ok(ValueType::I31Ref),       // GC: i31 heap type
+            0x6B => Ok(ValueType::StructRef(0)), // GC: struct (abstract, index lost in round-trip)
+            0x6A => Ok(ValueType::ArrayRef(0)),  // GC: array (abstract, index lost in round-trip)
             0x69 => Ok(ValueType::ExnRef),
             // 0x63 = ref null heaptype, 0x64 = ref heaptype
             // In round-trip serialization, TypedFuncRef loses its type index
@@ -309,11 +271,11 @@ impl ValueType {
             0x70 => Ok(ValueType::FuncRef),
             0x6F => Ok(ValueType::ExternRef),
             0x69 => Ok(ValueType::ExnRef),
-            0x6E => Ok(ValueType::AnyRef),               // GC: any heap type
-            0x6D => Ok(ValueType::EqRef),                // GC: eq heap type
-            0x6C => Ok(ValueType::I31Ref),               // GC: i31 heap type
+            0x6E => Ok(ValueType::AnyRef), // GC: any heap type
+            0x6D => Ok(ValueType::EqRef),  // GC: eq heap type
+            0x6C => Ok(ValueType::I31Ref), // GC: i31 heap type
             0x6B => Ok(ValueType::StructRef(type_index)), // GC: struct reference
-            0x6A => Ok(ValueType::ArrayRef(type_index)),  // GC: array reference
+            0x6A => Ok(ValueType::ArrayRef(type_index)), // GC: array reference
             _ => Err(Error::new(
                 ErrorCategory::Parse,
                 kiln_error::codes::PARSE_INVALID_VALTYPE_BYTE,
@@ -341,16 +303,16 @@ impl ValueType {
             ValueType::FuncRef => 0x70,
             ValueType::NullFuncRef => 0x73, // nofunc - bottom type for funcref
             ValueType::ExternRef => 0x6F,
-            ValueType::AnyRef => 0x6E,  // GC: any heap type
-            ValueType::EqRef => 0x6D,   // GC: eq heap type
-            ValueType::I31Ref => 0x6C,  // GC: i31 heap type
+            ValueType::AnyRef => 0x6E,       // GC: any heap type
+            ValueType::EqRef => 0x6D,        // GC: eq heap type
+            ValueType::I31Ref => 0x6C,       // GC: i31 heap type
             ValueType::StructRef(_) => 0x6B, // GC: struct heap type
             ValueType::ArrayRef(_) => 0x6A,  // GC: array heap type
             ValueType::ExnRef => 0x69,
             ValueType::TypedFuncRef(_, _) => 0x63, // Function references: typed funcref
-            ValueType::NoneRef => 0x71,       // none - bottom for any hierarchy
-            ValueType::NoExternRef => 0x72,   // noextern - bottom for extern hierarchy
-            ValueType::NoExnRef => 0x74,      // noexn - bottom for exn hierarchy
+            ValueType::NoneRef => 0x71,            // none - bottom for any hierarchy
+            ValueType::NoExternRef => 0x72,        // noextern - bottom for extern hierarchy
+            ValueType::NoExnRef => 0x74,           // noexn - bottom for exn hierarchy
         }
     }
 
@@ -386,7 +348,7 @@ impl ValueType {
                 // Size of a reference can vary. Using usize for simplicity.
                 // In a real scenario, this might depend on target architecture (32/64 bit).
                 core::mem::size_of::<usize>()
-            }
+            },
         }
     }
 }
@@ -547,12 +509,12 @@ impl Checksummable for HeapType {
             HeapType::Concrete(idx) => {
                 checksum.update_slice(&[0xFF]); // Marker for concrete type
                 checksum.update_slice(&idx.to_le_bytes());
-            }
+            },
             _ => {
                 if let Some(byte) = self.to_binary() {
                     checksum.update_slice(&[byte]);
                 }
-            }
+            },
         }
     }
 }
@@ -591,8 +553,12 @@ impl RefType {
             ValueType::AnyRef => Ok(RefType::Gc(GcRefType::ANYREF)),
             ValueType::EqRef => Ok(RefType::Gc(GcRefType::EQREF)),
             ValueType::I31Ref => Ok(RefType::Gc(GcRefType::I31REF)),
-            ValueType::StructRef(idx) => Ok(RefType::Gc(GcRefType::new(true, HeapType::Concrete(idx)))),
-            ValueType::ArrayRef(idx) => Ok(RefType::Gc(GcRefType::new(true, HeapType::Concrete(idx)))),
+            ValueType::StructRef(idx) => {
+                Ok(RefType::Gc(GcRefType::new(true, HeapType::Concrete(idx))))
+            },
+            ValueType::ArrayRef(idx) => {
+                Ok(RefType::Gc(GcRefType::new(true, HeapType::Concrete(idx))))
+            },
             ValueType::NullFuncRef => Ok(RefType::Gc(GcRefType::NULLFUNCREF)),
             ValueType::ExnRef => Ok(RefType::Gc(GcRefType::EXNREF)),
             _ => Err(Error::runtime_execution_error(
@@ -659,11 +625,18 @@ impl TryFrom<ValueType> for RefType {
             ValueType::AnyRef => Ok(RefType::Gc(GcRefType::ANYREF)),
             ValueType::EqRef => Ok(RefType::Gc(GcRefType::EQREF)),
             ValueType::I31Ref => Ok(RefType::Gc(GcRefType::I31REF)),
-            ValueType::StructRef(idx) => Ok(RefType::Gc(GcRefType::new(true, HeapType::Concrete(idx)))),
-            ValueType::ArrayRef(idx) => Ok(RefType::Gc(GcRefType::new(true, HeapType::Concrete(idx)))),
+            ValueType::StructRef(idx) => {
+                Ok(RefType::Gc(GcRefType::new(true, HeapType::Concrete(idx))))
+            },
+            ValueType::ArrayRef(idx) => {
+                Ok(RefType::Gc(GcRefType::new(true, HeapType::Concrete(idx))))
+            },
             ValueType::NullFuncRef => Ok(RefType::Gc(GcRefType::NULLFUNCREF)),
             ValueType::ExnRef => Ok(RefType::Gc(GcRefType::EXNREF)),
-            ValueType::TypedFuncRef(idx, nullable) => Ok(RefType::Gc(GcRefType::new(nullable, HeapType::Concrete(idx)))),
+            ValueType::TypedFuncRef(idx, nullable) => Ok(RefType::Gc(GcRefType::new(
+                nullable,
+                HeapType::Concrete(idx),
+            ))),
             _ => Err(Error::runtime_execution_error(
                 "Invalid ValueType for RefType try_from conversion",
             )),
@@ -703,7 +676,10 @@ impl GcRefType {
     /// Create a new GC reference type
     #[must_use]
     pub const fn new(nullable: bool, heap_type: HeapType) -> Self {
-        Self { nullable, heap_type }
+        Self {
+            nullable,
+            heap_type,
+        }
     }
 
     /// Create a nullable reference type
@@ -840,8 +816,12 @@ impl GcRefType {
     pub fn to_value_type(self) -> ValueType {
         match self.heap_type {
             HeapType::Func => {
-                if self.nullable { ValueType::FuncRef } else { ValueType::TypedFuncRef(0, false) }
-            }
+                if self.nullable {
+                    ValueType::FuncRef
+                } else {
+                    ValueType::TypedFuncRef(0, false)
+                }
+            },
             HeapType::Extern => ValueType::ExternRef,
             HeapType::Any => ValueType::AnyRef,
             HeapType::Eq => ValueType::EqRef,
@@ -999,7 +979,10 @@ impl FromBytes for TagType {
     ) -> kiln_error::Result<Self> {
         let attribute = reader.read_u8()?;
         let type_idx = reader.read_u32_le()?;
-        Ok(Self { attribute, type_idx })
+        Ok(Self {
+            attribute,
+            type_idx,
+        })
     }
 
     #[cfg(feature = "default-provider")]
@@ -1075,20 +1058,20 @@ impl Checksummable for CatchHandler {
                 checksum.update(0x00);
                 checksum.update_slice(&tag_idx.to_le_bytes());
                 checksum.update_slice(&label.to_le_bytes());
-            }
+            },
             Self::CatchRef { tag_idx, label } => {
                 checksum.update(0x01);
                 checksum.update_slice(&tag_idx.to_le_bytes());
                 checksum.update_slice(&label.to_le_bytes());
-            }
+            },
             Self::CatchAll { label } => {
                 checksum.update(0x02);
                 checksum.update_slice(&label.to_le_bytes());
-            }
+            },
             Self::CatchAllRef { label } => {
                 checksum.update(0x03);
                 checksum.update_slice(&label.to_le_bytes());
-            }
+            },
         }
     }
 }
@@ -1117,22 +1100,22 @@ impl ToBytes for CatchHandler {
                 writer.write_u8(0x00)?;
                 writer.write_u32_le(*tag_idx)?;
                 writer.write_u32_le(*label)?;
-            }
+            },
             Self::CatchRef { tag_idx, label } => {
                 writer.write_u8(0x01)?;
                 writer.write_u32_le(*tag_idx)?;
                 writer.write_u32_le(*label)?;
-            }
+            },
             Self::CatchAll { label } => {
                 writer.write_u8(0x02)?;
                 writer.write_u32_le(0)?; // padding for uniform size
                 writer.write_u32_le(*label)?;
-            }
+            },
             Self::CatchAllRef { label } => {
                 writer.write_u8(0x03)?;
                 writer.write_u32_le(0)?; // padding for uniform size
                 writer.write_u32_le(*label)?;
-            }
+            },
         }
         Ok(())
     }
@@ -1149,22 +1132,22 @@ impl FromBytes for CatchHandler {
                 let tag_idx = reader.read_u32_le()?;
                 let label = reader.read_u32_le()?;
                 Ok(Self::Catch { tag_idx, label })
-            }
+            },
             0x01 => {
                 let tag_idx = reader.read_u32_le()?;
                 let label = reader.read_u32_le()?;
                 Ok(Self::CatchRef { tag_idx, label })
-            }
+            },
             0x02 => {
                 let _padding = reader.read_u32_le()?; // skip padding
                 let label = reader.read_u32_le()?;
                 Ok(Self::CatchAll { label })
-            }
+            },
             0x03 => {
                 let _padding = reader.read_u32_le()?; // skip padding
                 let label = reader.read_u32_le()?;
                 Ok(Self::CatchAllRef { label })
-            }
+            },
             _ => Err(kiln_error::Error::parse_error(
                 "Invalid CatchHandler discriminant",
             )),
@@ -1186,7 +1169,7 @@ impl FromBytes for CatchHandler {
 /// **Migration Note:** Migrated from `BoundedVec<T, N, P>` to `StaticVec<T, N>` (Issue #118)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FuncType {
-    pub params:  StaticVec<ValueType, MAX_PARAMS_IN_FUNC_TYPE>,
+    pub params: StaticVec<ValueType, MAX_PARAMS_IN_FUNC_TYPE>,
     pub results: StaticVec<ValueType, MAX_RESULTS_IN_FUNC_TYPE>,
 }
 
@@ -1298,17 +1281,17 @@ pub struct MemArg {
     /// The alignment exponent (2^align_exponent bytes)
     pub align_exponent: u32,
     /// The offset to add to the address (u64 for memory64 support)
-    pub offset:         u64,
+    pub offset: u64,
     /// The memory index (0 for single memory)
-    pub memory_index:   u32,
+    pub memory_index: u32,
 }
 
 impl Default for MemArg {
     fn default() -> Self {
         Self {
             align_exponent: 0,
-            offset:         0,
-            memory_index:   0,
+            offset: 0,
+            memory_index: 0,
         }
     }
 }
@@ -1369,7 +1352,7 @@ pub enum DataMode {
         /// Memory index where data is loaded
         memory_index: u32,
         /// Offset expression where data is loaded
-        offset:       u32,
+        offset: u32,
     },
     /// Passive data segment - loaded explicitly via memory.init
     Passive,
@@ -1407,7 +1390,7 @@ pub enum ElementMode {
         /// Table index where elements are loaded
         table_index: u32,
         /// Offset expression where elements are loaded
-        offset:      u32,
+        offset: u32,
     },
     /// Passive element segment - loaded explicitly via table.init
     Passive,
@@ -1461,7 +1444,7 @@ pub enum Instruction<P: MemoryProvider + Clone + core::fmt::Debug + PartialEq + 
     Br(LabelIdx),
     BrIf(LabelIdx),
     BrTable {
-        targets:        BoundedVec<LabelIdx, MAX_BR_TABLE_TARGETS, P>,
+        targets: BoundedVec<LabelIdx, MAX_BR_TABLE_TARGETS, P>,
         default_target: LabelIdx,
     },
     Return,
@@ -1486,7 +1469,7 @@ pub enum Instruction<P: MemoryProvider + Clone + core::fmt::Debug + PartialEq + 
     /// Modern try_table block with catch handlers (opcode 0x1F)
     TryTable {
         block_type_idx: u32,
-        handlers:       BoundedVec<CatchHandler, MAX_CATCH_HANDLERS, P>,
+        handlers: BoundedVec<CatchHandler, MAX_CATCH_HANDLERS, P>,
     },
     /// Legacy try block (opcode 0x06)
     Try {
@@ -2020,17 +2003,17 @@ pub enum Instruction<P: MemoryProvider + Clone + core::fmt::Debug + PartialEq + 
     // Branch on cast operations
     /// br_on_cast: branch if cast succeeds (0xFB 0x18)
     BrOnCast {
-        flags:       u8,
-        label:       LabelIdx,
-        from_type:   HeapType,
-        to_type:     HeapType,
+        flags: u8,
+        label: LabelIdx,
+        from_type: HeapType,
+        to_type: HeapType,
     },
     /// br_on_cast_fail: branch if cast fails (0xFB 0x19)
     BrOnCastFail {
-        flags:       u8,
-        label:       LabelIdx,
-        from_type:   HeapType,
-        to_type:     HeapType,
+        flags: u8,
+        label: LabelIdx,
+        from_type: HeapType,
+        to_type: HeapType,
     },
 
     // Extern/any conversions
@@ -2048,17 +2031,33 @@ pub enum Instruction<P: MemoryProvider + Clone + core::fmt::Debug + PartialEq + 
     I31GetU,
 
     /// SIMD v128.const - 16-byte constant
-    V128Const { bytes: [u8; 16] },
+    V128Const {
+        bytes: [u8; 16],
+    },
     /// SIMD operation (most operations - no additional immediates beyond opcode)
-    SimdOp { opcode: u32 },
+    SimdOp {
+        opcode: u32,
+    },
     /// SIMD memory operation (v128.load, v128.store, etc.)
-    SimdMemOp { opcode: u32, memarg: MemArg },
+    SimdMemOp {
+        opcode: u32,
+        memarg: MemArg,
+    },
     /// SIMD shuffle operation (v8x16.shuffle with 16 lane indices)
-    SimdShuffle { lanes: [u8; 16] },
+    SimdShuffle {
+        lanes: [u8; 16],
+    },
     /// SIMD lane operation (extract_lane, replace_lane)
-    SimdLaneOp { opcode: u32, lane: u8 },
+    SimdLaneOp {
+        opcode: u32,
+        lane: u8,
+    },
     /// SIMD memory lane operation (load_lane, store_lane)
-    SimdMemLaneOp { opcode: u32, memarg: MemArg, lane: u8 },
+    SimdMemLaneOp {
+        opcode: u32,
+        memarg: MemArg,
+        lane: u8,
+    },
 
     #[doc(hidden)]
     _Phantom(core::marker::PhantomData<P>),
@@ -3097,7 +3096,7 @@ pub type InstructionSequence<P> = BoundedVec<Instruction<P>, MAX_INSTRUCTIONS_PE
 /// Represents a local variable entry in a function body.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct LocalEntry {
-    pub count:      u32,
+    pub count: u32,
     pub value_type: ValueType,
 }
 
@@ -3170,14 +3169,13 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> Cu
     /// Creates a new `CustomSection` from a name and data.
     pub fn new(provider: P, name_str: &str, data: &[u8]) -> Result<Self> {
         // Create WasmName for the section name
-        let name = WasmName::from_str_truncate(name_str)
-            .map_err(|e| {
-                // Log or convert BoundedError to crate::Error
-                // For now, creating a generic error:
-                Error::runtime_execution_error(
-                    "Failed to create bounded string from custom section name",
-                )
-            })?;
+        let name = WasmName::from_str_truncate(name_str).map_err(|e| {
+            // Log or convert BoundedError to crate::Error
+            // For now, creating a generic error:
+            Error::runtime_execution_error(
+                "Failed to create bounded string from custom section name",
+            )
+        })?;
 
         // Create BoundedVec for the section data
         let mut data_vec = BoundedVec::<u8, MAX_CUSTOM_SECTION_DATA_SIZE, P>::new(provider.clone()) // Use cloned provider for data_vec
@@ -3283,10 +3281,8 @@ impl<PCustom: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + 
         reader: &mut ReadStream<'a>,
         stream_provider: &PStream,
     ) -> kiln_error::Result<Self> {
-        let name = WasmName::<MAX_WASM_NAME_LENGTH>::from_bytes_with_provider(
-            reader,
-            stream_provider,
-        )?;
+        let name =
+            WasmName::<MAX_WASM_NAME_LENGTH>::from_bytes_with_provider(reader, stream_provider)?;
         let data =
             BoundedVec::<u8, MAX_CUSTOM_SECTION_DATA_SIZE, PCustom>::from_bytes_with_provider(
                 reader,
@@ -3308,7 +3304,7 @@ pub struct FuncBody<P: MemoryProvider + Default + Clone + core::fmt::Debug + Par
     /// Local variable declarations.
     pub locals: BoundedVec<LocalEntry, MAX_LOCALS_PER_FUNCTION, P>,
     /// The sequence of instructions (the function's code).
-    pub body:   InstructionSequence<P>,
+    pub body: InstructionSequence<P>,
 }
 
 impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> Default
@@ -3317,7 +3313,7 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> De
     fn default() -> Self {
         Self {
             locals: BoundedVec::new(P::default()).expect("Default BoundedVec for locals failed"),
-            body:   BoundedVec::new(P::default()).expect("Default BoundedVec for body failed"),
+            body: BoundedVec::new(P::default()).expect("Default BoundedVec for body failed"),
         }
     }
 }
@@ -3369,16 +3365,16 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> Fr
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Import<P: MemoryProvider + Default + Clone + PartialEq + Eq> {
     pub module_name: WasmName<MAX_MODULE_NAME_LEN>,
-    pub item_name:   WasmName<MAX_ITEM_NAME_LEN>,
-    pub desc:        ImportDesc<P>,
+    pub item_name: WasmName<MAX_ITEM_NAME_LEN>,
+    pub desc: ImportDesc<P>,
 }
 
 impl<P: MemoryProvider + Default + Clone + PartialEq + Eq> Default for Import<P> {
     fn default() -> Self {
         Self {
             module_name: WasmName::default(),
-            item_name:   WasmName::default(),
-            desc:        ImportDesc::default(),
+            item_name: WasmName::default(),
+            desc: ImportDesc::default(),
         }
     }
 }
@@ -3392,17 +3388,16 @@ impl<P: MemoryProvider + Default + Clone + PartialEq + Eq> Import<P> {
         item_name_str: &str,
         desc: ImportDesc<P>,
     ) -> Result<Self> {
-        let module_name =
-            WasmName::try_from_str(module_name_str).map_err(|e| match e {
-                SerializationError::Custom(_) => {
-                    Error::runtime_execution_error("Custom serialization error in module name")
-                },
-                _ => Error::new(
-                    ErrorCategory::Validation,
-                    kiln_error::codes::INVALID_VALUE,
-                    "Invalid module name serialization",
-                ),
-            })?;
+        let module_name = WasmName::try_from_str(module_name_str).map_err(|e| match e {
+            SerializationError::Custom(_) => {
+                Error::runtime_execution_error("Custom serialization error in module name")
+            },
+            _ => Error::new(
+                ErrorCategory::Validation,
+                kiln_error::codes::INVALID_VALUE,
+                "Invalid module name serialization",
+            ),
+        })?;
         let item_name = WasmName::try_from_str(item_name_str).map_err(|e| match e {
             SerializationError::Custom(_) => {
                 Error::runtime_execution_error("Custom serialization error in export item name")
@@ -3531,7 +3526,7 @@ impl<P: MemoryProvider + PartialEq + Eq> ToBytes for ImportDesc<P> {
             },
             ImportDesc::_Phantom(_) => {
                 writer.write_u8(255)?; // Tag for phantom (should not occur in
-                                       // real data)
+                // real data)
             },
         }
         Ok(())
@@ -3726,8 +3721,8 @@ pub struct ExternTypePlaceholder; // Placeholder
 
 impl Checksummable for ExternTypePlaceholder {
     fn update_checksum(&self, _checksum: &mut Checksum) { // TODO: Implement
-                                                          // actual checksum
-                                                          // logic
+        // actual checksum
+        // logic
     }
 }
 
@@ -3760,8 +3755,8 @@ pub struct ResourceTypePlaceholder; // Placeholder
 
 impl Checksummable for ResourceTypePlaceholder {
     fn update_checksum(&self, _checksum: &mut Checksum) { // TODO: Implement
-                                                          // actual checksum
-                                                          // logic
+        // actual checksum
+        // logic
     }
 }
 
@@ -3866,9 +3861,9 @@ pub struct TableType {
     pub element_type: RefType,
     /// The size limits of the table, specifying initial and optional maximum
     /// size.
-    pub limits:       Limits,
+    pub limits: Limits,
     /// Table64 extension - uses i64 indices instead of i32
-    pub table64:      bool,
+    pub table64: bool,
 }
 
 // Generic constructor, still valid as it doesn't depend on P.
@@ -3950,12 +3945,22 @@ pub struct MemoryType {
 
 impl MemoryType {
     pub const fn new(limits: Limits, shared: bool) -> Self {
-        Self { limits, shared, memory64: false, page_size: None }
+        Self {
+            limits,
+            shared,
+            memory64: false,
+            page_size: None,
+        }
     }
 
     /// Create a memory type with all options
     pub const fn new_with_memory64(limits: Limits, shared: bool, memory64: bool) -> Self {
-        Self { limits, shared, memory64, page_size: None }
+        Self {
+            limits,
+            shared,
+            memory64,
+            page_size: None,
+        }
     }
 }
 
@@ -3984,10 +3989,10 @@ impl ToBytes for MemoryType {
             Some(ps) => {
                 writer.write_u8(1)?;
                 writer.write_u32_le(ps)?;
-            }
+            },
             None => {
                 writer.write_u8(0)?;
-            }
+            },
         }
         Ok(())
     }
@@ -4022,12 +4027,13 @@ impl FromBytes for MemoryType {
             },
         };
         let page_size_flag = reader.read_u8()?;
-        let page_size = if page_size_flag != 0 {
-            Some(reader.read_u32_le()?)
-        } else {
-            None
-        };
-        Ok(MemoryType { limits, shared, memory64, page_size })
+        let page_size = if page_size_flag != 0 { Some(reader.read_u32_le()?) } else { None };
+        Ok(MemoryType {
+            limits,
+            shared,
+            memory64,
+            page_size,
+        })
     }
     // Default from_bytes method will be used if #cfg(feature = ")
     // is active
@@ -4036,7 +4042,7 @@ impl FromBytes for MemoryType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
 pub struct GlobalType {
     pub value_type: ValueType,
-    pub mutable:    bool,
+    pub mutable: bool,
 }
 
 impl GlobalType {
@@ -4140,36 +4146,36 @@ impl FromBytes for Tag {
 #[derive(Debug, Clone, PartialEq, Hash)] // Module itself cannot be Eq easily due to provider. P must be Eq for fields.
 pub struct Module<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> {
     /// Types section: A list of function types defined in the module.
-    pub types:           BoundedVec<FuncType, MAX_TYPES_IN_MODULE, P>,
+    pub types: BoundedVec<FuncType, MAX_TYPES_IN_MODULE, P>,
     /// Imports section: A list of imports declared by the module.
-    pub imports:         BoundedVec<Import<P>, MAX_IMPORTS_IN_MODULE, P>,
+    pub imports: BoundedVec<Import<P>, MAX_IMPORTS_IN_MODULE, P>,
     /// Functions section: A list of type indices for functions defined in the
     /// module.
-    pub functions:       BoundedVec<TypeIdx, MAX_FUNCS_IN_MODULE, P>,
+    pub functions: BoundedVec<TypeIdx, MAX_FUNCS_IN_MODULE, P>,
     /// Tables section: A list of table types defined in the module.
-    pub tables:          BoundedVec<TableType, MAX_TABLES_IN_MODULE, P>,
+    pub tables: BoundedVec<TableType, MAX_TABLES_IN_MODULE, P>,
     /// Memories section: A list of memory types defined in the module.
-    pub memories:        BoundedVec<MemoryType, MAX_MEMORIES_IN_MODULE, P>,
+    pub memories: BoundedVec<MemoryType, MAX_MEMORIES_IN_MODULE, P>,
     /// Globals section: A list of global variables defined in the module.
-    pub globals:         BoundedVec<GlobalType, MAX_GLOBALS_IN_MODULE, P>,
+    pub globals: BoundedVec<GlobalType, MAX_GLOBALS_IN_MODULE, P>,
     /// Exports section: A list of exports declared by the module.
-    pub exports:         BoundedVec<Export<P>, MAX_EXPORTS_IN_MODULE, P>,
+    pub exports: BoundedVec<Export<P>, MAX_EXPORTS_IN_MODULE, P>,
     /// Start function: An optional index to a function that is executed when
     /// the module is instantiated.
-    pub start_func:      Option<FuncIdx>,
+    pub start_func: Option<FuncIdx>,
     /// Function bodies section: A list of code bodies for functions defined in
     /// the module.
-    pub func_bodies:     BoundedVec<FuncBody<P>, MAX_FUNCS_IN_MODULE, P>, /* Changed from
-                                                                           * code_entries */
+    pub func_bodies: BoundedVec<FuncBody<P>, MAX_FUNCS_IN_MODULE, P>, /* Changed from
+                                                                       * code_entries */
     /// Data count section: An optional count of data segments, required if data
     /// segments are present.
-    pub data_count:      Option<u32>,
+    pub data_count: Option<u32>,
     /// Custom sections: A list of custom sections with arbitrary binary data.
     pub custom_sections: BoundedVec<CustomSection<P>, MAX_CUSTOM_SECTIONS_IN_MODULE, P>,
     /// Tags section: A list of exception tags.
-    pub tags:            BoundedVec<Tag, MAX_TAGS_IN_MODULE, P>,
+    pub tags: BoundedVec<Tag, MAX_TAGS_IN_MODULE, P>,
     /// The memory provider instance.
-    provider:            P,
+    provider: P,
 }
 
 impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> Module<P> {
@@ -4324,7 +4330,9 @@ pub const MAX_REC_GROUP_SIZE: usize = 64; // Maximum types in a recursive group
 /// All share a single type index space.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(clippy::large_enum_variant)] // FuncType is large but boxing is not ideal for no_std
-pub enum CompositeType<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq = NoStdProvider<1024>> {
+pub enum CompositeType<
+    P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq = NoStdProvider<1024>,
+> {
     /// Function type: params -> results
     Func(FuncType),
     /// Struct type: sequence of mutable/immutable fields
@@ -4374,7 +4382,9 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> Co
     }
 }
 
-impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> Default for CompositeType<P> {
+impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> Default
+    for CompositeType<P>
+{
     fn default() -> Self {
         // Default to an empty function type
         CompositeType::Func(FuncType::default())
@@ -4386,7 +4396,9 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> De
 /// A sub type wraps a composite type with optional subtyping information.
 /// In the GC proposal, types can declare at most one supertype.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SubType<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq = NoStdProvider<1024>> {
+pub struct SubType<
+    P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq = NoStdProvider<1024>,
+> {
     /// Whether this type is final (cannot be subtyped)
     pub is_final: bool,
     /// Optional supertype index (GC allows exactly 0 or 1 supertype)
@@ -4415,7 +4427,11 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> Su
     }
 
     /// Create a sub type with a supertype
-    pub fn with_supertype(composite_type: CompositeType<P>, supertype: TypeIdx, is_final: bool) -> Self {
+    pub fn with_supertype(
+        composite_type: CompositeType<P>,
+        supertype: TypeIdx,
+        is_final: bool,
+    ) -> Self {
         Self {
             is_final,
             supertype: Some(supertype),
@@ -4424,7 +4440,9 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> Su
     }
 }
 
-impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> Default for SubType<P> {
+impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> Default
+    for SubType<P>
+{
     fn default() -> Self {
         Self::new_final(CompositeType::default())
     }
@@ -4451,7 +4469,7 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> De
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructType<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> {
     /// Fields in the struct
-    pub fields:     BoundedVec<FieldType, MAX_STRUCT_FIELDS, P>,
+    pub fields: BoundedVec<FieldType, MAX_STRUCT_FIELDS, P>,
     /// Whether this type can be subtyped
     pub final_type: bool,
 }
@@ -4494,7 +4512,7 @@ pub struct ArrayType {
     /// Element type of the array
     pub element_type: FieldType,
     /// Whether this type can be subtyped
-    pub final_type:   bool,
+    pub final_type: bool,
 }
 
 impl ArrayType {
@@ -4513,7 +4531,7 @@ pub struct FieldType {
     /// Storage type of the field
     pub storage_type: StorageType,
     /// Whether the field is mutable
-    pub mutable:      bool,
+    pub mutable: bool,
 }
 
 impl FieldType {
@@ -4535,7 +4553,7 @@ impl Default for FieldType {
     fn default() -> Self {
         Self {
             storage_type: StorageType::default(),
-            mutable:      false,
+            mutable: false,
         }
     }
 }
@@ -4851,17 +4869,17 @@ pub struct ElementSegment {
     /// Table index
     pub table_index: u32,
     /// Offset expression (static inline storage, no heap)
-    pub offset:      StaticVec<u8, 1024>,
+    pub offset: StaticVec<u8, 1024>,
     /// Elements (static inline storage, no heap)
-    pub elements:    StaticVec<u32, 1024>,
+    pub elements: StaticVec<u32, 1024>,
 }
 
 impl Default for ElementSegment {
     fn default() -> Self {
         Self {
             table_index: 0,
-            offset:      StaticVec::new(),
-            elements:    StaticVec::new(),
+            offset: StaticVec::new(),
+            elements: StaticVec::new(),
         }
     }
 }
@@ -4876,17 +4894,17 @@ pub struct DataSegment {
     /// Memory index
     pub memory_index: u32,
     /// Offset expression (static inline storage, no heap)
-    pub offset:       StaticVec<u8, 1024>,
+    pub offset: StaticVec<u8, 1024>,
     /// Data bytes (static inline storage, no heap)
-    pub data:         StaticVec<u8, 1024>,
+    pub data: StaticVec<u8, 1024>,
 }
 
 impl Default for DataSegment {
     fn default() -> Self {
         Self {
             memory_index: 0,
-            offset:       StaticVec::new(),
-            data:         StaticVec::new(),
+            offset: StaticVec::new(),
+            data: StaticVec::new(),
         }
     }
 }

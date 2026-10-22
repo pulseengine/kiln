@@ -20,7 +20,7 @@
 //! per-access memory locking; a store+load costs ~47 ns of lock overhead.
 //! That gap is the regression/optimization signal for the memory-access work.
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput};
+use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
 use kiln_foundation::values::Value;
 use kiln_runtime::engine::{CapabilityAwareEngine, CapabilityEngine, EnginePreset};
 
@@ -71,25 +71,20 @@ fn memory_wasm() -> Vec<u8> {
 /// `export` once over `N` iterations. Setup is done once (outside the measured
 /// loop); fuel is set high so the bound never trips mid-measurement.
 fn bench_workload(c: &mut Criterion, name: &str, wasm: &[u8], export: &'static str) {
-    let mut engine =
-        CapabilityAwareEngine::with_preset(EnginePreset::QM).expect("engine");
+    let mut engine = CapabilityAwareEngine::with_preset(EnginePreset::QM).expect("engine");
     engine.set_fuel(u64::MAX);
     let module = engine.load_module(wasm).expect("load");
     let instance = engine.instantiate(module).expect("instantiate");
 
     // Sanity: the workload runs and returns a value before we measure it.
-    let _ = engine
-        .execute(instance, export, &[Value::I32(N)])
-        .expect("workload executes");
+    let _ = engine.execute(instance, export, &[Value::I32(N)]).expect("workload executes");
 
     let mut group = c.benchmark_group("interpreter_throughput");
     group.throughput(Throughput::Elements(N as u64));
     group.sample_size(10);
     group.bench_function(name, |b| {
         b.iter(|| {
-            let r = engine
-                .execute(instance, export, &[Value::I32(black_box(N))])
-                .expect("execute");
+            let r = engine.execute(instance, export, &[Value::I32(black_box(N))]).expect("execute");
             black_box(r);
         });
     });

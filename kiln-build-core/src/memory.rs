@@ -269,7 +269,10 @@ impl BuildSystem {
         html.push_str("</body>\n</html>");
 
         let report_dir = std::path::Path::new(output_path).parent().ok_or_else(|| {
-            BuildError::Tool(format!("Report path has no parent directory: {}", output_path))
+            BuildError::Tool(format!(
+                "Report path has no parent directory: {}",
+                output_path
+            ))
         })?;
         std::fs::create_dir_all(report_dir)
             .map_err(|e| BuildError::Tool(format!("Failed to create report directory: {}", e)))?;

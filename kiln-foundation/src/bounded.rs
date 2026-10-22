@@ -131,12 +131,7 @@ extern crate alloc;
 #[cfg(not(feature = "std"))]
 use core::fmt; // Removed hash, mem
 use core::{
-    hash::{
-        Hash,
-        Hash as CoreHash,
-        Hasher,
-        Hasher as CoreHasher,
-    },
+    hash::{Hash, Hash as CoreHash, Hasher, Hasher as CoreHasher},
     marker::PhantomData,
 };
 // use core::mem::MaybeUninit; // No longer needed here if SafeMemoryHandler doesn't expose it
@@ -151,18 +146,15 @@ use std::string::String;
 use std::vec::Vec;
 
 use kiln_error::ErrorCategory as KilnErrorCategory; // And added here as a top-level import -
-                                                  // Keep ErrorCategory qualified
-                                                  // Use the modern Result type from kiln_error
+// Keep ErrorCategory qualified
+// Use the modern Result type from kiln_error
 type Result<T> = kiln_error::Result<T>;
 
 // Binary std/no_std choice
 
 // Use the HashMap that's re-exported in lib.rs - works for both std and no_std
 #[allow(unused_imports)]
-use crate::operations::{
-    self,
-    record_global_operation,
-};
+use crate::operations::{self, record_global_operation};
 // use crate::HashMap; // Removed, should come from prelude
 
 // Ensure MemoryProvider is imported directly for trait bounds.
@@ -171,41 +163,19 @@ use crate::operations::{
 // Removing as per unused_import warning
 // NoStdProvider is imported where it's actually used
 // use crate::safe_memory::SafeMemory; // Remove this if it was added
+use crate::MemoryProvider; // Added import for the MemoryProvider trait alias
 use crate::safe_memory::SafeMemoryHandler; // Ensure this is imported
 use crate::safe_memory::SliceMut; // IMPORT ADDED
 use crate::traits::{
-    importance,
-    BoundedCapacity,
-    Checksummed,
-    DefaultMemoryProvider,
-    SerializationError,
+    BoundedCapacity, Checksummed, DefaultMemoryProvider, SerializationError, importance,
 }; // Moved from validation to traits module
-use crate::MemoryProvider; // Added import for the MemoryProvider trait alias
 use crate::{
     codes,
     operations::Type as OperationType,
-    prelude::{
-        Clone,
-        Debug,
-        Default,
-        Display,
-        Eq,
-        Ord,
-        PartialEq,
-        Sized,
-    },
+    prelude::{Clone, Debug, Default, Display, Eq, Ord, PartialEq, Sized},
     safe_memory::Slice,
-    traits::{
-        Checksummable,
-        FromBytes,
-        ReadStream,
-        ToBytes,
-        WriteStream,
-    },
-    verification::{
-        Checksum,
-        VerificationLevel,
-    },
+    traits::{Checksummable, FromBytes, ReadStream, ToBytes, WriteStream},
+    verification::{Checksum, VerificationLevel},
 };
 
 // KilnResult type alias has been removed - use kiln_error::Result<T> directly
@@ -258,9 +228,9 @@ impl Display for BoundedErrorKind {
 /// Error type for bounded collection operations.
 #[derive(Debug, PartialEq, Eq)]
 pub struct BoundedError {
-    pub kind:               BoundedErrorKind,
+    pub kind: BoundedErrorKind,
     #[cfg(feature = "std")]
-    pub description:        String, // Binary std/no_std choice
+    pub description: String, // Binary std/no_std choice
     #[cfg(not(any(feature = "std")))]
     pub description_static: &'static str, // Binary std/no_std choice
 }
@@ -369,7 +339,7 @@ impl BoundedError {
         #[cfg(not(any(feature = "std")))]
         {
             Self::new(BoundedErrorKind::ConversionError, msg) // Use the static
-                                                              // msg directly
+            // msg directly
         }
     }
 
@@ -611,18 +581,18 @@ where
     T: Sized + Checksummable + ToBytes + FromBytes + Default, // Added Default
 {
     /// The underlying memory handler
-    handler:              SafeMemoryHandler<P>, // Corrected type to SafeMemoryHandler
+    handler: SafeMemoryHandler<P>, // Corrected type to SafeMemoryHandler
     /// Current number of elements in the stack
-    length:               usize,
+    length: usize,
     /// Size of a single element T in bytes, assuming all T have the same
     /// serialized size. Determined from T::default().serialized_size().
     item_serialized_size: usize,
     /// Checksum for verifying data integrity
-    checksum:             Checksum,
+    checksum: Checksum,
     /// Verification level for this stack
-    verification_level:   VerificationLevel,
+    verification_level: VerificationLevel,
     /// Phantom data for type T
-    _phantom:             PhantomData<T>,
+    _phantom: PhantomData<T>,
 }
 
 // Default implementation requires MemoryProvider to be Default, which might not
@@ -775,7 +745,7 @@ where
             if self.verification_level >= VerificationLevel::Full {
                 // Was should_recalculate_checksum_on_mutate
                 self.recalculate_checksum(); // Recalculate based on remaining
-                                             // items
+                // items
             }
             return Ok(Some(T::default()));
         }
@@ -1049,13 +1019,13 @@ where
     T: Sized + Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq,
     P: MemoryProvider + Clone + Default + PartialEq + Eq,
 {
-    provider:             P, // Changed from handler: SafeMemoryHandler<P>
-    length:               usize,
+    provider: P, // Changed from handler: SafeMemoryHandler<P>
+    length: usize,
     item_serialized_size: usize, /* From T::default().serialized_size(), assumes fixed for all T
                                   * in this Vec */
-    checksum:             Checksum,
-    verification_level:   VerificationLevel,
-    _phantom:             PhantomData<T>,
+    checksum: Checksum,
+    verification_level: VerificationLevel,
+    _phantom: PhantomData<T>,
 }
 
 impl<T, const N_ELEMENTS: usize, P> Default for BoundedVec<T, N_ELEMENTS, P>
@@ -1067,12 +1037,12 @@ where
         let item_s_size = Self::get_item_size();
 
         Self {
-            provider:             P::default(), // Requires P: Default
-            length:               0,
+            provider: P::default(), // Requires P: Default
+            length: 0,
             item_serialized_size: item_s_size,
-            checksum:             Checksum::default(), // Checksum is Default
-            verification_level:   VerificationLevel::default(), // VerificationLevel is Default
-            _phantom:             PhantomData,
+            checksum: Checksum::default(), // Checksum is Default
+            verification_level: VerificationLevel::default(), // VerificationLevel is Default
+            _phantom: PhantomData,
         }
     }
 }
@@ -1102,12 +1072,12 @@ where
         }
 
         Ok(Self {
-            provider:             provider_arg, // Store the provider directly
-            length:               0,
+            provider: provider_arg, // Store the provider directly
+            length: 0,
             item_serialized_size: item_s_size,
-            checksum:             Checksum::default(),
-            verification_level:   VerificationLevel::default(),
-            _phantom:             PhantomData,
+            checksum: Checksum::default(),
+            verification_level: VerificationLevel::default(),
+            _phantom: PhantomData,
         })
     }
 
@@ -1169,16 +1139,12 @@ where
         // ASIL-A: Fault detection for bounds checking
         #[cfg(feature = "fault-detection")]
         {
-            use crate::fault_detection::{
-                fault_detector,
-                FaultContext,
-                OperationType as FaultOp,
-            };
+            use crate::fault_detection::{FaultContext, OperationType as FaultOp, fault_detector};
             let context = FaultContext {
-                crate_id:  crate::budget_aware_provider::CrateId::Foundation,
+                crate_id: crate::budget_aware_provider::CrateId::Foundation,
                 operation: FaultOp::Write,
-                address:   None,
-                size:      Some(self.length + 1),
+                address: None,
+                size: Some(self.length + 1),
             };
             fault_detector()
                 .check_bounds(self.length + 1, N_ELEMENTS, &context)
@@ -1305,16 +1271,12 @@ where
         // ASIL-A: Fault detection for bounds checking
         #[cfg(feature = "fault-detection")]
         {
-            use crate::fault_detection::{
-                fault_detector,
-                FaultContext,
-                OperationType as FaultOp,
-            };
+            use crate::fault_detection::{FaultContext, OperationType as FaultOp, fault_detector};
             let context = FaultContext {
-                crate_id:  crate::budget_aware_provider::CrateId::Foundation,
+                crate_id: crate::budget_aware_provider::CrateId::Foundation,
                 operation: FaultOp::Read,
-                address:   Some(index * self.item_serialized_size),
-                size:      Some(self.item_serialized_size),
+                address: Some(index * self.item_serialized_size),
+                size: Some(self.item_serialized_size),
             };
             fault_detector()
                 .check_bounds(index, self.length, &context)
@@ -1437,7 +1399,7 @@ where
     /// Each element is deserialized on demand.
     pub fn iter(&self) -> BoundedVecIterator<'_, T, N_ELEMENTS, P> {
         BoundedVecIterator {
-            vec:           self,
+            vec: self,
             current_index: 0,
         }
     }
@@ -1451,7 +1413,7 @@ where
     /// are applied via the iterator's methods.
     pub fn iter_mut(&mut self) -> BoundedVecIteratorMut<'_, T, N_ELEMENTS, P> {
         BoundedVecIteratorMut {
-            vec:           self,
+            vec: self,
             current_index: 0,
         }
     }
@@ -1484,7 +1446,10 @@ where
     /// # }
     /// ```
     #[cfg(feature = "std")]
-    pub fn drain(&mut self, range: core::ops::Range<usize>) -> Result<BoundedVecDrain<'_, T, N_ELEMENTS, P>> {
+    pub fn drain(
+        &mut self,
+        range: core::ops::Range<usize>,
+    ) -> Result<BoundedVecDrain<'_, T, N_ELEMENTS, P>> {
         if range.start > range.end || range.end > self.length {
             return Err(crate::Error::index_out_of_bounds("Invalid drain range"));
         }
@@ -1688,16 +1653,12 @@ where
         // ASIL-A: Fault detection for bounds checking
         #[cfg(feature = "fault-detection")]
         {
-            use crate::fault_detection::{
-                fault_detector,
-                FaultContext,
-                OperationType as FaultOp,
-            };
+            use crate::fault_detection::{FaultContext, OperationType as FaultOp, fault_detector};
             let context = FaultContext {
-                crate_id:  crate::budget_aware_provider::CrateId::Foundation,
+                crate_id: crate::budget_aware_provider::CrateId::Foundation,
                 operation: FaultOp::Write,
-                address:   Some(index * self.item_serialized_size),
-                size:      Some(self.item_serialized_size),
+                address: Some(index * self.item_serialized_size),
+                size: Some(self.item_serialized_size),
             };
             fault_detector()
                 .check_bounds(index, self.length, &context)
@@ -2047,7 +2008,7 @@ where
                     return Err(BoundedError::new(
                         BoundedErrorKind::ConversionError,
                         "Operation failed",
-                    ))
+                    ));
                 },
             }
         }
@@ -2158,7 +2119,7 @@ where
                 return Err(BoundedError::new(
                     BoundedErrorKind::ConversionError,
                     "Operation failed",
-                ))
+                ));
             },
         };
 
@@ -2263,7 +2224,7 @@ where
                     return Err(BoundedError::new(
                         BoundedErrorKind::ConversionError,
                         "Operation failed",
-                    ))
+                    ));
                 },
             };
 
@@ -2362,7 +2323,7 @@ where
                 return Err(BoundedError::new(
                     BoundedErrorKind::ConversionError,
                     "Operation failed",
-                ))
+                ));
             },
         };
 
@@ -2458,7 +2419,7 @@ where
                 return Err(BoundedError::new(
                     BoundedErrorKind::ConversionError,
                     "Operation failed",
-                ))
+                ));
             },
         };
 
@@ -2908,7 +2869,7 @@ where
                     return Err(BoundedError::new(
                         BoundedErrorKind::ConversionError,
                         "Operation failed",
-                    ))
+                    ));
                 },
             }
         }
@@ -3080,7 +3041,8 @@ where
             return Err(BoundedError::capacity_exceeded());
         }
 
-        let mut vec = Self::new(provider).map_err(|_| BoundedError::runtime_execution_error("Failed to create BoundedVec"))?;
+        let mut vec = Self::new(provider)
+            .map_err(|_| BoundedError::runtime_execution_error("Failed to create BoundedVec"))?;
 
         for item in slice {
             vec.push(item.clone())?;
@@ -3095,7 +3057,7 @@ where
     T: Sized + Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq,
     P: MemoryProvider + Clone + Default + PartialEq + Eq,
 {
-    vec:           &'a BoundedVec<T, N_ELEMENTS, P>,
+    vec: &'a BoundedVec<T, N_ELEMENTS, P>,
     current_index: usize,
 }
 
@@ -3143,7 +3105,7 @@ where
     T: Sized + Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq,
     P: MemoryProvider + Clone + Default + PartialEq + Eq,
 {
-    vec:           &'a mut BoundedVec<T, N_ELEMENTS, P>,
+    vec: &'a mut BoundedVec<T, N_ELEMENTS, P>,
     current_index: usize,
 }
 
@@ -3290,7 +3252,7 @@ pub struct BoundedVecIntoIterator<
 > where
     T: Sized + Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq,
 {
-    vec:           BoundedVec<T, N_ELEMENTS, P>,
+    vec: BoundedVec<T, N_ELEMENTS, P>,
     current_index: usize,
 }
 
@@ -3326,7 +3288,7 @@ where
 
     fn into_iter(self) -> Self::IntoIter {
         BoundedVecIntoIterator {
-            vec:           self,
+            vec: self,
             current_index: 0,
         }
     }
@@ -3424,7 +3386,7 @@ where
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.length.hash(state);
         self.checksum.hash(state); // Assuming Checksum is Hashable
-                                   // Hash elements if verification level suggests deep hashing
+        // Hash elements if verification level suggests deep hashing
         if self.verification_level >= VerificationLevel::Full {
             for i in 0..self.length {
                 if let Ok(item) = self.get(i) {
@@ -3587,7 +3549,7 @@ impl<const N_BYTES: usize, P: MemoryProvider + Default + Clone + PartialEq + Eq>
         // `self.provider`. BoundedVec<T,N,P> has `provider: P`. Access its used
         // portion.
         self.provider.borrow_slice(0, self.length) // Assuming provider stores
-                                                   // items from offset 0
+        // items from offset 0
     }
 }
 
@@ -3809,7 +3771,7 @@ where
         // Changed to CoreHasher
         self.length.hash(state);
         self.checksum.hash(state); // Assuming Checksum is Hashable
-                                   // Hash elements if verification level suggests deep hashing
+        // Hash elements if verification level suggests deep hashing
         if self.verification_level >= VerificationLevel::Full {
             for i in 0..self.length {
                 if let Some(item) = self.peek_at_index(i) {
@@ -3849,9 +3811,7 @@ where
 // TODO(#118): Old impl block removed - these methods need to be reimplemented using StaticVec
 // The following methods were removed: from_str_truncate(with provider), from_str(with provider), new_from_str
 
-impl<const N_BYTES: usize>
-    BoundedString<N_BYTES>
-{
+impl<const N_BYTES: usize> BoundedString<N_BYTES> {
     /// Creates a new BoundedString from a string slice (truncating if needed).
     ///
     /// # Errors
@@ -3879,9 +3839,12 @@ impl<const N_BYTES: usize>
     /// Returns an error if the string is too long or allocation fails.
     pub fn try_from_str(s: &str) -> core::result::Result<Self, SerializationError> {
         if s.len() > N_BYTES {
-            return Err(SerializationError::Custom("String too long for BoundedString"));
+            return Err(SerializationError::Custom(
+                "String too long for BoundedString",
+            ));
         }
-        Self::from_str_truncate(s).map_err(|_| SerializationError::Custom("Failed to create BoundedString"))
+        Self::from_str_truncate(s)
+            .map_err(|_| SerializationError::Custom("Failed to create BoundedString"))
     }
 
     /// Returns the string as a slice.
@@ -4135,10 +4098,10 @@ impl<const N_BYTES: usize>
 
 // Add as_bytes_slice to BoundedVec
 impl<
-        T: Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq + core::fmt::Debug, /* Added Debug */
-        const N_ELEMENTS: usize,
-        P: MemoryProvider + Clone + Default + PartialEq + Eq, // Ensure P's bounds are sufficient
-    > BoundedVec<T, N_ELEMENTS, P>
+    T: Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq + core::fmt::Debug, /* Added Debug */
+    const N_ELEMENTS: usize,
+    P: MemoryProvider + Clone + Default + PartialEq + Eq, // Ensure P's bounds are sufficient
+> BoundedVec<T, N_ELEMENTS, P>
 {
     /// Returns a raw byte slice of the BoundedVec's used data.
     /// This is unsafe if T is not u8 or if T's size is not 1.
@@ -4208,10 +4171,10 @@ impl<
 
 // Fix for `try_extend_from_slice` on `BoundedVec`
 impl<
-        T: Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq + core::fmt::Debug, /* Added Debug and other consistent bounds */
-        const N_ELEMENTS: usize,
-        P: MemoryProvider + Clone + Default + PartialEq + Eq, // Ensure P's bounds are sufficient
-    > BoundedVec<T, N_ELEMENTS, P>
+    T: Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq + core::fmt::Debug, /* Added Debug and other consistent bounds */
+    const N_ELEMENTS: usize,
+    P: MemoryProvider + Clone + Default + PartialEq + Eq, // Ensure P's bounds are sufficient
+> BoundedVec<T, N_ELEMENTS, P>
 {
     pub fn try_extend_from_slice(
         &mut self,
@@ -4326,9 +4289,7 @@ where
 
 // Alloc-dependent methods for BoundedString
 #[cfg(feature = "std")]
-impl<const N_BYTES: usize>
-    BoundedString<N_BYTES>
-{
+impl<const N_BYTES: usize> BoundedString<N_BYTES> {
     /// Splits the string by the given delimiter and returns a vector of
     /// BoundedStrings.
     ///
@@ -4362,10 +4323,7 @@ impl<const N_BYTES: usize>
 #[cfg(kani)]
 mod kani_proofs {
     use super::*;
-    use crate::{
-        memory_sizing::SmallProvider,
-        safe_memory::NoStdProvider,
-    };
+    use crate::{memory_sizing::SmallProvider, safe_memory::NoStdProvider};
 
     /// Verify that BoundedVec push never violates capacity bounds
     #[kani::proof]

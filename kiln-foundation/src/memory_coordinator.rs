@@ -12,25 +12,14 @@
 use alloc::vec::Vec;
 use core::{
     marker::PhantomData,
-    sync::atomic::{
-        AtomicBool,
-        AtomicUsize,
-        Ordering,
-    },
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 #[cfg(feature = "std")]
 use std::vec::Vec;
 
-use kiln_error::{
-    helpers::memory_limit_exceeded_error,
-    Result,
-};
+use kiln_error::{Result, helpers::memory_limit_exceeded_error};
 
-use crate::{
-    codes,
-    Error,
-    ErrorCategory,
-};
+use crate::{Error, ErrorCategory, codes};
 
 /// Generic crate identifier trait
 ///
@@ -49,19 +38,19 @@ pub trait CrateIdentifier: Copy + Clone + Eq + core::hash::Hash + 'static {
 /// Generic memory coordinator that works with any CrateIdentifier
 pub struct GenericMemoryCoordinator<C: CrateIdentifier, const MAX_CRATES: usize> {
     /// Per-crate allocation tracking
-    crate_allocations:  [AtomicUsize; MAX_CRATES],
+    crate_allocations: [AtomicUsize; MAX_CRATES],
     /// Per-crate budgets
-    crate_budgets:      [AtomicUsize; MAX_CRATES],
+    crate_budgets: [AtomicUsize; MAX_CRATES],
     /// Total system allocation
-    total_allocated:    AtomicUsize,
+    total_allocated: AtomicUsize,
     /// Total system budget
-    total_budget:       AtomicUsize,
+    total_budget: AtomicUsize,
     /// Whether the system is initialized
-    initialized:        AtomicBool,
+    initialized: AtomicBool,
     /// Next allocation ID
     next_allocation_id: AtomicUsize,
     /// Phantom data for crate type
-    _phantom:           PhantomData<C>,
+    _phantom: PhantomData<C>,
 }
 
 impl<C: CrateIdentifier, const MAX_CRATES: usize> Default
@@ -76,13 +65,13 @@ impl<C: CrateIdentifier, const MAX_CRATES: usize> GenericMemoryCoordinator<C, MA
     /// Create a new coordinator with zero budgets
     pub fn new() -> Self {
         Self {
-            crate_allocations:  core::array::from_fn(|_| AtomicUsize::new(0)),
-            crate_budgets:      core::array::from_fn(|_| AtomicUsize::new(0)),
-            total_allocated:    AtomicUsize::new(0),
-            total_budget:       AtomicUsize::new(0),
-            initialized:        AtomicBool::new(false),
+            crate_allocations: core::array::from_fn(|_| AtomicUsize::new(0)),
+            crate_budgets: core::array::from_fn(|_| AtomicUsize::new(0)),
+            total_allocated: AtomicUsize::new(0),
+            total_budget: AtomicUsize::new(0),
+            initialized: AtomicBool::new(false),
             next_allocation_id: AtomicUsize::new(1),
-            _phantom:           PhantomData,
+            _phantom: PhantomData,
         }
     }
 
@@ -255,13 +244,13 @@ pub struct AllocationId(pub usize);
 /// Generic budget configuration
 pub struct BudgetConfig<C: CrateIdentifier> {
     pub crate_id: C,
-    pub budget:   usize,
+    pub budget: usize,
 }
 
 /// Builder for setting up memory coordination
 #[cfg(any(feature = "std", feature = "alloc"))]
 pub struct MemoryCoordinatorBuilder<C: CrateIdentifier, const MAX_CRATES: usize> {
-    budgets:      Vec<BudgetConfig<C>>,
+    budgets: Vec<BudgetConfig<C>>,
     total_budget: Option<usize>,
 }
 
@@ -278,7 +267,7 @@ impl<C: CrateIdentifier, const MAX_CRATES: usize> Default
 impl<C: CrateIdentifier, const MAX_CRATES: usize> MemoryCoordinatorBuilder<C, MAX_CRATES> {
     pub fn new() -> Self {
         Self {
-            budgets:      Vec::new(),
+            budgets: Vec::new(),
             total_budget: None,
         }
     }
@@ -310,4 +299,3 @@ impl<C: CrateIdentifier, const MAX_CRATES: usize> MemoryCoordinatorBuilder<C, MA
 
 // Re-export for convenience
 pub use self::AllocationId as AllocId;
-

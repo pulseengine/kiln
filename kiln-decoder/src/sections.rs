@@ -25,7 +25,8 @@ type KilnFoundationImport = KilnImport<kiln_foundation::NoStdProvider<65536>>;
 
 // Import segment types from kiln-format
 use kiln_format::{
-    DataSegment as KilnDataSegment, ElementSegment as KilnElementSegment, module::Export as KilnExport,
+    DataSegment as KilnDataSegment, ElementSegment as KilnElementSegment,
+    module::Export as KilnExport,
 };
 
 use crate::{
@@ -79,7 +80,8 @@ pub enum Section {
         /// Section name
         name: SectionString,
         /// Section data
-        data: kiln_foundation::bounded::BoundedVec<u8, 65536, kiln_foundation::NoStdProvider<65536>>,
+        data:
+            kiln_foundation::bounded::BoundedVec<u8, 65536, kiln_foundation::NoStdProvider<65536>>,
     },
 }
 
@@ -515,8 +517,9 @@ pub mod parsers {
                 kiln_foundation::bounded::WasmName::try_from_str(&format_import.module)
                     .map_err(|_| Error::parse_error("Module name too long for bounded string"))?;
 
-            let item_name = kiln_foundation::bounded::WasmName::try_from_str(&format_import.name)
-                .map_err(|_| Error::parse_error("Item name too long for bounded string"))?;
+            let item_name =
+                kiln_foundation::bounded::WasmName::try_from_str(&format_import.name)
+                    .map_err(|_| Error::parse_error("Item name too long for bounded string"))?;
 
             let kiln_desc = match format_import.desc {
                 kiln_format::module::ImportDesc::Function(type_idx) => {
@@ -606,10 +609,8 @@ pub mod parsers {
         };
 
         // Convert kiln_format::Limits to kiln_foundation::Limits
-        let foundation_limits = kiln_foundation::Limits::new(
-            limits.min as u32,
-            limits.max.map(|m| m as u32),
-        );
+        let foundation_limits =
+            kiln_foundation::Limits::new(limits.min as u32, limits.max.map(|m| m as u32));
 
         Ok((
             kiln_foundation::TableType {
@@ -652,7 +653,11 @@ pub mod parsers {
         );
 
         Ok((
-            kiln_foundation::MemoryType::new_with_memory64(foundation_limits, limits.shared, limits.memory64),
+            kiln_foundation::MemoryType::new_with_memory64(
+                foundation_limits,
+                limits.shared,
+                limits.memory64,
+            ),
             new_offset,
         ))
     }

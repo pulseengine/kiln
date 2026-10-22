@@ -8,19 +8,12 @@
 //! and uses bounded collections for predictable memory usage in no_std
 //! environments.
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-};
+use kiln_error::{Error, ErrorCategory, codes};
 use kiln_foundation::{
-    bounded::BoundedVec,
-    component_value::{
-        ValType,
-        ValTypeRef,
-    },
-    traits::BoundedCapacity,
     MemoryProvider,
+    bounded::BoundedVec,
+    component_value::{ValType, ValTypeRef},
+    traits::BoundedCapacity,
 };
 
 /// Maximum number of types that can be stored
@@ -97,7 +90,7 @@ impl<P: MemoryProvider + Default + Clone + PartialEq + Eq> TypeStore<P> {
 /// Builder for constructing types with automatic interning
 #[allow(dead_code)] // Stub implementation for future type building functionality
 pub struct TypeBuilder<'a, P: MemoryProvider + Default + Clone + PartialEq + Eq> {
-    store:    &'a mut TypeStore<P>,
+    store: &'a mut TypeStore<P>,
     provider: P,
 }
 
@@ -145,7 +138,7 @@ impl<'a, P: MemoryProvider + Default + Clone + PartialEq + Eq> TypeBuilder<'a, P
             None => None,
         };
         Ok(ValType::Result {
-            ok:  ok_ref,
+            ok: ok_ref,
             err: err_ref,
         })
     }

@@ -2,10 +2,7 @@
 //!
 //! Tests cover QM, ASIL-A, and ASIL-B safety levels with real functionality
 
-use crate::{
-    nn::*,
-    prelude::*,
-};
+use crate::{nn::*, prelude::*};
 
 /// Test basic capability creation and verification levels
 #[test]
@@ -114,14 +111,11 @@ fn test_resource_limits_enforcement() {
 /// Test operation verification for different safety levels
 #[test]
 fn test_operation_verification() {
-    use capabilities::{
-        ModelFormat,
-        NNOperation,
-    };
+    use capabilities::{ModelFormat, NNOperation};
 
     // Test load operation verification
     let load_op = NNOperation::Load {
-        size:   10 * 1024 * 1024, // 10MB
+        size: 10 * 1024 * 1024, // 10MB
         format: ModelFormat::ONNX,
     };
 
@@ -139,7 +133,7 @@ fn test_operation_verification() {
 
     // Test oversized model
     let large_load_op = NNOperation::Load {
-        size:   100 * 1024 * 1024, // 100MB
+        size: 100 * 1024 * 1024, // 100MB
         format: ModelFormat::ONNX,
     };
 
@@ -414,7 +408,7 @@ fn test_complete_workflow_simulation() {
 
     // 6. Verify operation would be allowed
     let load_op = capabilities::NNOperation::Load {
-        size:   model_data.len(),
+        size: model_data.len(),
         format: capabilities::ModelFormat::ONNX,
     };
     assert!(capability.verify_operation(&load_op).is_ok());

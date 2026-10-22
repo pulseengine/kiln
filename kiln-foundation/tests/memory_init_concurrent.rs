@@ -6,15 +6,9 @@
 
 #![cfg(feature = "std")]
 
-use std::sync::{
-    Arc,
-    Barrier,
-};
+use std::sync::{Arc, Barrier};
 
-use kiln_foundation::memory_init::{
-    get_global_capability_context,
-    MemoryInitializer,
-};
+use kiln_foundation::memory_init::{MemoryInitializer, get_global_capability_context};
 
 #[test]
 fn concurrent_first_initialization_publishes_context_before_success() {

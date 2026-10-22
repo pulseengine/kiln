@@ -340,7 +340,12 @@ fn run_with_timeout(mut cmd: Command, timeout: Duration, echo: bool) -> BuildRes
     let stderr = stderr_reader
         .join()
         .map_err(|_| BuildError::Tool("cargo test stderr reader panicked".to_string()))?;
-    Ok(CargoRun { exit_success, timed_out, stdout, stderr })
+    Ok(CargoRun {
+        exit_success,
+        timed_out,
+        stdout,
+        stderr,
+    })
 }
 
 impl BuildSystem {
@@ -437,7 +442,8 @@ impl BuildSystem {
         }
 
         if failure_reasons.is_empty() && counts.passed == 0 {
-            failure_reasons.push("no tests ran (0 passed): the gate refuses a vacuous pass".to_string());
+            failure_reasons
+                .push("no tests ran (0 passed): the gate refuses a vacuous pass".to_string());
         }
 
         let duration = start_time.elapsed();
@@ -539,7 +545,14 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
     #[test]
     fn parse_sums_every_result_line() {
         let counts = parse_test_results(OK_LINES).expect("result lines present");
-        assert_eq!(counts, TestCounts { passed: 42, failed: 0, ignored: 1 });
+        assert_eq!(
+            counts,
+            TestCounts {
+                passed: 42,
+                failed: 0,
+                ignored: 1
+            }
+        );
     }
 
     #[test]
@@ -549,20 +562,36 @@ test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 test result: FAILED. 2 passed; 3 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
 ";
         let counts = parse_test_results(out).expect("result lines present");
-        assert_eq!(counts, TestCounts { passed: 7, failed: 3, ignored: 1 });
+        assert_eq!(
+            counts,
+            TestCounts {
+                passed: 7,
+                failed: 3,
+                ignored: 1
+            }
+        );
     }
 
     #[test]
     fn parse_without_result_lines_is_none() {
         assert_eq!(parse_test_results(""), None);
-        assert_eq!(parse_test_results("error[E0432]: unresolved import\n"), None);
+        assert_eq!(
+            parse_test_results("error[E0432]: unresolved import\n"),
+            None
+        );
         // Individual "test x ... ok" lines are not a summary.
-        assert_eq!(parse_test_results("test a ... ok\ntest b ... FAILED\n"), None);
+        assert_eq!(
+            parse_test_results("test a ... ok\ntest b ... FAILED\n"),
+            None
+        );
     }
 
     #[test]
     fn parse_unparsable_result_line_is_none() {
-        assert_eq!(parse_test_results("test result: ok. many passed; 0 failed\n"), None);
+        assert_eq!(
+            parse_test_results("test result: ok. many passed; 0 failed\n"),
+            None
+        );
     }
 
     #[test]
@@ -587,7 +616,8 @@ test result: FAILED. 2 passed; 3 failed; 1 ignored; 0 measured; 0 filtered out; 
 
     #[test]
     fn judge_fails_on_failed_tests_even_with_zero_exit() {
-        let out = "test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out\n";
+        let out =
+            "test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out\n";
         let verdict = judge(true, false, out);
         assert!(verdict.failure.is_some());
         assert_eq!(verdict.counts.failed, 1);
@@ -605,7 +635,10 @@ test result: FAILED. 2 passed; 3 failed; 1 ignored; 0 measured; 0 filtered out; 
         let mut options = TestOptions::default();
         assert_eq!(target_selections(&options), vec![Vec::<&str>::new()]);
         options.doc_tests = false;
-        assert_eq!(target_selections(&options), vec![vec!["--lib", "--bins", "--tests"]]);
+        assert_eq!(
+            target_selections(&options),
+            vec![vec!["--lib", "--bins", "--tests"]]
+        );
         options.integration = false;
         assert_eq!(target_selections(&options), vec![vec!["--lib", "--bins"]]);
         options.doc_tests = true;
@@ -626,7 +659,17 @@ test result: FAILED. 2 passed; 3 failed; 1 ignored; 0 measured; 0 filtered out; 
         let args = cargo_test_args(&options, &[], &["std".to_string()], &[]);
         assert_eq!(
             args,
-            ["test", "--workspace", "--no-fail-fast", "--features", "std", "foo", "--", "--nocapture", "--test-threads=1"]
+            [
+                "test",
+                "--workspace",
+                "--no-fail-fast",
+                "--features",
+                "std",
+                "foo",
+                "--",
+                "--nocapture",
+                "--test-threads=1"
+            ]
         );
     }
 

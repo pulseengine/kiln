@@ -4,39 +4,33 @@
 //! budgets and limits required for ASIL certification.
 
 use kiln_error::Result;
-use kiln_foundation::{
-    safe_managed_alloc,
-    CrateId,
-};
+use kiln_foundation::{CrateId, safe_managed_alloc};
 
-use crate::nn::{
-    capabilities::*,
-    *,
-};
+use crate::nn::{capabilities::*, *};
 
 /// Test that model loading respects memory limits
 #[test]
 fn test_model_size_limit_enforcement() {
     let capability = DynamicNNCapability::new();
     let limits = NNResourceLimits {
-        max_model_size:          10 * 1024 * 1024, // 10MB limit
-        max_concurrent_models:   2,
+        max_model_size: 10 * 1024 * 1024, // 10MB limit
+        max_concurrent_models: 2,
         max_concurrent_contexts: 4,
-        max_tensor_memory:       50 * 1024 * 1024,
-        max_tensor_dimensions:   8,
-        operations_per_minute:   100,
+        max_tensor_memory: 50 * 1024 * 1024,
+        max_tensor_dimensions: 8,
+        operations_per_minute: 100,
     };
 
     // Test within limits
     let small_operation = NNOperation::Load {
-        size:   5 * 1024 * 1024, // 5MB - should pass
+        size: 5 * 1024 * 1024, // 5MB - should pass
         format: ModelFormat::ONNX,
     };
     assert!(capability.verify_operation(&small_operation).is_ok());
 
     // Test exceeding limits
     let large_operation = NNOperation::Load {
-        size:   15 * 1024 * 1024, // 15MB - should fail
+        size: 15 * 1024 * 1024, // 15MB - should fail
         format: ModelFormat::ONNX,
     };
     assert!(capability.verify_operation(&large_operation).is_err());
@@ -50,14 +44,14 @@ fn test_tensor_memory_limits() {
 
     // Test within tensor memory limits
     let small_tensor = NNOperation::SetInput {
-        size:       1024 * 1024, // 1MB
+        size: 1024 * 1024, // 1MB
         dimensions: vec![32, 32, 32],
     };
     assert!(capability.verify_operation(&small_tensor).is_ok());
 
     // Test exceeding tensor memory limits
     let large_tensor = NNOperation::SetInput {
-        size:       limits.max_tensor_memory + 1,
+        size: limits.max_tensor_memory + 1,
         dimensions: vec![1000, 1000, 1000],
     };
     assert!(capability.verify_operation(&large_tensor).is_err());
@@ -89,7 +83,7 @@ fn test_bounded_capability_resource_tracking() {
     let mut successful_loads = 0;
     for i in 0..10 {
         let load_op = NNOperation::Load {
-            size:   1024 * 1024, // 1MB model
+            size: 1024 * 1024, // 1MB model
             format: ModelFormat::ONNX,
         };
 
@@ -106,12 +100,12 @@ fn test_bounded_capability_resource_tracking() {
 #[test]
 fn test_resource_tracker_prevents_exhaustion() {
     let limits = NNResourceLimits {
-        max_model_size:          10 * 1024 * 1024,
-        max_concurrent_models:   2, // Low limit for testing
+        max_model_size: 10 * 1024 * 1024,
+        max_concurrent_models: 2, // Low limit for testing
         max_concurrent_contexts: 2,
-        max_tensor_memory:       10 * 1024 * 1024,
-        max_tensor_dimensions:   8,
-        operations_per_minute:   100,
+        max_tensor_memory: 10 * 1024 * 1024,
+        max_tensor_dimensions: 8,
+        operations_per_minute: 100,
     };
 
     let rate_limits = RateLimits::default();
@@ -137,12 +131,12 @@ fn test_no_dynamic_allocation_pattern() {
     // All these operations should use pre-allocated memory
     let operations = vec![
         NNOperation::Load {
-            size:   1024,
+            size: 1024,
             format: ModelFormat::ONNX,
         },
         NNOperation::CreateContext { model_id: 1 },
         NNOperation::SetInput {
-            size:       1024,
+            size: 1024,
             dimensions: vec![32, 32],
         },
         NNOperation::Compute {
@@ -219,7 +213,7 @@ fn test_automatic_memory_cleanup() {
 
         // Use some memory
         let _operation = NNOperation::Load {
-            size:   1024 * 1024,
+            size: 1024 * 1024,
             format: ModelFormat::ONNX,
         };
     } // Resources should be automatically cleaned up here
@@ -242,11 +236,11 @@ fn test_error_path_memory_safety() {
     // Create operations that will fail
     let failing_operations = vec![
         NNOperation::Load {
-            size:   usize::MAX,
+            size: usize::MAX,
             format: ModelFormat::ONNX,
         }, // Too large
         NNOperation::SetInput {
-            size:       0,
+            size: 0,
             dimensions: vec![],
         }, // Invalid input
         NNOperation::CreateContext { model_id: u32::MAX }, // Invalid ID
@@ -265,10 +259,7 @@ fn test_error_path_memory_safety() {
 #[test]
 fn test_concurrent_resource_safety() {
     use std::{
-        sync::{
-            Arc,
-            Mutex,
-        },
+        sync::{Arc, Mutex},
         thread,
     };
 
@@ -280,7 +271,7 @@ fn test_concurrent_resource_safety() {
         let cap = Arc::clone(&capability);
         let handle = thread::spawn(move || {
             let op = NNOperation::Load {
-                size:   1024 * 1024,
+                size: 1024 * 1024,
                 format: ModelFormat::ONNX,
             };
 

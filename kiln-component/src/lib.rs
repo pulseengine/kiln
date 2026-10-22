@@ -130,8 +130,8 @@ pub use components::component::{
 };
 #[cfg(not(feature = "std"))]
 pub use components::component_no_std::{
-    Component, ComponentBuilder, ExternValue, FunctionValue, GlobalValue, MemoryValue,
-    RuntimeInstance, TableValue, KilnComponentType, KilnComponentTypeBuilder,
+    Component, ComponentBuilder, ExternValue, FunctionValue, GlobalValue, KilnComponentType,
+    KilnComponentTypeBuilder, MemoryValue, RuntimeInstance, TableValue,
 };
 // Component registry (consolidated implementation for both std and no_std)
 pub use components::component_registry::ComponentRegistry;

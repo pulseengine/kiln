@@ -246,21 +246,13 @@ impl<const N: usize> StreamTable<N> {
     #[must_use]
     pub fn get(&self, id: StreamId) -> Option<&Stream> {
         let slot = self.slots.get(id.index as usize)?;
-        if slot.generation == id.generation {
-            slot.stream.as_ref()
-        } else {
-            None
-        }
+        if slot.generation == id.generation { slot.stream.as_ref() } else { None }
     }
 
     /// Generation-validated mutable access to a live stream.
     pub fn get_mut(&mut self, id: StreamId) -> Option<&mut Stream> {
         let slot = self.slots.get_mut(id.index as usize)?;
-        if slot.generation == id.generation {
-            slot.stream.as_mut()
-        } else {
-            None
-        }
+        if slot.generation == id.generation { slot.stream.as_mut() } else { None }
     }
 
     /// `stream.drop` — free a stream, bumping its generation so stale handles
@@ -291,7 +283,10 @@ mod tests {
     use super::*;
 
     fn task(i: u16) -> TaskId {
-        TaskId { index: i, generation: 0 }
+        TaskId {
+            index: i,
+            generation: 0,
+        }
     }
 
     #[test]
@@ -307,10 +302,16 @@ mod tests {
     fn write_buffers_with_no_reader_then_read_consumes() {
         let mut s = Stream::new(2);
         // write-before-read: nobody parked to wake.
-        assert_eq!(s.write(task(1)).unwrap(), StreamWrite::Buffered { wake_reader: None });
+        assert_eq!(
+            s.write(task(1)).unwrap(),
+            StreamWrite::Buffered { wake_reader: None }
+        );
         assert_eq!(s.len(), 1);
         // read consumes; no writer was parked (wasn't full).
-        assert_eq!(s.read(task(2)).unwrap(), StreamRead::Consumed { wake_writer: None });
+        assert_eq!(
+            s.read(task(2)).unwrap(),
+            StreamRead::Consumed { wake_writer: None }
+        );
         assert!(s.is_empty());
     }
 
@@ -322,7 +323,9 @@ mod tests {
         // a write buffers and returns the parked reader to wake.
         assert_eq!(
             s.write(task(1)).unwrap(),
-            StreamWrite::Buffered { wake_reader: Some(task(7)) }
+            StreamWrite::Buffered {
+                wake_reader: Some(task(7))
+            }
         );
         assert_eq!(s.len(), 1);
     }
@@ -337,7 +340,9 @@ mod tests {
         // a read frees the slot and returns the parked writer to wake.
         assert_eq!(
             s.read(task(2)).unwrap(),
-            StreamRead::Consumed { wake_writer: Some(task(9)) }
+            StreamRead::Consumed {
+                wake_writer: Some(task(9))
+            }
         );
     }
 
@@ -400,6 +405,9 @@ mod tests {
         let mut s2 = Stream::new(2);
         s2.write(task(1)).unwrap();
         s2.close();
-        assert_eq!(s2.read(task(2)).unwrap(), StreamRead::Consumed { wake_writer: None });
+        assert_eq!(
+            s2.read(task(2)).unwrap(),
+            StreamRead::Consumed { wake_writer: None }
+        );
     }
 }

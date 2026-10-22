@@ -58,31 +58,31 @@ pub enum PlatformId {
 #[derive(Debug, Clone)]
 pub struct ComprehensivePlatformLimits {
     /// Platform identifier
-    pub platform_id:            PlatformId,
+    pub platform_id: PlatformId,
     /// Maximum total memory available to the runtime
-    pub max_total_memory:       usize,
+    pub max_total_memory: usize,
     /// Maximum WebAssembly linear memory
     pub max_wasm_linear_memory: usize,
     /// Maximum stack bytes
-    pub max_stack_bytes:        usize,
+    pub max_stack_bytes: usize,
     /// Maximum number of components
-    pub max_components:         usize,
+    pub max_components: usize,
     /// Maximum debug overhead memory
-    pub max_debug_overhead:     usize,
+    pub max_debug_overhead: usize,
     /// ASIL level for safety-critical systems
-    pub asil_level:             AsilLevel,
+    pub asil_level: AsilLevel,
 }
 
 impl Default for ComprehensivePlatformLimits {
     fn default() -> Self {
         Self {
-            platform_id:            PlatformId::Unknown,
-            max_total_memory:       1024 * 1024 * 1024, // 1GB
-            max_wasm_linear_memory: 256 * 1024 * 1024,  // 256MB
-            max_stack_bytes:        1024 * 1024,        // 1MB
-            max_components:         256,
-            max_debug_overhead:     64 * 1024 * 1024, // 64MB
-            asil_level:             AsilLevel::QM,
+            platform_id: PlatformId::Unknown,
+            max_total_memory: 1024 * 1024 * 1024,      // 1GB
+            max_wasm_linear_memory: 256 * 1024 * 1024, // 256MB
+            max_stack_bytes: 1024 * 1024,              // 1MB
+            max_components: 256,
+            max_debug_overhead: 64 * 1024 * 1024, // 64MB
+            asil_level: AsilLevel::QM,
         }
     }
 }
@@ -157,13 +157,13 @@ pub struct QnxLimitProvider;
 impl ComprehensiveLimitProvider for QnxLimitProvider {
     fn discover_limits(&self) -> Result<ComprehensivePlatformLimits, Error> {
         let limits = ComprehensivePlatformLimits {
-            platform_id:            PlatformId::QNX,
-            max_total_memory:       512 * 1024 * 1024, // 512MB conservative for QNX
+            platform_id: PlatformId::QNX,
+            max_total_memory: 512 * 1024 * 1024, // 512MB conservative for QNX
             max_wasm_linear_memory: 256 * 1024 * 1024, // 256MB
-            max_stack_bytes:        2 * 1024 * 1024,   // 2MB stack
-            max_components:         128,               // Conservative for embedded
-            max_debug_overhead:     32 * 1024 * 1024,  // 32MB debug
-            asil_level:             AsilLevel::AsilB,  // Assume automotive grade
+            max_stack_bytes: 2 * 1024 * 1024,    // 2MB stack
+            max_components: 128,                 // Conservative for embedded
+            max_debug_overhead: 32 * 1024 * 1024, // 32MB debug
+            asil_level: AsilLevel::AsilB,        // Assume automotive grade
         };
 
         Ok(limits)
@@ -209,7 +209,7 @@ pub struct EmbeddedLimitProvider {
     /// Configured memory size
     pub memory_size: usize,
     /// ASIL level for the embedded system
-    pub asil_level:  AsilLevel,
+    pub asil_level: AsilLevel,
 }
 
 impl EmbeddedLimitProvider {
@@ -225,13 +225,13 @@ impl EmbeddedLimitProvider {
 impl ComprehensiveLimitProvider for EmbeddedLimitProvider {
     fn discover_limits(&self) -> Result<ComprehensivePlatformLimits, Error> {
         let limits = ComprehensivePlatformLimits {
-            platform_id:            PlatformId::Embedded,
-            max_total_memory:       self.memory_size,
+            platform_id: PlatformId::Embedded,
+            max_total_memory: self.memory_size,
             max_wasm_linear_memory: (self.memory_size * 2) / 3, // 66% for WASM
-            max_stack_bytes:        self.memory_size / 16,      // 6.25% for stack
-            max_components:         16,                         // Very limited for embedded
-            max_debug_overhead:     self.memory_size / 20,      // 5% for debug
-            asil_level:             self.asil_level,
+            max_stack_bytes: self.memory_size / 16,             // 6.25% for stack
+            max_components: 16,                                 // Very limited for embedded
+            max_debug_overhead: self.memory_size / 20,          // 5% for debug
+            asil_level: self.asil_level,
         };
 
         Ok(limits)

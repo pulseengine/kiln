@@ -18,8 +18,4 @@
 extern crate alloc;
 
 // Added BoundedVec for tests
-use kiln_error::{
-    ErrorCategory,
-    Result,
-};
-
+use kiln_error::{ErrorCategory, Result};

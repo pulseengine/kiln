@@ -10,15 +10,12 @@
 #[cfg(target_arch = "x86_64")]
 use core::arch::x86_64::*;
 
-use super::{
-    SimdLevel,
-    SimdProvider,
-};
+use super::{SimdLevel, SimdProvider};
 
 /// x86_64 SIMD provider with SSE2 and AVX2 support
 #[derive(Debug, Clone)]
 pub struct X86SimdProvider {
-    level:    SimdLevel,
+    level: SimdLevel,
     has_sse2: bool,
     has_avx2: bool,
 }
@@ -27,7 +24,7 @@ impl X86SimdProvider {
     /// Create a new SSE2-only provider
     pub const fn new_sse2() -> Self {
         Self {
-            level:    SimdLevel::Basic,
+            level: SimdLevel::Basic,
             has_sse2: true,
             has_avx2: false,
         }
@@ -36,7 +33,7 @@ impl X86SimdProvider {
     /// Create a new AVX2 provider (includes SSE2)
     pub const fn new_avx2() -> Self {
         Self {
-            level:    SimdLevel::Advanced,
+            level: SimdLevel::Advanced,
             has_sse2: true,
             has_avx2: true,
         }

@@ -12,9 +12,9 @@ use kiln_error::Error;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlatformCapabilities {
     /// Memory management capabilities
-    pub memory:   MemoryCapabilities,
+    pub memory: MemoryCapabilities,
     /// Synchronization capabilities  
-    pub sync:     SyncCapabilities,
+    pub sync: SyncCapabilities,
     /// Security features available
     pub security: SecurityCapabilities,
     /// Real-time guarantees available
@@ -25,15 +25,15 @@ pub struct PlatformCapabilities {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MemoryCapabilities {
     /// Binary std/no_std choice
-    pub dynamic_allocation:     bool,
+    pub dynamic_allocation: bool,
     /// Supports memory protection (mprotect-style)
-    pub memory_protection:      bool,
+    pub memory_protection: bool,
     /// Supports guard pages
-    pub guard_pages:            bool,
+    pub guard_pages: bool,
     /// Has hardware memory tagging (ARM MTE, Intel MPX, etc.)
-    pub hardware_tagging:       bool,
+    pub hardware_tagging: bool,
     /// Binary std/no_std choice
-    pub max_memory:             Option<usize>,
+    pub max_memory: Option<usize>,
     /// Binary std/no_std choice
     pub allocation_granularity: usize,
 }
@@ -42,45 +42,45 @@ pub struct MemoryCapabilities {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SyncCapabilities {
     /// Supports futex-style blocking synchronization
-    pub futex_support:      bool,
+    pub futex_support: bool,
     /// Supports cross-process synchronization
     pub cross_process_sync: bool,
     /// Supports timeout-based operations
-    pub timeout_support:    bool,
+    pub timeout_support: bool,
     /// Has hardware atomic operations beyond basic CAS
-    pub hardware_atomics:   bool,
+    pub hardware_atomics: bool,
     /// Maximum number of waiters supported
-    pub max_waiters:        Option<u32>,
+    pub max_waiters: Option<u32>,
 }
 
 /// Security capabilities
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SecurityCapabilities {
     /// Has hardware memory isolation (MPU/MMU)
-    pub hardware_isolation:  bool,
+    pub hardware_isolation: bool,
     /// Supports process-level isolation
-    pub process_isolation:   bool,
+    pub process_isolation: bool,
     /// Has capability-based security
     pub capability_security: bool,
     /// Supports formal verification
     pub formal_verification: bool,
     /// Has trusted execution environment
-    pub trusted_execution:   bool,
+    pub trusted_execution: bool,
 }
 
 /// Real-time capabilities
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RealtimeCapabilities {
     /// Provides deterministic timing guarantees
-    pub deterministic_timing:  bool,
+    pub deterministic_timing: bool,
     /// Supports priority-based scheduling
-    pub priority_scheduling:   bool,
+    pub priority_scheduling: bool,
     /// Has preemption control
-    pub preemption_control:    bool,
+    pub preemption_control: bool,
     /// Maximum interrupt latency in nanoseconds
     pub max_interrupt_latency: Option<u64>,
     /// Supports deadline scheduling
-    pub deadline_scheduling:   bool,
+    pub deadline_scheduling: bool,
 }
 
 /// Runtime platform detector
@@ -139,11 +139,11 @@ impl PlatformDetector {
         {
             // POSIX-style platforms
             return Ok(MemoryCapabilities {
-                dynamic_allocation:     true,
-                memory_protection:      true,
-                guard_pages:            true,
-                hardware_tagging:       self.detect_hardware_tagging(),
-                max_memory:             self.detect_max_memory(),
+                dynamic_allocation: true,
+                memory_protection: true,
+                guard_pages: true,
+                hardware_tagging: self.detect_hardware_tagging(),
+                max_memory: self.detect_max_memory(),
                 allocation_granularity: self.detect_page_size(),
             });
         }
@@ -152,12 +152,12 @@ impl PlatformDetector {
         {
             // Real-time embedded platform
             return Ok(MemoryCapabilities {
-                dynamic_allocation:     false,           // Binary std/no_std choice
-                memory_protection:      true,            // Memory domains provide protection
-                guard_pages:            true,            // Guard regions supported
-                hardware_tagging:       false,           // Not typical in embedded
-                max_memory:             Some(64 * 1024), // Typical embedded limit
-                allocation_granularity: 32,              // Typical alignment
+                dynamic_allocation: false,   // Binary std/no_std choice
+                memory_protection: true,     // Memory domains provide protection
+                guard_pages: true,           // Guard regions supported
+                hardware_tagging: false,     // Not typical in embedded
+                max_memory: Some(64 * 1024), // Typical embedded limit
+                allocation_granularity: 32,  // Typical alignment
             });
         }
 
@@ -165,12 +165,12 @@ impl PlatformDetector {
         {
             // Security-first platform
             return Ok(MemoryCapabilities {
-                dynamic_allocation:     false,           // Grant-based, not dynamic
-                memory_protection:      true,            // MPU provides protection
-                guard_pages:            false,           // Not applicable to grants
-                hardware_tagging:       false,           // Focus on isolation, not tagging
-                max_memory:             Some(16 * 1024), // Very limited embedded memory
-                allocation_granularity: 32,              // MPU alignment requirement
+                dynamic_allocation: false,   // Grant-based, not dynamic
+                memory_protection: true,     // MPU provides protection
+                guard_pages: false,          // Not applicable to grants
+                hardware_tagging: false,     // Focus on isolation, not tagging
+                max_memory: Some(16 * 1024), // Very limited embedded memory
+                allocation_granularity: 32,  // MPU alignment requirement
             });
         }
 
@@ -184,11 +184,11 @@ impl PlatformDetector {
         {
             // Fallback - minimal capabilities
             return Ok(MemoryCapabilities {
-                dynamic_allocation:     false,
-                memory_protection:      false,
-                guard_pages:            false,
-                hardware_tagging:       false,
-                max_memory:             Some(4096),
+                dynamic_allocation: false,
+                memory_protection: false,
+                guard_pages: false,
+                hardware_tagging: false,
+                max_memory: Some(4096),
                 allocation_granularity: 1,
             });
         }
@@ -209,11 +209,11 @@ impl PlatformDetector {
         {
             // POSIX-style platforms
             return Ok(SyncCapabilities {
-                futex_support:      true,
+                futex_support: true,
                 cross_process_sync: true,
-                timeout_support:    true,
-                hardware_atomics:   true,
-                max_waiters:        None, // Typically unlimited
+                timeout_support: true,
+                hardware_atomics: true,
+                max_waiters: None, // Typically unlimited
             });
         }
 
@@ -221,11 +221,11 @@ impl PlatformDetector {
         {
             // Real-time embedded platform
             return Ok(SyncCapabilities {
-                futex_support:      true,  // Zephyr has futex
+                futex_support: true,       // Zephyr has futex
                 cross_process_sync: false, // Single-process system
-                timeout_support:    true,
-                hardware_atomics:   self.detect_embedded_atomics(),
-                max_waiters:        Some(32), // Limited by memory
+                timeout_support: true,
+                hardware_atomics: self.detect_embedded_atomics(),
+                max_waiters: Some(32), // Limited by memory
             });
         }
 
@@ -233,11 +233,11 @@ impl PlatformDetector {
         {
             // Security-first platform
             return Ok(SyncCapabilities {
-                futex_support:      false, // No traditional futex
-                cross_process_sync: true,  // IPC-based
-                timeout_support:    true,  // Timer-based
-                hardware_atomics:   self.detect_embedded_atomics(),
-                max_waiters:        Some(8), // Very limited
+                futex_support: false,     // No traditional futex
+                cross_process_sync: true, // IPC-based
+                timeout_support: true,    // Timer-based
+                hardware_atomics: self.detect_embedded_atomics(),
+                max_waiters: Some(8), // Very limited
             });
         }
 
@@ -251,11 +251,11 @@ impl PlatformDetector {
         {
             // Fallback - minimal capabilities
             return Ok(SyncCapabilities {
-                futex_support:      false,
+                futex_support: false,
                 cross_process_sync: false,
-                timeout_support:    false,
-                hardware_atomics:   false,
-                max_waiters:        Some(1),
+                timeout_support: false,
+                hardware_atomics: false,
+                max_waiters: Some(1),
             });
         }
 
@@ -270,11 +270,11 @@ impl PlatformDetector {
         {
             // Security-first platform (Tock OS)
             Ok(SecurityCapabilities {
-                hardware_isolation:  true,  // MPU-based
-                process_isolation:   true,  // Core feature
+                hardware_isolation: true,   // MPU-based
+                process_isolation: true,    // Core feature
                 capability_security: true,  // Grant system
                 formal_verification: false, // Depends on specific implementation
-                trusted_execution:   false, // Typically not TEE
+                trusted_execution: false,   // Typically not TEE
             })
         }
 
@@ -288,11 +288,11 @@ impl PlatformDetector {
         {
             // POSIX platforms (Linux/macOS)
             Ok(SecurityCapabilities {
-                hardware_isolation:  true,  // MMU-based
-                process_isolation:   true,  // OS feature
+                hardware_isolation: true,   // MMU-based
+                process_isolation: true,    // OS feature
                 capability_security: false, // Not typical
                 formal_verification: false,
-                trusted_execution:   self.detect_tee_support(),
+                trusted_execution: self.detect_tee_support(),
             })
         }
 
@@ -304,11 +304,11 @@ impl PlatformDetector {
         {
             // QNX - safety-critical RTOS
             Ok(SecurityCapabilities {
-                hardware_isolation:  true, // MMU/MPU
-                process_isolation:   true, // Strong isolation
+                hardware_isolation: true, // MMU/MPU
+                process_isolation: true,  // Strong isolation
                 capability_security: false,
                 formal_verification: true, // QNX can be formally verified
-                trusted_execution:   false,
+                trusted_execution: false,
             })
         }
 
@@ -316,11 +316,11 @@ impl PlatformDetector {
         {
             // Zephyr - real-time embedded
             Ok(SecurityCapabilities {
-                hardware_isolation:  true,  // Memory domains
-                process_isolation:   false, // Single process
+                hardware_isolation: true, // Memory domains
+                process_isolation: false, // Single process
                 capability_security: false,
                 formal_verification: false,
-                trusted_execution:   false,
+                trusted_execution: false,
             })
         }
 
@@ -334,11 +334,11 @@ impl PlatformDetector {
         {
             // Fallback - no security features
             Ok(SecurityCapabilities {
-                hardware_isolation:  false,
-                process_isolation:   false,
+                hardware_isolation: false,
+                process_isolation: false,
                 capability_security: false,
                 formal_verification: false,
-                trusted_execution:   false,
+                trusted_execution: false,
             })
         }
     }
@@ -349,11 +349,11 @@ impl PlatformDetector {
         {
             // Real-time embedded platform
             Ok(RealtimeCapabilities {
-                deterministic_timing:  true,
-                priority_scheduling:   true,
-                preemption_control:    true,
+                deterministic_timing: true,
+                priority_scheduling: true,
+                preemption_control: true,
                 max_interrupt_latency: Some(1_000), // 1 microsecond typical
-                deadline_scheduling:   true,
+                deadline_scheduling: true,
             })
         }
 
@@ -365,11 +365,11 @@ impl PlatformDetector {
         {
             // QNX - real-time OS
             Ok(RealtimeCapabilities {
-                deterministic_timing:  true,
-                priority_scheduling:   true,
-                preemption_control:    true,
+                deterministic_timing: true,
+                priority_scheduling: true,
+                preemption_control: true,
                 max_interrupt_latency: Some(5_000), // 5 microseconds typical
-                deadline_scheduling:   true,
+                deadline_scheduling: true,
             })
         }
 
@@ -381,11 +381,11 @@ impl PlatformDetector {
         {
             // Tock OS - embedded but not hard real-time
             Ok(RealtimeCapabilities {
-                deterministic_timing:  false, // Security over timing
-                priority_scheduling:   false,
-                preemption_control:    false,
+                deterministic_timing: false, // Security over timing
+                priority_scheduling: false,
+                preemption_control: false,
                 max_interrupt_latency: Some(10_000), // 10 microseconds
-                deadline_scheduling:   false,
+                deadline_scheduling: false,
             })
         }
 
@@ -397,11 +397,11 @@ impl PlatformDetector {
         {
             // General-purpose platforms (Linux/macOS) - limited real-time
             Ok(RealtimeCapabilities {
-                deterministic_timing:  false,
-                priority_scheduling:   true,
-                preemption_control:    false,
+                deterministic_timing: false,
+                priority_scheduling: true,
+                preemption_control: false,
                 max_interrupt_latency: None, // Highly variable
-                deadline_scheduling:   false,
+                deadline_scheduling: false,
             })
         }
     }

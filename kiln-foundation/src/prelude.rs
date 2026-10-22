@@ -42,67 +42,32 @@ extern crate alloc;
 ))]
 pub use alloc::{
     boxed::Box,
-    collections::{
-        BTreeMap,
-        BTreeSet,
-    },
+    collections::{BTreeMap, BTreeSet},
     format,
-    string::{
-        String,
-        ToString,
-    },
+    string::{String, ToString},
     vec,
     vec::Vec,
 };
 pub use core::{
     any::Any,
     clone::Clone,
-    cmp::{
-        Eq,
-        Ord,
-        PartialEq,
-        PartialOrd,
-    },
-    convert::{
-        TryFrom,
-        TryInto,
-    },
+    cmp::{Eq, Ord, PartialEq, PartialOrd},
+    convert::{TryFrom, TryInto},
     default::Default,
-    fmt::{
-        self,
-        Debug,
-        Display,
-        Write,
-    },
+    fmt::{self, Debug, Display, Write},
     hash::Hash,
-    marker::{
-        Copy,
-        PhantomData,
-        Sized,
-    },
+    marker::{Copy, PhantomData, Sized},
     mem,
-    ops::{
-        Deref,
-        DerefMut,
-    },
-    slice,
-    str,
+    ops::{Deref, DerefMut},
+    slice, str,
 };
 // std-allocation imports (QM, DAL-E - non-safety-critical)
 #[cfg(feature = "std-allocation")]
 pub use std::{
     boxed::Box,
-    collections::{
-        BTreeMap,
-        BTreeSet,
-        HashMap,
-        HashSet,
-    },
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     format,
-    string::{
-        String,
-        ToString,
-    },
+    string::{String, ToString},
     sync::Arc,
     vec,
     vec::Vec,
@@ -110,10 +75,7 @@ pub use std::{
 
 // Always use kiln_sync for consistent Mutex/RwLock behavior
 #[cfg(feature = "std-allocation")]
-pub use kiln_sync::{
-    Mutex,
-    RwLock,
-};
+pub use kiln_sync::{Mutex, RwLock};
 
 // bounded-allocation and static-allocation alternatives
 // For bounded-allocation: Use bounded collections with compile-time capacity limits
@@ -126,21 +88,12 @@ pub use hashbrown::HashMap as BHashMap;
 
 // Re-export from kiln_error - this is the standard Result type for Kiln
 pub use kiln_error::prelude::*;
-pub use kiln_error::{
-    codes,
-    kinds,
-    Error,
-    ErrorCategory,
-    Result,
-};
+pub use kiln_error::{Error, ErrorCategory, Result, codes, kinds};
 
 // Feature-gated re-exports that can't be included in the main use block
 #[cfg(feature = "std")]
 pub use crate::component_builder::{
-    ComponentTypeBuilder,
-    ExportBuilder,
-    ImportBuilder,
-    NamespaceBuilder,
+    ComponentTypeBuilder, ExportBuilder, ImportBuilder, NamespaceBuilder,
 };
 // Modern memory system convenience functions already imported above
 
@@ -149,10 +102,7 @@ pub use crate::component_builder::{
     feature = "std",
     any(feature = "managed-dynamic-alloc", feature = "std-allocation")
 ))]
-pub use crate::conversion::{
-    ref_type_to_val_type,
-    val_type_to_ref_type,
-};
+pub use crate::conversion::{ref_type_to_val_type, val_type_to_ref_type};
 // Re-export from kiln_sync, only if the feature is active
 // #[cfg(feature = "kiln-sync")] // Or a more specific feature if kiln-sync is always a dep
 
@@ -165,44 +115,22 @@ pub use crate::conversion::{
 pub use crate::no_std_hashmap::SimpleHashMap;
 // Re-export from this crate
 pub use crate::{
+    // Direct re-exports for convenience (original list)
+    // ResourceType, // Already covered by component::* above
+    SafeMemoryHandler,
+    SafeSlice,
     // ASIL testing framework
     asil_testing::{
-        get_asil_tests,
-        get_test_statistics,
-        get_tests_by_asil,
-        get_tests_by_category,
-        register_asil_test,
-        AsilTestMetadata,
-        TestCategory,
-        TestStatistics,
+        AsilTestMetadata, TestCategory, TestStatistics, get_asil_tests, get_test_statistics,
+        get_tests_by_asil, get_tests_by_category, register_asil_test,
     },
     // Atomic memory operations
-    atomic_memory::{
-        AtomicMemoryExt,
-        AtomicMemoryOps,
-    },
+    atomic_memory::{AtomicMemoryExt, AtomicMemoryOps},
     // Bounded collections
-    bounded::{
-        BoundedStack,
-        BoundedString,
-        BoundedVec,
-        CapacityError,
-        WasmName,
-    },
-    bounded_collections::{
-        BoundedDeque,
-        BoundedMap,
-        BoundedQueue,
-        BoundedSet,
-    },
+    bounded::{BoundedStack, BoundedString, BoundedVec, CapacityError, WasmName},
+    bounded_collections::{BoundedDeque, BoundedMap, BoundedQueue, BoundedSet},
     // Builder patterns
-    builder::{
-        BoundedBuilder,
-        MemoryBuilder,
-        ResourceBuilder,
-        ResourceItemBuilder,
-        StringBuilder,
-    },
+    builder::{BoundedBuilder, MemoryBuilder, ResourceBuilder, ResourceItemBuilder, StringBuilder},
     // Builtin types
     builtin::BuiltinType,
     // Component model types
@@ -216,51 +144,30 @@ pub use crate::{
         Namespace,
         ResourceType,
     },
-    memory_coordinator::{
-        AllocationId,
-        CrateIdentifier,
-        GenericMemoryCoordinator,
-    },
+    memory_coordinator::{AllocationId, CrateIdentifier, GenericMemoryCoordinator},
     // Resource types
     resource::ResourceOperation,
     // Safety-level-aware features
     safety_features::{
         allocation::MEMORY_STRATEGY,
-        runtime::{
-            current_safety_level,
-            has_capability,
-            max_allocation_size,
-        },
-        standards::{
-            AsilLevel,
-            DalLevel,
-            SafetyStandardMapping,
-            SilLevel,
-        },
+        runtime::{current_safety_level, has_capability, max_allocation_size},
+        standards::{AsilLevel, DalLevel, SafetyStandardMapping, SilLevel},
     },
     // Safe memory types (SafeMemoryHandler, SafeSlice, SafeStack are already here from direct
     // re-exports) Sections (SectionId, SectionType, Section are usually handled by decoder)
     // Binary std/no_std choice
     // safe_memory::NoStdProvider, // Re-exported below to avoid duplicate
     // Safety system types
-    safety_system::{
-        SafeMemoryAllocation,
-        SafetyContext,
-        SafetyGuard,
-    },
+    safety_system::{SafeMemoryAllocation, SafetyContext, SafetyGuard},
     // Validation traits (moved to traits module to break circular dependency)
     traits::{
-        BoundedCapacity,
-        Checksummed,
+        BoundedCapacity, Checksummed,
         Validatable, /* ValidationContext,
-                      * ValidationError and ValidationResult will be re-added when validation
-                      * module is restored */
+                     * ValidationError and ValidationResult will be re-added when validation
+                     * module is restored */
     },
     // Traits
-    traits::{
-        FromFormat,
-        ToFormat,
-    },
+    traits::{FromFormat, ToFormat},
     // Common types (BlockType, FuncType, GlobalType, MemoryType, TableType, ValueType are already
     // here)
     types::{
@@ -275,28 +182,13 @@ pub use crate::{
     },
     // New unified types from Agent A deliverables (simplified)
     unified_types_simple::{
-        DefaultTypes,
-        DesktopTypes,
-        EmbeddedTypes,
-        PlatformCapacities,
-        SafetyCriticalTypes,
+        DefaultTypes, DesktopTypes, EmbeddedTypes, PlatformCapacities, SafetyCriticalTypes,
         UnifiedTypes,
     },
     // Value representations
-    values::{
-        FloatBits32,
-        FloatBits64,
-        Value,
-    },
+    values::{FloatBits32, FloatBits64, Value},
     // Verification types
-    verification::{
-        Checksum,
-        VerificationLevel,
-    },
-    // Direct re-exports for convenience (original list)
-    // ResourceType, // Already covered by component::* above
-    SafeMemoryHandler,
-    SafeSlice,
+    verification::{Checksum, VerificationLevel},
 };
 // Safety-level-aware component system
 // Component builders only available with std feature and allocation levels
@@ -306,25 +198,19 @@ pub use crate::{
 ))]
 pub use crate::{
     // Component builders
-    component_value::{
-        ComponentValue,
-        ValType,
-    },
-    component_value_store::{
-        ComponentValueStore,
-        ValueRef,
-    },
+    component_value::{ComponentValue, ValType},
+    component_value_store::{ComponentValueStore, ValueRef},
     component_value_store_builder::ComponentValueStoreBuilder,
 };
 // Memory system core exports
 pub use crate::{
     // Modern memory system types
     generic_memory_guard::GenericMemoryGuard,
+    kiln_memory_system::CapabilityKilnFactory,
     // Core memory allocation macro
     safe_managed_alloc,
     // Memory provider types
     safe_memory::Provider as MemoryProvider,
-    kiln_memory_system::CapabilityKilnFactory,
 };
 
 // Binary std/no_std choice
@@ -406,31 +292,20 @@ pub use crate::capabilities::NoStdCapabilityContext as CapabilityContext;
     any(feature = "managed-dynamic-alloc", feature = "std-allocation")
 ))]
 pub use crate::capabilities::{
-    CapabilityAwareProvider,
-    CapabilityProviderFactory,
-    ProviderCapabilityExt,
+    CapabilityAwareProvider, CapabilityProviderFactory, ProviderCapabilityExt,
 };
 // Re-export NoStdProvider only once
 pub use crate::safe_memory::NoStdProvider;
 // Verified allocator with GlobalAlloc and scope support
 pub use crate::verified_allocator::{
-    ScopeGuard,
-    ScopeInfo,
-    VerifiedAllocator,
-    TOTAL_HEAP_SIZE,
-    MAX_MODULE_SIZE,
-    MAX_SCOPES,
+    MAX_MODULE_SIZE, MAX_SCOPES, ScopeGuard, ScopeInfo, TOTAL_HEAP_SIZE, VerifiedAllocator,
 };
 pub use crate::{
     // Budget management
     budget_aware_provider::CrateId,
     // Capability system
     capabilities::{
-        CapabilityMask,
-        MemoryCapability,
-        MemoryGuard,
-        MemoryOperation,
-        MemoryOperationType,
+        CapabilityMask, MemoryCapability, MemoryGuard, MemoryOperation, MemoryOperationType,
         MemoryRegion,
     },
     // Memory initialization

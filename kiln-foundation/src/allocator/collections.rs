@@ -8,10 +8,7 @@
 
 use core::{
     marker::PhantomData,
-    ops::{
-        Deref,
-        DerefMut,
-    },
+    ops::{Deref, DerefMut},
 };
 #[cfg(feature = "std")]
 use std::collections::HashMap;
@@ -28,16 +25,12 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 // Re-export for convenience
-pub use super::phantom_budgets::{
-    CapacityError,
-    CrateId,
-    CRATE_BUDGETS,
-};
+pub use super::phantom_budgets::{CRATE_BUDGETS, CapacityError, CrateId};
 
 /// Zero-cost wrapper around std::vec::Vec with compile-time budget verification
 #[derive(Debug, Clone)]
 pub struct KilnVec<T, const CRATE: u8, const MAX_SIZE: usize> {
-    inner:   Vec<T>,
+    inner: Vec<T>,
     _budget: PhantomData<MemoryBudget<CRATE, MAX_SIZE>>,
 }
 
@@ -45,7 +38,7 @@ impl<T, const CRATE: u8, const MAX_SIZE: usize> KilnVec<T, CRATE, MAX_SIZE> {
     /// Create new vector with compile-time budget verification
     pub fn new() -> Self {
         Self {
-            inner:   Vec::new(),
+            inner: Vec::new(),
             _budget: PhantomData,
         }
     }
@@ -58,7 +51,7 @@ impl<T, const CRATE: u8, const MAX_SIZE: usize> KilnVec<T, CRATE, MAX_SIZE> {
         );
 
         Self {
-            inner:   Vec::with_capacity(capacity),
+            inner: Vec::with_capacity(capacity),
             _budget: PhantomData,
         }
     }
@@ -113,7 +106,7 @@ pub struct KilnHashMap<K, V, const CRATE: u8, const MAX_SIZE: usize>
 where
     K: std::hash::Hash + Eq,
 {
-    inner:   HashMap<K, V>,
+    inner: HashMap<K, V>,
     _budget: PhantomData<MemoryBudget<CRATE, MAX_SIZE>>,
 }
 
@@ -138,7 +131,7 @@ where
     /// Create new HashMap with compile-time budget verification
     pub fn new() -> Self {
         Self {
-            inner:   HashMap::new(),
+            inner: HashMap::new(),
             _budget: PhantomData,
         }
     }
@@ -151,7 +144,7 @@ where
         );
 
         Self {
-            inner:   HashMap::with_capacity(capacity),
+            inner: HashMap::with_capacity(capacity),
             _budget: PhantomData,
         }
     }
@@ -196,7 +189,7 @@ where
 #[cfg(feature = "std")]
 #[derive(Debug, Clone)]
 pub struct KilnString<const CRATE: u8, const MAX_SIZE: usize> {
-    inner:   String,
+    inner: String,
     _budget: PhantomData<MemoryBudget<CRATE, MAX_SIZE>>,
 }
 
@@ -205,7 +198,7 @@ impl<const CRATE: u8, const MAX_SIZE: usize> KilnString<CRATE, MAX_SIZE> {
     /// Create new string with compile-time budget verification
     pub fn new() -> Self {
         Self {
-            inner:   String::new(),
+            inner: String::new(),
             _budget: PhantomData,
         }
     }
@@ -216,7 +209,7 @@ impl<const CRATE: u8, const MAX_SIZE: usize> KilnString<CRATE, MAX_SIZE> {
             Err(CapacityError::Exceeded)
         } else {
             Ok(Self {
-                inner:   s.to_string(),
+                inner: s.to_string(),
                 _budget: PhantomData,
             })
         }
@@ -286,7 +279,8 @@ pub mod aliases {
 
     // Runtime crate collections
     pub type RuntimeVec<T, const N: usize> = KilnVec<T, { CrateId::Runtime as u8 }, N>;
-    pub type RuntimeHashMap<K, V, const N: usize> = KilnHashMap<K, V, { CrateId::Runtime as u8 }, N>;
+    pub type RuntimeHashMap<K, V, const N: usize> =
+        KilnHashMap<K, V, { CrateId::Runtime as u8 }, N>;
     #[cfg(feature = "std")]
     pub type RuntimeString<const N: usize> = KilnString<{ CrateId::Runtime as u8 }, N>;
 

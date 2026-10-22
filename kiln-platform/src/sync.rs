@@ -17,28 +17,14 @@ pub use alloc::sync::Arc;
 pub use alloc::sync::Arc;
 use core::fmt::Debug;
 // Re-export atomic types for platform use
-pub use core::sync::atomic::{
-    AtomicU32,
-    AtomicU64,
-    AtomicUsize,
-    Ordering,
-};
+pub use core::sync::atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering};
 // Re-export Duration for platform use
 pub use core::time::Duration;
 #[cfg(feature = "std")]
-pub use std::sync::{
-    Condvar,
-    Mutex,
-    MutexGuard,
-    RwLock,
-};
+pub use std::sync::{Condvar, Mutex, MutexGuard, RwLock};
 
 #[cfg(not(feature = "std"))]
-pub use kiln_sync::{
-    KilnMutex as Mutex,
-    KilnMutexGuard as MutexGuard,
-    KilnRwLock as RwLock,
-};
+pub use kiln_sync::{KilnMutex as Mutex, KilnMutexGuard as MutexGuard, KilnRwLock as RwLock};
 
 use crate::prelude::Result;
 
@@ -131,7 +117,7 @@ pub enum TimeoutResult {
 #[derive(Debug)]
 pub struct SpinFutex {
     /// The atomic value used for synchronization
-    value:    core::sync::atomic::AtomicU32,
+    value: core::sync::atomic::AtomicU32,
     /// Padding to ensure the value is on its own cache line
     _padding: [u8; 60], // 64 - sizeof(AtomicU32)
 }
@@ -140,7 +126,7 @@ impl SpinFutex {
     /// Creates a new `SpinFutex` with the given initial value.
     pub fn new(initial_value: u32) -> Self {
         Self {
-            value:    core::sync::atomic::AtomicU32::new(initial_value),
+            value: core::sync::atomic::AtomicU32::new(initial_value),
             _padding: [0; 60],
         }
     }
@@ -244,10 +230,7 @@ impl FutexLike for SpinFutex {
 mod tests {
     use core::time::Duration;
 
-    use kiln_error::{
-        ErrorCategory,
-        ErrorSource,
-    };
+    use kiln_error::{ErrorCategory, ErrorSource};
 
     use super::*;
 

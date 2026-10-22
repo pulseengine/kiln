@@ -7,29 +7,16 @@
 //! These operations support the WebAssembly branch hinting proposal
 //! and work across std, `no_std+alloc`, and pure `no_std` environments.
 
-use kiln_error::{
-    Error,
-    Result,
-};
+use kiln_error::{Error, Result};
 use kiln_foundation::{
-    types::{
-        LabelIdx,
-        ValueType,
-    },
+    types::{LabelIdx, ValueType},
     values::Value,
 };
 
 use crate::{
     control_ops::ControlContext,
-    prelude::{
-        Debug,
-        Eq,
-        PartialEq,
-    },
-    validation::{
-        Validate,
-        ValidationContext,
-    },
+    prelude::{Debug, Eq, PartialEq},
+    validation::{Validate, ValidationContext},
 };
 
 /// Branch on null operation - branches if reference is null
@@ -233,10 +220,7 @@ impl Validate for BranchHintOp {
 
 #[cfg(all(test, feature = "std"))]
 mod tests {
-    use kiln_foundation::values::{
-        ExternRef,
-        FuncRef,
-    };
+    use kiln_foundation::values::{ExternRef, FuncRef};
 
     use super::*;
 
@@ -250,7 +234,12 @@ mod tests {
     #[test]
     fn test_br_on_null_with_non_null_funcref() {
         let op = BrOnNull::new(0);
-        let result = op.execute(&Value::FuncRef(Some(FuncRef { index: 42, instance_id: None }))).unwrap();
+        let result = op
+            .execute(&Value::FuncRef(Some(FuncRef {
+                index: 42,
+                instance_id: None,
+            })))
+            .unwrap();
         assert!(!result); // Branch should not be taken
     }
 
@@ -286,7 +275,10 @@ mod tests {
     #[test]
     fn test_br_on_non_null_with_non_null_funcref() {
         let op = BrOnNonNull::new(0);
-        let ref_value = Value::FuncRef(Some(FuncRef { index: 42, instance_id: None }));
+        let ref_value = Value::FuncRef(Some(FuncRef {
+            index: 42,
+            instance_id: None,
+        }));
         let (branch_taken, value) = op.execute(&ref_value).unwrap();
         assert!(branch_taken); // Branch should be taken
         assert_eq!(value, Some(ref_value.clone())); // Reference stays on stack
@@ -327,7 +319,10 @@ mod tests {
 
         // Test BrOnNonNull with non-null ref
         let br_on_non_null = BranchHintOp::BrOnNonNull(BrOnNonNull::new(3));
-        let ref_value = Value::FuncRef(Some(FuncRef { index: 10, instance_id: None }));
+        let ref_value = Value::FuncRef(Some(FuncRef {
+            index: 10,
+            instance_id: None,
+        }));
         let (taken, label, value) = br_on_non_null.execute(&ref_value).unwrap();
         assert!(taken);
         assert_eq!(label, Some(3));

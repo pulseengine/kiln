@@ -4,47 +4,34 @@
 //! instead of provider-embedded types, serving as a prototype for the
 //! full kiln-runtime migration.
 
-use alloc::{
-    string::String,
-    vec::Vec,
-};
+use alloc::{string::String, vec::Vec};
 
-use kiln_error::{
-    codes,
-    Error,
-    ErrorCategory,
-    Result,
-};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 use kiln_foundation::{
-    CleanFuncType,
-    CleanMemoryType,
-    CleanTableType,
-    CleanValType,
-    CleanValue,
-    RuntimeTypeFactory,
+    CleanFuncType, CleanMemoryType, CleanTableType, CleanValType, CleanValue, RuntimeTypeFactory,
     TypeFactory,
 };
 
 /// Clean runtime module using provider-free types
 pub struct CleanRuntime {
     /// Runtime type factory for allocation
-    factory:   RuntimeTypeFactory<65536>,
+    factory: RuntimeTypeFactory<65536>,
     /// Functions in this runtime
     functions: Vec<CleanFunction>,
     /// Memory instances
-    memories:  Vec<CleanMemory>,
+    memories: Vec<CleanMemory>,
     /// Table instances  
-    tables:    Vec<CleanTable>,
+    tables: Vec<CleanTable>,
 }
 
 impl CleanRuntime {
     /// Create a new clean runtime
     pub fn new() -> Self {
         Self {
-            factory:   RuntimeTypeFactory::new(),
+            factory: RuntimeTypeFactory::new(),
             functions: Vec::new(),
-            memories:  Vec::new(),
-            tables:    Vec::new(),
+            memories: Vec::new(),
+            tables: Vec::new(),
         }
     }
 
@@ -130,25 +117,25 @@ impl Default for CleanRuntime {
 #[derive(Debug, Clone)]
 pub struct CleanFunction {
     /// Function name
-    pub name:      String,
+    pub name: String,
     /// Function type signature
     pub func_type: CleanFuncType,
     /// Function ID
-    pub id:        u32,
+    pub id: u32,
 }
 
 /// Clean memory representation without provider embedding
 #[derive(Debug, Clone)]
 pub struct CleanMemory {
     /// Memory name
-    pub name:        String,
+    pub name: String,
     /// Memory type
     pub memory_type: CleanMemoryType,
     /// Memory ID
-    pub id:          u32,
+    pub id: u32,
     /// Memory data (simplified - in real impl would use factory for bounded
     /// allocation)
-    pub data:        Vec<u8>,
+    pub data: Vec<u8>,
 }
 
 impl CleanMemory {
@@ -183,12 +170,11 @@ impl CleanMemory {
 #[derive(Debug, Clone)]
 pub struct CleanTable {
     /// Table name
-    pub name:       String,
+    pub name: String,
     /// Table type
     pub table_type: CleanTableType,
     /// Table ID
-    pub id:         u32,
+    pub id: u32,
     /// Table elements (simplified)
-    pub elements:   Vec<Option<u32>>, // Function references
+    pub elements: Vec<Option<u32>>, // Function references
 }
-

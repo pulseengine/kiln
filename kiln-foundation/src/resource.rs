@@ -20,36 +20,14 @@ use std::fmt::Debug;
 // #[cfg(feature = "component-model-resources")]
 // use crate::bounded::BoundedVec;
 use crate::{
-    bounded::{
-        BoundedString,
-        BoundedVec,
-        WasmName,
-        MAX_WASM_NAME_LENGTH,
-    },
-    memory_sizing::{
-        size_classes,
-        MediumProvider,
-    },
-    prelude::{
-        str,
-        Eq,
-        PartialEq,
-    },
-    safe_memory::NoStdProvider,
-    traits::{
-        Checksummable,
-        FromBytes,
-        ReadStream,
-        SerializationError,
-        ToBytes,
-        WriteStream,
-    },
-    types::ValueType,
-    verification::{
-        Checksum,
-        VerificationLevel,
-    },
     MemoryProvider,
+    bounded::{BoundedString, BoundedVec, MAX_WASM_NAME_LENGTH, WasmName},
+    memory_sizing::{MediumProvider, size_classes},
+    prelude::{Eq, PartialEq, str},
+    safe_memory::NoStdProvider,
+    traits::{Checksummable, FromBytes, ReadStream, SerializationError, ToBytes, WriteStream},
+    types::ValueType,
+    verification::{Checksum, VerificationLevel},
 };
 
 // use crate::prelude::{format, ToString, String as PreludeString, Vec as
@@ -198,11 +176,7 @@ pub enum ResourceRepresentation {
     /// Record representation with field names
     #[cfg(feature = "std")]
     Record(
-        BoundedVec<
-            BoundedString<MAX_RESOURCE_FIELD_NAME_LEN>,
-            MAX_RESOURCE_FIELDS,
-            MediumProvider,
-        >,
+        BoundedVec<BoundedString<MAX_RESOURCE_FIELD_NAME_LEN>, MAX_RESOURCE_FIELDS, MediumProvider>,
     ),
     /// Aggregate representation with type indices
     #[cfg(feature = "std")]
@@ -246,8 +220,7 @@ impl core::str::FromStr for ResourceRepresentation {
                 #[cfg(feature = "std")]
                 {
                     use crate::{
-                        budget_aware_provider::CrateId,
-                        safe_allocation::capability_factories,
+                        budget_aware_provider::CrateId, safe_allocation::capability_factories,
                         verification::VerificationLevel,
                     };
 
@@ -268,8 +241,7 @@ impl core::str::FromStr for ResourceRepresentation {
                 #[cfg(feature = "std")]
                 {
                     use crate::{
-                        budget_aware_provider::CrateId,
-                        safe_allocation::capability_factories,
+                        budget_aware_provider::CrateId, safe_allocation::capability_factories,
                         verification::VerificationLevel,
                     };
 
@@ -323,8 +295,7 @@ pub enum ResourceRepr<P: MemoryProvider + Default + Clone + Eq + Debug> {
 impl<P: MemoryProvider + Default + Clone + Eq + Debug> Checksummable for ResourceRepr<P>
 where
     ValueType: Checksummable, // Already is
-    BoundedVec<BoundedString<MAX_RESOURCE_FIELD_NAME_LEN>, MAX_RESOURCE_FIELDS, P>:
-        Checksummable,
+    BoundedVec<BoundedString<MAX_RESOURCE_FIELD_NAME_LEN>, MAX_RESOURCE_FIELDS, P>: Checksummable,
     BoundedVec<u32, MAX_RESOURCE_AGGREGATE_IDS, P>: Checksummable,
     BoundedString<MAX_RESOURCE_FIELD_NAME_LEN>: Checksummable,
 {
@@ -430,9 +401,9 @@ impl<P: MemoryProvider + Default + Clone + Eq + Debug> FromBytes for ResourceRep
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Resource<P: MemoryProvider + Default + Clone + Eq + Debug> {
     /// Unique identifier for the resource.
-    pub id:             u32,
+    pub id: u32,
     /// The representation or type of the resource.
-    pub repr:           ResourceRepr<P>,
+    pub repr: ResourceRepr<P>,
     /// Optional human-readable name for the resource.
     // Using WasmName (which uses BoundedString internally)
     pub name: Option<WasmName<MAX_WASM_NAME_LENGTH>>, // MAX_WASM_NAME_LENGTH from bounded.rs
@@ -560,11 +531,11 @@ where
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ResourceItem<P: MemoryProvider + Default + Clone + Eq> {
     /// Unique identifier for the resource.
-    pub id:    u32,
+    pub id: u32,
     /// The type of the resource.
     pub type_: ResourceType<P>,
     /// Optional human-readable name for the resource.
-    pub name:  Option<WasmName<MAX_WASM_NAME_LENGTH>>,
+    pub name: Option<WasmName<MAX_WASM_NAME_LENGTH>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -577,8 +548,8 @@ impl ToBytes for ResourceTableIdx {
         _provider: &PStream, // Not used by u32
     ) -> kiln_error::Result<()> {
         self.0.to_bytes_with_provider(writer, _provider) // u32's to_bytes
-                                                         // doesn't take
-                                                         // provider
+        // doesn't take
+        // provider
     }
 }
 
@@ -669,10 +640,7 @@ mod kani_proofs {
         assert_ne!(id1, id3);
 
         // Hash should be consistent
-        use core::hash::{
-            Hash,
-            Hasher,
-        };
+        use core::hash::{Hash, Hasher};
         let mut hasher1 = core::hash::SipHasher::new();
         let mut hasher2 = core::hash::SipHasher::new();
 

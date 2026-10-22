@@ -1,19 +1,10 @@
 use core::{
-    fmt::{
-        self,
-        Debug,
-    },
-    sync::atomic::{
-        AtomicU32,
-        Ordering,
-    },
+    fmt::{self, Debug},
+    sync::atomic::{AtomicU32, Ordering},
     time::Duration,
 };
 
-use kiln_error::{
-    Error,
-    Result,
-};
+use kiln_error::{Error, Result};
 
 use crate::sync::FutexLike;
 
@@ -60,7 +51,7 @@ struct PosixSem {
 
 #[repr(C)]
 struct TimeSpec {
-    tv_sec:  i64,
+    tv_sec: i64,
     tv_nsec: i64,
 }
 
@@ -68,10 +59,10 @@ use super::vxworks_memory::VxWorksContext;
 
 /// VxWorks synchronization primitive supporting both LKM and RTP contexts
 pub struct VxWorksFutex {
-    context:      VxWorksContext,
+    context: VxWorksContext,
     atomic_value: AtomicU32,
-    sem_id:       Option<usize>,
-    posix_sem:    Option<PosixSem>,
+    sem_id: Option<usize>,
+    posix_sem: Option<PosixSem>,
 }
 
 impl Debug for VxWorksFutex {
@@ -177,11 +168,7 @@ impl VxWorksFutex {
             }
 
             let ticks = (total_ms * ticks_per_sec) / 1000;
-            if ticks > i32::MAX as u64 {
-                WAIT_FOREVER
-            } else {
-                ticks as i32
-            }
+            if ticks > i32::MAX as u64 { WAIT_FOREVER } else { ticks as i32 }
         }
 
         #[cfg(not(target_os = "vxworks"))]
@@ -194,7 +181,7 @@ impl VxWorksFutex {
     /// Convert duration to timespec for POSIX operations
     fn duration_to_timespec(duration: Duration) -> TimeSpec {
         TimeSpec {
-            tv_sec:  duration.as_secs() as i64,
+            tv_sec: duration.as_secs() as i64,
             tv_nsec: duration.subsec_nanos() as i64,
         }
     }
@@ -217,8 +204,7 @@ impl VxWorksFutex {
         success: Ordering,
         failure: Ordering,
     ) -> core::result::Result<u32, u32> {
-        self.atomic_value
-            .compare_exchange_weak(current, new, success, failure)
+        self.atomic_value.compare_exchange_weak(current, new, success, failure)
     }
 }
 
@@ -359,7 +345,7 @@ impl Drop for VxWorksFutex {
 
 /// Builder for VxWorks futex
 pub struct VxWorksFutexBuilder {
-    context:       VxWorksContext,
+    context: VxWorksContext,
     initial_value: u32,
 }
 

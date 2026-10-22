@@ -8,11 +8,11 @@ use std::io::IsTerminal;
 
 use anyhow::Result;
 use colored::Colorize;
-use serde::Serialize;
 use kiln_build_core::{
     diagnostics::DiagnosticCollection,
     formatters::{FormatterFactory, OutputFormat},
 };
+use serde::Serialize;
 
 /// Standard result formatting for any serializable + displayable type
 #[must_use]

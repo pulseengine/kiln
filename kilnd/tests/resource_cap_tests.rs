@@ -73,9 +73,7 @@ fn multi_memory_peak_reporting_sums_all_memories() {
         r#"(module (memory 2) (memory 3) (func (export "_start")))"#,
         10 * WASM_PAGE,
     );
-    engine
-        .execute_module()
-        .expect("within-cap multi-memory module must execute");
+    engine.execute_module().expect("within-cap multi-memory module must execute");
     let peak = engine.stats().peak_memory;
     assert!(
         peak >= 5 * WASM_PAGE,
