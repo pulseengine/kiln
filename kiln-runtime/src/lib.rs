@@ -23,8 +23,10 @@
 //! memory access (atomic operations, wait queues) allow unsafe code with
 //! documented safety invariants.
 
-// Note: unsafe_code is allowed selectively in specific modules that need it
+// unsafe_code is denied crate-wide (SR-73); modules that need it opt in with an
+// item- or module-level `#[allow(unsafe_code)]` and documented invariants.
 // Lints configured in Cargo.toml
+#![deny(unsafe_code)]
 
 extern crate alloc;
 extern crate std;

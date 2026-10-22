@@ -1,4 +1,6 @@
-// #![allow(unsafe_code)] // Allow unsafe for UnsafeCell and Send/Sync impls
+// Reviewed exception (SR-73): UnsafeCell access guarded by the spinlock and the
+// Send/Sync impls for the lock. Each site carries its own SAFETY comment.
+#![allow(unsafe_code)]
 
 // use crate::prelude::*;
 use crate::prelude::{AtomicBool, Deref, DerefMut, Ordering, UnsafeCell, fmt};

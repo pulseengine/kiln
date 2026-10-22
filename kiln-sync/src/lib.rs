@@ -9,6 +9,7 @@
 
 #![doc = include_str!("../README.md")]
 #![cfg_attr(not(feature = "std"), no_std)]
+#![deny(unsafe_code)] // SR-73: only the lock primitives (mutex, rwlock, once, unified_sync) opt in
 #![warn(clippy::missing_panics_doc)]
 #![warn(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
