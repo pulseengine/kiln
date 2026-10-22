@@ -107,41 +107,18 @@ impl SimdCapabilities {
     pub fn detect() -> Self {
         #[cfg(target_arch = "x86_64")]
         {
-            return Self::detect_x86_64();
+            Self::detect_x86_64()
         }
 
         #[cfg(target_arch = "aarch64")]
         {
-            return Self::detect_aarch64();
+            Self::detect_aarch64()
         }
 
-        // Fallback for unsupported architectures
-        Self {
-            #[cfg(target_arch = "x86_64")]
-            has_sse2:                                   false,
-            #[cfg(target_arch = "x86_64")]
-            has_sse3:                                   false,
-            #[cfg(target_arch = "x86_64")]
-            has_ssse3:                                  false,
-            #[cfg(target_arch = "x86_64")]
-            has_sse41:                                  false,
-            #[cfg(target_arch = "x86_64")]
-            has_sse42:                                  false,
-            #[cfg(target_arch = "x86_64")]
-            has_avx:                                    false,
-            #[cfg(target_arch = "x86_64")]
-            has_avx2:                                   false,
-            #[cfg(target_arch = "x86_64")]
-            has_avx512f:                                false,
-
-            #[cfg(target_arch = "aarch64")]
-            has_neon:                                 false,
-            #[cfg(target_arch = "aarch64")]
-            has_sve:                                  false,
-            #[cfg(target_arch = "aarch64")]
-            has_sve2:                                 false,
-
-            level: SimdLevel::None,
+        // No SIMD detection exists for other architectures, so none is reported.
+        #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+        {
+            Self { level: SimdLevel::None }
         }
     }
 
