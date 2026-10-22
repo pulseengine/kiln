@@ -610,6 +610,9 @@ impl Data {
 /// Version
 #[cfg(not(any(feature = "std")))]
 #[derive(Debug, Clone, PartialEq, Eq)]
+// rustfmt 1.10.0 panics (items.rs:557, unwrap on None) formatting an enum whose
+// generic parameter has a long default; skip it so `cargo fmt` completes.
+#[rustfmt::skip]
 pub enum ElementInit<
     P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq = kiln_foundation::NoStdProvider<1024>,
 > {
@@ -840,6 +843,8 @@ impl Default for ElementInit {
 /// Version
 #[cfg(not(any(feature = "std")))]
 #[derive(Debug, Clone, PartialEq, Eq)]
+// rustfmt 1.10.0 panics on this enum's long generic default too; see ElementInit.
+#[rustfmt::skip]
 pub enum ElementMode<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq = kiln_foundation::NoStdProvider<1024>>
 {
     /// Active segment: associated with a table and an offset.
