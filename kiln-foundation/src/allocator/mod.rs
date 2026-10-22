@@ -13,7 +13,12 @@
 //!
 //! # Usage
 //!
+//! The budget-typed collections exist only with the `kiln-allocator`
+//! feature, so the example body is compiled only when it is enabled.
+//!
 //! ```rust
+//! # #[cfg(feature = "kiln-allocator")]
+//! # {
 //! use kiln_foundation::allocator::{
 //!     CrateId,
 //!     KilnHashMap,
@@ -22,11 +27,12 @@
 //!
 //! // Compile-time verified collections
 //! let mut vec: KilnVec<i32, { CrateId::Component as u8 }, 1000> = KilnVec::new();
-//! let mut map: KilnHashMap<String, Data, { CrateId::Component as u8 }, 256> = KilnHashMap::new();
+//! let mut map: KilnHashMap<String, u32, { CrateId::Component as u8 }, 256> = KilnHashMap::new();
 //!
 //! // Works exactly like std collections but with compile-time safety
-//! vec.push(42)?;
-//! map.insert("key".to_string(), data)?;
+//! vec.push(42).unwrap();
+//! map.insert("key".to_string(), 7).unwrap();
+//! # }
 //! ```
 
 #[cfg(feature = "kiln-allocator")]

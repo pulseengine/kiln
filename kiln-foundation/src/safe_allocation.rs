@@ -134,20 +134,29 @@ pub mod capability_factories {
 /// Capability-aware macro for creating providers
 ///
 /// This macro uses the capability context for memory allocation verification.
+/// It registers a static capability of the given size for the crate in the
+/// context; providers are then created from that context.
 ///
 /// # Examples
 ///
 /// ```rust
+/// # fn main() -> kiln_error::Result<()> {
 /// use kiln_foundation::{
+///     capabilities::{MemoryCapabilityContext, MemoryFactory},
 ///     capability_managed_alloc,
+///     verification::VerificationLevel,
+///     BoundedVec,
 ///     CrateId,
-///     MemoryCapabilityContext,
 /// };
 ///
-/// let context = MemoryCapabilityContext::new();
+/// let mut context = MemoryCapabilityContext::new(VerificationLevel::Standard, false);
 /// // Capability-based allocation with context verification
-/// let provider = capability_managed_alloc!(131072, &context, CrateId::Runtime)?;
-/// let vec = BoundedVec::new(provider)?;
+/// capability_managed_alloc!(131072, &mut context, CrateId::Runtime)?;
+/// let provider = MemoryFactory::create_with_context::<4096>(&context, CrateId::Runtime)?;
+/// let vec: BoundedVec<u32, 16, _> = BoundedVec::new(provider)?;
+/// # let _ = vec;
+/// # Ok(())
+/// # }
 /// ```
 #[macro_export]
 macro_rules! capability_managed_alloc {

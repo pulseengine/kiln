@@ -4,6 +4,7 @@
 use std::fs;
 
 #[test]
+#[ignore = "#583: fixture kiln-tests/fixtures/file_ops_component.wasm does not exist"]
 fn test_parse_file_ops_component() {
     let bytes = fs::read("../kiln-tests/fixtures/file_ops_component.wasm")
         .expect("Failed to read component file");

@@ -35,8 +35,8 @@
 //! let comm_strategy = ComponentCommunicationStrategy::new();
 //!
 //! // Add to interceptor
-//! let mut interceptor = LinkInterceptor::new("component_comm";
-//! interceptor.add_strategy(std::sync::Arc::new(comm_strategy;
+//! let mut interceptor = LinkInterceptor::new("component_comm");
+//! interceptor.add_strategy(std::sync::Arc::new(comm_strategy));
 //! ```
 
 // Cross-environment imports

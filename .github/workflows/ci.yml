@@ -122,6 +122,9 @@ jobs:
     # This job runs on push, PR, and all manual triggers (regardless of input)
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The WAST tests decode files from the external/testsuite submodule (SR-73).
+          submodules: true
       - name: Cargo Cache
         uses: actions/cache@v6
         with:

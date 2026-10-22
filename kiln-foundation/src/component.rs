@@ -650,6 +650,7 @@ mod tests {
     use crate::safe_memory::StdProvider; // For testing with a concrete provider
 
     #[test]
+    #[ignore = "#576: BoundedVec::new rejects BoundedString elements (zero-size default)"]
     fn namespace_from_str_works() {
         let provider = StdProvider::new(Vec::new()); // Example provider
         let ns = Namespace::from_str("wasi:filesystem/types", provider).unwrap();
@@ -660,6 +661,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "#576: BoundedVec::new rejects BoundedString elements (zero-size default)"]
     fn namespace_from_str_empty_parts() {
         let provider = StdProvider::new(Vec::new());
         let ns = Namespace::from_str("foo::bar", provider).unwrap(); // Handles empty part

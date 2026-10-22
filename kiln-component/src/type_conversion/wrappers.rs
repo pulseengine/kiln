@@ -19,14 +19,11 @@
 //!     RuntimeComponentType,
 //! };
 //! use kiln_format::component::ComponentTypeDefinition;
+//! use kiln_foundation::NoStdProvider;
 //! use kiln_foundation::component::ComponentType as TypesComponentType;
 //!
-//! // Create a wrapper around a runtime type
-//! let rt_type = TypesComponentType {
-//!     imports:   vec![],
-//!     exports:   vec![],
-//!     instances: vec![],
-//! };
+//! // Create a wrapper around a runtime type (an empty component type)
+//! let rt_type: TypesComponentType<NoStdProvider<4096>> = TypesComponentType::default();
 //! let wrapper = RuntimeComponentType::new(rt_type);
 //!
 //! // Get the underlying type

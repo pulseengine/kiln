@@ -16,12 +16,21 @@
 //! # Usage
 //!
 //! ```rust
+//! use kiln_error::Error;
 //! use kiln_foundation::limits;
 //!
 //! // Check before allocation
-//! if param_count > limits::MAX_FUNCTION_PARAMS {
-//!     return Err(Error::module_exceeds_platform_limits());
+//! fn check_param_count(param_count: usize) -> kiln_error::Result<()> {
+//!     if param_count > limits::MAX_FUNCTION_PARAMS {
+//!         return Err(Error::capacity_limit_exceeded(
+//!             "Function type exceeds maximum parameter count for platform",
+//!         ));
+//!     }
+//!     Ok(())
 //! }
+//!
+//! assert!(check_param_count(limits::MAX_FUNCTION_PARAMS).is_ok());
+//! assert!(check_param_count(limits::MAX_FUNCTION_PARAMS + 1).is_err());
 //! ```
 //!
 //! # Safety

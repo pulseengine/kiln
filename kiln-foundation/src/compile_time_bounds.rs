@@ -101,9 +101,28 @@ impl<const SIZE: usize, const CRATE: usize> CompileTimeBoundsValidator<SIZE, CRA
 ///
 /// # Usage
 ///
+/// The macro refers to `CompileTimeBoundsValidator` unqualified, so it must be
+/// in scope at the call site.
+///
 /// ```rust
+/// use kiln_foundation::{
+///     compile_time_bounds::CompileTimeBoundsValidator,
+///     validate_allocation,
+///     CrateId,
+/// };
+///
 /// // This will compile successfully
-/// validate_allocation!(1024, CrateId::Component;
+/// validate_allocation!(1024, CrateId::Component);
+/// ```
+///
+/// An oversized allocation is rejected at compile time:
+///
+/// ```rust,compile_fail
+/// use kiln_foundation::{
+///     compile_time_bounds::CompileTimeBoundsValidator,
+///     validate_allocation,
+///     CrateId,
+/// };
 ///
 /// // This will cause a compile error
 /// validate_allocation!(999_999_999, CrateId::Component); // Too large

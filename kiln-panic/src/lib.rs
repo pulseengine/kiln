@@ -25,19 +25,24 @@
 //!
 //! ### Runtime Configuration
 //! ```rust
-//! use kiln_foundation::safety_system::AsilLevel;
 //! use kiln_panic::{
 //!     initialize_panic_handler,
+//!     AsilLevel,
+//!     NoStdProvider,
 //!     PanicContextBuilder,
 //! };
 //!
 //! // Initialize with custom memory budget and safety level
+//! // (this crate has no dependencies, so it defines its own `AsilLevel`
+//! // and `NoStdProvider`)
 //! let panic_context = PanicContextBuilder::new()
+//!     .with_memory_provider(NoStdProvider::<4096>)
 //!     .with_memory_budget(2048)  // 2KB for panic information
 //!     .with_safety_level(AsilLevel::AsilD)
-//!     .build();
+//!     .build()
+//!     .expect("valid panic context");
 //!
-//! initialize_panic_handler(panic_context);
+//! initialize_panic_handler(panic_context).expect("provider covers budget");
 //! ```
 //!
 //! ## Safety Compliance Features

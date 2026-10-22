@@ -220,10 +220,52 @@ impl TelemetryConfig {
 }
 
 /// Global telemetry buffer (1024 events)
+#[cfg(not(test))]
 static TELEMETRY_BUFFER: TelemetryBuffer<1024> = TelemetryBuffer::new();
 
 /// Global telemetry configuration
+#[cfg(not(test))]
 static TELEMETRY_CONFIG: TelemetryConfig = TelemetryConfig::new();
+
+// In unit tests every test thread owns its telemetry buffer and configuration:
+// tests assert exact event counts, and the process-globals would be mutated by
+// any concurrently running test that records an event. Call sites are
+// unchanged (`TELEMETRY_BUFFER.method()`).
+#[cfg(test)]
+struct PerTestThreadBuffer;
+#[cfg(test)]
+struct PerTestThreadConfig;
+
+#[cfg(test)]
+impl core::ops::Deref for PerTestThreadBuffer {
+    type Target = TelemetryBuffer<1024>;
+
+    fn deref(&self) -> &Self::Target {
+        std::thread_local! {
+            static BUFFER: &'static TelemetryBuffer<1024> =
+                std::boxed::Box::leak(std::boxed::Box::new(TelemetryBuffer::new()));
+        }
+        BUFFER.with(|buffer| *buffer)
+    }
+}
+
+#[cfg(test)]
+impl core::ops::Deref for PerTestThreadConfig {
+    type Target = TelemetryConfig;
+
+    fn deref(&self) -> &Self::Target {
+        std::thread_local! {
+            static CONFIG: &'static TelemetryConfig =
+                std::boxed::Box::leak(std::boxed::Box::new(TelemetryConfig::new()));
+        }
+        CONFIG.with(|config| *config)
+    }
+}
+
+#[cfg(test)]
+static TELEMETRY_BUFFER: PerTestThreadBuffer = PerTestThreadBuffer;
+#[cfg(test)]
+static TELEMETRY_CONFIG: PerTestThreadConfig = PerTestThreadConfig;
 
 /// Record a telemetry event
 pub fn record_event(

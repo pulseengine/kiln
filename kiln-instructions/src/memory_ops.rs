@@ -37,34 +37,76 @@
 //!
 //! # Usage
 //!
-//! ```no_run
-//! use kiln_foundation::types::Limits;
+//! `kiln-runtime` depends on this crate, so the example cannot use
+//! `kiln_runtime::Memory`; it implements [`MemoryOperations`] over a plain
+//! byte vector instead. It needs the `std` feature (the `read_bytes`
+//! signature is std-only); the hidden `main` wrappers make it a no-op without
+//! `std`.
+//!
+//! ```
+//! # #[cfg(not(feature = "std"))]
+//! # fn main() {}
+//! # #[cfg(feature = "std")]
+//! # fn main() {
+//! use kiln_error::{Error, Result};
 //! use kiln_instructions::{
 //!     memory_ops::{
 //!         MemoryLoad,
+//!         MemoryOperations,
 //!         MemoryStore,
 //!     },
 //!     Value,
 //! };
-//! use kiln_runtime::Memory;
 //!
-//! // Create a memory instance
-//! let mem_type = MemoryType {
-//!     limits: Limits {
-//!         min: 1,
-//!         max: Some(2),
-//!     },
-//! };
-//! let mut memory = Memory::new(mem_type).unwrap();
+//! // A one-page memory backed by a byte vector
+//! struct VecMemory(Vec<u8>);
+//!
+//! impl MemoryOperations for VecMemory {
+//!     fn read_bytes(&self, offset: u64, len: u64) -> Result<Vec<u8>> {
+//!         let (start, end) = (offset as usize, (offset + len) as usize);
+//!         self.0.get(start..end).map(<[u8]>::to_vec)
+//!             .ok_or_else(|| Error::memory_error("read out of bounds"))
+//!     }
+//!     fn write_bytes(&mut self, offset: u64, bytes: &[u8]) -> Result<()> {
+//!         let start = offset as usize;
+//!         self.0.get_mut(start..start + bytes.len())
+//!             .ok_or_else(|| Error::memory_error("write out of bounds"))?
+//!             .copy_from_slice(bytes);
+//!         Ok(())
+//!     }
+//!     fn size_in_bytes(&self) -> Result<u64> { Ok(self.0.len() as u64) }
+//!     fn grow(&mut self, bytes: u64) -> Result<()> {
+//!         self.0.resize(self.0.len() + bytes as usize, 0);
+//!         Ok(())
+//!     }
+//!     fn fill(&mut self, offset: u64, value: u8, size: u64) -> Result<()> {
+//!         let start = offset as usize;
+//!         self.0.get_mut(start..start + size as usize)
+//!             .ok_or_else(|| Error::memory_error("fill out of bounds"))?
+//!             .fill(value);
+//!         Ok(())
+//!     }
+//!     fn copy(&mut self, dest: u64, src: u64, size: u64) -> Result<()> {
+//!         let (d, s, n) = (dest as usize, src as usize, size as usize);
+//!         if d + n > self.0.len() || s + n > self.0.len() {
+//!             return Err(Error::memory_error("copy out of bounds"));
+//!         }
+//!         self.0.copy_within(s..s + n, d);
+//!         Ok(())
+//!     }
+//! }
+//!
+//! let mut memory = VecMemory(vec![0u8; 65536]);
 //!
 //! // Store a value
 //! let store = MemoryStore::i32(0, 4); // offset 0, 4-byte aligned
 //! store.execute(&mut memory, &Value::I32(0), &Value::I32(42)).unwrap();
 //!
 //! // Load a value
-//! let load = MemoryLoad::i32(0, 4); // offset 0, 4-byte aligned
+//! let load = MemoryLoad::i32_legacy(0, 4); // offset 0, 4-byte aligned
 //! let result = load.execute(&memory, &Value::I32(0)).unwrap();
 //! assert_eq!(result, Value::I32(42));
+//! # }
 //! ```
 
 // WebAssembly value semantics require bit reinterpretation casts.

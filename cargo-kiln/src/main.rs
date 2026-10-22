@@ -1864,7 +1864,7 @@ async fn cmd_test(
                     results.failed,
                     results.passed
                 );
-                anyhow::bail!("Test suite failed");
+                anyhow::bail!("Test suite failed:{}", results.failure_reasons.join("; "));
             }
         },
     }
@@ -2365,11 +2365,21 @@ async fn cmd_ci(build_system: &BuildSystem, fail_fast: bool, json: bool) -> Resu
 
     // 2. Tests
     println!("  {} Testing...", "🧪".bright_cyan());
-    if let Err(e) = build_system.run_tests() {
-        errors.push(format!("Tests failed: {}", e));
-        if fail_fast {
-            anyhow::bail!("Tests failed: {}", e);
-        }
+    match build_system.run_tests() {
+        Ok(results) if results.is_success() => {},
+        Ok(results) => {
+            let msg = format!("Tests failed: {}", results.failure_reasons.join("; "));
+            errors.push(msg.clone());
+            if fail_fast {
+                anyhow::bail!("{}", msg);
+            }
+        },
+        Err(e) => {
+            errors.push(format!("Tests failed: {}", e));
+            if fail_fast {
+                anyhow::bail!("Tests failed: {}", e);
+            }
+        },
     }
 
     // 3. Static analysis

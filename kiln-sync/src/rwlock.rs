@@ -310,7 +310,6 @@ pub mod parking_impl {
     // Replace wildcard import with explicit imports
     // Removed Cow from this list as it is no longer used.
     use core::sync::atomic::{
-        AtomicBool,
         AtomicUsize,
         Ordering,
     }; // Use Ordering directly
@@ -345,16 +344,20 @@ pub mod parking_impl {
 
     /// A `RwLock` that uses `std::thread::park` for blocking.
     pub struct KilnParkingRwLock<T: ?Sized> {
-        state:          AtomicUsize,
-        writer_waiting: AtomicBool, // True if a writer is parked, waiting for the lock
-        waiters:        Arc<WaitQueue>,
-        data:           CoreUnsafeCell<T>,
+        state:           AtomicUsize,
+        /// Number of `write()` calls currently trying to acquire the lock.
+        /// New readers defer to them. It is a count, incremented before the
+        /// first acquire attempt and decremented once `write()` returns, so
+        /// it is back to zero whenever no writer is waiting.
+        writers_waiting: AtomicUsize,
+        waiters:         Arc<WaitQueue>,
+        data:            CoreUnsafeCell<T>,
     }
 
     #[derive(CoreFmt::Debug)] // Add Debug derive for WaitQueue
     struct WaitQueue {
         readers: StdRwLock<Vec<Thread>>,
-        writer:  StdRwLock<Option<Thread>>,
+        writers: StdRwLock<Vec<Thread>>,
     }
 
     // Static error messages - Corrected syntax
@@ -369,7 +372,7 @@ pub mod parking_impl {
         fn new() -> Self {
             Self {
                 readers: StdRwLock::new(Vec::new()),
-                writer:  StdRwLock::new(None),
+                writers: StdRwLock::new(Vec::new()),
             }
         }
 
@@ -387,19 +390,18 @@ pub mod parking_impl {
             Ok(())
         }
 
-        fn register_writer(&self) -> Result<bool> {
-            let mut writer_guard = self.writer.write().map_err(|_e| {
-                Error::new(
-                    ErrorCategory::Concurrency, // Corrected Category
-                    codes::POISONED_LOCK,
-                    POISONED_WRITER_QUEUE_MSG, // Static message
-                )
-            })?;
-            if writer_guard.is_some() {
-                return Ok(false); // Writer already present
-            }
-            *writer_guard = Some(thread::current());
-            Ok(true)
+        fn register_writer(&self) -> Result<()> {
+            self.writers
+                .write()
+                .map_err(|_e| {
+                    Error::new(
+                        ErrorCategory::Concurrency, // Corrected Category
+                        codes::POISONED_LOCK,
+                        POISONED_WRITER_QUEUE_MSG, // Static message
+                    )
+                })?
+                .push(thread::current());
+            Ok(())
         }
 
         fn unregister_current_reader(&self) -> Result<()> {
@@ -417,31 +419,32 @@ pub mod parking_impl {
             Ok(())
         }
 
-        fn unregister_writer(&self) -> Result<()> {
-            let mut writer_guard = self.writer.write().map_err(|_e| {
-                Error::new(
-                    ErrorCategory::Concurrency, // Corrected Category
-                    codes::POISONED_LOCK,
-                    POISONED_WRITER_UNREGISTER_MSG, // Static message
-                )
-            })?;
-            *writer_guard = None;
-            Ok(())
-        }
-
-        fn wake_writer(&self) -> Result<()> {
-            if let Some(writer_thread) = self
-                .writer
+        fn unregister_current_writer(&self) -> Result<()> {
+            let current_thread_id = thread::current().id();
+            self.writers
                 .write()
                 .map_err(|_e| {
                     Error::new(
                         ErrorCategory::Concurrency, // Corrected Category
                         codes::POISONED_LOCK,
-                        POISONED_WRITER_WAKE_MSG, // Static message
+                        POISONED_WRITER_UNREGISTER_MSG, // Static message
                     )
                 })?
-                .take()
-            {
+                .retain(|t| t.id() != current_thread_id);
+            Ok(())
+        }
+
+        /// Wake every parked writer; they race for the lock and the losers
+        /// park again.
+        fn wake_writers(&self) -> Result<()> {
+            let writers_guard = self.writers.read().map_err(|_e| {
+                Error::new(
+                    ErrorCategory::Concurrency, // Corrected Category
+                    codes::POISONED_LOCK,
+                    POISONED_WRITER_WAKE_MSG, // Static message
+                )
+            })?;
+            for writer_thread in writers_guard.iter() {
                 writer_thread.unpark();
             }
             Ok(())
@@ -501,15 +504,15 @@ pub mod parking_impl {
         /// # Examples
         ///
         /// ```
-        /// use kiln_sync::parking_impl::KilnParkingRwLock;
+        /// use kiln_sync::KilnParkingRwLock;
         /// let lock = KilnParkingRwLock::new(0);
         /// ```
         pub fn new(data: T) -> Self {
             KilnParkingRwLock {
-                state:          AtomicUsize::new(UNLOCKED),
-                writer_waiting: AtomicBool::new(false),
-                waiters:        Arc::new(WaitQueue::new()),
-                data:           CoreUnsafeCell::new(data),
+                state:           AtomicUsize::new(UNLOCKED),
+                writers_waiting: AtomicUsize::new(0),
+                waiters:         Arc::new(WaitQueue::new()),
+                data:            CoreUnsafeCell::new(data),
             }
         }
     }
@@ -525,7 +528,9 @@ pub mod parking_impl {
         pub fn read(&self) -> Result<KilnParkingRwLockReadGuard<'_, T>> {
             loop {
                 let current_state = self.state.load(Ordering::Relaxed);
-                if current_state < usize::MAX - 1 && !self.writer_waiting.load(Ordering::Relaxed) {
+                if current_state < usize::MAX - 1
+                    && self.writers_waiting.load(Ordering::SeqCst) == 0
+                {
                     match self.state.compare_exchange_weak(
                         current_state,
                         current_state + 1,
@@ -541,13 +546,15 @@ pub mod parking_impl {
                 // Re-check state before parking to avoid race
                 let current_state_after_register = self.state.load(Ordering::Relaxed);
                 if current_state_after_register < usize::MAX - 1
-                    && !self.writer_waiting.load(Ordering::Relaxed)
+                    && self.writers_waiting.load(Ordering::SeqCst) == 0
                 {
                     // Lock might have become available between check and park registration
                     self.waiters.unregister_current_reader()?; // Unregister before trying to acquire
                     continue; // Retry acquiring without parking
                 }
                 thread::park();
+                // Woken (or spurious): leave the queue and re-evaluate from scratch.
+                self.waiters.unregister_current_reader()?;
             }
         }
 
@@ -559,29 +566,33 @@ pub mod parking_impl {
         ///
         /// Returns a `PoisonError` if the lock is poisoned.
         pub fn write(&self) -> Result<KilnParkingRwLockWriteGuard<'_, T>> {
-            self.writer_waiting.store(true, Ordering::Relaxed);
+            // Announce before the first attempt so new readers defer to us, and
+            // retract on every exit path (including a poisoned wait queue) so
+            // the count never outlives this call.
+            self.writers_waiting.fetch_add(1, Ordering::SeqCst);
+            let acquired = self.acquire_write();
+            self.writers_waiting.fetch_sub(1, Ordering::SeqCst);
+            acquired?;
+            Ok(KilnParkingRwLockWriteGuard { lock: self })
+        }
+
+        fn acquire_write(&self) -> Result<()> {
             loop {
-                match self.state.compare_exchange_weak(
-                    0,
-                    usize::MAX - 1,
-                    Ordering::Acquire,
-                    Ordering::Relaxed,
-                ) {
-                    Ok(_) => {
-                        return Ok(KilnParkingRwLockWriteGuard { lock: self });
-                    },
-                    Err(_current_state) => {
-                        if !self.waiters.register_writer()? {
-                            thread::park();
-                            continue;
-                        }
-                        if self.state.load(Ordering::Relaxed) == 0 {
-                            self.waiters.unregister_writer()?;
-                            continue;
-                        }
-                        thread::park();
-                    },
+                if self
+                    .state
+                    .compare_exchange_weak(0, usize::MAX - 1, Ordering::Acquire, Ordering::Relaxed)
+                    .is_ok()
+                {
+                    return Ok(());
                 }
+                self.waiters.register_writer()?;
+                // Re-check after registering: a release that ran before we
+                // registered will not wake us.
+                if self.state.load(Ordering::SeqCst) != 0 {
+                    thread::park();
+                }
+                // Woken, spurious, or lock already free: leave the queue and retry.
+                self.waiters.unregister_current_writer()?;
             }
         }
 
@@ -589,7 +600,7 @@ pub mod parking_impl {
         #[inline]
         pub fn try_read(&self) -> Option<KilnParkingRwLockReadGuard<'_, T>> {
             let current_state = self.state.load(Ordering::Relaxed);
-            if current_state != usize::MAX - 1 && !self.writer_waiting.load(Ordering::Relaxed) {
+            if current_state != usize::MAX - 1 && self.writers_waiting.load(Ordering::SeqCst) == 0 {
                 match self.state.compare_exchange(
                     current_state,
                     current_state + 1,
@@ -612,7 +623,6 @@ pub mod parking_impl {
                 .compare_exchange(0, usize::MAX - 1, Ordering::Acquire, Ordering::Relaxed)
                 .is_ok()
             {
-                self.writer_waiting.store(true, Ordering::Relaxed); // Mark writer active
                 Some(KilnParkingRwLockWriteGuard { lock: self })
             } else {
                 None
@@ -635,11 +645,9 @@ pub mod parking_impl {
     impl<T: ?Sized> Drop for KilnParkingRwLockReadGuard<'_, T> {
         fn drop(&mut self) {
             let old_state = self.lock.state.fetch_sub(1, core::sync::atomic::Ordering::Release);
-            if old_state == 1
-                && self.lock.writer_waiting.load(core::sync::atomic::Ordering::Acquire)
-            {
-                // Last reader out, and a writer is waiting. Wake the writer.
-                self.lock.waiters.wake_writer().ok();
+            if old_state == 1 && self.lock.writers_waiting.load(Ordering::SeqCst) > 0 {
+                // Last reader out, and a writer is waiting. Wake the writers.
+                self.lock.waiters.wake_writers().ok();
             }
         }
     }
@@ -669,17 +677,10 @@ pub mod parking_impl {
     impl<T: ?Sized> Drop for KilnParkingRwLockWriteGuard<'_, T> {
         fn drop(&mut self) {
             self.lock.state.store(0, core::sync::atomic::Ordering::Release);
-            // Wake up any waiting readers or a writer. Readers are prioritized if present.
-            let readers_woken_or_attempted =
-                self.lock.waiters.wake_readers().map(|_| true).unwrap_or_else(|_err| {
-                    // Log _err if necessary
-                    false // If wake_readers failed, assume no readers were
-                          // effectively woken for this logic
-                });
-
-            if !readers_woken_or_attempted {
-                self.lock.waiters.wake_writer().ok();
-            }
+            // Wake every waiter: readers and writers re-check the state and the
+            // losers park again. Waking only one side strands the other.
+            self.lock.waiters.wake_readers().ok();
+            self.lock.waiters.wake_writers().ok();
         }
     }
 
@@ -781,6 +782,65 @@ pub mod parking_impl {
                 reader_finished_first_attempt.load(Ordering::SeqCst),
                 "Reader should have finished after writer released"
             );
+        }
+
+        /// Run `f` on a thread; fail the test (instead of hanging) if it does
+        /// not finish in time.
+        fn finishes_within_timeout<F: FnOnce() + Send + 'static>(f: F) -> bool {
+            let (tx, rx) = std::sync::mpsc::channel();
+            thread::spawn(move || {
+                f();
+                let _ = tx.send(());
+            });
+            rx.recv_timeout(std::time::Duration::from_secs(5)).is_ok()
+        }
+
+        #[test]
+        fn read_after_write_release_does_not_block() {
+            assert!(finishes_within_timeout(|| {
+                let lock = KilnParkingRwLock::new(0);
+                drop(lock.write().unwrap());
+                assert_eq!(*lock.read().unwrap(), 0);
+            }));
+        }
+
+        #[test]
+        fn try_read_succeeds_after_try_write_release() {
+            let lock = KilnParkingRwLock::new(0);
+            drop(lock.try_write().expect("uncontended try_write"));
+            assert!(lock.try_read().is_some());
+        }
+
+        #[test]
+        fn blocked_writer_is_woken_by_writer_release() {
+            assert!(finishes_within_timeout(|| {
+                let lock = Arc::new(KilnParkingRwLock::new(0));
+                let first = lock.write().unwrap();
+                let lock2 = Arc::clone(&lock);
+                let second = thread::spawn(move || {
+                    *lock2.write().unwrap() += 1;
+                });
+                thread::sleep(std::time::Duration::from_millis(100));
+                drop(first);
+                second.join().unwrap();
+                assert_eq!(*lock.read().unwrap(), 1);
+            }));
+        }
+
+        #[test]
+        fn blocked_writer_is_woken_by_last_reader_release() {
+            assert!(finishes_within_timeout(|| {
+                let lock = Arc::new(KilnParkingRwLock::new(0));
+                let reader = lock.read().unwrap();
+                let lock2 = Arc::clone(&lock);
+                let writer = thread::spawn(move || {
+                    *lock2.write().unwrap() += 1;
+                });
+                thread::sleep(std::time::Duration::from_millis(100));
+                drop(reader);
+                writer.join().unwrap();
+                assert_eq!(*lock.read().unwrap(), 1);
+            }));
         }
 
         #[test]

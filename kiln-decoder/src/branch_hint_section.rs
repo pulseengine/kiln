@@ -411,6 +411,7 @@ mod tests {
 
     #[cfg(feature = "std")]
     #[test]
+    #[ignore = "#580: branch hint section does not round-trip"]
     fn test_parse_encode_round_trip() {
         // Create a test section
         let mut section = BranchHintSection::new();

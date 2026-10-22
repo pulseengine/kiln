@@ -110,11 +110,10 @@ impl SimdCapabilities {
             return Self::detect_x86_64();
         }
 
-        // TODO: Implement aarch64 detection
-        // #[cfg(target_arch = "aarch64")]
-        // {
-        //     return Self::detect_aarch64);
-        // }
+        #[cfg(target_arch = "aarch64")]
+        {
+            return Self::detect_aarch64();
+        }
 
         // Fallback for unsupported architectures
         Self {
@@ -197,7 +196,6 @@ impl SimdCapabilities {
     }
 
     #[cfg(target_arch = "aarch64")]
-    #[allow(dead_code)]
     fn detect_aarch64() -> Self {
         // ARM64 always has NEON
         let has_neon = true;
@@ -507,13 +505,13 @@ impl SimdRuntime {
             }
         }
 
-        // TODO: Implement aarch64 provider selection
-        // #[cfg(target_arch = "aarch64")]
-        // {
-        //     if capabilities.has_neon {
-        //         return Box::new(aarch64::ArmSimdProvider::new();
-        //     }
-        // }
+        #[cfg(target_arch = "aarch64")]
+        {
+            // SVE is never reported by `detect_aarch64`, so NEON is the ceiling.
+            if _capabilities.has_neon {
+                return Box::new(aarch64::AArch64SimdProvider::new_neon());
+            }
+        }
 
         // Fallback to scalar
         Box::new(ScalarSimdProvider::new())

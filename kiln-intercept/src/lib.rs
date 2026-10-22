@@ -36,6 +36,12 @@
 //! See the `strategies` module for examples of built-in interceptor strategies.
 //!
 //! ```rust,no_run
+//! // This example uses the `std` strategy API (`Vec`-returning hooks and
+//! // `add_strategy`); the hidden `main` wrappers make it a no-op without `std`.
+//! # #[cfg(not(feature = "std"))]
+//! # fn main() {}
+//! # #[cfg(feature = "std")]
+//! # fn main() {
 //! # use std::sync::Arc;
 //! # use kiln_intercept::{LinkInterceptor, LinkInterceptorStrategy};
 //! # use kiln_error::Result;
@@ -54,14 +60,15 @@
 //! # }
 //!
 //! // Create your custom strategy
-//! let my_strategy = Arc::new(MyStrategy;
+//! let my_strategy = Arc::new(MyStrategy);
 //!
 //! // Create an interceptor and add your strategy
-//! let mut interceptor = LinkInterceptor::new("my_interceptor";
-//! interceptor.add_strategy(my_strategy;
+//! let mut interceptor = LinkInterceptor::new("my_interceptor");
+//! interceptor.add_strategy(my_strategy);
 //!
 //! // Attach to component or host
-//! // component.with_interceptor(Arc::new(interceptor;
+//! // component.with_interceptor(Arc::new(interceptor));
+//! # }
 //! ```
 
 #![forbid(unsafe_code)] // Rule 2

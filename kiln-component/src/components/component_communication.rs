@@ -26,17 +26,23 @@
 //! # Example
 //!
 //! ```no_run
-//! use kiln_component::component_communication::{
-//!     CallContext,
-//!     CallRouter,
-//! };
+//! use kiln_component::canonical_abi::ComponentValue;
+//! use kiln_component::components::{CallRouter, ComponentInstance};
 //!
+//! # fn route(
+//! #     source_instance: &ComponentInstance,
+//! #     target_instance: &mut ComponentInstance,
+//! # ) -> kiln_error::Result<()> {
 //! // Create a call router
 //! let mut router = CallRouter::new();
 //!
-//! // Route a call between components
-//! let context = CallContext::new(source_instance, target_instance, "add", &args)?;
-//! let result = router.dispatch_call(context)?;
+//! // Route a call between components (instance ids 1 and 2)
+//! let args = vec![ComponentValue::S32(1), ComponentValue::S32(2)];
+//! let context =
+//!     router.create_call_context(1, 2, "add".to_string(), args, vec![])?;
+//! let result = router.dispatch_call(context, source_instance, target_instance)?;
+//! # Ok(())
+//! # }
 //! ```
 
 // Cross-environment imports

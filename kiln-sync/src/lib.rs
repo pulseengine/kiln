@@ -56,8 +56,8 @@ pub mod mutex;
 /// use kiln_sync::{prelude::*, KilnOnce};
 /// static SOME_STATIC: KilnOnce<Vec<i32>> = KilnOnce::new();
 /// fn main() {
-///     let data = SOME_STATIC.get_or_init(|| vec![1,2,3];
-///     assert_eq!(data, &vec![1,2,3];
+///     let data = SOME_STATIC.get_or_init(|| vec![1,2,3]);
+///     assert_eq!(data, &vec![1,2,3]);
 /// }
 /// ```
 pub mod once;

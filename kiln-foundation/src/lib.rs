@@ -161,8 +161,10 @@ pub use prelude::*;
 /// # Examples
 ///
 /// ```rust
+/// # fn main() -> kiln_error::Result<()> {
 /// use kiln_foundation::{
 ///     safe_managed_alloc,
+///     BoundedVec,
 ///     CrateId,
 /// };
 ///
@@ -170,9 +172,11 @@ pub use prelude::*;
 /// let provider = safe_managed_alloc!(1024, CrateId::Foundation)?;
 ///
 /// // Use with bounded collections
-/// let mut vec = BoundedVec::new(provider)?;
+/// let mut vec: BoundedVec<u32, 16, _> = BoundedVec::new(provider)?;
 /// vec.push(42)?;
 /// // Memory automatically cleaned up on drop
+/// # Ok(())
+/// # }
 /// ```
 #[macro_export]
 macro_rules! safe_managed_alloc {

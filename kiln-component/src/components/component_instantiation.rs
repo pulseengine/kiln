@@ -26,19 +26,20 @@
 //! # Example
 //!
 //! ```no_run
-//! use kiln_component::component_instantiation::{
-//!     ComponentLinker,
-//!     InstanceConfig,
-//! };
+//! use kiln_component::components::ComponentLinker;
 //!
+//! # fn link(math_component_binary: &[u8], calc_component_binary: &[u8]) -> kiln_error::Result<()> {
 //! // Create a linker for component composition
 //! let mut linker = ComponentLinker::new();
 //!
 //! // Add a component with exports
-//! linker.add_component("math", &math_component_binary)?;
+//! linker.add_component("math".to_string(), math_component_binary)?;
 //!
-//! // Instantiate a component that imports from "math"
-//! let instance = linker.instantiate("calculator", &calc_component_binary)?;
+//! // Add a component that imports from "math" and instantiate it
+//! linker.add_component("calculator".to_string(), calc_component_binary)?;
+//! let instance_id = linker.instantiate(&"calculator".to_string(), None)?;
+//! # Ok(())
+//! # }
 //! ```
 
 // Cross-environment imports

@@ -373,7 +373,30 @@ fn platform() -> Option<&'static Platform> {
 mod tests {
     use super::*;
 
+    // The builtins keep process-global state (bump pointer, platform, P3
+    // slots), so tests that reset and then use it must not interleave. The
+    // first `reset()` on a test's thread takes this lock and keeps the guard
+    // in a thread-local until that thread (the test) ends.
+    static GLOBAL_STATE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    std::thread_local! {
+        static HELD: std::cell::RefCell<Option<std::sync::MutexGuard<'static, ()>>> =
+            const { std::cell::RefCell::new(None) };
+    }
+
     fn reset() {
+        HELD.with(|held| {
+            let mut held = held.borrow_mut();
+            if held.is_none() {
+                // A poisoned lock only means another test panicked; the state
+                // is reset right below, so the guard is still sound to take.
+                *held = Some(
+                    GLOBAL_STATE_LOCK
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner),
+                );
+            }
+        });
         BUMP_PTR.store(0, Ordering::SeqCst);
         PLATFORM.store(core::ptr::null_mut(), Ordering::SeqCst);
         P3_CONTEXT_SLOT.store(0, Ordering::SeqCst);

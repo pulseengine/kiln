@@ -236,8 +236,10 @@ pub mod constant_time {
             result |= a[i] ^ b[i];
         }
 
-        // Constant-time zero check
-        ((result as u16).wrapping_sub(1) >> 8) == 0
+        // Constant-time zero check: for result == 0 the subtraction wraps to
+        // 0xFFFF (bit 8 set); for any result in 1..=255 it stays below 0x100
+        // (bit 8 clear).
+        (((result as u16).wrapping_sub(1) >> 8) & 1) == 1
     }
 
     /// Constant-time conditional selection
@@ -726,6 +728,19 @@ pub mod platform_integration {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn constant_time_eq_distinguishes_every_single_byte_value() {
+        for x in 0..=255u8 {
+            for y in [0u8, 1, 0x7f, 0x80, 0xff] {
+                assert_eq!(
+                    constant_time::constant_time_eq(&[x], &[y]),
+                    x == y,
+                    "constant_time_eq(&[{x}], &[{y}])"
+                );
+            }
+        }
+    }
 
     #[test]
     fn test_constant_time_operations() {

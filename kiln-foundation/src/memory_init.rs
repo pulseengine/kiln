@@ -36,6 +36,11 @@ static MEMORY_INITIALIZED: AtomicBool = AtomicBool::new(false);
 static INIT_ERROR_PTR: core::sync::atomic::AtomicPtr<&'static str> =
     core::sync::atomic::AtomicPtr::new(core::ptr::null_mut());
 
+/// Serializes first-time initialization (std only; no_std is single-threaded
+/// during init).
+#[cfg(feature = "std")]
+static INIT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// Global capability context for modern memory management
 #[cfg(feature = "std")]
 static GLOBAL_CAPABILITY_CONTEXT: OnceLock<MemoryCapabilityContext> = OnceLock::new();
@@ -78,8 +83,15 @@ impl MemoryInitializer {
     ///
     /// This is called once at startup and configures all crate budgets
     pub fn initialize() -> Result<()> {
+        // Serialize first-time initialization: a caller must not be told the
+        // system is initialized until the global context has been stored.
+        #[cfg(feature = "std")]
+        let _init_guard = INIT_LOCK.lock().map_err(|_| {
+            Error::runtime_execution_error("Memory system initialization lock poisoned")
+        })?;
+
         // Check if already initialized
-        if MEMORY_INITIALIZED.swap(true, Ordering::AcqRel) {
+        if MEMORY_INITIALIZED.load(Ordering::Acquire) {
             return Ok(()); // Already initialized
         }
 
@@ -116,9 +128,6 @@ impl MemoryInitializer {
             if *budget > 0 {
                 // Register dynamic capabilities for all crates
                 if context.register_dynamic_capability(*crate_id, *budget).is_err() {
-                    // ASIL-D safe error storage using atomic pointer
-                    let error_msg: &'static str = "Failed to register crate capability";
-                    MEMORY_INITIALIZED.store(false, Ordering::Release);
                     return Err(Error::runtime_execution_error(
                         "Failed to register dynamic capability for crate",
                     ));
@@ -142,6 +151,9 @@ impl MemoryInitializer {
                 GLOBAL_CAPABILITY_CONTEXT = Some(context);
             }
         }
+
+        // Publish only now that the context is stored.
+        MEMORY_INITIALIZED.store(true, Ordering::Release);
 
         // Capability system initialization completed successfully
         Ok(())

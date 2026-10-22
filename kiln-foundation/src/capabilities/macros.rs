@@ -17,19 +17,18 @@
 /// # Examples
 ///
 /// ```rust,no_run
-/// use kiln_foundation::capabilities::{
-///     MemoryCapabilityContext, CapabilityFactoryBuilder
-/// };
+/// use kiln_foundation::capabilities::MemoryCapabilityContext;
 /// use kiln_foundation::budget_aware_provider::CrateId;
+/// use kiln_foundation::safe_capability_alloc;
+/// use kiln_foundation::verification::VerificationLevel;
 ///
-/// # fn example() -> kiln_foundation::Result<()> {
+/// # fn example() -> kiln_error::Result<()> {
 /// // Create capability context
-/// let mut factory = CapabilityFactoryBuilder::new()
-///     .with_dynamic_capability(CrateId::Foundation, 4096)?
-///     .build);
+/// let mut context = MemoryCapabilityContext::new(VerificationLevel::Standard, false);
+/// context.register_dynamic_capability(CrateId::Foundation, 4096)?;
 ///
 /// // Use the capability-driven macro
-/// let provider = safe_capability_alloc!(factory, CrateId::Foundation, 1024)?;
+/// let provider = safe_capability_alloc!(context, CrateId::Foundation, 1024)?;
 /// # Ok(())
 /// # }
 /// ```
@@ -78,10 +77,11 @@ macro_rules! safe_capability_alloc {
 /// ```rust,no_run
 /// use kiln_foundation::{
 ///     budget_aware_provider::CrateId,
+///     safe_verified_alloc,
 ///     verification::VerificationLevel,
 /// };
 ///
-/// # fn example() -> kiln_foundation::Result<()> {
+/// # fn example() -> kiln_error::Result<()> {
 /// let provider = safe_verified_alloc!(CrateId::Foundation, 1024, VerificationLevel::Redundant)?;
 /// # Ok(())
 /// # }
@@ -107,24 +107,31 @@ macro_rules! safe_verified_alloc {
 ///
 /// # Examples
 ///
+/// The wrapping requires allocation, so the example is compiled only with the
+/// `std` or `alloc` feature.
+///
 /// ```rust,no_run
+/// # #[cfg(any(feature = "std", feature = "alloc"))]
+/// # {
 /// use kiln_foundation::{
 ///     capabilities::{DynamicMemoryCapability, ProviderCapabilityExt},
+///     capability_wrap_provider,
 ///     safe_memory::NoStdProvider,
 ///     budget_aware_provider::CrateId,
 ///     verification::VerificationLevel
 /// };
 ///
-/// # fn example() -> kiln_foundation::Result<()> {
-/// let provider = NoStdProvider::<1024>::new();
+/// # fn example() -> kiln_error::Result<()> {
+/// let provider = NoStdProvider::<1024>::default();
 /// let capability = Box::new(DynamicMemoryCapability::new(
 ///     1024,
 ///     CrateId::Foundation,
 ///     VerificationLevel::Standard,
-/// ;
+/// ));
 ///
-/// let wrapped = capability_wrap_provider!(provider, capability, CrateId::Foundation;
+/// let wrapped = capability_wrap_provider!(provider, capability, CrateId::Foundation);
 /// # Ok(())
+/// # }
 /// # }
 /// ```
 #[macro_export]
@@ -156,9 +163,9 @@ macro_rules! capability_wrap_provider {
 /// # Examples
 ///
 /// ```rust,no_run
-/// use kiln_foundation::{budget_aware_provider::CrateId, capabilities::VerificationProofs};
+/// use kiln_foundation::{budget_aware_provider::CrateId, capability_context};
 ///
-/// # fn example() -> kiln_foundation::Result<()> {
+/// # fn example() -> kiln_error::Result<()> {
 /// // Dynamic capability context
 /// let dynamic_context = capability_context!(dynamic(CrateId::Foundation, 4096))?;
 ///

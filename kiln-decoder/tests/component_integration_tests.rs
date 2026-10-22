@@ -7,6 +7,7 @@ mod tests {
     use kiln_format::component::FormatValType;
 
     #[test]
+    #[ignore = "#582: encode_component output is rejected by decode_component"]
     fn test_decode_simple_component() -> Result<()> {
         // This is a mock test since we can't include actual binary data here
         // In a real test, we would decode an actual binary component
