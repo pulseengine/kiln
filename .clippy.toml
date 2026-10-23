@@ -22,4 +22,21 @@ disallowed-names = ["foo", "bar", "baz", "quux"]
 allow-expect-in-tests = true
 allow-unwrap-in-tests = true
 
+# Don't require backticks for common technical terms (moved from clippy.toml,
+# which clippy ignored because this file takes precedence)
+doc-valid-idents = [
+    "no_std",
+    "WebAssembly",
+    "WASM",
+    "ASIL",
+    "QNX",
+    "RISC",
+    "ARM",
+    "SIMD",
+    "WASI",
+    "CFI",
+    "MCDC",
+    "APIs",
+]
+
 # Note: undocumented-unsafe-blocks lint not available in current Rust version

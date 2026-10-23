@@ -7,8 +7,7 @@
 //! Provides implementations for WebAssembly numeric instructions.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![forbid(unsafe_code)]
-#![deny(missing_docs, clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![deny(missing_docs)]
 #![deny(clippy::todo, clippy::unimplemented)]
 #![warn(clippy::pedantic)]
 // Allow specific lints necessary for low-level math/Wasm ops, matching Cargo.toml
@@ -62,3 +61,16 @@ pub use kiln_error::Result as KilnMathResult; // Alias specific to this crate co
 // fn panic(_info: &core::panic::PanicInfo) -> ! {
 //     loop {}
 // }
+
+// GATE-POTENCY NEGATIVE CONTROL — scratch branch, never merge.
+/// Injected violations: broken intra-doc link to [`DoesNotExistAnywhere`],
+/// unwrap in library code, and unformatted code.
+pub   fn   negative_control_unwrap( x : Option<u32> ) -> u32 { x.unwrap() }
+
+#[cfg(test)]
+mod gate_potency_negative_control {
+    #[test]
+    fn negative_control_must_fail() {
+        assert_eq!(1, 2, "gate-potency negative control: this test must turn CI red");
+    }
+}
