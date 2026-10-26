@@ -288,7 +288,7 @@ mod no_std_math_sqrt {
                 return 0.0f32.copysign(f_val); // Or handle as an underflow to
                 // 0, preserving sign.
             }
-            y = (y + f_val / y) * 0.5;
+            y = f32::midpoint(y, f_val / y);
             if y == prev_y {
                 // Converged
                 break;
@@ -333,7 +333,7 @@ mod no_std_math_sqrt {
                 // Avoid division by zero
                 return 0.0f64.copysign(d_val);
             }
-            y = (y + d_val / y) * 0.5;
+            y = f64::midpoint(y, d_val / y);
             if y == prev_y {
                 // Converged
                 break;

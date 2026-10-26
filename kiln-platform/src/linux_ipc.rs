@@ -56,7 +56,11 @@ impl LinuxDomainSocket {
 
     /// Generate next client ID
     fn next_client_id(&self) -> u64 {
-        let mut id = self.next_client_id.lock().unwrap();
+        // Poison-tolerant: the guarded value is a plain u64 counter and the
+        // only mutation is `*id += 1`, which cannot panic, so a thread that
+        // panicked while holding the lock leaves the counter consistent and
+        // the data is recovered rather than propagating the poison.
+        let mut id = self.next_client_id.lock().unwrap_or_else(|e| e.into_inner());
         let current = *id;
         *id += 1;
         current

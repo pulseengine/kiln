@@ -1525,7 +1525,7 @@ impl<'a> StreamingDecoder<'a> {
                         locals: alloc::vec::Vec::new(),
                         code: alloc::vec::Vec::new(),
                     };
-                    self.module.functions.push(func);
+                    let _ = self.module.functions.push(func);
 
                     // Track function imports for proper function indexing
                     self.num_function_imports += 1;
@@ -1940,7 +1940,7 @@ impl<'a> StreamingDecoder<'a> {
                 code: alloc::vec::Vec::new(),
             };
 
-            self.module.functions.push(func);
+            let _ = self.module.functions.push(func);
         }
 
         Ok(offset)
@@ -2332,7 +2332,7 @@ impl<'a> StreamingDecoder<'a> {
             let is_table64 = flags & 0x04 != 0;
             let table_type =
                 TableType::new_with_table64(element_type, Limits { min, max }, is_table64);
-            self.module.tables.push(table_type);
+            let _ = self.module.tables.push(table_type);
 
             #[cfg(feature = "tracing")]
             trace!(
@@ -2486,7 +2486,7 @@ impl<'a> StreamingDecoder<'a> {
             };
 
             // Add to module
-            self.module.memories.push(memory_type);
+            let _ = self.module.memories.push(memory_type);
 
             #[cfg(feature = "tracing")]
             trace!(
@@ -2706,7 +2706,7 @@ impl<'a> StreamingDecoder<'a> {
                 init: init_bytes,
             };
 
-            self.module.globals.push(global);
+            let _ = self.module.globals.push(global);
 
             #[cfg(feature = "tracing")]
             trace!(global_index = i, value_type = ?value_type, mutable = mutable, init_len = offset - init_start, "global parsed");
@@ -3204,7 +3204,7 @@ impl<'a> StreamingDecoder<'a> {
                 init_data,
             };
 
-            self.module.elements.push(elem_segment);
+            let _ = self.module.elements.push(elem_segment);
             #[cfg(feature = "tracing")]
             trace!(
                 elem_idx = elem_idx,

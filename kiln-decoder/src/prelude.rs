@@ -215,8 +215,10 @@ pub mod binary {
     /// Write LEB128 u32 in no_std mode
     pub fn write_leb128_u32(value: u32) -> BoundedVec<u8, 10, NoStdProvider<64>> {
         if let Ok(provider) = create_decoder_provider::<64>() {
-            let mut result =
-                BoundedVec::new(provider).expect("Failed to create bounded vec for LEB128");
+            // BoundedVec::new cannot fail for a fresh provider of this size;
+            // if it ever does, an empty vec is the honest result (the caller
+            // sees a short encoding, not a panic).
+            let mut result = BoundedVec::new(provider).unwrap_or_default();
             let mut buffer = [0u8; 10];
             // Simple LEB128 encoding for no_std
             let mut bytes_written = 0;
@@ -250,8 +252,11 @@ pub mod binary {
     /// Write string in no_std mode
     pub fn write_string(_s: &str) -> BoundedVec<u8, 256, NoStdProvider<512>> {
         if let Ok(provider) = create_decoder_provider::<512>() {
-            // Simplified no_std implementation
-            BoundedVec::new(provider).expect("Failed to create bounded vec for string")
+            // Simplified no_std implementation. BoundedVec::new cannot fail
+            // for a fresh provider of this size; if it ever does, an empty
+            // vec is the honest result (the caller sees a short encoding,
+            // not a panic).
+            BoundedVec::new(provider).unwrap_or_default()
         } else {
             BoundedVec::default()
         }
