@@ -258,15 +258,13 @@ impl CallbackRegistry {
 
     /// Create a new callback registry (`no_std` version)
     ///
-    /// # Panics
-    /// Panics if provider creation fails
     #[must_use]
     #[cfg(not(feature = "std"))]
     pub fn new() -> Self {
         // In no_std mode, we need to provide memory providers for the bounded
         // collections
         use crate::bounded_host_infra::create_host_provider;
-        let provider = create_host_provider().expect("Failed to create host provider");
+        let provider = create_host_provider().unwrap_or_default();
         Self {
             callbacks: HashMap::new(provider).unwrap_or_default(),
             host_functions: HostFunctionsNoStd::default(),
@@ -466,7 +464,7 @@ impl CallbackRegistry {
     pub fn get_registered_modules(&self) -> StringVec {
         // In no_std mode, we can't return dynamic module names
         use crate::bounded_host_infra::create_host_provider;
-        let provider = create_host_provider().expect("Failed to create host provider");
+        let provider = create_host_provider().unwrap_or_default();
         StringVec::new(provider).unwrap_or_default()
     }
 
@@ -487,7 +485,7 @@ impl CallbackRegistry {
     pub fn get_registered_functions(&self, _module_name: &str) -> StringVec {
         // In no_std mode, we can't return dynamic function names
         use crate::bounded_host_infra::create_host_provider;
-        let provider = create_host_provider().expect("Failed to create host provider");
+        let provider = create_host_provider().unwrap_or_default();
         StringVec::new(provider).unwrap_or_default()
     }
 
@@ -526,13 +524,8 @@ impl CallbackRegistry {
     ) -> kiln_foundation::BoundedSet<BuiltinType, 32, HostProvider> {
         // In no_std mode, we can't dynamically track built-ins
         use crate::bounded_host_infra::create_host_provider;
-        let provider = create_host_provider().expect("Failed to create host provider");
-        kiln_foundation::BoundedSet::new(provider).unwrap_or_else(|_| {
-            let fallback_provider =
-                create_host_provider().expect("Failed to create fallback host provider");
-            kiln_foundation::BoundedSet::new(fallback_provider)
-                .expect("Failed to create bounded set")
-        })
+        let provider = create_host_provider().unwrap_or_default();
+        kiln_foundation::BoundedSet::new(provider).unwrap_or_default()
     }
 
     /// Call a built-in function

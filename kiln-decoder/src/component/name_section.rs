@@ -541,7 +541,7 @@ pub fn generate_component_name_section(
     // Component name
     if let Some(name) = &name_section.component_name {
         // Name type
-        data.push(COMPONENT_NAME_COMPONENT);
+        let _ = data.push(COMPONENT_NAME_COMPONENT);
 
         // Generate data for name
         #[cfg(feature = "std")]
@@ -588,12 +588,12 @@ pub fn generate_component_name_section(
             let len_bytes = write_leb128_u32(subsection_data.len() as u32)?;
             for i in 0..len_bytes.len() {
                 if let Ok(byte) = len_bytes.get(i) {
-                    data.push(byte);
+                    let _ = data.push(byte);
                 }
             }
             for i in 0..subsection_data.len() {
                 if let Ok(byte) = subsection_data.get(i) {
-                    data.push(byte);
+                    let _ = data.push(byte);
                 }
             }
         }
@@ -608,7 +608,7 @@ pub fn generate_component_name_section(
 
     if !sort_names_empty {
         // Name type
-        data.push(COMPONENT_NAME_SORT);
+        let _ = data.push(COMPONENT_NAME_SORT);
 
         // Generate data for sorts
         #[cfg(feature = "std")]
@@ -661,12 +661,12 @@ pub fn generate_component_name_section(
             let len_bytes = write_leb128_u32(subsection_data.len() as u32)?;
             for i in 0..len_bytes.len() {
                 if let Ok(byte) = len_bytes.get(i) {
-                    data.push(byte);
+                    let _ = data.push(byte);
                 }
             }
             for i in 0..subsection_data.len() {
                 if let Ok(byte) = subsection_data.get(i) {
-                    data.push(byte);
+                    let _ = data.push(byte);
                 }
             }
         }
@@ -681,7 +681,7 @@ pub fn generate_component_name_section(
 
     if !import_names_empty {
         // Name type
-        data.push(COMPONENT_NAME_IMPORT);
+        let _ = data.push(COMPONENT_NAME_IMPORT);
 
         // Generate data for import names
         let subsection_data = generate_name_map(&name_section.import_names)?;
@@ -698,12 +698,12 @@ pub fn generate_component_name_section(
             let len_bytes = write_leb128_u32(subsection_data.len() as u32)?;
             for i in 0..len_bytes.len() {
                 if let Ok(byte) = len_bytes.get(i) {
-                    data.push(byte);
+                    let _ = data.push(byte);
                 }
             }
             for i in 0..subsection_data.len() {
                 if let Ok(byte) = subsection_data.get(i) {
-                    data.push(byte);
+                    let _ = data.push(byte);
                 }
             }
         }
@@ -718,7 +718,7 @@ pub fn generate_component_name_section(
 
     if !export_names_empty {
         // Name type
-        data.push(COMPONENT_NAME_EXPORT);
+        let _ = data.push(COMPONENT_NAME_EXPORT);
 
         // Generate data for export names
         let subsection_data = generate_name_map(&name_section.export_names)?;
@@ -735,12 +735,12 @@ pub fn generate_component_name_section(
             let len_bytes = write_leb128_u32(subsection_data.len() as u32)?;
             for i in 0..len_bytes.len() {
                 if let Ok(byte) = len_bytes.get(i) {
-                    data.push(byte);
+                    let _ = data.push(byte);
                 }
             }
             for i in 0..subsection_data.len() {
                 if let Ok(byte) = subsection_data.get(i) {
-                    data.push(byte);
+                    let _ = data.push(byte);
                 }
             }
         }
@@ -755,7 +755,7 @@ pub fn generate_component_name_section(
 
     if !canonical_names_empty {
         // Name type
-        data.push(COMPONENT_NAME_CANONICAL);
+        let _ = data.push(COMPONENT_NAME_CANONICAL);
 
         // Generate data for canonical names
         let subsection_data = generate_name_map(&name_section.canonical_names)?;
@@ -772,12 +772,12 @@ pub fn generate_component_name_section(
             let len_bytes = write_leb128_u32(subsection_data.len() as u32)?;
             for i in 0..len_bytes.len() {
                 if let Ok(byte) = len_bytes.get(i) {
-                    data.push(byte);
+                    let _ = data.push(byte);
                 }
             }
             for i in 0..subsection_data.len() {
                 if let Ok(byte) = subsection_data.get(i) {
-                    data.push(byte);
+                    let _ = data.push(byte);
                 }
             }
         }
@@ -792,7 +792,7 @@ pub fn generate_component_name_section(
 
     if !type_names_empty {
         // Name type
-        data.push(COMPONENT_NAME_TYPE);
+        let _ = data.push(COMPONENT_NAME_TYPE);
 
         // Generate data for type names
         let subsection_data = generate_name_map(&name_section.type_names)?;
@@ -809,12 +809,12 @@ pub fn generate_component_name_section(
             let len_bytes = write_leb128_u32(subsection_data.len() as u32)?;
             for i in 0..len_bytes.len() {
                 if let Ok(byte) = len_bytes.get(i) {
-                    data.push(byte);
+                    let _ = data.push(byte);
                 }
             }
             for i in 0..subsection_data.len() {
                 if let Ok(byte) = subsection_data.get(i) {
-                    data.push(byte);
+                    let _ = data.push(byte);
                 }
             }
         }

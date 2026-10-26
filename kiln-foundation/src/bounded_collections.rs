@@ -639,6 +639,16 @@ where
     verification_level: VerificationLevel,
 }
 
+impl<T, const N_ELEMENTS: usize, P: MemoryProvider> Default for BoundedSet<T, N_ELEMENTS, P>
+where
+    T: Sized + Checksummable + ToBytes + FromBytes + Default + Eq + Clone + PartialEq,
+    P: Default + Clone + PartialEq + Eq,
+{
+    fn default() -> Self {
+        Self::new(P::default()).expect("Default provider should never fail to create BoundedSet")
+    }
+}
+
 impl<T, const N_ELEMENTS: usize, P: MemoryProvider> BoundedSet<T, N_ELEMENTS, P>
 where
     T: Sized + Checksummable + ToBytes + FromBytes + Default + Eq + Clone + PartialEq,

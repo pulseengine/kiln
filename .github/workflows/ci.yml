@@ -45,25 +45,17 @@ jobs:
           profile: minimal
           toolchain: stable # Or match your rust-toolchain.toml for building cargo-kiln
           override: true
-      - name: Install and setup cargo-kiln with all tools
-        run: |
-          cargo build --package cargo-kiln # Ensures cargo-kiln and its direct deps are built/cached
-          cargo install --path cargo-kiln --force # Install cargo-kiln for use in subsequent steps
-          cargo-kiln setup --all # Setup all development tools automatically
-      - name: Run CI Integrity Checks (lint, fmt, deny, spell, headers, etc.)
-        run: cargo-kiln verify --detailed
-        continue-on-error: true  # Safety verification has pre-existing findings being addressed
-      - name: Run Strict Documentation Check
-        run: cargo-kiln docs --private
-      - name: Initialize Requirements File (if missing)
-        run: cargo-kiln verify --asil c # Requirements initialization is handled automatically
-        continue-on-error: true
-      - name: Run Requirements Verification
-        run: cargo-kiln verify --asil c --detailed
-        continue-on-error: true  # Report findings without blocking CI
-      - name: Generate Safety Summary for Documentation
-        run: cargo-kiln verify --asil c --detailed # Safety summary is generated automatically
-        continue-on-error: true  # Report findings without blocking CI
+          components: rustfmt
+      # SR-73: every step in this required check can fail. Reports that are
+      # informational only live in the non-required "Quality Report" job.
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Documentation builds without warnings
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+        run: cargo doc --workspace --no-deps --document-private-items
+      - name: Every workspace target compiles (SR-32)
+        run: cargo build --workspace --all-targets
 
   code_quality:
     name: Code Quality Checks
@@ -85,14 +77,6 @@ jobs:
         run: cargo-kiln validate --check-test-files
       - name: Check module documentation coverage
         run: cargo-kiln validate --check-docs
-      - name: Check code formatting
-        run: cargo fmt --all -- --check
-        continue-on-error: true  # Temporarily allow failures due to rustfmt crash bug
-      - name: Run clippy checks
-        # Note: Using --lib --bins only (not --all-targets) to skip examples/tests that have outdated API
-        # continue-on-error: true due to occasional compiler panics in CI environment
-        run: cargo clippy --workspace --lib --bins -- -D warnings
-        continue-on-error: true
       - name: Check platform feature compilation (VxWorks, Zephyr, Tock)
         run: |
           echo "=== VxWorks platform feature check ==="
@@ -115,6 +99,32 @@ jobs:
             exit 1
           fi
           echo "Engine architecture check passed - no hardcoded WASI stubs in engine"
+
+  quality_report:
+    # Informational only (maintainer decision 2026-10-22): NOT a required check.
+    # These are quality metrics, not correctness gates; their findings are
+    # tracked as issues. Each step reports its result without failing the job.
+    name: Quality Report (informational)
+    runs-on: [self-hosted, linux, x64, rust-cpu]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+          components: clippy
+      - name: Install cargo-kiln
+        run: cargo install --path cargo-kiln --force
+      - name: Documentation audit (READMEs, metadata, doc coverage)
+        run: cargo-kiln validate --all
+        continue-on-error: true
+      - name: Pedantic clippy
+        run: cargo-kiln check --strict
+        continue-on-error: true
+      - name: Text-search safety report (superseded as a gate by clippy + unsafe policy)
+        run: cargo-kiln verify --asil d --detailed
+        continue-on-error: true
 
   core_tests_and_analysis:
     name: Core Tests, Analysis & Coverage
@@ -141,43 +151,15 @@ jobs:
           toolchain: stable # For cargo-kiln. Nightly for UDeps should be handled internally.
           override: true
           components: llvm-tools-preview # For coverage
-      - name: Install and setup cargo-kiln with tools
+      - name: Install cargo-kiln
         run: |
           cargo build --package cargo-kiln
           cargo install --path cargo-kiln --force
-          cargo-kiln setup --all # Setup all required tools for testing and analysis
+      # SR-73: cargo-kiln test runs `cargo test --workspace --no-fail-fast`,
+      # judges by cargo's exit status and real counts, and fails on a timeout.
+      # Coverage runs in the "Code Coverage" job; reports in "Quality Report".
       - name: Run Tests
         run: cargo-kiln test
-      - name: Run Code Validation Checks
-        run: cargo-kiln validate --all
-        continue-on-error: true  # Documentation audit has pre-existing findings
-      - name: Check Unused Dependencies
-        run: cargo-kiln check --strict
-        continue-on-error: true
-      - name: Run Security Audit
-        run: cargo-kiln verify --asil c
-        continue-on-error: true  # Safety verification has pre-existing findings
-      - name: Run Coverage Tests
-        run: cargo-kiln coverage --html
-        continue-on-error: true  # Coverage report generation is best-effort
-      - name: Run Basic Safety Checks
-        run: |
-          cargo test -p kiln-foundation asil_testing -- --nocapture || true
-          cargo-kiln verify --asil c || true
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v7
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: |
-            ./target/coverage/lcov.info
-            ./target/coverage/cobertura.xml
-          fail_ci_if_error: false  # Coverage uploads are best-effort
-      - name: Upload test results to Codecov (JUnit)
-        if: ${{ !cancelled() }}
-        uses: codecov/test-results-action@v1
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./target/coverage/junit.xml # Ensure this path is correct
 
   safety_verification:
     name: SCORE-Inspired Safety Verification
@@ -203,38 +185,17 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-      - name: Install and setup cargo-kiln for safety verification
-        run: |
-          cargo build --package cargo-kiln
-          cargo install --path cargo-kiln --force
-          cargo-kiln setup --check # Verify required tools for safety verification
-      - name: Check Requirements File
-        run: cargo-kiln verify --asil c
-        continue-on-error: true
-      - name: Initialize Requirements if Missing
-        run: cargo-kiln verify --asil c # Requirements are initialized automatically
-        if: failure() # Only run if check-requirements failed
-      - name: Run ASIL Test Suite
-        run: cargo test -p kiln-foundation asil_testing -- --nocapture
-        continue-on-error: true
-      - name: Generate Comprehensive Safety Report (JSON)
-        run: cargo-kiln verify --asil d --detailed > safety-verification-full.json || true
-      - name: Generate Comprehensive Safety Report (HTML)
-        run: cargo-kiln verify --asil d --detailed || true
-      - name: Generate Safety Dashboard
-        run: cargo-kiln verify --asil d --detailed || true
-      - name: Upload Safety Artifacts
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: safety-verification-artifacts
-          path: |
-            safety-verification-full.json
-            safety-verification-report.html
-          retention-days: 90
-      - name: Safety Verification Gate
-        run: cargo-kiln verify --asil d
-        continue-on-error: true  # Informational until pre-existing code quality issues are resolved
+      # SR-73 (maintainer decision 2026-10-22): the safety gate uses precise,
+      # compiler-backed facts, not text-search counts. unwrap/expect/panic/
+      # unreachable are gated by "Safety Analysis with Clippy".
+      - name: Unsafe code only in allow-listed crates
+        # Every crate root carries #![deny(unsafe_code)] or #![forbid(unsafe_code)]
+        # unless listed, with a reason, in safety/unsafe-allowlist.yaml.
+        run: cargo test -p kiln-build-core --test unsafe_policy
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --version 0.19.0 --locked
+      - name: Supply chain (advisories, bans, licenses, sources)
+        run: cargo deny check
 
   verus_verification:
     name: Verus Formal Verification
@@ -336,16 +297,15 @@ jobs:
       fail-fast: false  # Don't stop all jobs if one fails
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        include:
-          - os: windows-latest
-            continue-on-error: true  # Allow Windows to fail without stopping the workflow
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix.continue-on-error || false }}
     steps:
       - uses: actions/checkout@v7
-      - uses: actions-rs/audit-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      # SR-73: pinned cargo-audit; fails on any vulnerability in Cargo.lock
+      # (unmaintained/unsound warnings are reported, not gating).
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --version 0.22.1 --locked
+      - name: Audit Cargo.lock
+        run: cargo audit
 
   vxworks_cross_build:
     name: VxWorks Cross-Compilation

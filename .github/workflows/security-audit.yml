@@ -88,43 +88,18 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-clippy-${{ hashFiles('**/Cargo.lock') }}
       
+      # SR-73: clippy's exit status is the verdict. Library and binary code
+      # only (tests may unwrap); default features (the all-features build
+      # does not compile, #557). The previous step parsed the output for the
+      # word "denied", which clippy never prints, so it could not fail.
       - name: Run Safety-Critical Clippy
         run: |
-          cargo clippy --workspace --all-targets --all-features -- \
+          cargo clippy --workspace --lib --bins -- \
+            -D warnings \
             -D clippy::unwrap_used \
             -D clippy::expect_used \
             -D clippy::panic \
-            -D clippy::unreachable \
-            -D clippy::std_instead_of_core \
-            -D clippy::std_instead_of_alloc \
-            -W clippy::unnecessary_box_returns \
-            -W clippy::vec_init_then_push \
-            > clippy-safety-report.txt 2>&1
-        continue-on-error: true
-      
-      - name: Process Safety Results
-        run: |
-          if [ -f clippy-safety-report.txt ]; then
-            DENIES=$(grep -c "denied" clippy-safety-report.txt || echo 0)
-            WARNS=$(grep -c "warning" clippy-safety-report.txt || echo 0)
-            
-            echo "## Safety Analysis Results" >> $GITHUB_STEP_SUMMARY
-            echo "- Safety violations (denied): $DENIES" >> $GITHUB_STEP_SUMMARY
-            echo "- Safety warnings: $WARNS" >> $GITHUB_STEP_SUMMARY
-            
-            if [ $DENIES -gt 0 ]; then
-              echo "::error::Safety-critical violations found"
-              cat clippy-safety-report.txt
-              exit 1
-            fi
-          fi
-      
-      - name: Upload Safety Report
-        uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: safety-analysis-report
-          path: clippy-safety-report.txt
+            -D clippy::unreachable
 
   dependency-review:
     name: Dependency Review

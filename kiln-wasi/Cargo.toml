@@ -95,8 +95,6 @@ let_underscore_drop = "warn"
 # Language subset
 inline_asm_x86_att_syntax = "warn"
 transmute_ptr_to_ref = "deny"
-# type_id lint removed - not a valid clippy lint
-dyn_trait = "warn"
 float_arithmetic = "warn"
 # Unsafe usage
 ptr_offset_with_cast = "warn"
@@ -111,9 +109,6 @@ must_use_unit = "warn"
 match_wildcard_for_single_variants = "allow"
 never_loop = "warn"
 unreachable = "warn"
-# Memory & concurrency safety
-# static_mut_reference renamed to static_mut_refs in newer Rust versions
-arc_mutate = "deny"
 # Static analysis gates - pedantic disabled for CI stability
 # pedantic = "warn"
 # Documentation

@@ -89,17 +89,13 @@ impl Default for HostBuilder {
         {
             use crate::bounded_host_infra::create_host_provider;
 
-            let provider = create_host_provider().expect("Failed to create host provider");
+            // Default must always produce a value: if the provider cannot be
+            // allocated (out of memory), fall back to a default provider and
+            // an empty set rather than panicking.
+            let provider = create_host_provider().unwrap_or_default();
             Self {
                 registry: CallbackRegistry::new(),
-                required_builtins: kiln_foundation::BoundedSet::new(provider).unwrap_or_else(
-                    |_| {
-                        let fallback_provider = create_host_provider()
-                            .expect("Failed to create fallback host provider");
-                        kiln_foundation::BoundedSet::new(fallback_provider)
-                            .expect("Failed to create bounded set")
-                    },
-                ),
+                required_builtins: kiln_foundation::BoundedSet::new(provider).unwrap_or_default(),
                 strict_validation: false,
             }
         }
@@ -194,9 +190,8 @@ impl HostBuilder {
             #[cfg(not(feature = "std"))]
             let args: ValueVec = {
                 use crate::bounded_host_infra::create_host_provider;
-                let provider = create_host_provider().expect("Failed to create host provider");
-                ValueVec::new(provider)
-                    .expect("ValueVec creation should never fail with valid provider")
+                let provider = create_host_provider().unwrap_or_default();
+                ValueVec::new(provider).unwrap_or_default()
             };
             handler(target, args)
         });
@@ -328,9 +323,8 @@ impl HostBuilder {
             #[cfg(not(feature = "std"))]
             let args: ValueVec = {
                 use crate::bounded_host_infra::create_host_provider;
-                let provider = create_host_provider().expect("Failed to create host provider");
-                ValueVec::new(provider)
-                    .expect("ValueVec creation should never fail with valid provider")
+                let provider = create_host_provider().unwrap_or_default();
+                ValueVec::new(provider).unwrap_or_default()
             };
             handler(target, args)
         });

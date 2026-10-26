@@ -370,9 +370,15 @@ impl Default for CfiLandingPad {
             }
             #[cfg(not(feature = "std"))]
             {
-                // try_default() should not fail in practice
-                Self::try_default()
-                    .expect("CfiLandingPad::default() failed in no_std - use try_default() instead")
+                // try_default() can only fail on allocation; BoundedVec's
+                // Default does not allocate, so the fallback is an empty pad
+                // rather than a panic.
+                Self {
+                    pad_id: 0,
+                    hardware_instruction: None,
+                    software_validation: None,
+                    valid_predecessors: Default::default(),
+                }
             }
         })
     }
@@ -929,10 +935,27 @@ impl Default for CfiExecutionContext {
             }
             #[cfg(not(feature = "std"))]
             {
-                // try_default() should not fail in practice
-                Self::try_default().expect(
-                    "CfiExecutionContext::default() failed in no_std - use try_default() instead",
-                )
+                // try_default() can only fail on allocation; every collection
+                // field's Default does not allocate, so the fallback is an
+                // empty context rather than a panic.
+                Self {
+                    current_function: 0,
+                    current_instruction: 0,
+                    shadow_stack: Default::default(),
+                    landing_pad_expectations: Default::default(),
+                    violation_count: 0,
+                    metrics: CfiMetrics::default(),
+                    calling_convention: CallingConvention::WebAssembly,
+                    current_stack_depth: 0,
+                    software_config: CfiSoftwareConfig::default(),
+                    last_checkpoint_time: 0,
+                    max_labels: 256,
+                    valid_branch_targets: Default::default(),
+                    max_types: 256,
+                    type_signatures: Default::default(),
+                    max_shadow_stack_depth: 1024,
+                    indirect_branch_targets: Default::default(),
+                }
             }
         })
     }
