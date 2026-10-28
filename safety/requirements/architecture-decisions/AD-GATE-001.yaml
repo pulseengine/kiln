@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: AD-GATE-001
+    type: design-decision
+    title: Each required CI check runs a command whose exit status is the verdict, with no continue-on-error, proven by a negative-control PR
+    status: implemented
+    release: v0.7.0
+    description: "Implements SR-73 (issue #568). Evidence: PRs #575, #586, #590, #591, #592, #593, #595; negative control in issue #568 on PR #596. DECISION: #586 makes 'cargo-kiln test' (kiln-build-core/src/test.rs) run 'cargo test --workspace --no-fail-fast', sum every 'test result:' line, and fail on non-zero exit, missing or unparsable results, failed > 0, zero passed, or a 45 minute timeout; 'cargo-kiln ci' checks is_success(). #575 and #590 make 'clippy --workspace --lib --bins -- -D warnings' plus the unwrap/expect/panic/unreachable lints pass. #591 runs cargo fmt --all across the workspace (with #[rustfmt::skip] on two enums in kiln-format/src/module.rs where rustfmt panics) so the fmt check can block. #592 adds #![deny/forbid(unsafe_code)] per crate with the reviewed list safety/unsafe-allowlist.yaml, checked by kiln-build-core/tests/unsafe_policy.rs. #593 makes cargo-kiln docs fail when a package fails and clears rustdoc -D warnings. #595 rewrites .github/workflows/ci.yml so each required check keeps its name but its steps can fail (fmt, rustdoc -D warnings, all-targets build, cargo-kiln test, unsafe policy, cargo deny, clippy, pinned cargo-audit including Windows), and moves informational reports to a non-required job 'Quality Report (informational)'. Evidence of effect: issue #568 comments record PR #596 with violations injected and all 8 required checks red in round 2, with run links."
+    tags: [ci, merge-gate, vacuous-gate, issue-568]
+    fields:
+      alternatives-considered: "(1) Keep the gates as soft steps and review the logs: the failure the negative control found. (2) Block on the text-search verify scan: it does not catch the violations tested. (3) Turn gates on before fixing main: every PR would be red."
+      rationale: "A check that parses output or ignores exit status can report green on a violation, as the first negative control (PR #567) showed. Making the tool's exit status the verdict, and fixing existing failures first, lets the gates block without freezing main. Required check names stay unchanged so branch protection needs no edit."
+    links:
+      - type: satisfies
+        target: SR-73
+    provenance:
+      created-by: ai
+      model: claude-sonnet-5-5
+      timestamp: 2026-10-28T11:57:41Z

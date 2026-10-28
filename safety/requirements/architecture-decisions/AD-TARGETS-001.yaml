@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: AD-TARGETS-001
+    type: design-decision
+    title: Dead targets are deleted, drifted ones fixed, and CI builds every workspace target
+    status: implemented
+    release: v0.7.0
+    description: "Implements SR-32. Evidence: PR #561 (kiln-component), PR #563 (all other crates), and the all-targets build step added in PR #595. DECISION: delete targets whose APIs no longer exist before fixing the rest, then gate the result. #561 removed dead kiln-component tests and examples (async_ and task_manager removed in #284, canonical/canonical_options/resources::MemoryManager gone, the bounded_component_infra fallible-constructor tests) and fixed the remaining ones under kiln-component/tests, examples and benches/execution_benchmarks.rs. #563 deleted cargo-kiln/tests/integration_tests.rs (cargo-kiln is bin-only), kiln-runtime/tests/fuel_consumption_tests.rs and kiln-runtime/examples/simd_execution_integration_demo.rs, and fixed API drift in cargo-kiln, kiln-debug, kiln-decoder, kiln-format (ast_tests; debug_bounded_wit gets required-features = [wit-parsing] in kiln-format/Cargo.toml), kiln-instructions and kiln-runtime tests and examples, without weakening assertions or ignoring tests. #595 adds the step 'Every workspace target compiles (SR-32)' running 'cargo build --workspace --all-targets' to the required 'CI Checks & Docs' job in .github/workflows/ci.yml, with no continue-on-error."
+    tags: [ci, bit-rot, testing, hygiene, issue-568]
+    fields:
+      alternatives-considered: "(1) Mark broken targets with required-features or exclude them from the workspace build: keeps the rot, the build gate would not cover them. (2) Gate only --lib --bins (what clippy did before #595): leaves examples, tests and benches free to rot. (3) Add the gate first and fix targets later: the gate would be red on main."
+      rationale: Targets that import APIs which were removed (async/task_manager, cargo_kiln as a library) cannot be repaired, only rewritten against nothing, so deleting them keeps the all-targets build honest and avoids stubs. Drifted targets that test live APIs were fixed so their coverage is kept. The gate sits in an existing required job so branch protection names do not change, and it fails the job on any broken target.
+    links:
+      - type: satisfies
+        target: SR-32
+    provenance:
+      created-by: ai
+      model: claude-sonnet-5-5
+      timestamp: 2026-10-28T11:57:39Z

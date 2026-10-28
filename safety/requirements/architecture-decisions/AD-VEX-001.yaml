@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: AD-VEX-001
+    type: design-decision
+    title: cargo-kiln vex derives a CycloneDX VEX from cargo audit and each release target's dependency tree; a daily job flags stale VEX
+    status: implemented
+    release: v0.7.0
+    description: "Implements SR-69 (issue #515). Evidence: PR #570. DECISION: a new subcommand 'cargo-kiln vex --sbom <sbom> --out <vex> --target <triple>...' (cargo-kiln/src/commands/vex.rs, registered in commands/mod.rs and main.rs) runs cargo audit --json, then 'cargo tree -p kilnd -e normal --target <t> --prefix none --locked' for every release target. An advisory whose package version appears in any tree is exploitable; one in no tree is not_affected with justification code_not_present; an entry without a package version is in_triage; yanked warnings carry no advisory and are skipped. Output is CycloneDX matching the SBOM, with affects[].ref as a bom-link to the SBOM component. .github/workflows/release.yml generates kiln-<version>.vex.cdx.json after the SBOM, reads the targets from its own build matrix, validates it with a sha256-pinned cyclonedx-cli v0.33.1, asserts it is in SHA256SUMS (so the cosign signature covers it) and uploads it. .github/workflows/vex-reissue.yml runs daily and manually: it uses the latest release tag's Cargo.lock and SBOM with today's advisory database, compares the (advisory, state) set with the published VEX, and opens a de-duplicated issue carrying the validated VEX if they differ or none exists. It does not publish or sign. 14 unit tests cover the decisions, required CycloneDX fields and determinism."
+    tags: [release, supply-chain, vex, issue-515]
+    fields:
+      alternatives-considered: "(1) Hand-maintained VEX file: drifts from Cargo.lock. (2) Re-publish and sign automatically from the daily job: puts signing outside the release workflow. (3) Mark every advisory in the lock file affected: contradicts SR-69, which wants not_affected where true."
+      rationale: Computing state from the per-target dependency tree gives a not_affected statement that follows from the build (for example advisories reaching only cargo-kiln, not kilnd) instead of a hand-written one. Re-issue is detected by comparing statement sets, and it stops at an issue so signing stays in the release workflow.
+    links:
+      - type: satisfies
+        target: SR-69
+    provenance:
+      created-by: ai
+      model: claude-sonnet-5-5
+      timestamp: 2026-10-28T11:57:40Z

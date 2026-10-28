@@ -3,7 +3,7 @@ artifacts:
   - id: SR-68
     type: requirement
     title: Linux releases include a static musl build that runs without glibc
-    status: proposed
+    status: implemented
     description: "Issue #514 (consumer: varve pulseengine realm layer). v0.5.0's Linux x86_64 binary is dynamically linked against glibc with a 2.34 floor, so it does not run on Ubuntu 20.04, RHEL 8, Alpine or distroless-static. Ship x86_64- and aarch64-unknown-linux-musl archives (static) alongside glibc, with the same signed-sums and --version-equals-tag checks. Verified by: the downloaded musl archive's kiln runs in an Alpine container and reports the tag version."
     tags: [release, portability, musl, issue-514]
     provenance:

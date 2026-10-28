@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: AD-WASIFS-001
+    type: design-decision
+    title: Descriptor read/write/sync and directory-mutation calls are served by dispatch_core under the existing preopen path rules
+    status: implemented
+    release: v0.7.0
+    description: "Implements SR-72 (issue #552). Evidence: PR #559, files kiln-wasi/src/dispatcher.rs, kiln-runtime/src/wasip2_host.rs, kiln-runtime/src/stackless/engine.rs. DECISION: WasiDispatcher::dispatch_core serves [method]descriptor.read, .write, .sync-data, .create-directory-at, .remove-directory-at, .unlink-file-at, .rename-at, .link-at, .symlink-at and .readlink-at from wasi:filesystem/types. Path-based calls use the same lexical and symlink escape refusal as open-at and stat-at, return the WASI error code on escape, and do not perform the operation. wasip2_host.rs lowers result<_, error-code> and result<filesize, error-code> with the exact canonical-ABI layout (1-byte discriminant, payload at its alignment); this also corrects the descriptor.get-type result layout, which wrote 8 bytes into a 2-byte result. engine.rs dispatch_canon_lowered sizes the guest buffer for descriptor.read (requested length, minimum 1) and readlink-at (4096) with allocate_wasi_read_buffer. Tests marked 'rivet: verifies SR-72': 30 in kiln-wasi dispatcher::tests::sr72 and 5 byte-layout tests in kiln-runtime wasip2_host::sr72_lowering_tests. The PR states the Go hello world imports these calls but does not invoke them, so no end-to-end run exercises them through the engine."
+    tags: [wasi, filesystem, sandbox, go, issue-552]
+    fields:
+      alternatives-considered: "(1) Leave the calls unserved: SR-65 then refuses the released Go command at instantiation. (2) Serve them with per-call path checks: duplicates the escape rules and can drift from open-at."
+      rationale: Reusing the existing preopen resolution keeps one sandbox rule for all path calls, so a new call cannot define a weaker one. The canonical-ABI layout is needed because the old sequential 4-byte layout would corrupt the new result types.
+    links:
+      - type: satisfies
+        target: SR-72
+    provenance:
+      created-by: ai
+      model: claude-sonnet-5-5
+      timestamp: 2026-10-28T11:57:41Z

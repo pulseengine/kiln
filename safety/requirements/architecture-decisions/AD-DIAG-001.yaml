@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: AD-DIAG-001
+    type: design-decision
+    title: WASI and engine diagnostics use kiln_foundation::tracing, silent unless RUST_LOG enables them
+    status: implemented
+    release: v0.7.0
+    description: "Implements SR-67 (issue #542). Evidence: PR #572. DECISION: every diagnostic eprintln! on the runtime path becomes a kiln_foundation::tracing event. kiln-wasi/src/dispatcher.rs dispatch_core: the [WASI-TRACE] eprintln! becomes trace!(interface, function, args, ...). kilnd/src/lib.rs: the two [WASI-PREALLOC] eprintln! become warn!, and the unconditional '[TRACING] Tracing initialized' line is removed. kiln-runtime/src/stackless/engine.rs: eight [DEBUG-EXN-HANDLER] eprintln! become trace! with fields. kiln-runtime/src/wasip2_host.rs: the unknown-function eprintln! becomes warn!(interface, function), and the call still returns the error. The kilnd subscriber, when built with the tracing feature, writes to stderr with default directive off (was info), so RUST_LOG is the only switch; the kilnd tracing feature now also enables kiln-wasi/tracing. Four compile errors under kiln-runtime/tracing were fixed so the feature builds. Test: kilnd/tests/wasi_trace_output_tests.rs. The PR notes the released binary does not include the tracing feature by default."
+    tags: [observability, tracing, stderr, issue-542]
+    fields:
+      alternatives-considered: "(1) Keep eprintln! behind a runtime flag: a second logging mechanism next to tracing, against project rules. (2) Keep the default directive at info: still prints on every run. (3) Delete the diagnostics: loses the ability to debug WASI calls."
+      rationale: CLAUDE.md requires the tracing framework instead of eprintln!. The tracing fmt layer writes each record in one call, and the WASI stderr write path flushes before returning, so records do not split the program's own stderr lines. Defaulting the directive to off makes the default run print only the program's stderr.
+    links:
+      - type: satisfies
+        target: SR-67
+    provenance:
+      created-by: ai
+      model: claude-sonnet-5-5
+      timestamp: 2026-10-28T11:57:40Z

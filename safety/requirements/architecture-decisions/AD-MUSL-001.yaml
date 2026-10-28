@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: AD-MUSL-001
+    type: design-decision
+    title: Static musl release archives are built with cargo-zigbuild and proven on a PR job in an Alpine container
+    status: implemented
+    release: v0.7.0
+    description: "Implements SR-68 (issue #514). Evidence: PR #558, files .github/workflows/release.yml and .github/workflows/ci.yml. DECISION: release.yml additionally builds x86_64-unknown-linux-musl and aarch64-unknown-linux-musl archives with cargo-zigbuild (version pinned), with static-link and --version-equals-tag checks, covered by the existing SHA256SUMS and cosign signature. ci.yml gains a pull-request job 'Static musl build (SR-68)' that builds both targets with 'cargo zigbuild --release -p kilnd', asserts the binaries are reported as statically linked, checks ldd finds no dynamic dependencies for the x86_64 binary, and runs kiln in an Alpine container pinned by image digest (alpine:3.22.2@sha256:...) on a minimal wasm module. The aarch64 build is build-only on the PR job."
+    tags: [release, portability, musl, issue-514]
+    fields:
+      alternatives-considered: "(1) Build with the musl target through plain cargo: needs a musl C toolchain per host, cargo-zigbuild avoids that. (2) Only build musl in release.yml: a failure would first show at tagging. (3) Lower the glibc floor by building on an older distro: does not cover Alpine or distroless-static."
+      rationale: A static binary removes the glibc 2.34 floor that stops the glibc archive running on Ubuntu 20.04, RHEL 8, Alpine and distroless-static. Running it in Alpine on every PR shows the release recipe works before a tag is cut instead of at release time.
+    links:
+      - type: satisfies
+        target: SR-68
+    provenance:
+      created-by: ai
+      model: claude-sonnet-5-5
+      timestamp: 2026-10-28T11:57:40Z

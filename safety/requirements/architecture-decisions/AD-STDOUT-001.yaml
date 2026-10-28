@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: AD-STDOUT-001
+    type: design-decision
+    title: kilnd prints only the program's output on stdout by default; banner and statistics need --verbose and go to stderr
+    status: implemented
+    release: v0.7.0
+    description: "Implements SR-74 (issue #574; maintainer decision recorded in PR #587). Evidence: PR #588, files kilnd/src/lib.rs and kilnd/tests/quiet_stdout_tests.rs. DECISION: the startup banner, [INFO] lines and run statistics (including the memory profiling block) are printed only with a new --verbose flag, on stderr. KilndLogHandler also forwards to kiln_foundation::tracing, off unless RUST_LOG is set. The 'Entry ... returned' line for the default wasi:cli/run entry is deleted, and the core-function result line is printed only when an export was explicitly requested with --invoke or --function. 'No module specified' moved from stdout to stderr. Unchanged: --version and --help on stdout, usage and refusal errors on stderr, --invoke results on stdout. Banner code paths no longer used were deleted. Tests in kilnd/tests/quiet_stdout_tests.rs: with no flags stdout equals exactly the program's bytes; with --verbose stdout is still exactly the program's bytes and stderr carries the banner; kiln --help mentions --verbose. The PR reports cmp-identical stdout against wasmtime for hello_rust, hello_c_cli, hello_cpp_cli and hello_go."
+    tags: [cli, stdout, observability, issue-574]
+    fields:
+      alternatives-considered: "(1) Keep the banner on stdout and filter it downstream: every consumer has to know kiln's text. (2) Use only RUST_LOG for the banner: the banner is user-facing run information, not a diagnostic, so a flag is simpler. (3) Print the banner on stderr by default: still pollutes the program's stderr differential."
+      rationale: Pipelines, wasmtime differentials and varve consume stdout, so any kiln line on it must be scrubbed. Putting the extra output behind --verbose on stderr keeps stdout a clean program stream and keeps the information available.
+    links:
+      - type: satisfies
+        target: SR-74
+    provenance:
+      created-by: ai
+      model: claude-sonnet-5-5
+      timestamp: 2026-10-28T11:57:41Z
