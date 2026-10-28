@@ -325,8 +325,10 @@ jobs:
               --tag v0.38.0 --bin rivet rivet-cli
           fi
           rivet --version
+      # Externals at the commits pinned in rivet.lock, so another repo's
+      # push cannot turn this job red; moving a pin is an explicit PR.
       - name: Sync externals
-        run: rivet sync
+        run: rivet sync --locked
       - name: Validate artifacts
         run: rivet validate
 

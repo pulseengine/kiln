@@ -5,7 +5,7 @@ artifacts:
     title: Every PR runs rivet validate; a traceability error fails CI
     status: approved
     release: v0.7.0
-    description: "Maintainer decision 2026-10-28 (#600, in v0.7.0): the rivet artifact graph is gated like the code. A CI job installs a pinned rivet (v0.38.0), syncs the declared externals (rivet sync) and runs rivet validate; any validation ERROR (broken link, unknown type, missing required field) fails the job, warnings do not. Verified by: a negative control with a link to a nonexistent artifact turns the job red (local: exit 1, ERROR [SR-73] link derives-from targets SR-99999 which does not exist; CI run link recorded), and main is green."
+    description: "Maintainer decisions 2026-10-28 (#600, in v0.7.0; externals pinned): the rivet artifact graph is gated like the code. A CI job installs a pinned rivet (v0.38.0), syncs the declared externals at the commits pinned in rivet.lock (rivet sync --locked) and runs rivet validate; any validation ERROR (broken link, unknown type, missing required field) fails the job, warnings do not. Pins move only by an explicit PR. Verified by: a negative control with a link to a nonexistent artifact turns the job red (local: exit 1, ERROR [SR-73] link derives-from targets SR-99999 which does not exist; CI run link recorded), and main is green; then the maintainer adds the check to the required contexts."
     tags: [ci, traceability, merge-gate]
     links:
       - type: derives-from
