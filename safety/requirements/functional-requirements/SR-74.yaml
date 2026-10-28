@@ -3,7 +3,7 @@ artifacts:
   - id: SR-74
     type: requirement
     title: A kiln run's stdout carries only the program's output; kiln's banner, startup lines and statistics appear only with --verbose, on stderr
-    status: approved
+    status: implemented
     release: v0.7.0
     description: "Issue #574. Maintainer decision 2026-10-22: quiet by default in v0.7.0. MEASURED on the SR-67 release build (#572): stdout of 'kiln hello_rust.core.wasm' interleaves the program's output with a ~15-line banner, ~12 [INFO] lines (KilndLogHandler::handle_minimal_log println!) and run statistics, so wasmtime differentials, pipelines and varve must scrub kiln's lines. REQUIRED: with no flags, stdout is byte-identical to the program's stdout; banner, startup lines and statistics are printed only with a new --verbose flag, to stderr; internal diagnostics go through kiln_foundation::tracing (off unless RUST_LOG). Deliberate user-facing output (errors, refusals, --help, --version, --invoke results) is unchanged. Verified by: a release-binary run of each released command component prints stdout byte-identical to wasmtime 42.0.1 (datetime excepted for its clock), and with --verbose the banner appears on stderr only."
     tags: [cli, stdout, observability, issue-574]
