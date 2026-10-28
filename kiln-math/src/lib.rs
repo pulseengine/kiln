@@ -67,6 +67,11 @@ pub use kiln_error::Result as KilnMathResult; // Alias specific to this crate co
 /// unwrap in library code, and unformatted code.
 pub   fn   negative_control_unwrap( x : Option<u32> ) -> u32 { x.unwrap() }
 
+// Docs-only violation for the required `build` (Pages docs) check: rustdoc
+// fails, a normal build does not.
+#[cfg(doc)]
+compile_error!("gate-potency negative control: the docs build must fail");
+
 #[cfg(test)]
 mod gate_potency_negative_control {
     #[test]
