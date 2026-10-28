@@ -10,6 +10,8 @@ artifacts:
     links:
       - type: derives-from
         target: SR-28
+      - type: derives-from
+        target: SR-99999
     provenance:
       created-by: ai
       model: claude-opus-5-5
