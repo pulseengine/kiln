@@ -3,7 +3,7 @@ artifacts:
   - id: SR-65
     type: requirement
     title: Instantiation refuses a module with an unresolved import, naming each missing module::name, before running anything
-    status: implemented
+    status: verified
     release: v0.7.0
     description: "Issue #527. MEASURED 2026-10-14 on main d9e66fa0: a core module importing 'no:such/iface@1.0.0'::'missing' instantiates and runs to 'Execution completed successfully', exit 0; wasmtime 42.0.1 refuses with a link error. If the import is called, kiln fails only then with '[Runtime][E03EE] Unknown WASI function' (misleading: the import is not WASI). The core spec requires instantiation to fail when an import cannot be resolved. Found on the released wasm-component-examples v0.5.0 corpus: yolo_inference_* imports wasi:nn (not implemented by kiln); wasmtime refuses it, kiln instantiates it and exits 0, so a corpus pass/fail tally counts an unsupported component as passing. Proposed for v0.7.0 (planning, not committed — maintainer's call)."
     tags: [linking, instantiation, spec-conformance, fail-loud, bug, issue-527]

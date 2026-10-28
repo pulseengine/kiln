@@ -3,7 +3,7 @@ artifacts:
   - id: SR-72
     type: requirement
     title: The WASI dispatcher serves the descriptor read/write/sync and directory-mutation calls a released Go command imports, inside the preopen sandbox
-    status: implemented
+    status: verified
     release: v0.7.0
     description: "Issue #552. The released hello_go (wasm-component-examples v0.5.0, meld 0.62.0 fused) imports wasi:filesystem/types [method]descriptor.read, .write, .sync-data, .create-directory-at, .remove-directory-at, .unlink-file-at, .rename-at, .link-at, .symlink-at, .readlink-at; dispatch_core serves none of them. With SR-65 kiln refuses the module at instantiation (correct), so these must be served for Go to run. Maintainer decision 2026-10-21: implement in v0.7.0 before SR-65 merges. Each call operates only within a preopen and its allow-list, with the same lexical and symlink escape rules as open-at/stat-at; a path-based call that escapes is refused with the WASI error code, never performed. Verified by: unit tests per call (success inside the preopen, refusal on lexical and symlink escape), and the released hello_go fused by meld 0.62.0 running under kiln with stdout identical to wasmtime 42.0.1 once SR-65 is merged."
     tags: [wasi, filesystem, sandbox, go, issue-552]
