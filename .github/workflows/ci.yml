@@ -59,7 +59,10 @@ jobs:
 
   code_quality:
     name: Code Quality Checks
-    runs-on: [self-hosted, linux, x64, rust-cpu]
+    # Routes fork PRs to GitHub-hosted runners by default. This is NOT a security
+    # boundary: a fork PR can edit this file. Isolation is enforced by the org's
+    # smithy runner-group policy and fork-PR approval (pulseengine/warte#35).
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","linux","x64","rust-cpu"]') }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions-rs/toolchain@v1
@@ -105,7 +108,7 @@ jobs:
     # These are quality metrics, not correctness gates; their findings are
     # tracked as issues. Each step reports its result without failing the job.
     name: Quality Report (informational)
-    runs-on: [self-hosted, linux, x64, rust-cpu]
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","linux","x64","rust-cpu"]') }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions-rs/toolchain@v1
@@ -128,7 +131,7 @@ jobs:
 
   core_tests_and_analysis:
     name: Core Tests, Analysis & Coverage
-    runs-on: [self-hosted, linux, x64, rust-cpu]
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","linux","x64","rust-cpu"]') }}
     # This job runs on push, PR, and all manual triggers (regardless of input)
     steps:
       - uses: actions/checkout@v7
@@ -163,7 +166,7 @@ jobs:
 
   safety_verification:
     name: SCORE-Inspired Safety Verification
-    runs-on: [self-hosted, linux, x64, rust-cpu]
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","linux","x64","rust-cpu"]') }}
     # Measured over 25 successful runs (2026-10): 1.2-7.9 min, median 3.8.
     # A hung run held this required check for 2h on #540 (#543); fail fast.
     timeout-minutes: 30
@@ -262,10 +265,10 @@ jobs:
 # Coverage job is still Linux-only as tarpaulin only supports Linux
   coverage:
     name: Code Coverage
-    runs-on: [self-hosted, linux, x64, rust-cpu]
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","linux","x64","rust-cpu"]') }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/cache@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/bin/
@@ -274,7 +277,7 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           components: llvm-tools-preview
       - name: Setup Rust targets
@@ -284,8 +287,9 @@ jobs:
       - name: Run coverage tests
         run: cargo-kiln coverage --html
         continue-on-error: true  # Coverage report generation is best-effort
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v7
+      - if: github.event.pull_request.head.repo.fork != true
+        name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: target/llvm-cov/lcov.info
