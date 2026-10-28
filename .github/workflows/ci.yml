@@ -307,6 +307,31 @@ jobs:
       - name: Audit Cargo.lock
         run: cargo audit
 
+  traceability:
+    name: Traceability (rivet validate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Cache rivet
+        uses: actions/cache@v6
+        with:
+          path: ~/.cargo/bin/rivet
+          key: ${{ runner.os }}-rivet-v0.38.0
+      # SR-75: pinned rivet; validation errors fail the job, warnings do not.
+      - name: Install rivet
+        run: |
+          if ! command -v rivet >/dev/null 2>&1; then
+            cargo install --locked --git https://github.com/pulseengine/rivet \
+              --tag v0.38.0 --bin rivet rivet-cli
+          fi
+          rivet --version
+      # Externals at the commits pinned in rivet.lock, so another repo's
+      # push cannot turn this job red; moving a pin is an explicit PR.
+      - name: Sync externals
+        run: rivet sync --locked
+      - name: Validate artifacts
+        run: rivet validate
+
   vxworks_cross_build:
     name: VxWorks Cross-Compilation
     runs-on: ubuntu-latest
