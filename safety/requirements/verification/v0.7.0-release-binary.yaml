@@ -1,0 +1,53 @@
+artifacts:
+
+  - id: VER-REL070-001
+    type: verification
+    title: Release binary refuses yolo_inference (wasi:nn) at instantiation, naming every missing import
+    status: verified
+    release: v0.7.0
+    description: "kiln built with cargo build --release from main 459c2309; wasm-component-examples v0.5.0 (wasm-components-0.5.0.tar.gz sha256 df22a99593e661e45675eec50e5af19e7dff230222fb9f11dc278b3bc428b910), each component fused by meld 0.62.0 and run with 'kiln --wasi'; reference wasmtime 42.0.1 on the unfused component; stdout and stderr captured to separate files and compared with cmp; 2026-10-28. yolo_inference_debug and yolo_inference_release: kiln exits 1 with 0 bytes on stdout before any program code runs; stderr starts 'kiln: refusing to instantiate: 15 unresolved import(s):', lists each module::name (10 wasi:nn imports, plus wasi:sockets resource drops and wasi:filesystem/types filesystem-error-code), and ends '[Runtime][E21A0] Module has unresolved imports; instantiation refused'. wasmtime 42.0.1 also refuses (no implementation of wasi:nn/errors). kilnd/tests/unresolved_import_tests.rs passes in the same tree. Known limitation, not a regression: p3_cli is refused with 14 imports carrying meld's $N instance suffix (#556); v0.6.0 fails on it at call time with 'Unknown WASI function'."
+    fields:
+      method: demonstration
+    links:
+      - type: verifies
+        target: SR-65
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-10-28T18:05:48Z
+
+  - id: VER-REL070-002
+    type: verification
+    title: "Release binary: command components' stdout byte-identical to wasmtime, stderr carries nothing from kiln"
+    status: verified
+    release: v0.7.0
+    description: "kiln built with cargo build --release from main 459c2309; wasm-component-examples v0.5.0 (wasm-components-0.5.0.tar.gz sha256 df22a99593e661e45675eec50e5af19e7dff230222fb9f11dc278b3bc428b910), each component fused by meld 0.62.0 and run with 'kiln --wasi'; reference wasmtime 42.0.1 on the unfused component; stdout and stderr captured to separate files and compared with cmp; 2026-10-28. Command components that wasmtime runs: hello_rust (38 B, sha256 00fc35935b1a4238...), hello_c_cli (35 B, b81c16e28c2d57c2...), hello_cpp_cli (37 B, b1433f6fde930136...), hello_go (30 B, 78e7fd5b7575f2f7...), calculator '8 + 8' (13 B, e67ad54444f5f06c...): stdout byte-identical to wasmtime, exit codes equal; datetime equal except its wall-clock second. With 'kiln' and no RUST_LOG/--verbose, kiln's stderr is empty (0 B, re-measured for hello_rust and hello_go). With --verbose the banner and statistics go to stderr only and stdout stays identical. The deprecated 'kilnd' alias adds exactly one deprecation line on stderr (alias kept through v0.7.0 by maintainer decision). kilnd/tests/quiet_stdout_tests.rs passes in the same tree."
+    fields:
+      method: demonstration
+    links:
+      - type: verifies
+        target: SR-67
+      - type: verifies
+        target: SR-74
+      - type: verifies
+        target: SR-65
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-10-28T18:05:49Z
+
+  - id: VER-REL070-003
+    type: verification
+    title: Release binary runs the released hello_go (fs calls served in the preopen sandbox), stdout identical to wasmtime
+    status: verified
+    release: v0.7.0
+    description: "kiln built with cargo build --release from main 459c2309; wasm-component-examples v0.5.0 (wasm-components-0.5.0.tar.gz sha256 df22a99593e661e45675eec50e5af19e7dff230222fb9f11dc278b3bc428b910), each component fused by meld 0.62.0 and run with 'kiln --wasi'; reference wasmtime 42.0.1 on the unfused component; stdout and stderr captured to separate files and compared with cmp; 2026-10-28. hello_go fused by meld 0.62.0 instantiates (all descriptor read/write/sync and directory-mutation imports resolve) and runs under kiln: exit 0, stdout 30 B, sha256 78e7fd5b7575f2f7... identical to wasmtime 42.0.1. cargo test -p kiln-wasi in the same tree: 119 + 6 + 4 passed, 0 failed (per-call success inside the preopen and refusal on lexical and symlink escape)."
+    fields:
+      method: demonstration
+    links:
+      - type: verifies
+        target: SR-72
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-10-28T18:05:49Z
