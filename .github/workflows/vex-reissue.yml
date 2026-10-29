@@ -50,17 +50,17 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       # The generator comes from main: older tags predate `cargo-kiln vex`.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: tool
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ steps.latest.outputs.tag }}
           path: release-src
           submodules: recursive
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
 
       - name: Install cargo-audit
         run: cargo install --locked cargo-audit --version "$CARGO_AUDIT_VERSION"
@@ -158,7 +158,7 @@ jobs:
 
       - name: Upload the regenerated VEX
         if: steps.compare.outputs.changed == 'true'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vex-reissue-${{ steps.latest.outputs.tag }}
           path: out/
