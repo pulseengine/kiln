@@ -149,3 +149,35 @@ artifacts:
       created-by: ai
       model: claude-opus-5-5
       timestamp: 2026-10-29T06:09:39Z
+
+  - id: VER-REL070-010
+    type: verification
+    title: v0.7.0 release ships static x86_64 and aarch64 musl archives, signed and checked
+    status: verified
+    release: v0.7.0
+    description: "GitHub Release v0.7.0 (tag on da174d71; built by release run 40909894276, workflow_dispatch tag=v0.7.0, after the first run 40884009877 failed installing qemu-user-static on Ubuntu 26.04, fixed in #608). Downloaded into an empty directory: shasum -a 256 -c SHA256SUMS.txt exit 0 for all 10 entries, including kiln-v0.7.0-x86_64-unknown-linux-musl.tar.gz and kiln-v0.7.0-aarch64-unknown-linux-musl.tar.gz; cosign verify-blob with the bundle and the release.yml workflow identity: Verified OK, and a tampered SHA256SUMS is rejected (exit 1). file(1) on the extracted kiln and kilnd: 'ELF 64-bit LSB executable, x86-64 ... statically linked' and 'ELF 64-bit LSB executable, ARM aarch64 ... statically linked'. In the release run both musl jobs passed 'Assert musl binaries are statically linked' and 'Assert --version matches the tag' (aarch64 executed under qemu-aarch64). Running the released musl binary in a glibc-less container was done on the same source by the PR job 'Static musl build (SR-68)' (Alpine 3.22.2 by digest), not on the downloaded asset (no container runtime on the verifying machine)."
+    fields:
+      method: inspection
+    links:
+      - type: verifies
+        target: SR-68
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-10-29T16:54:56Z
+
+  - id: VER-REL070-011
+    type: verification
+    title: v0.7.0 release carries a CycloneDX VEX that matches cargo audit and the shipped dependency trees
+    status: verified
+    release: v0.7.0
+    description: "GitHub Release v0.7.0 asset kiln-0.7.0.vex.cdx.json: listed in SHA256SUMS.txt (checksum OK, signature verified, see VER-REL070-010); bomFormat CycloneDX, specVersion 1.5, metadata.component kilnd 0.7.0. One statement: RUSTSEC-2026-0186 (pkg:cargo/memmap2@0.9.5) not_affected, justification code_not_present. Cross-check: cargo audit 0.22.1 on the tag's Cargo.lock reports 0 vulnerabilities and warnings 'unsound RUSTSEC-2026-0186 memmap2 0.9.5' and 'yanked chacha20 0.10.1' (no advisory, so no VEX entry, by design). cargo tree -p kilnd -e normal --locked for all seven release targets (x86_64/aarch64 linux gnu and musl, x86_64/aarch64 apple-darwin, x86_64-pc-windows-msvc) contains no memmap2 (control: the same tree has 109 lines and includes kiln-runtime), so not_affected is correct for every shipped binary."
+    fields:
+      method: inspection
+    links:
+      - type: verifies
+        target: SR-69
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-10-29T16:54:56Z
