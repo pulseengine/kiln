@@ -87,7 +87,7 @@ jobs:
             os: ubuntu-latest
             archive: tar.gz
             zigbuild: true
-            runner_prefix: qemu-aarch64-static
+            runner_prefix: qemu-aarch64
           - target: x86_64-apple-darwin
             os: macos-14
             archive: tar.gz
@@ -129,9 +129,19 @@ jobs:
           cargo install cargo-zigbuild --version 0.23.4 --locked
           echo "$(python3 -m site --user-base)/bin" >> "$GITHUB_PATH"
 
+      # qemu-user provides qemu-aarch64 on Ubuntu 24.04 and 26.04; on 26.04
+      # qemu-user-static is only a virtual package with no install candidate,
+      # which failed the v0.7.0 release run. The PR job "Static musl build
+      # (SR-68)" runs the same install and binary, so this path is tested
+      # before a tag.
       - name: Install qemu-user (musl aarch64 only)
         if: matrix.runner_prefix
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-user-static
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qemu-user
+          command -v "${{ matrix.runner_prefix }}"
 
       - name: Build kilnd (musl, static)
         if: matrix.zigbuild
