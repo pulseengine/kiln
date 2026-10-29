@@ -3,7 +3,7 @@ artifacts:
   - id: SR-73
     type: requirement
     title: "Every required CI check can fail: a negative control turns each one red"
-    status: implemented
+    status: verified
     release: v0.7.0
     description: "Maintainer decision 2026-10-21 (widened from clippy-only after the gate-potency negative control, #568, PR #567): a scratch PR with a failing unit test, unformatted code, an unwrap() in library code and a broken intra-doc link passed ALL 8 required checks. Mechanisms: Core Tests' runner (kiln-build-core/src/test.rs run_tests_with_options) sets success from parsed counts and ignores cargo's exit status -> 'All tests passed! (0/0)'; SCORE, clippy, CI Checks & Docs gating steps run with continue-on-error or || true; docs checks accept broken intra-doc links; Security Audit (windows) has continue-on-error. REQUIRED: each required check fails on the violation it exists to catch — the test runner honours cargo's exit status and reports real counts; gating steps have no continue-on-error / || true; rustdoc warnings are errors in the doc checks; pre-existing failures on main are fixed or explicitly #[ignore = \"#issue\"] before the gates bite. Verified by: a fresh negative-control PR with the same four violations turns each corresponding required check red (run links recorded), and main is green with the gates potent."
     tags: [ci, clippy, merge-gate, vacuous-gate]

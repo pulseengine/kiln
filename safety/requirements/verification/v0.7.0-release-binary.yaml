@@ -51,3 +51,101 @@ artifacts:
       created-by: ai
       model: claude-opus-5-5
       timestamp: 2026-10-28T18:05:49Z
+
+  - id: VER-REL070-004
+    type: verification
+    title: "Negative control: each of the 8 required checks goes red on the violation it exists to catch"
+    status: verified
+    release: v0.7.0
+    description: "Scratch PR #596 (never merged), on main 65fe5ff6 with the #595 workflows. Violations: a failing unit test, unformatted code with a broken intra-doc link, unwrap() in library code, forbid(unsafe_code) removed from a crate that is not allow-listed, the vulnerable time 0.1.43 (RUSTSEC-2020-0071), and a #[cfg(doc)] compile_error! (docs-only). Round 2 (9101ae4c), runs 40634787609 / 40634787583 / 40634787626: Core Tests red at Run Tests (negative_control_must_fail, unsafe policy test); CI Checks & Docs red at Check formatting; Safety Analysis with Clippy red on unwrap_used; SCORE red at 'Unsafe code only in allow-listed crates'; Security Audit ubuntu/macos/windows red at 'Audit Cargo.lock'; build (Pages docs) red at 'Build documentation via cargo-kiln' with the planted error. Every failing step was checked to fail on its planted violation, not on infrastructure. Run links: issue #568 comments 6460986391 and 6461842692. The same checks are green on main."
+    fields:
+      method: test
+    links:
+      - type: verifies
+        target: SR-73
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-10-28T23:55:59Z
+
+  - id: VER-REL070-005
+    type: verification
+    title: "Negative control: Traceability (rivet validate) goes red on a link to a nonexistent artifact"
+    status: verified
+    release: v0.7.0
+    description: "Scratch PR #602 (never merged) on main ec447cf0: SR-73 given a derives-from link to SR-99999. Job 'Traceability (rivet validate)' failed (run 40683491908, job 122799878535) with 'ERROR: [SR-73] link derives-from targets SR-99999 which does not exist'. On main (#601) the same job installs rivet 0.38.0, logs '7 externals synced at locked commits.' and 'Result: PASS'. Recorded in issue #568 comment 6476509699."
+    fields:
+      method: test
+    links:
+      - type: verifies
+        target: SR-75
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-10-28T23:56:00Z
+
+  - id: VER-REL070-006
+    type: verification
+    title: kilnd 0.7.0 deprecation notice names v0.8.0, on stderr only
+    status: verified
+    release: v0.7.0
+    description: "Release build (cargo build --release --locked -p kilnd) of the v0.7.0 release tree (main fb483580 plus the 0.6.0 -> 0.7.0 bump), streams in two files: 'kilnd --version' exits 0, stdout 'kilnd 0.7.0', stderr exactly 'warning: `kilnd` is deprecated and will be removed in v0.8.0; use `kiln` instead'. 'kiln --version' prints 'kiln 0.7.0' with nothing on stderr. The same single line is the only stderr output of kilnd on the v0.5.0 corpus run (VER-REL070-002)."
+    fields:
+      method: demonstration
+    links:
+      - type: verifies
+        target: SR-70
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-10-29T00:02:14Z
+
+  - id: VER-REL070-007
+    type: verification
+    title: kiln's own config files parse as YAML through rivet-yaml; malformed YAML is rejected
+    status: verified
+    release: v0.7.0
+    description: "cargo test --locked -p cargo-kiln -- config on the v0.7.0 release tree: 10 passed, 0 failed, exit 0, including helpers::config::tests::parses_yaml_config, rejects_malformed_yaml_config and default_config_round_trips_through_yaml, and test_config::tests::test_config_serialization and test_config_file_operations. The same tests run in the required Core Tests check on every PR."
+    fields:
+      method: automated-test
+      test-location: cargo-kiln/src/helpers/config.rs, cargo-kiln/src/test_config.rs
+    links:
+      - type: verifies
+        target: SR-71
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-10-29T00:02:14Z
+
+  - id: VER-REL070-008
+    type: verification
+    title: "Every workspace target compiles: cargo build --workspace --all-targets passes on main in a required check"
+    status: verified
+    release: v0.7.0
+    description: "Required check 'CI Checks & Docs', step 'Every workspace target compiles (SR-32)' (cargo build --workspace --all-targets) succeeded on main fb483580, run 40790398348 job 123173912500. The step's verdict is cargo's exit status (no continue-on-error or || true, SR-73). No separate negative control was run for this step: a target that fails to compile makes cargo exit non-zero by construction. Locally, cargo build --workspace --locked on the v0.7.0 release tree exits 0."
+    fields:
+      method: automated-test
+    links:
+      - type: verifies
+        target: SR-32
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-10-29T00:02:14Z
+
+  - id: VER-REL070-009
+    type: verification
+    title: Executor comparison bench runs and reports per-poll-cycle cost for kiln-async and embassy on a fourpi CI host
+    status: verified
+    release: v0.7.0
+    description: "Maintainer decision 2026-10-29: timed on a fourpi CI host, not a developer machine. Workflow 'Executor comparison bench (SR-31)' (#607), run 40825993124 job 123289048679 on main 9967b0ad, runner pulseengine-ci-01 (x86_64, 32 CPUs, Linux 6.8.0-100, rustc 1.99.1); deps criterion 0.8.2, embassy-executor 0.10.0, embassy-futures 0.1.2, kiln-async at main. Workload 16 tasks x 64 yields = 1024 poll cycles. kiln_async_16x64: time [11.106 11.384 11.669] us, thrpt 89.948 Melem/s (about 11.1 ns per poll cycle). embassy_16x64: time [14.229 14.336 14.441] us, thrpt 71.430 Melem/s (about 14.0 ns per poll cycle). kiln-async about 1.26x faster here. CAVEAT: the host was oversubscribed during the run (load average 48.75 at start, 51.04 at end, on 32 CPUs), so absolute numbers are inflated and the ratio is not comparable to the 2026-07-02 developer-machine measurement in SR-31 (1.60 vs 4.35 ns, about 2.7x). Verified here: the bench builds, runs both executors on the identical workload and reports per-cycle cost; not a performance claim."
+    fields:
+      method: test
+      test-location: benchmarks/executor-comparison/benches/comparison.rs
+    links:
+      - type: verifies
+        target: SR-31
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-10-29T06:09:39Z

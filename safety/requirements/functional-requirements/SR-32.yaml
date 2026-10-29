@@ -2,7 +2,7 @@ artifacts:
 - id: SR-32
   type: requirement
   title: All workspace build targets compile and are gated against bit rot in CI
-  status: implemented
+  status: verified
   description: "Every target in the workspace (lib, bin, tests, examples, benches) shall compile, and CI shall gate cargo build --workspace --all-targets (with the necessary feature sets) as a BLOCKING required check, so broken examples/integration-tests/benches cannot rot invisibly. Approach (user-directed): delete-dead-first (orphaned/removed-module/moved-inline tests), then fix salvageable, then add the CI gate. Status reset to approved 2026-10-21 (maintainer): MEASURED on main bc5a5194, cargo build --workspace --all-targets --keep-going fails in 42 targets (22 kiln-component tests/examples/bench, 6 kiln-runtime tests + 1 example, cargo-kiln bin test + integration_tests, kiln-decoder 2 tests + 1 example, kiln-format 1 test + 1 example, kiln-instructions 2 examples, kiln-debug 1 example) and no all-targets gate exists. Verified by: that command exits 0 on main and the CI job running it is required and has no continue-on-error."
   tags:
   - ci
