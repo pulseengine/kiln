@@ -132,3 +132,20 @@ artifacts:
       created-by: ai
       model: claude-opus-5-5
       timestamp: 2026-10-29T00:02:14Z
+
+  - id: VER-REL070-009
+    type: verification
+    title: Executor comparison bench runs and reports per-poll-cycle cost for kiln-async and embassy on a fourpi CI host
+    status: verified
+    release: v0.7.0
+    description: "Maintainer decision 2026-10-29: timed on a fourpi CI host, not a developer machine. Workflow 'Executor comparison bench (SR-31)' (#607), run 40825993124 job 123289048679 on main 9967b0ad, runner pulseengine-ci-01 (x86_64, 32 CPUs, Linux 6.8.0-100, rustc 1.99.1); deps criterion 0.8.2, embassy-executor 0.10.0, embassy-futures 0.1.2, kiln-async at main. Workload 16 tasks x 64 yields = 1024 poll cycles. kiln_async_16x64: time [11.106 11.384 11.669] us, thrpt 89.948 Melem/s (about 11.1 ns per poll cycle). embassy_16x64: time [14.229 14.336 14.441] us, thrpt 71.430 Melem/s (about 14.0 ns per poll cycle). kiln-async about 1.26x faster here. CAVEAT: the host was oversubscribed during the run (load average 48.75 at start, 51.04 at end, on 32 CPUs), so absolute numbers are inflated and the ratio is not comparable to the 2026-07-02 developer-machine measurement in SR-31 (1.60 vs 4.35 ns, about 2.7x). Verified here: the bench builds, runs both executors on the identical workload and reports per-cycle cost; not a performance claim."
+    fields:
+      method: test
+      test-location: benchmarks/executor-comparison/benches/comparison.rs
+    links:
+      - type: verifies
+        target: SR-31
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-10-29T06:09:39Z
