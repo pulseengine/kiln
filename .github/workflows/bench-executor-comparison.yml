@@ -1,0 +1,44 @@
+# SR-31: kiln-async vs embassy on an identical yield workload, timed on a
+# fourpi CI host instead of a developer machine (maintainer decision
+# 2026-10-29). Manual only: it is a measurement, not a gate.
+name: Executor comparison bench (SR-31)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    name: kiln-async vs embassy (criterion)
+    runs-on: [self-hosted, linux, x64, rust-cpu]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      # The numbers only mean something next to the host they ran on.
+      - name: Host
+        run: |
+          uname -a
+          nproc
+          grep -m1 'model name' /proc/cpuinfo || true
+          rustc -V
+          echo "load at start: $(cat /proc/loadavg)"
+      # benchmarks/executor-comparison is workspace-excluded with a git-ignored
+      # Cargo.lock (kiln#368), so its dependency versions are printed here.
+      - name: Run bench
+        working-directory: benchmarks/executor-comparison
+        run: |
+          set -o pipefail
+          cargo bench --bench comparison -- --noplot 2>&1 | tee bench.txt
+          echo "load at end: $(cat /proc/loadavg)"
+          cargo tree -e dev --depth 1 | grep -E 'embassy|kiln-async|criterion'
+      - name: Upload criterion results
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: executor-comparison-${{ github.sha }}
+          path: |
+            benchmarks/executor-comparison/bench.txt
+            benchmarks/executor-comparison/target/criterion
