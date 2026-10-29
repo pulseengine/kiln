@@ -1,0 +1,18 @@
+artifacts:
+
+  - id: AD-TRACE-001
+    type: design-decision
+    title: The traceability gate runs a pinned rivet against externals pinned in rivet.lock
+    status: implemented
+    release: v0.7.0
+    description: "Implements SR-75 (issue #600). Evidence: PR #601, files .github/workflows/ci.yml (job 'Traceability (rivet validate)'), rivet.lock, safety/requirements/functional-requirements/SR-75.yaml. DECISION: the job installs rivet v0.38.0 by git tag (binary cached by version), runs 'rivet sync --locked' to check out the seven externals (gale, gust, loom, meld, scry, sigil, synth) at the commits pinned in rivet.lock, then 'rivet validate'; a validation ERROR fails the job, warnings do not. A fresh checkout without the sync fails validation on cross-repo links (gust, scry), so the sync is part of the gate. The pins are the upstream main tips at 2026-10-28; moving a pin is an explicit PR."
+    fields:
+      alternatives-considered: "(1) Track ref: main: catches cross-repo drift immediately, but makes kiln's required check depend on six other repositories' main branches. (2) Validate kiln-local only, without externals: cross-repo links would go unchecked, and the fresh-checkout failure shows kiln artifacts do link into externals. (3) Pin with rivet.lock (chosen, maintainer decision 2026-10-28). rivet lock pins the local path checkout's HEAD instead of the declared ref (rivet#1138), so the lock was generated from a copy of rivet.yaml without the machine-local paths."
+      rationale: "Externals tracking ref: main would let a push to another repository turn every kiln PR red with no kiln change, and an unpinned rivet could change the rules under the gate. Pinning both makes a red result attributable to the PR under test."
+    links:
+      - type: satisfies
+        target: SR-75
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-10-28T23:55:47Z
