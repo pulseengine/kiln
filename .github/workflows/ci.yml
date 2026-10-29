@@ -401,8 +401,23 @@ jobs:
           echo "$(python3 -m site --user-base)/bin" >> "$GITHUB_PATH"
       - name: Build kiln (x86_64-unknown-linux-musl)
         run: cargo zigbuild --release --target x86_64-unknown-linux-musl -p kilnd
-      - name: Build kiln (aarch64-unknown-linux-musl, build-only)
+      - name: Build kiln (aarch64-unknown-linux-musl)
         run: cargo zigbuild --release --target aarch64-unknown-linux-musl -p kilnd
+      # Same install and invocation as release.yml's musl aarch64 --version
+      # check, so a runner-image change breaks a PR, not a release.
+      - name: Run aarch64 kiln under qemu-user
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qemu-user
+          WANT="$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "kilnd") | .version')"
+          for BIN in kiln kilnd; do
+            GOT="$(qemu-aarch64 "target/aarch64-unknown-linux-musl/release/${BIN}" --version)"
+            echo "${BIN} --version (qemu-aarch64) -> ${GOT}"
+            [ "$GOT" = "${BIN} ${WANT}" ]
+          done
       - name: Assert binaries are statically linked
         shell: bash
         run: |
