@@ -3,7 +3,7 @@ artifacts:
   - id: SR-69
     type: requirement
     title: Each release publishes a CycloneDX VEX document beside its SBOM, re-issued when a new advisory matches a shipped release
-    status: implemented
+    status: verified
     description: "Issue #515 (consumer: varve#179 ingests per-payload supply-chain documents). kiln already publishes kiln-<version>.cdx.json inside the signed sums and runs cargo audit / deny.toml; publish the advisory analysis result as a CycloneDX VEX (affected / not_affected with justification) and re-issue it when a new RUSTSEC advisory matches a shipped release (e.g. the four rustls advisories published the day v0.6.0 was prepared, which reach only cargo-kiln, not the released binary — exactly a not_affected statement). Verified by: a release's VEX validates against CycloneDX and names each advisory matching its Cargo.lock with a status."
     tags: [release, supply-chain, vex, issue-515]
     provenance:
