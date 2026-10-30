@@ -19,7 +19,7 @@ path = "src/lib.rs"
 kiln-error = { workspace = true, default-features = false } # Ensure kiln-error is also alloc-free by default
 
 # Optional: parking_lot for std-based advanced mutexes/rwlocks
-parking_lot = { version = "0.12", optional = true }
+parking_lot = { version = "0.13", optional = true }
 
 # Removed alloc dependency - binary std/no_std choice
 
