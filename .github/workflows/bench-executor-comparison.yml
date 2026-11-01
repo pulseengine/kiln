@@ -15,7 +15,7 @@ jobs:
     runs-on: [self-hosted, linux, x64, rust-cpu]
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: dtolnay/rust-toolchain@stable
       # The numbers only mean something next to the host they ran on.
       - name: Host
@@ -35,7 +35,7 @@ jobs:
           echo "load at end: $(cat /proc/loadavg)"
           cargo tree -e dev --depth 1 | grep -E 'embassy|kiln-async|criterion'
       - name: Upload criterion results
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
           name: executor-comparison-${{ github.sha }}
