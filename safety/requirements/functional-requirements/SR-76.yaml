@@ -1,0 +1,13 @@
+artifacts:
+
+  - id: SR-76
+    type: requirement
+    title: A direct call to a host import passes its arguments in declaration order
+    status: proposed
+    release: v0.8.0
+    description: "Issue #573. MEASURED 2026-11-04 on main fc73d15d (release build, wasmtime 42.0.1 reference). A core module that is not meld-fused and calls a WASI import directly gets the arguments reversed. kiln-runtime/src/stackless/engine.rs:2423-2448 collects the call's args in forward order (collect_function_args, :14143-14168, pops then reverses) and, when the import is not a P3 builtin, pushes them back with p3_args.into_iter().rev(); call_wasi_function then pops and reverses again (collect_import_args_by_name, :14259-14276), so the handler sees them reversed. Reproducer: a module importing wasi:cli/stdout@0.2.0 get-stdout and wasi:io/streams@0.2.0 [method]output-stream.blocking-write-and-flush, calling it as (handle, 32, 3, 0) to write the 3 bytes 'hi' plus newline: kiln exits 1 with '[Resource][E2003] Invalid WASI handle'; the same call with the arguments deliberately reversed writes the 3 bytes and exits 0; the same write through call_indirect works. Meld-fused modules reach WASI through call_indirect, which is why the released corpus is unaffected. REQUIRED: the handler receives the arguments in the import's declared parameter order on every call path (call and call_indirect). Verified by: that reproducer as a kilnd integration test writing exactly those 3 bytes on stdout via direct call and via call_indirect."
+    tags: [wasi, calling-convention, bug, issue-573]
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-03T23:59:21Z
