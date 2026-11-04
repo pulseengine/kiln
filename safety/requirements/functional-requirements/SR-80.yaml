@@ -3,7 +3,7 @@ artifacts:
   - id: SR-80
     type: requirement
     title: The workspace builds with its declared rust-version, checked on every pull request
-    status: proposed
+    status: implemented
     release: v0.8.0
     description: "Issue #616. MEASURED 2026-11-04: Cargo.toml declares rust-version 1.85.0, but the cargo dependency update #611 (4e7fc82a) moved kiln-sync to parking_lot 0.13, which resolves parking_lot 0.13.0, parking_lot_core 0.10.0 and lock_api 0.5.0. All three require rustc 1.95. The VxWorks Cross-Compilation job (WindRiver SDK rustc 1.85.0) has failed with 'rustc 1.85.0 is not supported' on every main push since then (4e7fc82a, e406642b, fc73d15d). The dependency PR was green because the VxWorks job does not run on PRs. REQUIRED: the declared rust-version and the resolved dependency graph agree (either hold parking_lot below 0.13, or raise rust-version and record what that drops, which is a maintainer decision); a PR check that builds the workspace with the declared rust-version so a dependency update cannot break it unnoticed. Verified by: that check green on main and red in a negative control that pins a crate requiring a newer rustc."
     tags: [msrv, dependencies, vxworks, regression, issue-616]
