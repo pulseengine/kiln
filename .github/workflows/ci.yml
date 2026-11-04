@@ -218,8 +218,10 @@ jobs:
         with:
           toolchain: "1.93.0"
       - name: Run Verus verification (StaticVec + StaticQueue + StaticString)
+        # --test_output=errors puts a failing proof's test.log in the job log;
+        # without it a toolchain launch failure shows only "Exit 1" (SR-79, #615).
         run: |
-          bazel test \
+          bazel test --test_output=errors \
             //kiln-foundation/src/verus_proofs:static_vec_verify \
             //kiln-foundation/src/verus_proofs:static_queue_verify \
             //kiln-foundation/src/verus_proofs:static_string_verify
