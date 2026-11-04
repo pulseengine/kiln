@@ -1,0 +1,13 @@
+artifacts:
+
+  - id: SR-83
+    type: requirement
+    title: P3 async built-ins kiln serves either do their job or refuse; none is a silent no-op
+    status: proposed
+    release: v0.8.0
+    description: "MEASURED 2026-11-04 by reading main 1adce1b4: kiln-runtime/src/stackless/engine.rs:736-750 serves [waitable-set-poll] by returning 0 and [waitable-join], [waitable-set-drop] and [task-cancel] as no-ops returning Ok; [context-set-N] stores 0 when its argument is missing or not i32 (engine.rs:711-714). kiln-builtins/src/lib.rs has the same no-op surface for the synth path. On meld's fused wit-bindgen ping-pong pair (meld main 21536f0, sha256 9891bc21...) kiln resolves exactly these stubs while refusing 65 other imports (E21A0), so once the other imports link, a program would observe 'no event ready' forever instead of an error. These stubs break the project's fail-loud rule and hid meld#555. REQUIRED: until kiln-async backs them (SR-84), each of these built-ins returns an explicit not-implemented trap naming the built-in, on both the interpreter and kiln-builtins paths; [context-set-N] refuses a missing or mistyped argument. context-get/set with valid arguments and task-return keep their current behaviour. Verified by: a core module calling each built-in traps with an error naming it (before: returns 0/Ok); existing P3 tests that relied on poll returning 0 are measured and reported, not silently adjusted."
+    tags: [p3, async, fail-loud, meld-548]
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-04T21:59:47Z

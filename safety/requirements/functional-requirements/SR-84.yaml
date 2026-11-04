@@ -1,0 +1,20 @@
+artifacts:
+
+  - id: SR-84
+    type: requirement
+    title: Async calls between fused P3 components run as subtasks scheduled by kiln-async, on the interpreter and the kiln-builtins path
+    status: proposed
+    release: v0.9.0
+    description: "meld ADR-10 (meld PR #556, draft, reviewed by kiln 2026-11-04): meld emits a versioned binary custom section pulseengine:async-edges (v1) keyed by original instance, with per-edge start/return copy adapters named by export, callback export, parameter shape, retptr position, result types and capacity bounds; kiln-async owns tasks, subtasks, waitable sets and event delivery. MEASURED 2026-11-04: meld's fused ping-pong pair (wit-bindgen runner+test, meld main 21536f0) is refused by kiln with E21A0 listing 65 imports, of which 20 are P3 future/stream/subtask built-ins kiln does not serve and 2 are the unfused async-lower calls; 19 such pairs pass unfused on wasmtime 51-dev -Wcomponent-model-async (meld's acceptance set). kiln-async already backs every P3 intrinsic (kiln-async/src/intrinsics.rs) but nothing links it and it has no subtask concept. REQUIRED: kiln loads and validates the section (missing or malformed -> refuse; adapter arities checked); resolves each async-lower import by exact (module, field) to its edge index; runs callees through the stackless callback ABI only; routes [task-return] by the current task (edge return adapter or host); delivers events FIFO per waitable set by a global sequence number with events raised during a poll visible from the next round, identically on the interpreter and through kiln-builtins; subtask cancel/drop pass through, dropping an unreturned subtask traps; cooperative threads (SR-82) share the same task table. Verified by: the 19 acceptance pairs, fused, run on the kiln interpreter with wasmtime's unfused exit status and output; the same event trace on the kiln-builtins path."
+    tags: [p3, async, kiln-async, meld-548, adr-10]
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-04T21:59:47Z
+    links:
+      - type: depends-on
+        target: SR-81
+      - type: depends-on
+        target: SR-83
+      - type: depends-on
+        target: SR-82

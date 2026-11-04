@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: AD-ASYNC-001
+    type: design-decision
+    title: The interpreter runs Component Model async through kiln-async, the same no_std scheduler the embedded path links; supersedes rfc46's 'no async in the interpreter'
+    status: approved
+    release: v0.9.0
+    description: "DECISION (maintainer, option dialogue 2026-11-04): kiln reuses kiln-async in the std interpreter rather than keeping the interpreter async-free or giving it a separate std async implementation. The interpreter's P3Builtin dispatch and kiln-builtins' __p3_* entry points are thin adapters over one kiln-async Scheduler. This reverses docs/architecture/rfc46-toolchain-architecture.md:107-111 ('The Component Model async proposal ... is not implemented in the Kiln interpreter'); that document is updated when SR-84 is implemented. Timing (same dialogue): SR-81 and SR-83 land in v0.8.0; this wiring targets v0.9.0 because it waits on meld's edge section (ADR-10 step 3). Also decided there for meld: meld refuses an unfusable async edge at fuse time until its adapters land."
+    tags: [p3, async, kiln-async, rfc46, adr-10, maintainer-decision]
+    fields:
+      alternatives-considered: "(1) Keep the interpreter async-free (rfc46 status quo): rejected, fused P3 async components could not run on the kiln CLI and the acceptance pairs could be checked only on gale or an emulator. (2) A separate unbounded std async implementation in the interpreter: rejected, two schedulers can order events differently so interpreter results would say nothing about gale, and it doubles maintenance."
+      rationale: One scheduler means one event order on both paths, so the interpreter running meld's 19 acceptance pairs is evidence for the gale path; kiln-async is no_std, no alloc, forbid(unsafe), Kani-checked, and already backs every P3 intrinsic. Capacities come from the bounds in meld's section.
+    links:
+      - type: satisfies
+        target: SR-84
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-04T21:59:47Z
