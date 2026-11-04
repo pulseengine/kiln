@@ -1,0 +1,65 @@
+artifacts:
+
+  - id: VER-CI080-001
+    type: verification
+    title: Verus proofs pass on main on macos-26-arm64 image 20261026 (rustc from Homebrew rustup)
+    status: verified
+    release: v0.8.0
+    description: "Main push b6b67eb1 (#619), run 41796861880, job 126462899626: Runner image macos-26-arm64 20261026.0455.2, rustc at /opt/homebrew/opt/rustup/bin/rustc, static_vec_verify / static_queue_verify / static_string_verify all PASSED (about 1.8 s each). Before the fix, main failed 8 of 8 runs on images 20261021 and later."
+    fields:
+      method: test
+    links:
+      - type: verifies
+        target: SR-79
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-04T08:07:54Z
+
+  - id: VER-CI080-002
+    type: verification
+    title: "Negative control: without --test_env=PATH the same image fails and the job log now names the cause"
+    status: verified
+    release: v0.8.0
+    description: "Dispatch run 41789577593 (branch fix/sr-79-verus-macos, --test_output=errors only), image 20261026.0455.2: 3 of 3 proofs Exit 1 with \"ERROR: Cannot determine Rust sysroot. Is rustc/rustup installed? ... Attempted HOME=/Users/runner, PATH includes: none\". Dispatch run 41789928886 with --test_env=PATH on the same image: 3 of 3 PASSED. Upstream gap: pulseengine/rules_verus#32."
+    fields:
+      method: test
+    links:
+      - type: verifies
+        target: SR-79
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-04T08:07:55Z
+
+  - id: VER-CI080-003
+    type: verification
+    title: kiln-platform builds on rustc 1.85.0 on main (VxWorks job and PR-time MSRV job green)
+    status: verified
+    release: v0.8.0
+    description: "Main push b6b67eb1, run 41796861880: VxWorks Cross-Compilation job 126462899625 logs \"Rust toolchain: rustc 1.85.0 (4d91de4e4 2025-02-17)\" and succeeds (it had failed on every main push since #611); MSRV (kiln-platform on rustc 1.85.0) job 126462899724 succeeds. The MSRV job also passed on PRs #618 and #619."
+    fields:
+      method: test
+    links:
+      - type: verifies
+        target: SR-80
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-04T08:07:55Z
+
+  - id: VER-CI080-004
+    type: verification
+    title: "Negative control: the MSRV check rejects parking_lot 0.13"
+    status: verified
+    release: v0.8.0
+    description: "Local, 2026-11-04: cargo +1.85.0 check -p kiln-platform --locked --features real-time,std passes with the #618 lock and fails with main pre-#618 Cargo.toml/Cargo.lock: \"parking_lot_core@0.10.0 requires rustc 1.95\". Separate finding recorded on #616: cargo +1.85.0 check --workspace also fails on rivet-yaml 0.41 (1.89) and wast/wat/wasm-encoder 262 (1.88), so the workspace-wide rust-version is a pending maintainer decision; SR-80 covers the VxWorks-built crate."
+    fields:
+      method: test
+    links:
+      - type: verifies
+        target: SR-80
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-04T08:07:55Z

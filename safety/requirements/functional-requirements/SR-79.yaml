@@ -3,7 +3,7 @@ artifacts:
   - id: SR-79
     type: requirement
     title: The Verus proof job checks the proofs on every supported macOS runner image and shows the failure cause when it fails
-    status: implemented
+    status: verified
     release: v0.8.0
     description: "Issue #615. MEASURED 2026-11-04 over 17 main pushes (Oct 22 to Nov 4): the Verus job's result depends only on the macos-26-arm64 runner image. Image 20261013.0424.1: 9 of 9 passed (each proof about 1.8 s). Images 20261021.0445.8 and 20261026.0455.2: 8 of 8 failed, all three targets (//kiln-foundation/src/verus_proofs:static_vec_verify, static_queue_verify, static_string_verify) Exit 1 in about 0.1 s, so Verus never ran a proof. The Bazel caches restored were identical in both cases. Re-runs passed only on runners still on the old image, which is why this looked like a flake. The cause is unknown because the job does not print Bazel test.log. REQUIRED: (1) a failing proof target prints its test.log (--test_output=errors) so the job log contains the cause; (2) the proofs run and pass on the current macos-26-arm64 image (fix the toolchain or pin a working image explicitly). Verified by: the Verus job passing on a run whose log shows the image version 20261021 or later, plus a negative control in which a broken proof shows the Verus error text in the job log."
     tags: [ci, verus, formal-verification, regression, issue-615]
