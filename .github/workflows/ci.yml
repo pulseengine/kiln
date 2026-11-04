@@ -218,8 +218,15 @@ jobs:
         with:
           toolchain: "1.93.0"
       - name: Run Verus verification (StaticVec + StaticQueue + StaticString)
+        # --test_output=errors puts a failing proof's test.log in the job log;
+        # without it a toolchain launch failure shows only "Exit 1" (SR-79, #615).
+        # --test_env=PATH: rules_verus's runner looks for rustc only under
+        # ~/.cargo/bin, ~/.rustup/shims and /usr/local/bin, and Bazel strips PATH
+        # from tests. On macos-26-arm64 image 20261021+ rustc is in none of
+        # those, so the runner fails with "Cannot determine Rust sysroot".
         run: |
-          bazel test \
+          rustc +1.93.0 --version && command -v rustup rustc
+          bazel test --test_output=errors --test_env=PATH \
             //kiln-foundation/src/verus_proofs:static_vec_verify \
             //kiln-foundation/src/verus_proofs:static_queue_verify \
             //kiln-foundation/src/verus_proofs:static_string_verify
