@@ -336,6 +336,21 @@ jobs:
       - name: Validate artifacts
         run: rivet validate
 
+  # SR-80 (#616): the VxWorks SDK ships rustc 1.85.0, but the VxWorks job runs
+  # only on push, so a dependency PR that needs a newer rustc looked green.
+  # This runs on every PR and checks the crate the VxWorks job builds, with the
+  # same features, on the SDK's rustc. Keep the version in step with the SDK.
+  msrv_vxworks:
+    name: MSRV (kiln-platform on rustc 1.85.0)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: "1.85.0"
+      - name: Check kiln-platform builds on the VxWorks SDK's rustc
+        run: cargo +1.85.0 check -p kiln-platform --locked --features real-time,std
+
   vxworks_cross_build:
     name: VxWorks Cross-Compilation
     runs-on: ubuntu-latest
