@@ -1,0 +1,13 @@
+artifacts:
+
+  - id: SR-81
+    type: requirement
+    title: Host imports carrying meld's per-instance $N suffix resolve to the WASI function they name
+    status: proposed
+    release: v0.8.0
+    description: "Issue #556. MEASURED 2026-11-04 on main 1adce1b4 (kiln 0.7.0 release build): wasm-component-examples v0.5.0 rust_p3/p3_cli.wasm fused by meld 0.62.0 (--memory multi) has 14 non-$root imports with a $N suffix (e.g. wasi:cli/stderr@0.2.6::get-stderr$5, wasi:cli/exit@0.2.6::exit$5, wasi:io/streams@0.2.6::[method]output-stream.blocking-write-and-flush$5). kiln refuses it at instantiation with E21A0 and lists exactly those 14 imports and nothing else. wasmtime 42.0.1 runs the unfused component (prints its usage text, exit 0). kiln strips $N only for $root built-ins (P3Builtin::from_import, kiln-runtime/src/stackless/engine.rs:470-480). meld 0.67.0 cannot re-fuse this v0.5.0 component (\"the async canonical option requires an async function type\"), so a current-toolchain fixture is needed. meld (kiln#620 comment, 2026-11-04) states the convention: under --memory multi a second component's copy of an import gets $N; the owning component comes from the import map's component field, not the suffix. REQUIRED: one resolver, shared by dispatch and the link check (AD-LINK-001), maps an import name with a trailing $N to its base WASI function and the owning instance from the import map; an unknown base name is still refused. Verified by: the fused p3_cli instantiates and its output matches wasmtime on the same inputs; a suffixed name whose base is not a known function is still refused with E21A0."
+    tags: [wasi, meld, import-resolution, bug, issue-556]
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-04T18:57:25Z
