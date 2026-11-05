@@ -14,3 +14,5 @@ artifacts:
     links:
       - type: depends-on
         target: SR-81
+      - type: depends-on
+        target: SR-93
