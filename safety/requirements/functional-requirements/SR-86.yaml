@@ -1,0 +1,13 @@
+artifacts:
+
+  - id: SR-86
+    type: requirement
+    title: BoundedVec stores and reads back every element type it accepts, including zero-size and variable-size serialized elements, and as_slice works
+    status: proposed
+    release: v0.8.0
+    description: "Issues #576, #577, #578. MEASURED 2026-11-05 on main deb8588f (cargo test --features std -- --ignored --exact, CARGO_TARGET_DIR on /Volumes/Home): #576: BoundedVec::new fails with 'Item serialized size cannot be zero with non-zero capacity' (Runtime 1005) for Namespace, TypeStore and ComponentValueStore (kiln-foundation component.rs:634/:645, component_builder.rs:580, component_value_store_builder.rs:125/:141; kiln-format type_store.rs:154/:173). #577: variable-size elements are lost or unreadable: 6 kiln-logging tests (bounded_logging.rs:1119-1315, 'left: 0 right: 1', 'Component not found') and 3 kiln-foundation tests ('Failed to deserialize item from BoundedVec', Parse 8003; builder.rs:592/:624, component_builder.rs:602). #578: BoundedVec::as_slice returns 'Operation not supported' (Runtime 1020), so test_bounded_slice_iterator (bounded_slice.rs:292) fails; re-verified by the lead. All 11 tests are #[ignore]d since SR-73. Common cause: fixed-slot sizing from the serialized size of Default. REQUIRED: each such element type either stores and round-trips, or is refused at the type level (compile time or a documented constructor error), never accepted and then lost; as_slice either returns the elements or the method is removed. Verified by: the 11 tests un-ignored and passing, plus a round-trip property test over variable-size elements."
+    tags: [foundation, bounded-collections, bug, issue-576, issue-577, issue-578]
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-05T18:59:56Z

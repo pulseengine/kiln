@@ -1,0 +1,13 @@
+artifacts:
+
+  - id: SR-89
+    type: requirement
+    title: Every kiln-wasi feature that is declared builds, and CI builds it
+    status: proposed
+    release: v0.8.0
+    description: "Issue #557. MEASURED 2026-11-05 on main deb8588f (cargo test --features std -- --ignored --exact, CARGO_TARGET_DIR on /Volumes/Home): 'cargo check -p kiln-wasi --features wasi-sockets,std,preview2' exits 101 with 13 E0308 errors in dispatch(), first at kiln-wasi/src/dispatcher.rs:1963 ('expected Vec<Value>, found &[Value]'); '--all-features' also fails (E0107 from the tract-based nn feature). CI never builds these feature sets, so they rot unseen. REQUIRED: each declared kiln-wasi feature either builds (and its calls are served or refused loudly) or is removed; CI checks a feature matrix that includes wasi-sockets and --all-features. Verified by: the two commands exit 0 on a PR; a negative control (a type error behind wasi-sockets) fails the new CI job."
+    tags: [wasi, features, build, issue-557]
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-05T18:59:56Z

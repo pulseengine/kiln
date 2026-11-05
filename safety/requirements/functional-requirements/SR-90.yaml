@@ -1,0 +1,13 @@
+artifacts:
+
+  - id: SR-90
+    type: requirement
+    title: "Tests disabled by SR-73 for code/contract disagreements are resolved: code fixed or test corrected, none left ignored, and the banned fallbacks found alongside are removed"
+    status: proposed
+    release: v0.8.0
+    description: "Issues #565, #579, #585. MEASURED 2026-11-05 on main deb8588f (cargo test --features std -- --ignored --exact, CARGO_TARGET_DIR on /Volumes/Home): #565: kiln-runtime integration_tests fails ('Operation failed', Runtime 1005); cargo-kiln test_build_errors ('left: Validation right: Build', helpers/tests.rs:522), test_levenshtein_distance (tests.rs:298) and test_similarity_matching (tests.rs:257) fail; doctest failures named in the issue not re-measured. #579: kiln-format bounded_wit_parser identifier-length test expects parse-with-warning, code returns 'Invalid input' (Validation 2015, bounded_wit_parser.rs:751). #585, still present: kiln-component type_conversion/bidirectional.rs:530 'format_val_type_to_value_type(val_type).unwrap_or(ValueType::I32)' (a banned fallback); create_provider! ignores its provider type argument (kiln-foundation macros.rs:88-96); next_clear_bit lacks docs while its example sits on set_multiple (bounded_collections.rs:1929-1968). REQUIRED: for each, decide which side is the contract (recorded in the PR), make code and test agree, un-ignore; the unwrap_or fallback becomes an error. Verified by: the tests run un-ignored and pass; grep finds no unwrap_or(ValueType::I32)."
+    tags: [tests, contract, tooling, issue-565, issue-579, issue-585]
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-05T18:59:57Z
