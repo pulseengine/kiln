@@ -15,3 +15,19 @@ artifacts:
       created-by: ai
       model: claude-opus-5-5
       timestamp: 2026-11-06T19:39:30Z
+
+  - id: VER-SR40-001
+    type: verification
+    title: kiln-wasi tests pass 10 of 10 consecutive parallel runs on main
+    status: verified
+    release: v0.8.0
+    description: "SR-40's oracle, measured 2026-11-06 on main ed451cff (macOS, local, CARGO_TARGET_DIR on /Volumes/Home): cargo test -p kiln-wasi --features wasi-filesystem, default parallel test threads, run 10 times in a row: every run 131 passed, 0 failed. The same suite passed in CI on main (Rust CI run 42279642643, Core Tests job 128104948835). Not established: which change removed the July failures (about 1 in 3 runs); the likely cause is serial_test marks added on budget-drawing tests since SR-37..39. A recurrence reopens SR-40."
+    fields:
+      method: test
+    links:
+      - type: verifies
+        target: SR-40
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-06T21:42:40Z
