@@ -1,0 +1,13 @@
+artifacts:
+
+  - id: SR-87
+    type: requirement
+    title: kiln-decoder's encoders produce what its decoders accept, and its tests use fixtures that exist
+    status: proposed
+    release: v0.8.0
+    description: "Issues #580, #581, #582, #583. MEASURED 2026-11-05 on main deb8588f (cargo test --features std -- --ignored --exact, CARGO_TARGET_DIR on /Volumes/Home): #580: branch_hint_section test_parse_encode_round_trip now fails earlier than filed, at branch_hint_section.rs:432 with 'LEB128 exceeds buffer bounds' (Parse 1010), before the function_count assertion; re-verified by the lead. #581: yaml_config test_yaml_parsing fails with 'Failed to insert resource limit' (Runtime 1005, yaml_config.rs:240/:281). #582: component_integration_tests fails, decode_component rejects encode_component output with 'Expected 0x11 (module sort) after 0x00'. #583: tests/test_component_sections.rs:9 reads ../kiln-tests/fixtures/file_ops_component.wasm; no kiln-tests/ directory and no such file exist (re-verified). Also observed: running all kiln-decoder ignored lib tests together aborts with a stack overflow (SIGABRT), test not yet located. REQUIRED: decode(encode(x)) == x for branch hints and components; the YAML resource-limit config converts; fixtures are built from source in-tree or the test is deleted. Verified by: those tests un-ignored and passing; the stack overflow located and fixed or filed."
+    tags: [decoder, round-trip, bug, issue-580, issue-581, issue-582, issue-583]
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-05T18:59:56Z

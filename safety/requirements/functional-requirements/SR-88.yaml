@@ -1,0 +1,13 @@
+artifacts:
+
+  - id: SR-88
+    type: requirement
+    title: kiln-sync BoundedChannel holds no dangling pointers and delivers what is sent
+    status: proposed
+    release: v0.8.0
+    description: "Issue #584. MEASURED 2026-11-05 on main deb8588f (cargo test --features std -- --ignored --exact, CARGO_TARGET_DIR on /Volumes/Home): test_bounded_channel (kiln-sync unified_sync.rs:573) fails with 'Error: Safety'; the issue traces it to create_channel returning pointers into a value that is moved/dropped. REQUIRED: the channel owns its storage with no raw pointer escaping its lifetime (no unsafe needed, or unsafe with a documented, tested invariant); send then receive returns the item. Verified by: test_bounded_channel un-ignored and passing; a Miri run of kiln-sync's channel tests is clean."
+    tags: [sync, bug, safety, issue-584]
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-05T18:59:56Z
