@@ -1,0 +1,13 @@
+artifacts:
+
+  - id: SR-91
+    type: requirement
+    title: WASI monotonic-clock subscribe-duration and subscribe-instant return real pollables that block, ready and poll honour
+    status: proposed
+    release: v0.8.0
+    description: "Issue #625. MEASURED 2026-11-04 on main 1adce1b4 (kiln 0.7.0 release build): kiln --wasi refuses meld's fused wit-bindgen ping-pong pair (runner+test, meld main 21536f0, --memory multi, sha256 9891bc21cabfc9fa658abf11231aa816a26235ff4d539ecf64e436e0a45da9dc) with E21A0; one of the 65 unresolved imports is wasi:clocks/monotonic-clock@0.2.12::subscribe-duration (unsuffixed, so not the SR-81 $N case). Cause: kiln-wasi/src/dispatcher.rs:511-520 maps only monotonic-clock now and resolution. Refusing is correct while they are missing. Not checked: whether the guest code or the wit-bindgen runtime imports it. REQUIRED: subscribe-duration(duration) -> pollable and subscribe-instant(instant) -> pollable create real pollable resources carrying a deadline on the monotonic clock; [method]pollable.ready reports whether the deadline passed, [method]pollable.block waits until it, and wasi:io/poll::poll returns the ready subset, waiting for the earliest deadline when none is ready. No pollable reports ready before its deadline. Verified by: a component that sleeps through subscribe-duration + block runs on kiln with the same output and exit status as wasmtime, and its measured elapsed time is at least the requested duration; a poll over two pollables with different deadlines returns the earlier first."
+    tags: [wasi, clocks, poll, p3, issue-625]
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-05T21:49:23Z

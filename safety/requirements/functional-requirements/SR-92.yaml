@@ -1,0 +1,13 @@
+artifacts:
+
+  - id: SR-92
+    type: requirement
+    title: Core WAST conformance runs on every runtime-affecting PR as a ratcheted required check
+    status: proposed
+    release: v0.8.0
+    description: "Issue #626. MEASURED 2026-11-05 on main deb8588f: .github/workflows/wast-conformance.yml runs the pinned testsuite against safety/wast-conformance-baseline.txt via scripts/wast-conformance-gate.sh, which fails on a failure not in the baseline and only prints a notice when a baselined file starts passing. It is triggered on pull_request only for paths under kiln-runtime, kiln-decoder, kiln-instructions, kiln-build-core, kiln-foundation, the suite, the baseline, the gate script and the workflow, plus a weekly cron; it is not among main's 8 required status contexts. A path-scoped workflow cannot be required as is, because a PR that skips it never reports the context. REQUIRED: a check context that reports on every PR (passing trivially when no runtime-affecting path changed) and runs the conformance gate whenever one did; a baselined file that starts passing fails the gate until it is removed from the baseline (ratchet), and so does a new failure; the context is added to main's required checks once green on main. Verified by: negative controls on a PR (a baselined file made to pass without editing the baseline fails; an injected new failure fails), and the context present in main's required_status_checks."
+    tags: [ci, wast, conformance, merge-gate, issue-626]
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-05T21:49:23Z
