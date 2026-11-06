@@ -1,0 +1,17 @@
+artifacts:
+
+  - id: AD-WASIFS-002
+    type: design-decision
+    title: unlink-file-at authorises its path without following the final component, on the value and core ABI paths alike
+    status: implemented
+    release: v0.8.0
+    description: "Implements SR-95 (PR #637, merged ed451cff). DECISION: both WasiDispatcher dispatch paths (dispatch, value ABI; dispatch_core, core ABI) authorise unlink-file-at with resolve_and_authorize_nofollow, so containment and the allow-list apply to the directory entry named, not to what a final symlink points at; they then read symlink_metadata and refuse a directory with the WIT error-code is-directory (fs_error::IS_DIRECTORY, 14) without removing it, otherwise remove_file on that entry. Open, out of scope: the value path's other failures still return Err(U32(2)), which is WIT 'already', not 'no-entry' (20)."
+    fields:
+      rationale: The symlink-following resolver made the value path delete a link's in-sandbox target instead of the link (found in the wasmtime advisory review, 2026-11-05); the core path already used the no-follow resolver, so the two paths disagreed.
+    links:
+      - type: satisfies
+        target: SR-95
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-06T19:40:01Z
