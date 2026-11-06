@@ -1937,10 +1937,20 @@ impl WasiDispatcher {
                     _ => return Err(Error::wasi_invalid_argument("Not a directory descriptor")),
                 };
 
-                // Sandbox gate: resolve → contain (symlink-safe) → allow-list.
-                let full_path = self.resolve_and_authorize(&base_path, &path)?;
+                // Sandbox gate; the final component is never followed so unlinking a
+                // symlink removes the link, not its target.
+                let full_path = self.resolve_and_authorize_nofollow(&base_path, &path)?;
 
-                match std::fs::remove_file(&full_path) {
+                let outcome = match std::fs::symlink_metadata(&full_path) {
+                    Ok(meta) if meta.is_dir() => {
+                        return Ok(vec![Value::Result(Err(Box::new(Value::U32(
+                            fs_error::IS_DIRECTORY as u32,
+                        ))))]);
+                    },
+                    Ok(_) => std::fs::remove_file(&full_path),
+                    Err(e) => Err(e),
+                };
+                match outcome {
                     Ok(()) => Ok(vec![Value::Result(Ok(Box::new(Value::Tuple(vec![]))))]),
                     Err(_e) => Ok(vec![Value::Result(Err(Box::new(Value::U32(2))))]), // ENOENT
                 }
@@ -4986,6 +4996,72 @@ mod tests {
             std::process::id(),
             nanos
         ))
+    }
+
+    /// SR-95: the value-ABI `unlink-file-at` removes a symlink itself, never the
+    /// file it points to.
+    // rivet: verifies SR-95
+    #[cfg(all(unix, feature = "wasi-filesystem", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn value_unlink_file_at_removes_symlink_not_target() -> Result<()> {
+        MemoryInitializer::ensure_initialized()?;
+        let root = sandbox_fixture_dir("sr95_value_link");
+        let sandbox = root.join("sandbox");
+        std::fs::create_dir_all(&sandbox).unwrap();
+        std::fs::write(sandbox.join("target.txt"), b"keep me").unwrap();
+        std::os::unix::fs::symlink("target.txt", sandbox.join("alias")).unwrap();
+        let mut dispatcher = WasiDispatcher::with_defaults()?;
+        let dir = dispatcher.add_preopen(sandbox.clone())?;
+        let res = dispatcher.dispatch(
+            "wasi:filesystem/types",
+            "[method]descriptor.unlink-file-at",
+            &[Value::U32(dir), Value::String("alias".to_string())],
+        );
+        let link_gone = std::fs::symlink_metadata(sandbox.join("alias")).is_err();
+        let target = std::fs::read(sandbox.join("target.txt"));
+        std::fs::remove_dir_all(&root).ok();
+        assert_eq!(
+            res?,
+            vec![Value::Result(Ok(Box::new(Value::Tuple(vec![]))))]
+        );
+        assert!(link_gone, "the symlink itself must be removed");
+        assert_eq!(
+            target.ok().as_deref(),
+            Some(&b"keep me"[..]),
+            "unlink of a symlink must not delete its target"
+        );
+        Ok(())
+    }
+
+    /// SR-95: the value-ABI `unlink-file-at` refuses a directory with the
+    /// is-directory error code and leaves the directory in place.
+    // rivet: verifies SR-95
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn value_unlink_file_at_refuses_directory() -> Result<()> {
+        MemoryInitializer::ensure_initialized()?;
+        let root = sandbox_fixture_dir("sr95_value_dir");
+        let sandbox = root.join("sandbox");
+        std::fs::create_dir_all(sandbox.join("d")).unwrap();
+        let mut dispatcher = WasiDispatcher::with_defaults()?;
+        let dir = dispatcher.add_preopen(sandbox.clone())?;
+        let res = dispatcher.dispatch(
+            "wasi:filesystem/types",
+            "[method]descriptor.unlink-file-at",
+            &[Value::U32(dir), Value::String("d".to_string())],
+        );
+        let still_there = sandbox.join("d").is_dir();
+        std::fs::remove_dir_all(&root).ok();
+        assert_eq!(
+            res?,
+            vec![Value::Result(Err(Box::new(Value::U32(
+                fs_error::IS_DIRECTORY as u32
+            ))))]
+        );
+        assert!(still_there, "a refused unlink must leave the directory");
+        Ok(())
     }
 
     /// Invoke the live `dispatch_core` open-at handler with a guest path.
