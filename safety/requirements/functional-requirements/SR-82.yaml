@@ -3,7 +3,7 @@ artifacts:
   - id: SR-82
     type: requirement
     title: kiln implements the nine P3 cooperative-thread built-ins that meld passes through as $root::[thread-*] imports
-    status: proposed
+    status: approved
     release: v0.8.0
     description: "Issue #620 (maintainer-filed; contract = producer ABI, meld ADR-9). meld v0.67.0 (released 2026-11-04, meld#547/SR-110) emits the nine built-ins as $root core imports with producer signatures ([thread-new-indirect-v0] (i32,i32)->i32, [thread-index] ()->i32, [thread-yield] ()->i32, [thread-resume-later] (i32)->(), [thread-suspend] ()->i32, [thread-yield-then-resume]/[thread-suspend-then-resume]/[thread-yield-then-promote]/[thread-suspend-then-promote] (i32)->i32), $N-suffixed under --memory multi, and exports __meld_thread_table for new-indirect's fn_idx. MEASURED 2026-11-04 on main 1adce1b4: a core module importing [thread-index], [thread-yield] and [thread-new-indirect-v0] is refused with E21A0 naming all three (correct until implemented); P3Builtin::from_import knows none of the thread names. REQUIRED: the nine built-ins with the producer ABI, cooperative scheduling on kiln's stackless frames, fn_idx resolved through __meld_thread_table, the owning instance from the import map (shares the $N resolution with SR-81); wasi-threads and shared-everything stay refused. Verified by: the seven #620 oracle programs fused by meld 0.67.0 give wasmtime 51-dev's results (new_resume 7, yield_index 3, suspend_resume 2, yield_then_resume 9, many_threads 36; suspend_then_resume and promote trap with the synchronous-task error)."
     tags: [p3, threads, component-model, feature, issue-620]

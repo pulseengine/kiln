@@ -4,7 +4,7 @@ artifacts:
     type: requirement
     title: "One nearest implementation: the off-path kiln-math/kiln-instructions helper is correct or deleted"
     status: proposed
-    release: v0.8.0
+    release: v0.9.0
     description: "Issue #564. MEASURED 2026-11-04 on main fc73d15d (release build, wasmtime 42.0.1 reference). The interpreter is correct: f32.nearest/f64.nearest execute inline in kiln-runtime/src/stackless/engine.rs:5897-5909 and :6099-6110 (round half to even); f32.wast 2514/2514, f64.wast 2514/2514, float_exprs.wast 927/927 assertions pass; kiln --invoke gives f32.nearest(2.5)=2, f64.nearest(-2.5)=-2, f32.nearest(3.5)=4, matching wasmtime. The bug is in a helper off the live path: kiln-math/src/ops.rs:386-391 f32_round_ties_to_even_compat calls f.round() (ties away from zero) despite its comment; its only caller is ArithmeticOp::execute (kiln-instructions/src/arithmetic_ops.rs:653, :669), which the interpreter does not execute; test_f32_math_operations is #[ignore] for #564 and fails when run (left 3.0, right 2.0). Two implementations of one spec operation, one wrong, is the drift CLAUDE.md's no-dead-code rule exists to prevent. REQUIRED: either the helper rounds half to even and the interpreter uses it (one implementation), or the helper and its caller are deleted; the ignored test is re-enabled or removed with the code. Verified by: the re-enabled test passing, or grep showing no second nearest implementation, plus the WAST nearest assertions still 0 failed."
     tags: [float, dead-code, issue-564]
     provenance:
