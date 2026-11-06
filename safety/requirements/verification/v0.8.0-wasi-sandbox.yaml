@@ -1,0 +1,17 @@
+artifacts:
+
+  - id: VER-SR95-001
+    type: verification
+    title: unlink-file-at removes the symlink and keeps its target on both dispatch paths, and refuses a directory (main CI green)
+    status: verified
+    release: v0.8.0
+    description: "Main push ed451cff (PR #637), Rust CI run 42279642643 completed success; job Core Tests, Analysis & Coverage (128104948835) logs these as ok: dispatcher::tests::value_unlink_file_at_removes_symlink_not_target, dispatcher::tests::value_unlink_file_at_refuses_directory (value ABI, added by #637), dispatcher::tests::sr72::unlink_file_at_removes_the_symlink_not_its_target, dispatcher::tests::sr72::unlink_file_at_refuses_directory (core ABI, pre-existing). Negative control (supervisor, local, head bbb49fdd): with only the dispatcher fix hunk reversed, both value-path tests fail ('the symlink itself must be removed'; Err(U32(2)) instead of Err(U32(14)))."
+    fields:
+      method: test
+    links:
+      - type: verifies
+        target: SR-95
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-06T19:39:30Z
