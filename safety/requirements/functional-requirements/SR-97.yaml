@@ -1,0 +1,13 @@
+artifacts:
+
+  - id: SR-97
+    type: requirement
+    title: Runtime and no_std crates keep MSRV 1.85; tooling crates declare their own higher rust-version
+    status: approved
+    release: v0.8.0
+    description: "Maintainer decision 2026-11-06 (per-crate MSRV). MEASURED on main 2b8e4b81: [workspace.package] sets rust-version 1.85.0 (Cargo.toml:29), but no crate inherits it; cargo metadata reports rust_version None for all 21 workspace crates, so nothing enforces a floor. Tooling dependencies already need more (rivet-yaml 0.41 needs 1.89; wast, wat and wasm-encoder 262 need 1.88), which blocks dependency updates. REQUIRED: every runtime and no_std crate (all workspace crates except cargo-kiln and kiln-build-core) declares rust-version 1.85.0; cargo-kiln and kiln-build-core declare the higher rust-version their dependencies need; a CI job builds the 1.85.0 set with toolchain 1.85.0 so the floor cannot drift up. Verified by: that CI job green, and cargo metadata showing the declared rust-version of each crate."
+    tags: [msrv, build, toolchain]
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-06T08:58:17Z

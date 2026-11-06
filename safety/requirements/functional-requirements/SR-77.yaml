@@ -4,7 +4,7 @@ artifacts:
     type: requirement
     title: A failing host import traps once with its error; no default results, no second call
     status: proposed
-    release: v0.8.0
+    release: v0.9.0
     description: "Issue #555. MEASURED 2026-11-04 on main fc73d15d (release build, wasmtime 42.0.1 reference). kiln-runtime/src/stackless/engine.rs hides or repeats host-import failures at these sites: :1817-1829 (execute, import entry) 'if let Ok(results) = handler.call_import(...)' drops an Err; :1832-1850 then returns zero/default values per result type ('Import not linked or link unresolvable - return correct number of default results'); :1851-1853 returns empty results ('Fallback for corrupted module data'); :3101-3118 (call_indirect, import not linked) drops an Err, then :3123-3135 falls through to call_wasi_function, which calls the handler a second time (:14871), so a side-effecting call runs twice; :2486-2491 (direct call, import unresolved) pushes a dummy I32(0); :1802-1804 and :2413-2415 fall through when a linked export is missing. These are banned fallbacks under the project rules (no fallback logic, fail loud and early). SR-65 refuses unresolved imports at instantiation, so the unresolved-import branches should be unreachable; whether they are is not yet measured. REQUIRED: a host import's error becomes a trap carrying its message, raised once; the handler is called exactly once per call; no path returns synthesized results for an import; branches made unreachable by SR-65 are deleted or return an explicit error. Verified by: a test host handler that counts calls and fails, reached through call and call_indirect: one call each, a trap with the handler's message, no results pushed."
     tags: [fail-loud, imports, bug, issue-555]
     provenance:

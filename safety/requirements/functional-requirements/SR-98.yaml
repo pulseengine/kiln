@@ -1,0 +1,8 @@
+artifacts:
+
+  - id: SR-98
+    type: requirement
+    title: kiln-foundation and the no_std crates build for thumbv7em-none-eabihf, and CI keeps them building
+    status: proposed
+    description: "Issue #633. MEASURED 2026-11-06 on main (deb8588f): cargo build -p kiln-foundation --no-default-features --target thumbv7em-none-eabihf fails with 7 errors because core::sync::atomic::AtomicU64 does not exist on a target without 64-bit atomics (kiln-foundation/src/platform_abstraction.rs:51 and :57, operations.rs:19, telemetry.rs:14, capabilities/atomic.rs:6, monitoring.rs:8, platform_atomic.rs:7). kiln-builtins builds for the target. No workflow builds any thumbv* target. This also blocks checking #594 on Cortex-M. REQUIRED: kiln-foundation builds on a target without 64-bit atomics, through a 32-bit counter where its range suffices or through an explicitly chosen, documented alternative, never a silent fallback; a CI job builds the no_std crates for thumbv7em-none-eabihf. Verified by: that CI job green. Not assigned to a release: scope is the maintainer's call."
+    tags: [no_std, embedded, thumbv7em, kiln-foundation, issue-633]
