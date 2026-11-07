@@ -5,7 +5,7 @@
 //! uses dynamic resource allocation via `WasiResourceManager`.
 //!
 //! These functions are kept for backwards compatibility but should not be used
-//! for new code. Use `WasiDispatcher::dispatch()` instead.
+//! for new code. Use `WasiDispatcher` as a `HostImportHandler` (`call_import`) instead.
 
 use kiln_error::Result;
 
@@ -23,7 +23,7 @@ use kiln_foundation::tracing::trace;
 /// allocates handles dynamically via `WasiResourceManager`.
 #[deprecated(
     since = "0.2.0",
-    note = "Use WasiDispatcher::dispatch(\"wasi:cli/stdout\", \"get-stdout\", ...) instead"
+    note = "Use WasiDispatcher as a HostImportHandler (call_import for \"wasi:cli/stdout\" get-stdout) instead"
 )]
 pub fn wasi_get_stdout() -> Result<u32> {
     #[cfg(feature = "tracing")]
@@ -39,7 +39,7 @@ pub fn wasi_get_stdout() -> Result<u32> {
 /// looks up resources via `WasiResourceManager`.
 #[deprecated(
     since = "0.2.0",
-    note = "Use WasiDispatcher::dispatch(\"wasi:io/streams\", \"blocking-write-and-flush\", ...) instead"
+    note = "Use WasiDispatcher as a HostImportHandler (call_import for \"wasi:io/streams\" blocking-write-and-flush) instead"
 )]
 #[cfg(feature = "std")]
 pub fn wasi_blocking_write_and_flush(handle: u32, bytes: &[u8]) -> Result<u64> {
