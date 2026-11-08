@@ -5,7 +5,7 @@ artifacts:
     title: unlink-file-at removes the symlink and keeps its target on both dispatch paths, and refuses a directory (main CI green)
     status: verified
     release: v0.8.0
-    description: "Main push ed451cff (PR #637), Rust CI run 42279642643 completed success; job Core Tests, Analysis & Coverage (128104948835) logs these as ok: dispatcher::tests::value_unlink_file_at_removes_symlink_not_target, dispatcher::tests::value_unlink_file_at_refuses_directory (value ABI, added by #637), dispatcher::tests::sr72::unlink_file_at_removes_the_symlink_not_its_target, dispatcher::tests::sr72::unlink_file_at_refuses_directory (core ABI, pre-existing). Negative control (supervisor, local, head bbb49fdd): with only the dispatcher fix hunk reversed, both value-path tests fail ('the symlink itself must be removed'; Err(U32(2)) instead of Err(U32(14)))."
+    description: "Main push ed451cff (PR #637), Rust CI run 42279642643 completed success; job Core Tests, Analysis & Coverage (128104948835) logs these as ok: dispatcher::tests::value_unlink_file_at_removes_symlink_not_target, dispatcher::tests::value_unlink_file_at_refuses_directory (value ABI, added by #637), dispatcher::tests::sr72::unlink_file_at_removes_the_symlink_not_its_target, dispatcher::tests::sr72::unlink_file_at_refuses_directory (core ABI, pre-existing). Negative control (supervisor, local, head bbb49fdd): with only the dispatcher fix hunk reversed, both value-path tests fail ('the symlink itself must be removed'; Err(U32(2)) instead of Err(U32(14))). UPDATE 2026-11-08: the two value-ABI tests were deleted with the value path in #641 (SR-99); the evidence that remains is the core-ABI sr72 tests, re-observed ok on main f84ba30c (Core Tests job 128517624253)."
     fields:
       method: test
     links:
@@ -31,3 +31,18 @@ artifacts:
       created-by: ai
       model: claude-opus-5-5
       timestamp: 2026-11-06T21:42:40Z
+
+  - id: VER-SR99-001
+    type: verification
+    title: "SR-99: value-ABI WasiDispatcher::dispatch removed; core path green on main"
+    status: verified
+    release: v0.8.0
+    description: "Main push f84ba30c (PR #641, head 26826ad1); all 9 required checks passed on the PR; main runs all completed success (Rust CI 42410579836). Evidence: (1) grep '\\.dispatch(' over *.rs finds only Wasip2Host::dispatch (kiln-component/src/canonical_executor.rs:98), a different type; WasiDispatcher has no dispatch method. (2) Core Tests job 128517624253 logs ok for dispatcher::tests::sr72::unlink_file_at_{denies_symlink_escape,refuses_directory,removes_inside_and_denies_lexical_escape,removes_the_symlink_not_its_target}. (3) Supervisor local, head 26826ad1: cargo test -p kiln-wasi --features tracing,wasi-sockets --lib dispatcher 64/64 passed."
+    fields:
+      method: test
+    links:
+      - type: verifies
+        target: SR-99
+    provenance:
+      created-by: ai
+      timestamp: 2026-11-08T06:53:45Z
