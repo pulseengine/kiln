@@ -223,6 +223,8 @@ artifacts:
         target: SR-19
       - type: satisfies
         target: SR-95
+      - type: satisfies
+        target: SR-99
     fields:
       implementation: kiln-wasi/src/dispatcher.rs
       note: "Dual dispatch path removed; engine uses HostImportHandler trait only"
