@@ -1,0 +1,51 @@
+# Canonical realm definitions for the PulseEngine toolchain.
+# Commit this beside your varve.toml (or above it); `realm = "pulseengine"`
+# in the pin then needs no environment variable — the realm supplies both
+# the registry and the trust root, and the realm's root is authoritative.
+#
+# The rolling root is PROVISIONAL until the v1.0 ceremony (see SECURITY.md);
+# the rolling channel makes no qualification promise.
+
+[realm.pulseengine]
+registry   = "oci://ghcr.io/pulseengine/layers"
+trust-root = "7d3b892e6a33c70043becc708e08042e1cef0d54dd5ae6f23d7d4c68de1da1a0"
+
+# Roots this realm has retired (REQ-ROTATE-002). DIAGNOSTIC ONLY — nothing
+# verifies against these, ever. They exist so that a consumer whose pin was
+# signed by an old root is told WHICH root and WHEN, instead of getting
+# "No valid signatures", which is indistinguishable from a forgery.
+#
+# This is not key rotation and must not be read as one: nothing signs "this new
+# root replaces the old one" (`varve docs threat-model`). It only means the
+# failure explains itself.
+retired-roots = [
+  # Retired in v0.32.1. It existed ONLY as a write-only CI secret, so nobody
+  # could back it up, move it, or rotate with it — varve#110. Every layer from
+  # 2026.08.0 to 2026.09.1 was signed by it and none of them verify here.
+  { key = "4e771dc62a08be89e3450f8cd807da58ff70af4a4e124ebf2d2b71684cfd9973", retired = "2026-09-07", last-layer = "2026.09.1" },
+]
+
+# The realm that carries the bytecodealliance component-model tools —
+# wasm-tools, wac, wkg, wit-bindgen-wrpc.
+#
+# NAMED `pulseengine-wasm` AND NOT `bytecodealliance`, deliberately: a realm
+# name is a claim about WHO VOUCHES, and the key signing this layer is
+# PulseEngine's. The payloads are upstream's; the signature is ours. Naming the
+# realm after the upstream would imply an endorsement nobody gave.
+#
+# Three of its four payloads are ingested with NO proof of origin — those
+# releases publish neither cosign-signed sums nor build provenance (measured
+# 2026-09-18) — and each carries the operator's recorded reason INSIDE the
+# signed layer, where `varve inspect` shows it as proof = unverified. Read them
+# before pinning this realm: they are the whole of what you are trusting.
+[realm.pulseengine-wasm]
+registry   = "oci://ghcr.io/pulseengine/wasm-layers"
+trust-root = "f1300acb791d330da9b81951d4137f5b1fb0c5efc50213deee4d7a981be28745"
+
+# The composing realm this project pins (pulseengine/covalent-layers). It
+# carries nothing of its own; its root signs only the pairing of the two
+# realms above. Each included layer is still verified against its own root.
+# trust-root from covalent-layers' realm-root.pub / README, 2026-11-04.
+[realm.covalent]
+registry   = "oci://ghcr.io/pulseengine/covalent-layers"
+trust-root = "32d09d12ec3dcd448fcfd9f5768327126d3d9c54a74fe01266882b43362eb8a5"
