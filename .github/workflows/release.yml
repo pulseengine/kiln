@@ -88,8 +88,11 @@ jobs:
             archive: tar.gz
             zigbuild: true
             runner_prefix: qemu-aarch64
+          # macos-14 is no longer offered ("configuration 'macos-14-arm64-us-default'
+          # is not supported"), which cancelled the v0.7.1 release run. macos-15-intel
+          # is GitHub's Intel image, so the --version check below runs natively.
           - target: x86_64-apple-darwin
-            os: macos-14
+            os: macos-15-intel
             archive: tar.gz
           - target: aarch64-apple-darwin
             os: macos-latest
