@@ -1,0 +1,17 @@
+artifacts:
+
+  - id: VER-SR97-001
+    type: verification
+    title: "SR-97: the 16 rust-version 1.85.0 crates build on rustc 1.85.0 in CI on main; the other 5 declare 1.89"
+    status: verified
+    release: v0.8.0
+    description: "Main push 8ede5d9c (PR #651, head bb3a8fc9); all 9 required checks passed on the PR. Rust CI run 43271760223 completed success; job 'MSRV (rustc 1.85.0: kiln-platform and the SR-97 crates)' 131369857437 logs rustc 1.85.0 (4d91de4e4 2025-02-17) and 17 'Finished' lines: kiln-platform with real-time,std, then cargo +1.85.0 check -p <crate> --lib --locked for each of kiln-error, kiln-sync, kiln-math, kiln-panic, kiln-foundation, kiln-format, kiln-platform, kiln-logging, kiln-instructions, kiln-host, kiln-intercept, kiln-debug, kiln-async, kiln-builtins, kiln-decoder, kiln-wasi. cargo metadata --no-deps on main 8ede5d9c: rust_version 1.85.0 for those 16, 1.89 for cargo-kiln, kiln-build-core, kiln-component, kiln-runtime and kilnd. Negative control (supervisor, local, head bb3a8fc9): cargo +1.85.0 check -p kilnd is refused because kiln-component requires rustc 1.89."
+    fields:
+      method: test
+    links:
+      - type: verifies
+        target: SR-97
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-12T19:20:00Z
