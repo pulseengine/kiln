@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: AD-MSRV-001
+    type: design-decision
+    title: "rust-version is declared per crate: 1.85.0 for the 16 crates that build on it, 1.89 for the five that pull 1.89-only dependencies"
+    status: implemented
+    release: v0.8.0
+    description: "Implements SR-97 (PR #651, main 8ede5d9c). kiln-error, kiln-sync, kiln-math, kiln-panic, kiln-foundation, kiln-format, kiln-platform, kiln-logging, kiln-instructions, kiln-host, kiln-intercept, kiln-debug, kiln-async, kiln-builtins, kiln-decoder and kiln-wasi set rust-version.workspace = true (1.85.0 from [workspace.package]). kiln-runtime, kiln-component, kilnd, cargo-kiln and kiln-build-core set rust-version = \"1.89\" with a comment naming the dependency that needs it. The ci.yml job 'MSRV (rustc 1.85.0: kiln-platform and the SR-97 crates)' runs cargo +1.85.0 check -p <crate> --lib --locked for each of the 16, so a change that needs a newer compiler in one of them fails CI."
+    tags: [msrv, build, toolchain, ci]
+    fields:
+      alternatives: "(1) One workspace MSRV of 1.89: drops the 1.85 floor for the no_std and runtime crates, which have no 1.89-only dependency. (2) Keep 1.85 for every crate: blocks the rivet-yaml 0.41 (1.89) and wast/wat/wasm-encoder 263 (1.88) updates. (3) Keep 1.85 for kiln-runtime, kiln-component and kilnd by making rivet-yaml optional in kiln-decoder/std: a feature split that SR-97 did not ask for, left to SR-71."
+      rationale: "Measured on main 6986dabb with cargo +1.85.0 check: those 16 crates build on 1.85.0; kiln-runtime, kiln-component and kilnd fail only because kiln-decoder/std pulls rivet-yaml 0.41. Declaring rust-version per crate makes cargo refuse a too-old compiler with a message naming the crate, and the CI loop keeps the 1.85 set from drifting up."
+    links:
+      - type: satisfies
+        target: SR-97
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-12T18:20:00Z
