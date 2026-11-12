@@ -3,6 +3,7 @@ name = "kiln-debug"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 description = "DWARF debug information support for WebAssembly Runtime (Kiln)"
 license.workspace = true
 repository.workspace = true

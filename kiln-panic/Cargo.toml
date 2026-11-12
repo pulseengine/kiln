@@ -2,6 +2,7 @@
 name = "kiln-panic"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 description = "Panic handler for Kiln - provides ASIL-B/D compliant panic handling"
 license.workspace = true
 repository.workspace = true

@@ -2,6 +2,7 @@
 name = "kiln-foundation"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 description = "Foundation library providing core types and memory safety primitives for the Kiln WebAssembly Runtime."
 readme = "README.md"
 license.workspace = true

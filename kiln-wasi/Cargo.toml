@@ -2,6 +2,7 @@
 name = "kiln-wasi"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license = { workspace = true }
 description = "WASI Preview2 implementation for Kiln WebAssembly Runtime with Preview3 preparation"
 repository = "https://github.com/pulseengine/kiln"

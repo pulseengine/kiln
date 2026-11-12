@@ -2,6 +2,8 @@
 name = "kiln-runtime"
 version.workspace = true
 edition.workspace = true
+# 1.89: rivet-yaml 0.41 (SR-71 YAML config, via kiln-decoder/std) needs it; see SR-97.
+rust-version = "1.89"
 description = "WebAssembly Component Model Runtime for Kiln"
 license.workspace = true
 repository.workspace = true
