@@ -1248,9 +1248,24 @@ impl WasiDispatcher {
 
     /// There is no stable std API for the link count off unix, and none may be
     /// invented: `stat` and `stat-at` report `unsupported` there.
+    /// Non-unix targets (Windows): stable std has no link-count API, so
+    /// link-count is reported as 1, a documented limit (SR-94, maintainer
+    /// decision 2026-11-12): a hard-linked file shows 1 there. There is no
+    /// status-change time (creation time is a different value), so it is none.
     #[cfg(all(feature = "wasi-filesystem", feature = "std", not(unix)))]
-    fn stat_core_values(_meta: &std::fs::Metadata) -> Vec<kiln_foundation::values::Value> {
-        fs_err(fs_error::UNSUPPORTED)
+    fn stat_core_values(meta: &std::fs::Metadata) -> Vec<kiln_foundation::values::Value> {
+        use kiln_foundation::values::Value as CoreValue;
+        let dtype: i32 = if meta.is_dir() { 3 } else { 6 };
+        let mut v = vec![
+            CoreValue::I32(0),
+            CoreValue::I32(dtype),
+            CoreValue::I64(1),
+            CoreValue::I64(meta.len() as i64),
+        ];
+        v.extend(Self::datetime_option(meta.accessed()));
+        v.extend(Self::datetime_option(meta.modified()));
+        v.push(CoreValue::I32(0));
+        v
     }
 
     /// Open `path` (already authorized by [`Self::resolve_and_authorize`] against the
