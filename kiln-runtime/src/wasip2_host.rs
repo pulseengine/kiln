@@ -384,6 +384,20 @@ pub fn get_wasi_function_signature(
             vec![WasiComponentType::List(Box::new(WasiComponentType::U32))],
         )),
 
+        // wasi:io/poll.[method]pollable.ready(self: borrow<pollable>) -> bool
+        ("wasi:io/poll", "[method]pollable.ready") => Some(WasiFunctionSignature::new(
+            vec![WasiComponentType::Handle],
+            vec![WasiComponentType::Bool],
+        )),
+
+        // wasi:clocks/monotonic-clock.subscribe-duration(when: duration) -> own<pollable>
+        // and subscribe-instant(when: instant) -> own<pollable>; duration and instant are u64.
+        ("wasi:clocks/monotonic-clock", "subscribe-duration")
+        | ("wasi:clocks/monotonic-clock", "subscribe-instant") => Some(WasiFunctionSignature::new(
+            vec![WasiComponentType::U64],
+            vec![WasiComponentType::Handle],
+        )),
+
         // wasi:io/poll.[method]pollable.block(self: borrow<pollable>)
         ("wasi:io/poll", "[method]pollable.block") => Some(WasiFunctionSignature::new(
             vec![WasiComponentType::Handle],
@@ -2654,5 +2668,32 @@ mod sr72_lowering_tests {
         // ok discriminant but no u64 payload
         let res = lower_results_to_retptr(&sig.results, &[Value::I32(0)], &mem, &mut offset);
         assert!(res.is_err(), "missing payload must be an error, not a zero");
+    }
+
+    // rivet: verifies SR-91
+    #[test]
+    fn pollable_clock_signatures_lower_without_a_retptr() {
+        let clock = "wasi:clocks/monotonic-clock@0.2.0";
+        for f in ["subscribe-duration", "subscribe-instant"] {
+            let sig = get_wasi_function_signature(clock, f)
+                .unwrap_or_else(|| panic!("{f} has a signature"));
+            assert_eq!(sig.params, vec![WasiComponentType::U64], "{f} takes a u64");
+            assert_eq!(
+                sig.results,
+                vec![WasiComponentType::Handle],
+                "{f} -> own<pollable>"
+            );
+            assert!(
+                !sig.result_needs_retptr(),
+                "{f} returns the handle on the stack"
+            );
+        }
+        let ready = get_wasi_function_signature("wasi:io/poll", "[method]pollable.ready").unwrap();
+        assert_eq!(ready.params, vec![WasiComponentType::Handle]);
+        assert_eq!(ready.results, vec![WasiComponentType::Bool]);
+        assert!(!ready.result_needs_retptr(), "bool comes back on the stack");
+        // poll returns `list<u32>`: via a retptr, which the dispatcher fills.
+        let poll = get_wasi_function_signature("wasi:io/poll", "poll").unwrap();
+        assert!(poll.result_needs_retptr());
     }
 }
