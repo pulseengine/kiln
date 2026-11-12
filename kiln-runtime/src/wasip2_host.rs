@@ -175,11 +175,11 @@ pub enum WasiComponentType {
     Unit,
     /// Tuple of types
     Tuple(Vec<WasiComponentType>),
-    /// `wasi:filesystem/types.descriptor-stat`: record { type: descriptor-type,
+    /// `wasi:filesystem/types.descriptor-stat`: `record { type: descriptor-type,
     /// link-count: u64, size: u64, data-access-timestamp: option<datetime>,
     /// data-modification-timestamp: option<datetime>,
-    /// status-change-timestamp: option<datetime> } with
-    /// datetime = record { seconds: u64, nanoseconds: u32 }.
+    /// status-change-timestamp: option<datetime> }` with
+    /// `datetime = record { seconds: u64, nanoseconds: u32 }`.
     ///
     /// Core values (see `lower_descriptor_stat`): `i32` type, `i64` link-count,
     /// `i64` size, then per timestamp an `i32` option discriminant followed, for
