@@ -1082,6 +1082,20 @@ impl WasiDispatcher {
         Ok(resolved)
     }
 
+    /// SR-96: a guest path ending in `/` or `/.` names a directory. Both
+    /// resolvers rebuild the path from its components, which drops the trailing
+    /// slash, so a call on `file/` would otherwise act on the regular file
+    /// `file`. Callers whose POSIX counterpart reports ENOTDIR for this (open,
+    /// stat, unlink, rmdir, rename) check this after the sandbox gate and return
+    /// `not-directory`. Only a regular file in the final position is refused; a
+    /// symlink keeps the resolver's behaviour, and a missing entry is left to the
+    /// host call to report.
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    fn trailing_slash_on_file(guest_path: &str, resolved: &std::path::Path) -> bool {
+        (guest_path.ends_with('/') || guest_path.ends_with("/."))
+            && matches!(std::fs::symlink_metadata(resolved), Ok(meta) if meta.is_file())
+    }
+
     /// The preopen directory `fd` names, if it is one. Path-based descriptor
     /// calls resolve relative to this directory only.
     #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
@@ -2496,6 +2510,9 @@ impl WasiDispatcher {
                 if let Some(base) = base_path {
                     // Sandbox gate: resolve → contain (symlink-safe) → allow-list.
                     let full_path = self.resolve_and_authorize(&base, &path_str)?;
+                    if Self::trailing_slash_on_file(&path_str, &full_path) {
+                        return Ok(fs_err(fs_error::NOT_DIRECTORY));
+                    }
                     if full_path.exists() {
                         // Granted access = the guest's descriptor-flags (read = bit 0,
                         // write = bit 1) ∩ the filesystem capabilities.
@@ -2630,6 +2647,9 @@ impl WasiDispatcher {
                 if let Some(base_path) = base {
                     // Sandbox gate: resolve → contain (symlink-safe) → allow-list.
                     let full_path = self.resolve_and_authorize(&base_path, &path_str)?;
+                    if Self::trailing_slash_on_file(&path_str, &full_path) {
+                        return Ok(fs_err(fs_error::NOT_DIRECTORY));
+                    }
                     match std::fs::metadata(&full_path) {
                         Ok(meta) => {
                             let dtype: u8 = if meta.is_dir() { 3 } else { 6 };
@@ -2968,6 +2988,13 @@ impl WasiDispatcher {
                 // Sandbox gate; the final component is never followed so unlinking a
                 // symlink removes the link, not its target.
                 let full_path = self.resolve_and_authorize_nofollow(&base, &guest_path)?;
+                // mkdir("file/") is EEXIST on POSIX, so create-directory-at keeps
+                // the host's answer; unlink and rmdir report not-directory.
+                if function != "[method]descriptor.create-directory-at"
+                    && Self::trailing_slash_on_file(&guest_path, &full_path)
+                {
+                    return Ok(fs_err(fs_error::NOT_DIRECTORY));
+                }
                 let outcome = match function {
                     "[method]descriptor.create-directory-at" => std::fs::create_dir(&full_path),
                     "[method]descriptor.remove-directory-at" => std::fs::remove_dir(&full_path),
@@ -3008,6 +3035,11 @@ impl WasiDispatcher {
                 // before anything is renamed.
                 let old_full = self.resolve_and_authorize_nofollow(&old_base, &old_guest)?;
                 let new_full = self.resolve_and_authorize_nofollow(&new_base, &new_guest)?;
+                if Self::trailing_slash_on_file(&old_guest, &old_full)
+                    || Self::trailing_slash_on_file(&new_guest, &new_full)
+                {
+                    return Ok(fs_err(fs_error::NOT_DIRECTORY));
+                }
                 match std::fs::rename(&old_full, &new_full) {
                     Ok(()) => Ok(vec![CoreValue::I32(0)]),
                     Err(e) => Ok(fs_err(Self::fs_error_code(&e))),
@@ -6418,5 +6450,433 @@ mod tests {
             assert!(res.is_err(), "got {:?}", res);
             Ok(())
         }
+    }
+
+    /// SR-96: a trailing slash (or `/.`) on a guest path must never change which
+    /// component is resolved so as to leave the preopen (the wasmtime
+    /// trailing-slash sandbox-escape class). `sandbox/link` is a symlink to a
+    /// directory OUTSIDE the preopen; every path-taking handler on the single
+    /// `dispatch_core` path is driven with `link/`, `link/.`, `dir/../link/` and
+    /// `file/` and must be refused or act only inside the preopen.
+    #[cfg(all(unix, feature = "wasi-filesystem", feature = "std"))]
+    mod sr96 {
+        use super::*;
+        use kiln_foundation::traits::SliceMemory;
+        use kiln_foundation::values::Value as CV;
+
+        const FS: &str = "wasi:filesystem/types";
+        const NOT_DIRECTORY: i32 = 24;
+        const MARKER_BODY: &[u8] = b"OUTSIDE-MARKER";
+
+        /// Tempdir root holding `sandbox/{dir/, file, link -> outside}` and a
+        /// sibling `outside/marker`. Removed on drop, even when an assertion fails.
+        struct Fx {
+            root: std::path::PathBuf,
+            sandbox: std::path::PathBuf,
+            outside: std::path::PathBuf,
+            d: WasiDispatcher,
+            mem: SliceMemory,
+            dir: u32,
+        }
+
+        impl Fx {
+            fn new(tag: &str) -> Result<Self> {
+                MemoryInitializer::ensure_initialized()?;
+                let root = sandbox_fixture_dir(tag);
+                let sandbox = root.join("sandbox");
+                let outside = root.join("outside");
+                std::fs::create_dir_all(sandbox.join("dir")).unwrap();
+                std::fs::create_dir_all(&outside).unwrap();
+                std::fs::write(sandbox.join("file"), b"inside-file").unwrap();
+                std::fs::write(outside.join("marker"), MARKER_BODY).unwrap();
+                let abs_outside = std::fs::canonicalize(&outside).unwrap();
+                std::os::unix::fs::symlink(&abs_outside, sandbox.join("link")).unwrap();
+                let mut d = WasiDispatcher::with_defaults()?;
+                let dir = d.add_preopen(sandbox.clone())?;
+                Ok(Self {
+                    root,
+                    sandbox,
+                    outside,
+                    d,
+                    mem: SliceMemory::with_size(0x10000),
+                    dir,
+                })
+            }
+
+            /// Sorted (name, file contents / None for a directory) of `outside/`.
+            fn outside_snapshot(&self) -> Vec<(String, Option<Vec<u8>>)> {
+                let mut v: Vec<_> = std::fs::read_dir(&self.outside)
+                    .unwrap()
+                    .map(|e| {
+                        let e = e.unwrap();
+                        let body = if e.path().is_dir() {
+                            None
+                        } else {
+                            Some(std::fs::read(e.path()).unwrap())
+                        };
+                        (e.file_name().to_string_lossy().to_string(), body)
+                    })
+                    .collect();
+                v.sort();
+                v
+            }
+
+            fn put(&self, ptr: u32, s: &[u8]) -> [CV; 2] {
+                self.mem.write_bytes(ptr, s).unwrap();
+                [CV::I32(ptr as i32), CV::I32(s.len() as i32)]
+            }
+
+            fn call(&mut self, func: &str, args: &[CV]) -> Result<Vec<CV>> {
+                self.d.dispatch_core(FS, func, args, Some(&self.mem))
+            }
+
+            /// open-at / stat-at style: (self, path-flags, path ptr, path len, ...).
+            fn open_at(&mut self, path: &[u8]) -> Result<Vec<CV>> {
+                let [p, l] = self.put(0x1000, path);
+                let dir = self.dir as i32;
+                self.call(
+                    "[method]descriptor.open-at",
+                    &[
+                        CV::I32(dir),
+                        CV::I32(0),
+                        p,
+                        l,
+                        CV::I32(0),
+                        CV::I32(1), // descriptor-flags: read
+                    ],
+                )
+            }
+
+            fn stat_at(&mut self, path: &[u8]) -> Result<Vec<CV>> {
+                let [p, l] = self.put(0x1000, path);
+                let dir = self.dir as i32;
+                self.call(
+                    "[method]descriptor.stat-at",
+                    &[CV::I32(dir), CV::I32(0), p, l, CV::I32(0x100)],
+                )
+            }
+
+            /// unlink-file-at / remove-directory-at / create-directory-at.
+            fn path_op(&mut self, func: &str, path: &[u8]) -> Result<Vec<CV>> {
+                let [p, l] = self.put(0x1000, path);
+                let dir = self.dir as i32;
+                self.call(func, &[CV::I32(dir), p, l, CV::I32(0x100)])
+            }
+
+            fn rename_at(&mut self, old: &[u8], new: &[u8]) -> Result<Vec<CV>> {
+                let [op, ol] = self.put(0x1000, old);
+                let [np, nl] = self.put(0x2000, new);
+                let dir = self.dir as i32;
+                self.call(
+                    "[method]descriptor.rename-at",
+                    &[CV::I32(dir), op, ol, CV::I32(dir), np, nl, CV::I32(0x100)],
+                )
+            }
+
+            fn symlink_at(&mut self, contents: &[u8], new: &[u8]) -> Result<Vec<CV>> {
+                let [op, ol] = self.put(0x1000, contents);
+                let [np, nl] = self.put(0x2000, new);
+                let dir = self.dir as i32;
+                self.call(
+                    "[method]descriptor.symlink-at",
+                    &[CV::I32(dir), op, ol, np, nl, CV::I32(0x100)],
+                )
+            }
+        }
+
+        impl Drop for Fx {
+            fn drop(&mut self) {
+                std::fs::remove_dir_all(&self.root).ok();
+            }
+        }
+
+        fn err_code(res: &Result<Vec<CV>>) -> Option<i32> {
+            match res.as_deref() {
+                Ok([CV::I32(1), CV::I32(c)]) => Some(*c),
+                _ => None,
+            }
+        }
+
+        fn succeeded(res: &Result<Vec<CV>>) -> bool {
+            matches!(res.as_deref(), Ok([CV::I32(0), ..]))
+        }
+
+        /// The outside directory is exactly as the fixture made it.
+        fn assert_outside_intact(fx: &Fx, what: &str) {
+            assert_eq!(
+                fx.outside_snapshot(),
+                vec![("marker".to_string(), Some(MARKER_BODY.to_vec()))],
+                "{what}: outside/ was created in, removed from or modified"
+            );
+        }
+
+        /// `file/` on a regular file must report not-directory and leave it intact.
+        fn assert_not_directory(fx: &Fx, res: &Result<Vec<CV>>, what: &str) {
+            assert_eq!(
+                err_code(res),
+                Some(NOT_DIRECTORY),
+                "{what}: trailing slash on a non-directory must be not-directory, got {res:?}"
+            );
+            assert_eq!(
+                std::fs::read(fx.sandbox.join("file")).unwrap(),
+                b"inside-file",
+                "{what}: `file` was modified"
+            );
+            assert_outside_intact(fx, what);
+        }
+
+        /// Creating something at `file/`: the name exists, so POSIX `mkdir("file/")`
+        /// and `symlink(_, "file/")` fail with EEXIST (not ENOTDIR). The task asked
+        /// for not-directory; EEXIST is the platform-correct code for these two
+        /// creators and is accepted, but `file` must be left untouched.
+        fn assert_exists_not_replaced(fx: &Fx, res: &Result<Vec<CV>>, what: &str) {
+            assert_eq!(
+                err_code(res),
+                Some(fs_error::EXIST),
+                "{what}: creating at `file/` must fail with exist, got {res:?}"
+            );
+            assert_eq!(
+                std::fs::read(fx.sandbox.join("file")).unwrap(),
+                b"inside-file",
+                "{what}: `file` was modified"
+            );
+            assert_outside_intact(fx, what);
+        }
+
+        fn is_file_case(path: &[u8]) -> bool {
+            path == b"file/"
+        }
+
+        // ---------------- open-at ----------------
+
+        fn check_open_at(path: &[u8]) -> Result<()> {
+            let mut fx = Fx::new("sr96_open")?;
+            let res = fx.open_at(path);
+            if is_file_case(path) {
+                assert_not_directory(&fx, &res, "open-at");
+            } else {
+                assert!(
+                    !succeeded(&res),
+                    "open-at {:?} must not hand out a descriptor for the outside dir, got {res:?}",
+                    String::from_utf8_lossy(path)
+                );
+                assert_outside_intact(&fx, "open-at");
+            }
+            Ok(())
+        }
+
+        // ---------------- stat-at ----------------
+
+        fn check_stat_at(path: &[u8]) -> Result<()> {
+            let mut fx = Fx::new("sr96_stat")?;
+            let res = fx.stat_at(path);
+            if is_file_case(path) {
+                assert_not_directory(&fx, &res, "stat-at");
+            } else {
+                assert!(
+                    !succeeded(&res),
+                    "stat-at {:?} must not return the outside dir's metadata, got {res:?}",
+                    String::from_utf8_lossy(path)
+                );
+                assert_outside_intact(&fx, "stat-at");
+            }
+            Ok(())
+        }
+
+        // ---------------- unlink-file-at ----------------
+
+        fn check_unlink(path: &[u8]) -> Result<()> {
+            let mut fx = Fx::new("sr96_unlink")?;
+            let res = fx.path_op("[method]descriptor.unlink-file-at", path);
+            if is_file_case(path) {
+                assert_not_directory(&fx, &res, "unlink-file-at");
+            } else {
+                // Refused, or acted on the `link` entry inside the preopen only.
+                assert_outside_intact(&fx, "unlink-file-at");
+                assert!(fx.sandbox.join("file").exists(), "unrelated file removed");
+                assert!(fx.sandbox.join("dir").is_dir(), "unrelated dir removed");
+            }
+            Ok(())
+        }
+
+        // ---------------- remove-directory-at ----------------
+
+        fn check_rmdir(path: &[u8]) -> Result<()> {
+            let mut fx = Fx::new("sr96_rmdir")?;
+            // Make the escape observable: an empty outside dir is removable by rmdir.
+            std::fs::remove_file(fx.outside.join("marker")).unwrap();
+            let res = fx.path_op("[method]descriptor.remove-directory-at", path);
+            assert!(
+                fx.outside.is_dir(),
+                "remove-directory-at {:?} removed the outside directory, got {res:?}",
+                String::from_utf8_lossy(path)
+            );
+            if is_file_case(path) {
+                assert_eq!(
+                    err_code(&res),
+                    Some(NOT_DIRECTORY),
+                    "remove-directory-at `file/` must be not-directory, got {res:?}"
+                );
+                assert!(fx.sandbox.join("file").exists(), "`file` was removed");
+            } else {
+                assert!(fx.sandbox.join("file").exists(), "unrelated file removed");
+            }
+            Ok(())
+        }
+
+        // ---------------- create-directory-at ----------------
+
+        fn check_mkdir(path: &[u8]) -> Result<()> {
+            let mut fx = Fx::new("sr96_mkdir")?;
+            let res = fx.path_op("[method]descriptor.create-directory-at", path);
+            if is_file_case(path) {
+                assert_exists_not_replaced(&fx, &res, "create-directory-at");
+            } else {
+                assert!(
+                    !succeeded(&res),
+                    "create-directory-at on an existing path must not succeed, got {res:?}"
+                );
+                assert_outside_intact(&fx, "create-directory-at");
+            }
+            Ok(())
+        }
+
+        // ---------------- rename-at ----------------
+
+        /// `path` as the OLD name; the new name is a fresh `moved`.
+        fn check_rename_old(path: &[u8]) -> Result<()> {
+            let mut fx = Fx::new("sr96_rename_old")?;
+            let res = fx.rename_at(path, b"moved");
+            if is_file_case(path) {
+                assert_not_directory(&fx, &res, "rename-at old");
+                assert!(!fx.sandbox.join("moved").exists(), "`file/` was renamed");
+            } else {
+                assert_outside_intact(&fx, "rename-at old");
+                assert!(
+                    !fx.root.join("moved").exists() && !fx.outside.join("moved").exists(),
+                    "rename-at old moved something out of the preopen"
+                );
+            }
+            Ok(())
+        }
+
+        /// `path` as the NEW name; the old name is the regular `file`.
+        fn check_rename_new(path: &[u8]) -> Result<()> {
+            let mut fx = Fx::new("sr96_rename_new")?;
+            let res = fx.rename_at(b"file", path);
+            if is_file_case(path) {
+                assert_not_directory(&fx, &res, "rename-at new");
+            } else {
+                assert_outside_intact(&fx, "rename-at new");
+                assert!(
+                    !fx.root.join("file").exists(),
+                    "rename-at new moved `file` out of the preopen"
+                );
+            }
+            Ok(())
+        }
+
+        // ---------------- symlink-at ----------------
+
+        fn check_symlink(path: &[u8]) -> Result<()> {
+            let mut fx = Fx::new("sr96_symlink")?;
+            let res = fx.symlink_at(b"dir", path);
+            if is_file_case(path) {
+                assert_exists_not_replaced(&fx, &res, "symlink-at");
+            } else {
+                assert!(
+                    !succeeded(&res),
+                    "symlink-at over an existing name must not succeed, got {res:?}"
+                );
+                assert_outside_intact(&fx, "symlink-at");
+            }
+            Ok(())
+        }
+
+        macro_rules! sr96_tests {
+            ($check:ident, $link_slash:ident, $link_dot:ident, $dir_dotdot:ident, $file_slash:ident) => {
+                // rivet: verifies SR-96
+                #[serial_test::serial]
+                #[test]
+                fn $link_slash() -> Result<()> {
+                    $check(b"link/")
+                }
+                // rivet: verifies SR-96
+                #[serial_test::serial]
+                #[test]
+                fn $link_dot() -> Result<()> {
+                    $check(b"link/.")
+                }
+                // rivet: verifies SR-96
+                #[serial_test::serial]
+                #[test]
+                fn $dir_dotdot() -> Result<()> {
+                    $check(b"dir/../link/")
+                }
+                // rivet: verifies SR-96
+                #[serial_test::serial]
+                #[test]
+                fn $file_slash() -> Result<()> {
+                    $check(b"file/")
+                }
+            };
+        }
+
+        sr96_tests!(
+            check_open_at,
+            sr96_open_at_link_slash,
+            sr96_open_at_link_dot,
+            sr96_open_at_dir_dotdot_link_slash,
+            sr96_open_at_file_slash
+        );
+        sr96_tests!(
+            check_stat_at,
+            sr96_stat_at_link_slash,
+            sr96_stat_at_link_dot,
+            sr96_stat_at_dir_dotdot_link_slash,
+            sr96_stat_at_file_slash
+        );
+        sr96_tests!(
+            check_unlink,
+            sr96_unlink_file_at_link_slash,
+            sr96_unlink_file_at_link_dot,
+            sr96_unlink_file_at_dir_dotdot_link_slash,
+            sr96_unlink_file_at_file_slash
+        );
+        sr96_tests!(
+            check_rmdir,
+            sr96_remove_directory_at_link_slash,
+            sr96_remove_directory_at_link_dot,
+            sr96_remove_directory_at_dir_dotdot_link_slash,
+            sr96_remove_directory_at_file_slash
+        );
+        sr96_tests!(
+            check_mkdir,
+            sr96_create_directory_at_link_slash,
+            sr96_create_directory_at_link_dot,
+            sr96_create_directory_at_dir_dotdot_link_slash,
+            sr96_create_directory_at_file_slash
+        );
+        sr96_tests!(
+            check_rename_old,
+            sr96_rename_at_old_link_slash,
+            sr96_rename_at_old_link_dot,
+            sr96_rename_at_old_dir_dotdot_link_slash,
+            sr96_rename_at_old_file_slash
+        );
+        sr96_tests!(
+            check_rename_new,
+            sr96_rename_at_new_link_slash,
+            sr96_rename_at_new_link_dot,
+            sr96_rename_at_new_dir_dotdot_link_slash,
+            sr96_rename_at_new_file_slash
+        );
+        sr96_tests!(
+            check_symlink,
+            sr96_symlink_at_link_slash,
+            sr96_symlink_at_link_dot,
+            sr96_symlink_at_dir_dotdot_link_slash,
+            sr96_symlink_at_file_slash
+        );
     }
 }
