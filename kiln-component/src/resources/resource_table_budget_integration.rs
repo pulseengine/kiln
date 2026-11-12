@@ -131,9 +131,5 @@ pub fn verify_budget_integration() -> kiln_error::Result<bool> {
 
     // Test 4: Verify statistics
     let stats = pool.get_usage_stats();
-    if stats.active_tables != 3 || stats.utilization_percent != 100 {
-        return Ok(false);
-    }
-
-    Ok(true)
+    Ok(stats.active_tables == 3 && stats.utilization_percent == 100)
 }
