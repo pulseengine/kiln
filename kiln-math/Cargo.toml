@@ -2,6 +2,7 @@
 name = "kiln-math"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 authors.workspace = true
 description = "Mathematical operations for the Kiln runtime, supporting WebAssembly standards."
 license.workspace = true

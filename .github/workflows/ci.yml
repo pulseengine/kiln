@@ -348,7 +348,7 @@ jobs:
   # This runs on every PR and checks the crate the VxWorks job builds, with the
   # same features, on the SDK's rustc. Keep the version in step with the SDK.
   msrv_vxworks:
-    name: MSRV (kiln-platform on rustc 1.85.0)
+    name: "MSRV (rustc 1.85.0: kiln-platform and the SR-97 crates)"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -357,6 +357,16 @@ jobs:
           toolchain: "1.85.0"
       - name: Check kiln-platform builds on the VxWorks SDK's rustc
         run: cargo +1.85.0 check -p kiln-platform --locked --features real-time,std
+      # SR-97: every crate that declares rust-version 1.85.0 builds on 1.85.0,
+      # so the floor cannot drift up. Crates declaring 1.89 are not in this list.
+      - name: Check the rust-version 1.85.0 crates on rustc 1.85.0 (SR-97)
+        run: |
+          set -euo pipefail
+          for c in kiln-error kiln-sync kiln-math kiln-panic kiln-foundation kiln-format kiln-platform kiln-logging kiln-instructions kiln-host kiln-intercept kiln-debug kiln-async kiln-builtins kiln-decoder kiln-wasi; do
+            echo "::group::$c"
+            cargo +1.85.0 check -p "$c" --lib --locked
+            echo "::endgroup::"
+          done
 
   vxworks_cross_build:
     name: VxWorks Cross-Compilation

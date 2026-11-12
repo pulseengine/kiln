@@ -2,6 +2,7 @@
 name = "kiln-instructions"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 description = "WebAssembly instruction implementations for the Kiln runtime"
 license.workspace = true
 repository.workspace = true

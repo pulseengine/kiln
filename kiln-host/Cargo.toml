@@ -2,6 +2,7 @@
 name = "kiln-host"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 description = "Host function infrastructure for the WebAssembly Runtime (Kiln)"
 license.workspace = true
 repository.workspace = true

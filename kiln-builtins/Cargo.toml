@@ -2,6 +2,7 @@
 name = "kiln-builtins"
 version = "0.1.0"
 edition = "2024"
+rust-version.workspace = true
 description = "Runtime builtins for synth-compiled WebAssembly on embedded targets"
 license = "MIT"
 

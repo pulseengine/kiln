@@ -2,6 +2,7 @@
 name = "kiln-intercept"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 description = "Host interception for WebAssembly Runtime (Kiln)"
 license.workspace = true
 repository.workspace = true
