@@ -389,11 +389,7 @@ impl ResourceTracker {
         };
 
         let stack_size = request.stack_size.unwrap_or(2 * 1024 * 1024);
-        if module_memory + stack_size > self.limits.memory_limit_per_module {
-            return Ok(false);
-        }
-
-        Ok(true)
+        Ok(module_memory + stack_size <= self.limits.memory_limit_per_module)
     }
 
     /// Allocate thread resources
