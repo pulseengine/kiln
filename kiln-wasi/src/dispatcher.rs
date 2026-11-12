@@ -1082,6 +1082,20 @@ impl WasiDispatcher {
         Ok(resolved)
     }
 
+    /// SR-96: a guest path ending in `/` or `/.` names a directory. Both
+    /// resolvers rebuild the path from its components, which drops the trailing
+    /// slash, so a call on `file/` would otherwise act on the regular file
+    /// `file`. Callers whose POSIX counterpart reports ENOTDIR for this (open,
+    /// stat, unlink, rmdir, rename) check this after the sandbox gate and return
+    /// `not-directory`. Only a regular file in the final position is refused; a
+    /// symlink keeps the resolver's behaviour, and a missing entry is left to the
+    /// host call to report.
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    fn trailing_slash_on_file(guest_path: &str, resolved: &std::path::Path) -> bool {
+        (guest_path.ends_with('/') || guest_path.ends_with("/."))
+            && matches!(std::fs::symlink_metadata(resolved), Ok(meta) if meta.is_file())
+    }
+
     /// The preopen directory `fd` names, if it is one. Path-based descriptor
     /// calls resolve relative to this directory only.
     #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
@@ -2496,6 +2510,9 @@ impl WasiDispatcher {
                 if let Some(base) = base_path {
                     // Sandbox gate: resolve → contain (symlink-safe) → allow-list.
                     let full_path = self.resolve_and_authorize(&base, &path_str)?;
+                    if Self::trailing_slash_on_file(&path_str, &full_path) {
+                        return Ok(fs_err(fs_error::NOT_DIRECTORY));
+                    }
                     if full_path.exists() {
                         // Granted access = the guest's descriptor-flags (read = bit 0,
                         // write = bit 1) ∩ the filesystem capabilities.
@@ -2630,6 +2647,9 @@ impl WasiDispatcher {
                 if let Some(base_path) = base {
                     // Sandbox gate: resolve → contain (symlink-safe) → allow-list.
                     let full_path = self.resolve_and_authorize(&base_path, &path_str)?;
+                    if Self::trailing_slash_on_file(&path_str, &full_path) {
+                        return Ok(fs_err(fs_error::NOT_DIRECTORY));
+                    }
                     match std::fs::metadata(&full_path) {
                         Ok(meta) => {
                             let dtype: u8 = if meta.is_dir() { 3 } else { 6 };
@@ -2968,6 +2988,13 @@ impl WasiDispatcher {
                 // Sandbox gate; the final component is never followed so unlinking a
                 // symlink removes the link, not its target.
                 let full_path = self.resolve_and_authorize_nofollow(&base, &guest_path)?;
+                // mkdir("file/") is EEXIST on POSIX, so create-directory-at keeps
+                // the host's answer; unlink and rmdir report not-directory.
+                if function != "[method]descriptor.create-directory-at"
+                    && Self::trailing_slash_on_file(&guest_path, &full_path)
+                {
+                    return Ok(fs_err(fs_error::NOT_DIRECTORY));
+                }
                 let outcome = match function {
                     "[method]descriptor.create-directory-at" => std::fs::create_dir(&full_path),
                     "[method]descriptor.remove-directory-at" => std::fs::remove_dir(&full_path),
@@ -3008,6 +3035,11 @@ impl WasiDispatcher {
                 // before anything is renamed.
                 let old_full = self.resolve_and_authorize_nofollow(&old_base, &old_guest)?;
                 let new_full = self.resolve_and_authorize_nofollow(&new_base, &new_guest)?;
+                if Self::trailing_slash_on_file(&old_guest, &old_full)
+                    || Self::trailing_slash_on_file(&new_guest, &new_full)
+                {
+                    return Ok(fs_err(fs_error::NOT_DIRECTORY));
+                }
                 match std::fs::rename(&old_full, &new_full) {
                     Ok(()) => Ok(vec![CoreValue::I32(0)]),
                     Err(e) => Ok(fs_err(Self::fs_error_code(&e))),
