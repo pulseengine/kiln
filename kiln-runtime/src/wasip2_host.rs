@@ -175,7 +175,20 @@ pub enum WasiComponentType {
     Unit,
     /// Tuple of types
     Tuple(Vec<WasiComponentType>),
+    /// `wasi:filesystem/types.descriptor-stat`: `record { type: descriptor-type,
+    /// link-count: u64, size: u64, data-access-timestamp: option<datetime>,
+    /// data-modification-timestamp: option<datetime>,
+    /// status-change-timestamp: option<datetime> }` with
+    /// `datetime = record { seconds: u64, nanoseconds: u32 }`.
+    ///
+    /// Core values (see `lower_descriptor_stat`): `i32` type, `i64` link-count,
+    /// `i64` size, then per timestamp an `i32` option discriminant followed, for
+    /// `some` only, by `i64` seconds and `i32` nanoseconds.
+    DescriptorStat,
 }
+
+/// Canonical ABI size of `descriptor-stat` (alignment 8).
+const DESCRIPTOR_STAT_SIZE: u32 = 96;
 
 /// WASI function signature
 #[derive(Debug, Clone)]
@@ -236,6 +249,8 @@ impl WasiFunctionSignature {
                 1 + core::cmp::max(ok_flat, err_flat) // discriminant + max payload
             },
             WasiComponentType::Tuple(types) => types.iter().map(Self::flat_count).sum(),
+            // type + link-count + size + 3 x (discriminant + seconds + nanoseconds)
+            WasiComponentType::DescriptorStat => 12,
             WasiComponentType::Unit => 0,
         }
     }
@@ -441,17 +456,7 @@ pub fn get_wasi_function_signature(
         ("wasi:filesystem/types", "[method]descriptor.stat") => Some(WasiFunctionSignature::new(
             vec![WasiComponentType::Handle],
             vec![WasiComponentType::Result(
-                Some(Box::new(WasiComponentType::Tuple(vec![
-                    WasiComponentType::U8,  // type
-                    WasiComponentType::U64, // link-count
-                    WasiComponentType::U64, // size
-                    WasiComponentType::U64,
-                    WasiComponentType::U32, // data-access-timestamp
-                    WasiComponentType::U64,
-                    WasiComponentType::U32, // data-modification-timestamp
-                    WasiComponentType::U64,
-                    WasiComponentType::U32, // status-change-timestamp
-                ]))),
+                Some(Box::new(WasiComponentType::DescriptorStat)),
                 Some(Box::new(WasiComponentType::U8)),
             )],
         )),
@@ -463,17 +468,7 @@ pub fn get_wasi_function_signature(
                     WasiComponentType::String,
                 ],
                 vec![WasiComponentType::Result(
-                    Some(Box::new(WasiComponentType::Tuple(vec![
-                        WasiComponentType::U8,
-                        WasiComponentType::U64,
-                        WasiComponentType::U64,
-                        WasiComponentType::U64,
-                        WasiComponentType::U32,
-                        WasiComponentType::U64,
-                        WasiComponentType::U32,
-                        WasiComponentType::U64,
-                        WasiComponentType::U32,
-                    ]))),
+                    Some(Box::new(WasiComponentType::DescriptorStat)),
                     Some(Box::new(WasiComponentType::U8)),
                 )],
             ))
@@ -787,6 +782,9 @@ fn lift_single_value(
         WasiComponentType::Unit => {
             Ok((ComponentValue::Bool(true), 0)) // Unit consumes nothing
         },
+        WasiComponentType::DescriptorStat => Err(kiln_error::Error::runtime_error(
+            "descriptor-stat is a host result type and cannot be lifted",
+        )),
 
         // String: ptr + len on stack, data in memory
         WasiComponentType::String => {
@@ -1405,6 +1403,12 @@ fn lower_type_to_memory(
         WasiComponentType::Unit => {
             // Unit has no representation — skip
         },
+        WasiComponentType::DescriptorStat => {
+            // Only valid as the payload of a result, lowered by `lower_exact_result`.
+            return Err(kiln_error::Error::runtime_error(
+                "descriptor-stat can only be lowered as a result payload",
+            ));
+        },
     }
     Ok(())
 }
@@ -1418,7 +1422,12 @@ fn result_exact_align(ok: Option<&WasiComponentType>, err: Option<&WasiComponent
         match ty {
             None
             | Some(WasiComponentType::U8 | WasiComponentType::S8 | WasiComponentType::Bool) => 1,
-            Some(WasiComponentType::U64 | WasiComponentType::S64 | WasiComponentType::F64) => 8,
+            Some(
+                WasiComponentType::U64
+                | WasiComponentType::S64
+                | WasiComponentType::F64
+                | WasiComponentType::DescriptorStat,
+            ) => 8,
             Some(_) => 4,
         }
     }
@@ -1441,6 +1450,7 @@ fn lower_exact_result(
         match ty {
             None => 0,
             Some(WasiComponentType::U8 | WasiComponentType::S8 | WasiComponentType::Bool) => 1,
+            Some(WasiComponentType::DescriptorStat) => DESCRIPTOR_STAT_SIZE,
             Some(_) => 8,
         }
     }
@@ -1471,6 +1481,9 @@ fn lower_exact_result(
             }
             *val_idx += 1;
         },
+        Some(WasiComponentType::DescriptorStat) => {
+            lower_descriptor_stat(core_values, val_idx, memory, payload_off)?;
+        },
         Some(_) => {
             match core_values.get(*val_idx) {
                 Some(Value::I64(v)) => memory.write_bytes(payload_off, &v.to_le_bytes())?,
@@ -1484,6 +1497,89 @@ fn lower_exact_result(
         },
     }
     *offset = payload_off + payload_size(ok).max(payload_size(err));
+    Ok(())
+}
+
+/// Lower a `descriptor-stat` record at `base` with the canonical layout
+/// (type u8 @0, link-count u64 @8, size u64 @16, then three `option<datetime>`
+/// of size 24 / align 8 at @24, @48, @72: discriminant u8 at +0, seconds u64 at
+/// +8, nanoseconds u32 at +16). A `none` timestamp writes only its discriminant.
+/// Missing or mistyped core values are errors, never silently zero.
+fn lower_descriptor_stat(
+    core_values: &[Value],
+    val_idx: &mut usize,
+    memory: &dyn kiln_foundation::MemoryAccessor,
+    base: u32,
+) -> Result<()> {
+    fn next_i32(core_values: &[Value], val_idx: &mut usize, what: &'static str) -> Result<i32> {
+        match core_values.get(*val_idx) {
+            Some(Value::I32(v)) => {
+                *val_idx += 1;
+                Ok(*v)
+            },
+            _ => Err(kiln_error::Error::runtime_error(what)),
+        }
+    }
+    fn next_i64(core_values: &[Value], val_idx: &mut usize, what: &'static str) -> Result<i64> {
+        match core_values.get(*val_idx) {
+            Some(Value::I64(v)) => {
+                *val_idx += 1;
+                Ok(*v)
+            },
+            _ => Err(kiln_error::Error::runtime_error(what)),
+        }
+    }
+
+    let descriptor_type = next_i32(
+        core_values,
+        val_idx,
+        "descriptor-stat lowering: missing type",
+    )?;
+    let link_count = next_i64(
+        core_values,
+        val_idx,
+        "descriptor-stat lowering: missing link-count",
+    )?;
+    let size = next_i64(
+        core_values,
+        val_idx,
+        "descriptor-stat lowering: missing size",
+    )?;
+    memory.write_bytes(base, &[descriptor_type as u8])?;
+    memory.write_bytes(base + 8, &link_count.to_le_bytes())?;
+    memory.write_bytes(base + 16, &size.to_le_bytes())?;
+
+    for index in 0..3u32 {
+        let opt = base + 24 + index * 24;
+        let disc = next_i32(
+            core_values,
+            val_idx,
+            "descriptor-stat lowering: missing timestamp discriminant",
+        )?;
+        match disc {
+            0 => memory.write_bytes(opt, &[0])?,
+            1 => {
+                let seconds = next_i64(
+                    core_values,
+                    val_idx,
+                    "descriptor-stat lowering: missing timestamp seconds",
+                )?;
+                let nanos = next_i32(
+                    core_values,
+                    val_idx,
+                    "descriptor-stat lowering: missing timestamp nanoseconds",
+                )?;
+                memory.write_bytes(opt, &[1])?;
+                memory.write_bytes(opt + 8, &seconds.to_le_bytes())?;
+                memory.write_bytes(opt + 16, &nanos.to_le_bytes())?;
+            },
+            _ => {
+                return Err(kiln_error::Error::runtime_error(
+                    "descriptor-stat lowering: invalid timestamp discriminant",
+                ));
+            },
+        }
+    }
     Ok(())
 }
 
@@ -1509,6 +1605,7 @@ fn canonical_flat_size(ty: &WasiComponentType) -> u32 {
             4 + core::cmp::max(ok_size, err_size)
         },
         WasiComponentType::Tuple(types) => types.iter().map(canonical_flat_size).sum(),
+        WasiComponentType::DescriptorStat => DESCRIPTOR_STAT_SIZE,
         WasiComponentType::Unit => 0,
     }
 }
@@ -1610,6 +1707,7 @@ fn get_element_size(ty: &WasiComponentType) -> usize {
         WasiComponentType::Tuple(types) => types.iter().map(|t| get_element_size(t)).sum(),
         WasiComponentType::Handle => 4, // u32 handle
         WasiComponentType::Unit => 0,   // no size
+        WasiComponentType::DescriptorStat => DESCRIPTOR_STAT_SIZE as usize,
     }
 }
 
@@ -1830,6 +1928,7 @@ fn lift_element_from_memory(
         | WasiComponentType::List(_)
         | WasiComponentType::Option(_)
         | WasiComponentType::Result(_, _)
+        | WasiComponentType::DescriptorStat
         | WasiComponentType::Tuple(_) => Err(kiln_error::Error::runtime_error(
             "Nested complex types in lists not yet supported",
         )),
@@ -2406,6 +2505,108 @@ mod sr72_lowering_tests {
         assert_eq!(bytes(&err, RETPTR, 1), vec![1]);
         assert_eq!(bytes(&err, RETPTR + 8, 1), vec![3]);
         Ok(())
+    }
+
+    fn u64_at(mem: &SliceMemory, at: u32) -> u64 {
+        let mut b = [0u8; 8];
+        b.copy_from_slice(&bytes(mem, at, 8));
+        u64::from_le_bytes(b)
+    }
+
+    fn u32_at(mem: &SliceMemory, at: u32) -> u32 {
+        let mut b = [0u8; 4];
+        b.copy_from_slice(&bytes(mem, at, 4));
+        u32::from_le_bytes(b)
+    }
+
+    // rivet: verifies SR-94
+    #[test]
+    fn stat_result_uses_the_canonical_descriptor_stat_layout() -> Result<()> {
+        for function in ["[method]descriptor.stat", "[method]descriptor.stat-at"] {
+            let ok = lower(
+                function,
+                &[
+                    Value::I32(0),
+                    Value::I32(6),
+                    Value::I64(2),
+                    Value::I64(5),
+                    Value::I32(0), // access: none
+                    Value::I32(1), // modification: some
+                    Value::I64(1_700_000_000),
+                    Value::I32(123_456_789),
+                    Value::I32(1), // status-change: some
+                    Value::I64(1_700_000_001),
+                    Value::I32(7),
+                ],
+            )?;
+            assert_eq!(bytes(&ok, RETPTR, 1), vec![0], "{function} disc");
+            assert_eq!(bytes(&ok, RETPTR + 8, 1), vec![6], "{function} type");
+            assert_eq!(u64_at(&ok, RETPTR + 16), 2, "{function} link-count");
+            assert_eq!(u64_at(&ok, RETPTR + 24), 5, "{function} size");
+            assert_eq!(
+                bytes(&ok, RETPTR + 32, 1),
+                vec![0],
+                "{function} access none"
+            );
+            assert_eq!(bytes(&ok, RETPTR + 56, 1), vec![1], "{function} mtime some");
+            assert_eq!(
+                u64_at(&ok, RETPTR + 64),
+                1_700_000_000,
+                "{function} mtime s"
+            );
+            assert_eq!(u32_at(&ok, RETPTR + 72), 123_456_789, "{function} mtime ns");
+            assert_eq!(bytes(&ok, RETPTR + 80, 1), vec![1], "{function} ctime some");
+            assert_eq!(
+                u64_at(&ok, RETPTR + 88),
+                1_700_000_001,
+                "{function} ctime s"
+            );
+            assert_eq!(u32_at(&ok, RETPTR + 96), 7, "{function} ctime ns");
+
+            let err = lower(function, &[Value::I32(1), Value::I32(24)])?;
+            assert_eq!(bytes(&err, RETPTR, 1), vec![1], "{function} err disc");
+            assert_eq!(
+                bytes(&err, RETPTR + 8, 1),
+                vec![24],
+                "{function} err code at +8"
+            );
+        }
+        Ok(())
+    }
+
+    // rivet: verifies SR-94
+    #[test]
+    fn stat_result_lowering_fails_loud_on_bad_core_values() {
+        let sig = get_wasi_function_signature(FS, "[method]descriptor.stat")
+            .expect("stat must have a signature");
+        let mem = SliceMemory::with_size(0x1000);
+        for values in [
+            // too few values
+            vec![Value::I32(0), Value::I32(6)],
+            // link-count has the wrong core type
+            vec![
+                Value::I32(0),
+                Value::I32(6),
+                Value::I32(2),
+                Value::I64(5),
+                Value::I32(0),
+                Value::I32(0),
+                Value::I32(0),
+            ],
+            // option discriminant not 0/1
+            vec![
+                Value::I32(0),
+                Value::I32(6),
+                Value::I64(2),
+                Value::I64(5),
+                Value::I32(2),
+                Value::I32(0),
+                Value::I32(0),
+            ],
+        ] {
+            let mut offset = RETPTR;
+            assert!(lower_results_to_retptr(&sig.results, &values, &mem, &mut offset).is_err());
+        }
     }
 
     // rivet: verifies SR-72

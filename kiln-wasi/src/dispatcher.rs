@@ -1192,6 +1192,82 @@ impl WasiDispatcher {
         }
     }
 
+    /// Flatten a host `SystemTime` into the core values of a canonical
+    /// `option<datetime>`: `[i32 0]` for none, `[i32 1, i64 seconds, i32 nanos]` for
+    /// some. A time the host cannot provide, or one before the Unix epoch (not
+    /// representable as the unsigned `datetime.seconds`), is none, never zero.
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    fn datetime_option(
+        time: std::io::Result<std::time::SystemTime>,
+    ) -> Vec<kiln_foundation::values::Value> {
+        use kiln_foundation::values::Value as CoreValue;
+        match time.ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()) {
+            Some(d) => vec![
+                CoreValue::I32(1),
+                CoreValue::I64(d.as_secs() as i64),
+                CoreValue::I32(d.subsec_nanos() as i32),
+            ],
+            None => vec![CoreValue::I32(0)],
+        }
+    }
+
+    /// The status-change time (`ctime`) as an `option<datetime>`; none when the
+    /// host reports a pre-epoch or out-of-range value.
+    #[cfg(all(feature = "wasi-filesystem", feature = "std", unix))]
+    fn status_change_option(meta: &std::fs::Metadata) -> Vec<kiln_foundation::values::Value> {
+        use std::os::unix::fs::MetadataExt;
+        let secs = u64::try_from(meta.ctime()).ok();
+        let nanos = u32::try_from(meta.ctime_nsec()).ok().filter(|n| *n < 1_000_000_000);
+        match secs.zip(nanos) {
+            Some((s, n)) => {
+                Self::datetime_option(Ok(std::time::UNIX_EPOCH + std::time::Duration::new(s, n)))
+            },
+            None => Self::datetime_option(Err(std::io::ErrorKind::InvalidData.into())),
+        }
+    }
+
+    /// Core values of an ok `result<descriptor-stat, error-code>` built from host
+    /// metadata, shared by `stat` and `stat-at`: discriminant, type, link-count,
+    /// size, then the access, modification and status-change `option<datetime>`.
+    #[cfg(all(feature = "wasi-filesystem", feature = "std", unix))]
+    fn stat_core_values(meta: &std::fs::Metadata) -> Vec<kiln_foundation::values::Value> {
+        use kiln_foundation::values::Value as CoreValue;
+        use std::os::unix::fs::MetadataExt;
+        let dtype: i32 = if meta.is_dir() { 3 } else { 6 };
+        let mut v = vec![
+            CoreValue::I32(0),
+            CoreValue::I32(dtype),
+            CoreValue::I64(meta.nlink() as i64),
+            CoreValue::I64(meta.len() as i64),
+        ];
+        v.extend(Self::datetime_option(meta.accessed()));
+        v.extend(Self::datetime_option(meta.modified()));
+        v.extend(Self::status_change_option(meta));
+        v
+    }
+
+    /// There is no stable std API for the link count off unix, and none may be
+    /// invented: `stat` and `stat-at` report `unsupported` there.
+    /// Non-unix targets (Windows): stable std has no link-count API, so
+    /// link-count is reported as 1, a documented limit (SR-94, maintainer
+    /// decision 2026-11-12): a hard-linked file shows 1 there. There is no
+    /// status-change time (creation time is a different value), so it is none.
+    #[cfg(all(feature = "wasi-filesystem", feature = "std", not(unix)))]
+    fn stat_core_values(meta: &std::fs::Metadata) -> Vec<kiln_foundation::values::Value> {
+        use kiln_foundation::values::Value as CoreValue;
+        let dtype: i32 = if meta.is_dir() { 3 } else { 6 };
+        let mut v = vec![
+            CoreValue::I32(0),
+            CoreValue::I32(dtype),
+            CoreValue::I64(1),
+            CoreValue::I64(meta.len() as i64),
+        ];
+        v.extend(Self::datetime_option(meta.accessed()));
+        v.extend(Self::datetime_option(meta.modified()));
+        v.push(CoreValue::I32(0));
+        v
+    }
+
     /// Open `path` (already authorized by [`Self::resolve_and_authorize`] against the
     /// preopen `base`) and return the handle the descriptor will keep. This is the one
     /// helper every file open goes through. The file is opened first and containment
@@ -2585,26 +2661,7 @@ impl WasiDispatcher {
                 });
                 if let Some(path) = file_path {
                     match std::fs::metadata(&path) {
-                        Ok(meta) => {
-                            let size = meta.len();
-                            let is_dir = meta.is_dir();
-                            let dtype: u8 = if is_dir { 3 } else { 6 };
-                            // result<ok>: discriminant=0
-                            // descriptor-stat: type(u8), link-count(u64), size(u64), ...timestamps
-                            // Simplified: just type and size
-                            Ok(vec![
-                                CoreValue::I32(0),            // ok discriminant
-                                CoreValue::I32(dtype as i32), // type
-                                CoreValue::I64(1),            // link-count
-                                CoreValue::I64(size as i64),  // size
-                                CoreValue::I64(0),
-                                CoreValue::I32(0), // data-access-timestamp
-                                CoreValue::I64(0),
-                                CoreValue::I32(0), // data-modification-timestamp
-                                CoreValue::I64(0),
-                                CoreValue::I32(0), // status-change-timestamp
-                            ])
-                        },
+                        Ok(meta) => Ok(Self::stat_core_values(&meta)),
                         Err(e) => Ok(fs_err(Self::fs_error_code(&e))),
                     }
                 } else {
@@ -2651,21 +2708,7 @@ impl WasiDispatcher {
                         return Ok(fs_err(fs_error::NOT_DIRECTORY));
                     }
                     match std::fs::metadata(&full_path) {
-                        Ok(meta) => {
-                            let dtype: u8 = if meta.is_dir() { 3 } else { 6 };
-                            Ok(vec![
-                                CoreValue::I32(0),
-                                CoreValue::I32(dtype as i32),
-                                CoreValue::I64(1),
-                                CoreValue::I64(meta.len() as i64),
-                                CoreValue::I64(0),
-                                CoreValue::I32(0),
-                                CoreValue::I64(0),
-                                CoreValue::I32(0),
-                                CoreValue::I64(0),
-                                CoreValue::I32(0),
-                            ])
-                        },
+                        Ok(meta) => Ok(Self::stat_core_values(&meta)),
                         Err(e) => Ok(fs_err(Self::fs_error_code(&e))),
                     }
                 } else {
@@ -6459,6 +6502,187 @@ mod tests {
     /// `dispatch_core` path is driven with `link/`, `link/.`, `dir/../link/` and
     /// `file/` and must be refused or act only inside the preopen.
     #[cfg(all(unix, feature = "wasi-filesystem", feature = "std"))]
+    mod sr94 {
+        use super::*;
+        use kiln_foundation::traits::SliceMemory;
+        use kiln_foundation::values::Value as CV;
+        use std::time::{Duration, UNIX_EPOCH};
+
+        const FS: &str = "wasi:filesystem/types";
+
+        /// A timestamp as the dispatcher reports it: `None` or `Some((seconds, nanos))`.
+        type Ts = Option<(i64, i32)>;
+
+        struct Stat {
+            link_count: i64,
+            size: i64,
+            atime: Ts,
+            mtime: Ts,
+            ctime: Ts,
+        }
+
+        /// Parse the flat core values of an ok `descriptor-stat` result:
+        /// [0, type, link-count, size, 3 x (disc [, seconds, nanos])].
+        fn parse(values: &[CV]) -> Stat {
+            let mut it = values.iter();
+            assert!(
+                matches!(it.next(), Some(CV::I32(0))),
+                "ok discriminant: {values:?}"
+            );
+            assert!(matches!(it.next(), Some(CV::I32(_))), "type: {values:?}");
+            let Some(CV::I64(link_count)) = it.next() else {
+                panic!("link-count: {values:?}")
+            };
+            let Some(CV::I64(size)) = it.next() else {
+                panic!("size: {values:?}")
+            };
+            let mut ts = |name: &str| -> Ts {
+                match it.next() {
+                    Some(CV::I32(0)) => None,
+                    Some(CV::I32(1)) => {
+                        let Some(CV::I64(s)) = it.next() else {
+                            panic!("{name} seconds: {values:?}")
+                        };
+                        let Some(CV::I32(n)) = it.next() else {
+                            panic!("{name} nanos: {values:?}")
+                        };
+                        Some((*s, *n))
+                    },
+                    other => panic!("{name} discriminant {other:?}: {values:?}"),
+                }
+            };
+            let atime = ts("access");
+            let mtime = ts("modification");
+            let ctime = ts("status-change");
+            assert!(it.next().is_none(), "trailing values: {values:?}");
+            Stat {
+                link_count: *link_count,
+                size: *size,
+                atime,
+                mtime,
+                ctime,
+            }
+        }
+
+        struct Fx {
+            root: std::path::PathBuf,
+            d: WasiDispatcher,
+            mem: SliceMemory,
+            dir: u32,
+        }
+
+        impl Fx {
+            fn new(tag: &str) -> Result<Self> {
+                MemoryInitializer::ensure_initialized()?;
+                let root = sandbox_fixture_dir(tag);
+                std::fs::create_dir_all(&root).unwrap();
+                std::fs::write(root.join("file"), b"hello").unwrap();
+                let mut d = WasiDispatcher::with_defaults()?;
+                let dir = d.add_preopen(root.clone())?;
+                Ok(Self {
+                    root,
+                    d,
+                    mem: SliceMemory::with_size(0x10000),
+                    dir,
+                })
+            }
+
+            fn put(&self, s: &[u8]) -> [CV; 2] {
+                self.mem.write_bytes(0x1000, s).unwrap();
+                [CV::I32(0x1000), CV::I32(s.len() as i32)]
+            }
+
+            fn call(&mut self, func: &str, args: &[CV]) -> Result<Vec<CV>> {
+                self.d.dispatch_core(FS, func, args, Some(&self.mem))
+            }
+
+            fn stat_at(&mut self, path: &[u8]) -> Result<Stat> {
+                let [p, l] = self.put(path);
+                let dir = self.dir as i32;
+                let v = self.call(
+                    "[method]descriptor.stat-at",
+                    &[CV::I32(dir), CV::I32(0), p, l, CV::I32(0x100)],
+                )?;
+                Ok(parse(&v))
+            }
+
+            fn stat(&mut self, path: &[u8]) -> Result<Stat> {
+                let [p, l] = self.put(path);
+                let dir = self.dir as i32;
+                let opened = self.call(
+                    "[method]descriptor.open-at",
+                    &[CV::I32(dir), CV::I32(0), p, l, CV::I32(0), CV::I32(1)],
+                )?;
+                let Some([CV::I32(0), CV::I32(h)]) =
+                    opened.get(..2).map(|s| [s[0].clone(), s[1].clone()])
+                else {
+                    panic!("open-at failed: {opened:?}")
+                };
+                let v = self.call("[method]descriptor.stat", &[CV::I32(h)])?;
+                Ok(parse(&v))
+            }
+        }
+
+        impl Drop for Fx {
+            fn drop(&mut self) {
+                std::fs::remove_dir_all(&self.root).ok();
+            }
+        }
+
+        // rivet: verifies SR-94
+        #[test]
+        fn stat_and_stat_at_report_the_real_hard_link_count() -> Result<()> {
+            let mut fx = Fx::new("sr94-nlink")?;
+            assert_eq!(fx.stat_at(b"file")?.link_count, 1);
+            assert_eq!(fx.stat(b"file")?.link_count, 1);
+            std::fs::hard_link(fx.root.join("file"), fx.root.join("second")).unwrap();
+            for path in [&b"file"[..], b"second"] {
+                assert_eq!(fx.stat_at(path)?.link_count, 2, "stat-at");
+                let s = fx.stat(path)?;
+                assert_eq!(s.link_count, 2, "stat");
+                assert_eq!(s.size, 5);
+            }
+            Ok(())
+        }
+
+        // rivet: verifies SR-94
+        #[test]
+        fn stat_and_stat_at_report_the_host_timestamps() -> Result<()> {
+            let mut fx = Fx::new("sr94-times")?;
+            let mtime = UNIX_EPOCH + Duration::new(1_700_000_000, 123_456_789);
+            std::fs::File::options()
+                .write(true)
+                .open(fx.root.join("file"))
+                .unwrap()
+                .set_modified(mtime)
+                .unwrap();
+            for s in [fx.stat_at(b"file")?, fx.stat(b"file")?] {
+                assert_eq!(s.mtime, Some((1_700_000_000, 123_456_789)));
+                // The host provides access and status-change times: some, never a
+                // zero-filled none, and a real (post-2020) instant.
+                assert!(matches!(s.atime, Some((secs, _)) if secs > 1_600_000_000));
+                assert!(matches!(s.ctime, Some((secs, _)) if secs > 1_600_000_000));
+            }
+            Ok(())
+        }
+
+        // rivet: verifies SR-94
+        #[test]
+        fn a_pre_epoch_timestamp_is_none_not_zero() -> Result<()> {
+            let mut fx = Fx::new("sr94-preepoch")?;
+            std::fs::File::options()
+                .write(true)
+                .open(fx.root.join("file"))
+                .unwrap()
+                .set_modified(UNIX_EPOCH - Duration::from_secs(10))
+                .unwrap();
+            for s in [fx.stat_at(b"file")?, fx.stat(b"file")?] {
+                assert_eq!(s.mtime, None);
+            }
+            Ok(())
+        }
+    }
+
     mod sr96 {
         use super::*;
         use kiln_foundation::traits::SliceMemory;
