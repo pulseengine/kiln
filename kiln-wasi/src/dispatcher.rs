@@ -733,13 +733,16 @@ const SERVED_WASI_IMPORTS: &[(&str, &str, WasiFn)] = &[
 ];
 
 /// The served WASI function an import names, if kiln serves it. The import's
-/// interface may carry an `@version`; the table is keyed without it.
+/// interface may carry an `@version`, and its function meld's per-instance
+/// `$N` suffix (SR-81); the table is keyed without either. The suffix is only
+/// stripped here, so an unknown base name stays unresolved.
 #[cfg(feature = "std")]
 fn served_wasi_fn(interface: &str, function: &str) -> Option<WasiFn> {
     let base_interface = WasiDispatcher::strip_version(interface);
+    let (base_function, _instance) = kiln_foundation::split_instance_suffix(function);
     SERVED_WASI_IMPORTS
         .iter()
-        .find(|(i, f, _)| *i == base_interface && *f == function)
+        .find(|(i, f, _)| *i == base_interface && *f == base_function)
         .map(|(_, _, served)| *served)
 }
 
@@ -4083,6 +4086,74 @@ mod tests {
                 .expect_err("an unlisted import must not dispatch");
             assert_eq!(err.message, "Unknown WASI function");
         }
+        Ok(())
+    }
+
+    /// SR-81: meld's `$N` instance suffix resolves to the same function as the
+    /// unsuffixed name, through the one resolver the link check and dispatch
+    /// share (AD-LINK-001); a bad suffix or an unknown base is refused.
+    // rivet: verifies SR-81
+    #[cfg(feature = "std")]
+    #[serial_test::serial]
+    #[test]
+    fn suffixed_imports_resolve_to_the_base_function_for_link_check_and_dispatch() -> Result<()> {
+        use kiln_foundation::HostImportHandler;
+        MemoryInitializer::ensure_initialized()?;
+        let mut dispatcher = WasiDispatcher::with_defaults()?;
+
+        assert_eq!(
+            served_wasi_fn("wasi:cli/stderr@0.2.6", "get-stderr$5"),
+            served_wasi_fn("wasi:cli/stderr@0.2.6", "get-stderr")
+        );
+        assert!(served_wasi_fn("wasi:cli/stderr@0.2.6", "get-stderr$5").is_some());
+        assert_eq!(
+            served_wasi_fn(
+                "wasi:io/streams@0.2.6",
+                "[method]output-stream.blocking-write-and-flush$2"
+            ),
+            served_wasi_fn(
+                "wasi:io/streams@0.2.6",
+                "[method]output-stream.blocking-write-and-flush"
+            )
+        );
+
+        // Every served import also resolves, to the same function, with a suffix.
+        for (interface, function, served) in SERVED_WASI_IMPORTS {
+            let suffixed = format!("{function}$7");
+            assert_eq!(
+                served_wasi_fn(interface, &suffixed),
+                Some(*served),
+                "{interface}::{suffixed}"
+            );
+            assert!(
+                dispatcher.resolves(interface, &suffixed),
+                "{interface}::{suffixed}"
+            );
+        }
+
+        // A suffixed name dispatches like the unsuffixed one.
+        let handle =
+            dispatcher.dispatch_core("wasi:cli/stderr@0.2.6", "get-stderr$5", &[], None)?;
+        assert_eq!(handle.len(), 1);
+
+        for function in [
+            "get-stderr$",
+            "get-stderr$x",
+            "get-stderr$5x",
+            "get-stderr$+5",
+            "not-a-function$3",
+        ] {
+            assert!(
+                !dispatcher.resolves("wasi:cli/stderr@0.2.6", function),
+                "{function}"
+            );
+            let err = dispatcher
+                .dispatch_core("wasi:cli/stderr@0.2.6", function, &[], None)
+                .expect_err("a refused name must not dispatch");
+            assert_eq!(err.message, "Unknown WASI function");
+        }
+        // The suffix does not move a function to another interface.
+        assert!(!dispatcher.resolves("wasi:cli/stdout@0.2.6", "get-stderr$5"));
         Ok(())
     }
 

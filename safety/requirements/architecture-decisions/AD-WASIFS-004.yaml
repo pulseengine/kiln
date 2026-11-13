@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: AD-WASIFS-004
+    type: design-decision
+    title: "A trailing slash or '/.' on a guest path that names a file returns not-directory; the slash is never passed to the host OS"
+    status: implemented
+    release: v0.8.0
+    description: "Implements SR-96 (PR #650, main fda1935d). dispatch_core checks trailing_slash_on_file(guest_path, resolved) after the sandbox resolver in open-at, stat-at, unlink-file-at and rename-at (old and new side): when the guest path ends in '/' or '/.' and symlink_metadata of the resolved path is a regular file, the call returns error-code not-directory (24). create-directory-at keeps exist. The resolvers rebuild the path as real_parent.join(file_name), which drops the slash, so containment is unchanged; the check restores the POSIX meaning of the slash without handing it to the OS."
+    tags: [kiln-wasi, wasi-filesystem, sandbox, cve-followup]
+    fields:
+      alternatives: "(1) Pass the guest's trailing slash through to the host call: on macOS, rmdir and rename of 'link/' follow the symlink target, which the no-follow resolvers exist to prevent. (2) Leave 'file/' accepted: diverges from POSIX and wasmtime (not-directory), and a guest that relies on the error sees success."
+      rationale: "The resolver already decides containment from the components; a separate post-resolution check keeps the sandbox gate unchanged and makes the error a property of the guest's spelling, matching wasmtime."
+    links:
+      - type: satisfies
+        target: SR-96
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-12T21:30:00Z

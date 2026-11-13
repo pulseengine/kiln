@@ -3,7 +3,7 @@ artifacts:
   - id: SR-94
     type: requirement
     title: WASI descriptor stat and stat-at report the file's real link count and timestamps, or none
-    status: approved
+    status: verified
     release: v0.8.0
     description: "Wasmtime advisory review, 2026-11-05; maintainer chose it for v0.8.0 on 2026-11-06. MEASURED on main 2b8e4b81: the core-ABI stat handler (kiln-wasi/src/dispatcher.rs:3292-3331, WasiFn::DescriptorStat) returns link-count 1 and zero for data-access, data-modification and status-change timestamps, whatever the file. A guest therefore sees every file as last modified at the epoch, which breaks build tools and caches that compare mtimes, and it cannot tell a hard-linked file. REQUIRED: stat and stat-at fill link-count from the host metadata, and each timestamp with the host value as a WASI datetime (seconds, nanoseconds) in the option<datetime> layout the canonical ABI defines; a timestamp the host cannot provide is none, never zero. Verified by: a component that stats a file whose mtime was set to a known instant gets that instant on kiln and on wasmtime; a file with two hard links reports link-count 2."
     tags: [wasi, filesystem, stat, cve-followup]

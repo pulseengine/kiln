@@ -46,3 +46,51 @@ artifacts:
     provenance:
       created-by: ai
       timestamp: 2026-11-08T06:53:45Z
+
+  - id: VER-SR96-001
+    type: verification
+    title: "SR-96: 32 trailing-slash tests on dispatch_core pass on main; 'file/' returns not-directory"
+    status: verified
+    release: v0.8.0
+    description: "Main push fda1935d (PR #650, head 3abfde8f); all 9 required checks passed on the PR. Rust CI run 43293153704 completed success; Core Tests job 131444372732 logs 32 'ok' for dispatcher::tests::sr96::* and none failed or ignored. The tests cover open-at, stat-at, unlink-file-at, remove-directory-at, create-directory-at, rename-at and symlink-at with 'link/', 'link/.', 'dir/../link/' and 'file/', link being a symlink to a directory outside the preopen. Fail-before (supervisor, local): with the tests but without the fix, 27 passed and 5 failed (sr96_open_at_file_slash, sr96_stat_at_file_slash, sr96_unlink_file_at_file_slash, sr96_rename_at_old_file_slash, sr96_rename_at_new_file_slash; rc 101). Scope: the tests assert dispatch_core's return values, not guest memory; until SR-94 (#655) the stat-at error code was written at retptr+4 instead of +8."
+    fields:
+      method: test
+    links:
+      - type: verifies
+        target: SR-96
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-12T21:30:00Z
+
+  - id: VER-SR94-001
+    type: verification
+    title: "SR-94: stat/stat-at report real link count and timestamps, lowered at canonical offsets (unit evidence, main CI green)"
+    status: verified
+    release: v0.8.0
+    description: "Maintainer decision 2026-11-12: SR-94 is verified on unit evidence; the kiln-vs-wasmtime component check is SR-101. Main push 06c21cf6 (PR #655, head 6027db1b); all 9 required checks passed on the PR. Rust CI run 43308001979 completed success; Core Tests job 131496277596 logs ok for dispatcher::tests::sr94::{stat_and_stat_at_report_the_real_hard_link_count, stat_and_stat_at_report_the_host_timestamps, a_pre_epoch_timestamp_is_none_not_zero} and wasip2_host::sr72_lowering_tests::{stat_result_uses_the_canonical_descriptor_stat_layout, stat_result_lowering_fails_loud_on_bad_core_values}. Fail-before (on main fda1935d, agent run, output in PR #655): the layout test read type 2 at +8 (the low byte of link-count), and all three sr94 tests failed on 'access discriminant Some(I64(0))'. Supervisor re-run on the PR head: kiln-runtime wasip2_host 7/7, kiln-wasi lib 151/151; cargo check -p kiln-wasi --target x86_64-pc-windows-msvc rc 0. Reference values from wasmtime 50.0.1, the varve covalent layer 2026.11.1 build (re-run 2026-11-13; first measured on a standalone 42.0.1), on the same fixture (12 field probes, 12/12 pass; probes and generator in /Volumes/Home/kiln-e2e/sr94/gen.sh): link-count 2 through a hard link, mtime 1700000000.000000000, 'f/' -> not-directory at +8. Not covered: the Windows branch (link-count 1) has no test run on Windows."
+    fields:
+      method: test
+    links:
+      - type: verifies
+        target: SR-94
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-13T07:00:00Z
+
+  - id: VER-SR91-001
+    type: verification
+    title: "SR-91: clock pollables honour their deadlines in ready, block and poll (unit evidence, main CI green)"
+    status: verified
+    release: v0.8.0
+    description: "Maintainer decision 2026-11-13: SR-91 is verified on unit evidence; the kiln-vs-wasmtime sleep component is part of SR-101. Main push 0715bf1f (PR #656, head d546e880); all 9 required checks passed on the PR. Rust CI run 43368945140 completed success; Core Tests job 131699934360 logs ok for all 9 dispatcher::tests::sr91 tests: subscribe_duration_ready_false_then_block_waits_then_ready (block >= 50 ms), subscribe_instant_future_and_past, poll_waits_for_the_earliest_deadline (returns [1] after >= 40 ms and < 150 ms with a 200 ms sibling), poll_returns_all_ready_indices_in_input_order, poll_without_result_allocation_fails_loud, stream_subscribe_is_a_real_always_ready_pollable, unknown_pollable_handle_is_an_error, dropped_pollable_is_gone, empty_poll_list_is_an_error. Fail-before (on main 06c21cf6, agent run, output in PR #656): 0 passed, 9 failed (subscribe/ready 'Unknown WASI function' 1006, block on an unknown handle succeeded, poll wrote a (0,0) list). Supervisor re-run on the PR head: the sr91 module 9/9 in 3 consecutive runs, kiln-wasi lib 160/160."
+    fields:
+      method: test
+    links:
+      - type: verifies
+        target: SR-91
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-13T07:30:00Z
