@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: AD-P3STUB-001
+    type: design-decision
+    title: "Unbacked P3 async built-ins refuse, naming themselves, on the interpreter and kiln-builtins paths until kiln-async backs them"
+    status: implemented
+    release: v0.8.0
+    description: "Implements SR-83 (PR #659, main fb2313c9). Interpreter (kiln-runtime/src/stackless/engine.rs): [waitable-set-poll], [waitable-join], [waitable-set-drop] and [task-cancel] (plain or $N-suffixed) return a not-implemented trap with one static message per built-in naming it, instead of 0 or Ok; [context-set-N] traps on a missing or non-i32 argument (message names [context-set-N], not the slot). context-get, context-set with an i32 and task-return are unchanged. [waitable-set-new] keeps allocating distinct handles (real work), and every operation that could use one refuses. kiln-builtins (no_std, synth path): __p3_waitable_set_poll, __p3_waitable_set_drop, __p3_waitable_join and __p3_task_cancel write a message naming themselves to stderr through the registered platform and call the platform's exit with code 70; with no platform registered they spin, as the crate's panic handler does (that crate has no other error channel)."
+    tags: [p3, async, fail-loud, kiln-builtins]
+    fields:
+      alternatives: "(1) Keep the no-ops until SR-84: a program observes 'no event ready' forever instead of an error (hid meld#555). (2) Implement the built-ins now: that is SR-84's scope (kiln-async backing)."
+      rationale: "The project's fail-loud rule: a built-in that cannot do its job says so, by name, on both execution paths. Measured on p3_cli (wasm-component-examples v0.5.0, fused): none of the four is called at runtime on the no-args, fibonacci, prime and transform paths, so SR-83 does not break that fixture."
+    links:
+      - type: satisfies
+        target: SR-83
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-13T12:00:00Z
