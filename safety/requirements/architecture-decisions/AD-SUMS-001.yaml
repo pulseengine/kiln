@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: AD-SUMS-001
+    type: design-decision
+    title: "build-env.txt is written before SHA256SUMS.txt, and the release job fails if any published asset other than the signature set is unsummed"
+    status: implemented
+    release: v0.8.0
+    description: "Implements SR-85 (PR #652, main 8fff449f). In .github/workflows/release.yml (create-release job), 'Install cosign' and 'Capture build environment' now run before 'Generate SHA256 checksums', which also asserts that ./build-env.txt is listed. A new step after signing, 'Every release asset is covered by SHA256SUMS (SR-85)', fails the job with an ::error:: per file if any regular file in release-assets/ other than SHA256SUMS.txt, .sig, .pem and .cosign.bundle is missing from SHA256SUMS.txt. The step runs before the upload."
+    tags: [release, supply-chain, cosign, issue-610]
+    fields:
+      alternatives: "(1) Sign build-env.txt separately: a second signature for consumers to check, and the gap reappears for the next asset someone adds. (2) Drop build-env.txt from the release: loses the toolchain provenance the file exists for."
+      rationale: "One signed sums file covering every asset is the property consumers check with 'cosign verify-blob' then 'sha256sum -c'. A guard that fails closed on any unsummed asset keeps that true when assets are added, not only for build-env.txt."
+    links:
+      - type: satisfies
+        target: SR-85
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-12T21:35:00Z
