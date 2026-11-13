@@ -1230,6 +1230,60 @@ impl WasiDispatcher {
         }
     }
 
+    /// Write a guest-owned `list<u8>`/`string` payload into the engine-supplied
+    /// cabi_realloc'd buffer and return its `(ptr, len)` for the return-area header.
+    ///
+    /// The guest owns and frees the returned payload, so it must never be placed next to
+    /// the return area. Fails loud when the engine supplied no buffer or the payload does
+    /// not fit (a payload is refused, never truncated). SR-38.
+    #[cfg(feature = "std")]
+    fn write_owned_return(
+        mem: &dyn MemoryAccessor,
+        read_buf: Option<(u32, u32)>,
+        what: &'static str,
+        payload: &[u8],
+    ) -> Result<(u32, u32)> {
+        let (buf_ptr, buf_size) = read_buf.ok_or_else(|| Error::runtime_error(what))?;
+        if payload.len() > buf_size as usize {
+            return Err(Error::wasi_resource_limit(
+                "returned payload exceeds the cabi_realloc'd buffer",
+            ));
+        }
+        let len = u32::try_from(payload.len())
+            .map_err(|_| Error::wasi_resource_limit("returned payload exceeds u32"))?;
+        mem.write_bytes(buf_ptr, payload)?;
+        Ok((buf_ptr, len))
+    }
+
+    /// Generate `len` random bytes into the engine-supplied buffer and write the
+    /// `(ptr, len)` list header at `retptr`. A request over 1 MiB is refused. SR-38.
+    #[cfg(all(feature = "wasi-random", feature = "std"))]
+    fn write_random_list(
+        mem: Option<&dyn MemoryAccessor>,
+        read_buf: Option<(u32, u32)>,
+        what: &'static str,
+        len: usize,
+        retptr: u32,
+    ) -> Result<()> {
+        use kiln_platform::random::PlatformRandom;
+
+        /// WASI random requests above this are refused (the engine buffer is capped here).
+        const MAX_RANDOM_BYTES: usize = 1024 * 1024;
+        if len > MAX_RANDOM_BYTES {
+            return Err(Error::wasi_resource_limit(
+                "random bytes request exceeds the 1 MiB limit",
+            ));
+        }
+        let mut bytes = vec![0u8; len];
+        PlatformRandom::get_secure_bytes(&mut bytes)
+            .map_err(|_| Error::wasi_capability_unavailable("Random not available"))?;
+        let mem = mem.ok_or_else(|| Error::wasi_invalid_argument("random bytes: no memory"))?;
+        let (ptr, len) = Self::write_owned_return(mem, read_buf, what, &bytes)?;
+        mem.write_bytes(retptr, &ptr.to_le_bytes())?;
+        mem.write_bytes(retptr + 4, &len.to_le_bytes())?;
+        Ok(())
+    }
+
     /// `filesize` (u64) core argument at `idx`.
     #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
     fn core_u64(
@@ -2685,8 +2739,6 @@ impl WasiDispatcher {
             // ================================================================
             #[cfg(feature = "wasi-random")]
             WasiFn::GetRandomBytes => {
-                use kiln_platform::random::PlatformRandom;
-
                 // Check random capability
                 if !self.capabilities.random.secure_random {
                     return Err(Error::wasi_permission_denied("Secure random access denied"));
@@ -2720,32 +2772,20 @@ impl WasiDispatcher {
                     ));
                 };
 
-                // Limit length to prevent OOM (WASI spec allows large values but we cap)
-                let len = len.min(1024 * 1024); // Cap at 1MB
+                // The list<u8> is owned and freed by the guest: it goes in the fresh
+                // cabi_realloc'd buffer the engine allocated (read_buf_alloc), never
+                // next to the return area. Requests over 1 MiB are refused. SR-38.
+                let read_buf = self.read_buf_alloc.take();
+                Self::write_random_list(
+                    memory,
+                    read_buf,
+                    "get-random-bytes requires a cabi_realloc'd buffer (read_buf_alloc not set)",
+                    len,
+                    retptr,
+                )?;
 
-                if let Some(mem) = memory {
-                    // Generate random bytes
-                    let mut bytes = vec![0u8; len];
-                    PlatformRandom::get_secure_bytes(&mut bytes)
-                        .map_err(|_| Error::wasi_capability_unavailable("Random not available"))?;
-
-                    // Allocate and write bytes to memory
-                    // For now, write at a known offset after retptr and return (ptr, len)
-                    let data_ptr = retptr + 8; // After the (ptr, len) tuple
-                    mem.write_bytes(data_ptr, &bytes)?;
-
-                    // Write (ptr, len) to retptr
-                    mem.write_bytes(retptr, &data_ptr.to_le_bytes())?;
-                    mem.write_bytes(retptr + 4, &(len as u32).to_le_bytes())?;
-
-                    #[cfg(feature = "tracing")]
-                    trace!(
-                        len = len,
-                        data_ptr = data_ptr,
-                        retptr = retptr,
-                        "get-random-bytes complete"
-                    );
-                }
+                #[cfg(feature = "tracing")]
+                trace!(len = len, retptr = retptr, "get-random-bytes complete");
 
                 Ok(vec![])
             },
@@ -3684,6 +3724,9 @@ impl WasiDispatcher {
                 #[cfg(feature = "std")]
                 {
                     let cwd_opt = std::env::current_dir().ok();
+                    // The string is owned and freed by the guest: it goes in the engine's
+                    // cabi_realloc'd buffer, never after the return area. SR-38.
+                    let read_buf = self.read_buf_alloc.take();
                     if let Some(mem) = memory {
                         let retptr = match args.first() {
                             Some(CoreValue::I32(p)) => *p as u32,
@@ -3692,13 +3735,16 @@ impl WasiDispatcher {
                         if let Some(cwd) = cwd_opt {
                             let cwd_str = cwd.to_string_lossy();
                             let bytes = cwd_str.as_bytes();
-                            // Write string data after retptr area
-                            let data_ptr = retptr + 12;
-                            mem.write_bytes(data_ptr, bytes)?;
+                            let (data_ptr, len) = Self::write_owned_return(
+                                mem,
+                                read_buf,
+                                "initial-cwd requires a cabi_realloc'd buffer (read_buf_alloc not set)",
+                                bytes,
+                            )?;
                             // Write Some discriminant (1), ptr, len
                             mem.write_bytes(retptr, &1u32.to_le_bytes())?;
                             mem.write_bytes(retptr + 4, &data_ptr.to_le_bytes())?;
-                            mem.write_bytes(retptr + 8, &(bytes.len() as u32).to_le_bytes())?;
+                            mem.write_bytes(retptr + 8, &len.to_le_bytes())?;
                         } else {
                             // Write None discriminant (0)
                             mem.write_bytes(retptr, &0u32.to_le_bytes())?;
@@ -3722,6 +3768,9 @@ impl WasiDispatcher {
             WasiFn::ErrorToDebugString => {
                 // Returns a debug string for the error resource
                 // Core lowering: string = (ptr, len) via retptr
+                // The string is owned and freed by the guest: it goes in the engine's
+                // cabi_realloc'd buffer, never after the return area. SR-38.
+                let read_buf = self.read_buf_alloc.take();
                 if let Some(mem) = memory {
                     let retptr = match args.get(1) {
                         Some(CoreValue::I32(p)) => *p as u32,
@@ -3731,10 +3780,14 @@ impl WasiDispatcher {
                         },
                     };
                     let debug_str = b"error";
-                    let data_ptr = retptr + 8;
-                    mem.write_bytes(data_ptr, debug_str)?;
+                    let (data_ptr, len) = Self::write_owned_return(
+                        mem,
+                        read_buf,
+                        "error.to-debug-string requires a cabi_realloc'd buffer (read_buf_alloc not set)",
+                        debug_str,
+                    )?;
                     mem.write_bytes(retptr, &data_ptr.to_le_bytes())?;
-                    mem.write_bytes(retptr + 4, &(debug_str.len() as u32).to_le_bytes())?;
+                    mem.write_bytes(retptr + 4, &len.to_le_bytes())?;
                     Ok(vec![])
                 } else {
                     Ok(vec![CoreValue::I32(0), CoreValue::I32(0)])
@@ -3760,8 +3813,6 @@ impl WasiDispatcher {
             // ================================================================
             #[cfg(feature = "wasi-random")]
             WasiFn::GetInsecureRandomBytes => {
-                use kiln_platform::random::PlatformRandom;
-
                 if !self.capabilities.random.pseudo_random {
                     return Err(Error::wasi_permission_denied("Pseudo-random access denied"));
                 }
@@ -3784,16 +3835,15 @@ impl WasiDispatcher {
                         ));
                     },
                 };
-                let len = len.min(1024 * 1024);
-                let mut bytes = vec![0u8; len];
-                PlatformRandom::get_secure_bytes(&mut bytes)
-                    .map_err(|_| Error::wasi_capability_unavailable("Random not available"))?;
-                if let Some(mem) = memory {
-                    let data_ptr = retptr + 8;
-                    mem.write_bytes(data_ptr, &bytes)?;
-                    mem.write_bytes(retptr, &data_ptr.to_le_bytes())?;
-                    mem.write_bytes(retptr + 4, &(len as u32).to_le_bytes())?;
-                }
+                // Guest-owned list<u8>: written into the engine's cabi_realloc'd buffer. SR-38.
+                let read_buf = self.read_buf_alloc.take();
+                Self::write_random_list(
+                    memory,
+                    read_buf,
+                    "get-insecure-random-bytes requires a cabi_realloc'd buffer (read_buf_alloc not set)",
+                    len,
+                    retptr,
+                )?;
                 Ok(vec![])
             },
 
@@ -4331,6 +4381,365 @@ mod tests {
             res.is_err(),
             "must fail loud when cabi_realloc pre-allocation is missing"
         );
+        Ok(())
+    }
+
+    /// Fill `[start, start + len)` with a sentinel byte, for asserting that a host call
+    /// never writes into guest memory it was not handed.
+    #[cfg(feature = "std")]
+    fn fill_sentinel(
+        mem: &kiln_foundation::traits::SliceMemory,
+        start: u32,
+        len: usize,
+    ) -> Result<()> {
+        mem.write_bytes(start, &vec![0xAAu8; len])?;
+        Ok(())
+    }
+
+    /// SR-38: get-random-bytes writes its list<u8> into the engine-supplied
+    /// cabi_realloc'd buffer, never next to the return area.
+    // rivet: verifies SR-38
+    #[cfg(all(feature = "wasi-random", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn get_random_bytes_returns_in_owned_buffer_not_after_retptr() -> Result<()> {
+        use kiln_foundation::HostImportHandler;
+        use kiln_foundation::traits::SliceMemory;
+        MemoryInitializer::ensure_initialized()?;
+        let mut dispatcher = WasiDispatcher::with_defaults()?;
+        let mem = SliceMemory::with_size(0x10000);
+        let retptr = 0x1000u32;
+        let buf_ptr = 0x4000u32;
+        fill_sentinel(&mem, retptr + 8, 64)?;
+        fill_sentinel(&mem, buf_ptr, 64)?;
+
+        dispatcher.set_read_buffer_allocation(buf_ptr, 32);
+        let res = dispatcher.dispatch_core(
+            "wasi:random/random",
+            "get-random-bytes",
+            &[
+                kiln_foundation::values::Value::I64(32),
+                kiln_foundation::values::Value::I32(retptr as i32),
+            ],
+            Some(&mem),
+        )?;
+        assert!(
+            res.is_empty(),
+            "get-random-bytes returns void (writes via retptr)"
+        );
+
+        let mut hdr = [0u8; 8];
+        mem.read_bytes(retptr, &mut hdr)?;
+        assert_eq!(
+            u32::from_le_bytes([hdr[0], hdr[1], hdr[2], hdr[3]]),
+            buf_ptr
+        );
+        assert_eq!(u32::from_le_bytes([hdr[4], hdr[5], hdr[6], hdr[7]]), 32);
+
+        let mut after = [0u8; 64];
+        mem.read_bytes(retptr + 8, &mut after)?;
+        assert!(
+            after.iter().all(|b| *b == 0xAA),
+            "must NOT write past the return area"
+        );
+        // 32 random bytes replaced the sentinel at the buffer (all-0xAA is 2^-256).
+        let mut got = [0u8; 32];
+        mem.read_bytes(buf_ptr, &mut got)?;
+        assert!(
+            got.iter().any(|b| *b != 0xAA),
+            "random bytes written into the buffer"
+        );
+        let mut tail = [0u8; 32];
+        mem.read_bytes(buf_ptr + 32, &mut tail)?;
+        assert!(tail.iter().all(|b| *b == 0xAA), "exactly len bytes written");
+        Ok(())
+    }
+
+    /// SR-38: FAIL-LOUD — get-random-bytes without an engine-supplied buffer errors.
+    // rivet: verifies SR-38
+    #[cfg(all(feature = "wasi-random", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn get_random_bytes_fails_loud_without_buffer() -> Result<()> {
+        use kiln_foundation::traits::SliceMemory;
+        MemoryInitializer::ensure_initialized()?;
+        let mut dispatcher = WasiDispatcher::with_defaults()?;
+        let mem = SliceMemory::with_size(0x10000);
+        let res = dispatcher.dispatch_core(
+            "wasi:random/random",
+            "get-random-bytes",
+            &[
+                kiln_foundation::values::Value::I64(16),
+                kiln_foundation::values::Value::I32(0x1000),
+            ],
+            Some(&mem),
+        );
+        assert!(res.is_err(), "must fail loud when no buffer was allocated");
+        Ok(())
+    }
+
+    /// SR-38: get-random-bytes refuses (rather than truncates) a request over 1 MiB,
+    /// and a request larger than the allocated buffer.
+    // rivet: verifies SR-38
+    #[cfg(all(feature = "wasi-random", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn get_random_bytes_refuses_oversized_requests() -> Result<()> {
+        use kiln_foundation::HostImportHandler;
+        use kiln_foundation::traits::SliceMemory;
+        MemoryInitializer::ensure_initialized()?;
+        let mut dispatcher = WasiDispatcher::with_defaults()?;
+        let mem = SliceMemory::with_size(0x10000);
+
+        dispatcher.set_read_buffer_allocation(0x4000, 1 << 20);
+        let res = dispatcher.dispatch_core(
+            "wasi:random/random",
+            "get-random-bytes",
+            &[
+                kiln_foundation::values::Value::I64((1 << 20) + 1),
+                kiln_foundation::values::Value::I32(0x1000),
+            ],
+            Some(&mem),
+        );
+        assert!(res.is_err(), "len > 1 MiB must be refused, not truncated");
+
+        dispatcher.set_read_buffer_allocation(0x4000, 8);
+        let res = dispatcher.dispatch_core(
+            "wasi:random/random",
+            "get-random-bytes",
+            &[
+                kiln_foundation::values::Value::I64(16),
+                kiln_foundation::values::Value::I32(0x1000),
+            ],
+            Some(&mem),
+        );
+        assert!(res.is_err(), "len > allocated buffer must be refused");
+        Ok(())
+    }
+
+    /// SR-38: get-insecure-random-bytes writes into the engine-supplied buffer.
+    // rivet: verifies SR-38
+    #[cfg(all(feature = "wasi-random", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn get_insecure_random_bytes_returns_in_owned_buffer_not_after_retptr() -> Result<()> {
+        use kiln_foundation::HostImportHandler;
+        use kiln_foundation::traits::SliceMemory;
+        MemoryInitializer::ensure_initialized()?;
+        let mut dispatcher = WasiDispatcher::with_defaults()?;
+        let mem = SliceMemory::with_size(0x10000);
+        let retptr = 0x1000u32;
+        let buf_ptr = 0x4000u32;
+        fill_sentinel(&mem, retptr + 8, 64)?;
+        fill_sentinel(&mem, buf_ptr, 64)?;
+
+        dispatcher.set_read_buffer_allocation(buf_ptr, 32);
+        dispatcher.dispatch_core(
+            "wasi:random/insecure",
+            "get-insecure-random-bytes",
+            &[
+                kiln_foundation::values::Value::I64(32),
+                kiln_foundation::values::Value::I32(retptr as i32),
+            ],
+            Some(&mem),
+        )?;
+
+        let mut hdr = [0u8; 8];
+        mem.read_bytes(retptr, &mut hdr)?;
+        assert_eq!(
+            u32::from_le_bytes([hdr[0], hdr[1], hdr[2], hdr[3]]),
+            buf_ptr
+        );
+        assert_eq!(u32::from_le_bytes([hdr[4], hdr[5], hdr[6], hdr[7]]), 32);
+        let mut after = [0u8; 64];
+        mem.read_bytes(retptr + 8, &mut after)?;
+        assert!(
+            after.iter().all(|b| *b == 0xAA),
+            "must NOT write past the return area"
+        );
+        let mut got = [0u8; 32];
+        mem.read_bytes(buf_ptr, &mut got)?;
+        assert!(
+            got.iter().any(|b| *b != 0xAA),
+            "random bytes written into the buffer"
+        );
+        Ok(())
+    }
+
+    /// SR-38: FAIL-LOUD — get-insecure-random-bytes without a buffer errors.
+    // rivet: verifies SR-38
+    #[cfg(all(feature = "wasi-random", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn get_insecure_random_bytes_fails_loud_without_buffer() -> Result<()> {
+        use kiln_foundation::traits::SliceMemory;
+        MemoryInitializer::ensure_initialized()?;
+        let mut dispatcher = WasiDispatcher::with_defaults()?;
+        let mem = SliceMemory::with_size(0x10000);
+        let res = dispatcher.dispatch_core(
+            "wasi:random/insecure",
+            "get-insecure-random-bytes",
+            &[
+                kiln_foundation::values::Value::I64(16),
+                kiln_foundation::values::Value::I32(0x1000),
+            ],
+            Some(&mem),
+        );
+        assert!(res.is_err(), "must fail loud when no buffer was allocated");
+        Ok(())
+    }
+
+    /// SR-38: initial-cwd writes the path into the engine-supplied buffer and the
+    /// option<string> header at retptr; nothing past the 12-byte return area.
+    // rivet: verifies SR-38
+    #[cfg(feature = "std")]
+    #[serial_test::serial]
+    #[test]
+    fn initial_cwd_returns_in_owned_buffer_not_after_retptr() -> Result<()> {
+        use kiln_foundation::HostImportHandler;
+        use kiln_foundation::traits::SliceMemory;
+        MemoryInitializer::ensure_initialized()?;
+        let mut dispatcher = WasiDispatcher::with_defaults()?;
+        let mem = SliceMemory::with_size(0x10000);
+        let retptr = 0x1000u32;
+        let buf_ptr = 0x4000u32;
+        fill_sentinel(&mem, retptr + 12, 64)?;
+
+        dispatcher.set_read_buffer_allocation(buf_ptr, 4096);
+        let res = dispatcher.dispatch_core(
+            "wasi:cli/environment",
+            "initial-cwd",
+            &[kiln_foundation::values::Value::I32(retptr as i32)],
+            Some(&mem),
+        )?;
+        assert!(
+            res.is_empty(),
+            "initial-cwd returns void (writes via retptr)"
+        );
+
+        let mut hdr = [0u8; 12];
+        mem.read_bytes(retptr, &mut hdr)?;
+        assert_eq!(
+            u32::from_le_bytes([hdr[0], hdr[1], hdr[2], hdr[3]]),
+            1,
+            "some"
+        );
+        assert_eq!(
+            u32::from_le_bytes([hdr[4], hdr[5], hdr[6], hdr[7]]),
+            buf_ptr
+        );
+        let len = u32::from_le_bytes([hdr[8], hdr[9], hdr[10], hdr[11]]) as usize;
+        let mut got = vec![0u8; len];
+        mem.read_bytes(buf_ptr, &mut got)?;
+        let cwd = std::env::current_dir().unwrap();
+        assert_eq!(
+            got,
+            cwd.to_string_lossy().as_bytes(),
+            "cwd bytes in the buffer"
+        );
+
+        let mut after = [0u8; 64];
+        mem.read_bytes(retptr + 12, &mut after)?;
+        assert!(
+            after.iter().all(|b| *b == 0xAA),
+            "must NOT write past the return area"
+        );
+        Ok(())
+    }
+
+    /// SR-38: FAIL-LOUD — initial-cwd without a buffer errors; a buffer too small for
+    /// the path is refused rather than truncated.
+    // rivet: verifies SR-38
+    #[cfg(feature = "std")]
+    #[serial_test::serial]
+    #[test]
+    fn initial_cwd_fails_loud_without_or_with_undersized_buffer() -> Result<()> {
+        use kiln_foundation::HostImportHandler;
+        use kiln_foundation::traits::SliceMemory;
+        MemoryInitializer::ensure_initialized()?;
+        let mut dispatcher = WasiDispatcher::with_defaults()?;
+        let mem = SliceMemory::with_size(0x10000);
+        let args = [kiln_foundation::values::Value::I32(0x1000)];
+        let res =
+            dispatcher.dispatch_core("wasi:cli/environment", "initial-cwd", &args, Some(&mem));
+        assert!(res.is_err(), "must fail loud when no buffer was allocated");
+
+        dispatcher.set_read_buffer_allocation(0x4000, 1);
+        let res =
+            dispatcher.dispatch_core("wasi:cli/environment", "initial-cwd", &args, Some(&mem));
+        assert!(
+            res.is_err(),
+            "a path longer than the buffer must be refused"
+        );
+        Ok(())
+    }
+
+    /// SR-38: error.to-debug-string writes into the engine-supplied buffer.
+    // rivet: verifies SR-38
+    #[cfg(feature = "std")]
+    #[serial_test::serial]
+    #[test]
+    fn error_to_debug_string_returns_in_owned_buffer_not_after_retptr() -> Result<()> {
+        use kiln_foundation::HostImportHandler;
+        use kiln_foundation::traits::SliceMemory;
+        MemoryInitializer::ensure_initialized()?;
+        let mut dispatcher = WasiDispatcher::with_defaults()?;
+        let mem = SliceMemory::with_size(0x10000);
+        let retptr = 0x1000u32;
+        let buf_ptr = 0x4000u32;
+        fill_sentinel(&mem, retptr + 8, 64)?;
+
+        dispatcher.set_read_buffer_allocation(buf_ptr, 256);
+        dispatcher.dispatch_core(
+            "wasi:io/error",
+            "[method]error.to-debug-string",
+            &[
+                kiln_foundation::values::Value::I32(1),
+                kiln_foundation::values::Value::I32(retptr as i32),
+            ],
+            Some(&mem),
+        )?;
+
+        let mut hdr = [0u8; 8];
+        mem.read_bytes(retptr, &mut hdr)?;
+        assert_eq!(
+            u32::from_le_bytes([hdr[0], hdr[1], hdr[2], hdr[3]]),
+            buf_ptr
+        );
+        let len = u32::from_le_bytes([hdr[4], hdr[5], hdr[6], hdr[7]]) as usize;
+        assert_eq!(len, 5);
+        let mut got = vec![0u8; len];
+        mem.read_bytes(buf_ptr, &mut got)?;
+        assert_eq!(&got, b"error");
+        let mut after = [0u8; 64];
+        mem.read_bytes(retptr + 8, &mut after)?;
+        assert!(
+            after.iter().all(|b| *b == 0xAA),
+            "must NOT write past the return area"
+        );
+        Ok(())
+    }
+
+    /// SR-38: FAIL-LOUD — error.to-debug-string without a buffer errors.
+    // rivet: verifies SR-38
+    #[cfg(feature = "std")]
+    #[serial_test::serial]
+    #[test]
+    fn error_to_debug_string_fails_loud_without_buffer() -> Result<()> {
+        use kiln_foundation::traits::SliceMemory;
+        MemoryInitializer::ensure_initialized()?;
+        let mut dispatcher = WasiDispatcher::with_defaults()?;
+        let mem = SliceMemory::with_size(0x10000);
+        let res = dispatcher.dispatch_core(
+            "wasi:io/error",
+            "[method]error.to-debug-string",
+            &[
+                kiln_foundation::values::Value::I32(1),
+                kiln_foundation::values::Value::I32(0x1000),
+            ],
+            Some(&mem),
+        );
+        assert!(res.is_err(), "must fail loud when no buffer was allocated");
         Ok(())
     }
 
