@@ -1280,9 +1280,11 @@ impl StacklessEngine {
                 match threads.pick_next(owner, yielding, target)? {
                     None => Ok(Resumption::Deliver(not_cancelled)),
                     Some(next) => {
+                        // The parked frames stay counted in
+                        // call_frames_count: the depth limit covers the
+                        // task's threads together, so parking deep stacks
+                        // cannot grow host memory without bound.
                         let frames = core::mem::take(pending_frames);
-                        self.call_frames_count =
-                            self.call_frames_count.saturating_sub(frames.len());
                         let parked = Continuation::Resume {
                             frames,
                             results: not_cancelled,
@@ -1296,16 +1298,15 @@ impl StacklessEngine {
     }
 
     /// Make `cont` the running thread's state: its parked frames become the
-    /// pending stack (counted toward the call depth again), or its start
-    /// function is to be called on an empty stack.
+    /// pending stack (they stayed counted toward the call depth while
+    /// parked), or its start function is to be called on an empty stack.
     fn install_thread(
-        &mut self,
+        &self,
         cont: Continuation<SuspendedFrame>,
         pending_frames: &mut Vec<SuspendedFrame>,
     ) -> Resumption {
         match cont {
             Continuation::Resume { frames, results } => {
-                self.call_frames_count += frames.len();
                 *pending_frames = frames;
                 Resumption::Deliver(results)
             },
@@ -2155,6 +2156,33 @@ impl StacklessEngine {
         func_idx: usize,
         args: Vec<Value>,
     ) -> Result<Vec<Value>> {
+        // SR-82: this call is one synchronous task. Its cooperative threads
+        // exist from the first thread built-in until the call ends. Frames of
+        // parked threads stay counted in call_frames_count while the task
+        // runs (the depth limit covers all its threads), so they are uncounted
+        // here, whichever way the task ended.
+        let mut threads: Option<CoopScheduler<SuspendedFrame>> = None;
+        let result = self.run_task(instance_id, func_idx, args, &mut threads);
+        if let Some(sched) = threads {
+            self.call_frames_count =
+                self.call_frames_count.checked_sub(sched.parked_frames()).ok_or_else(|| {
+                    kiln_error::Error::runtime_error(
+                        "call depth accounting underflow when a task with P3 threads ended",
+                    )
+                })?;
+        }
+        result
+    }
+
+    /// The trampoline of [`Self::execute`]; `threads` is the task's
+    /// cooperative-thread scheduler, created by the first thread built-in.
+    fn run_task(
+        &mut self,
+        instance_id: usize,
+        func_idx: usize,
+        args: Vec<Value>,
+        threads: &mut Option<CoopScheduler<SuspendedFrame>>,
+    ) -> Result<Vec<Value>> {
         // Full call trampoline: handles TailCall, regular Call, and exception unwinding.
         // Instead of recursive Rust stack frames (which overflow in debug mode at ~50-100
         // levels due to the ~100-160KB frame size of execute_function_body), we maintain
@@ -2165,11 +2193,8 @@ impl StacklessEngine {
         let mut current_args = args;
         let mut pending_frames: Vec<SuspendedFrame> = Vec::new();
         let mut resume_state: Option<SuspendedFrame> = None;
-        // SR-82: this call is one synchronous task. Its cooperative threads
-        // exist from the first thread built-in until the implicit thread (the
-        // one running `func_idx`) returns. `pending_frames` is always the
-        // running thread's stack; the scheduler holds the others.
-        let mut threads: Option<CoopScheduler<SuspendedFrame>> = None;
+        // SR-82: `pending_frames` is always the running thread's stack;
+        // `threads` holds the others.
         // Results the trampoline produced itself (a thread built-in's), to be
         // handled like a callee's completion before any more code runs.
         let mut injected: Option<Vec<Value>> = None;
@@ -2240,11 +2265,17 @@ impl StacklessEngine {
                 }) => {
                     // Normalise: the thread is now exactly `pending_frames`,
                     // its innermost frame waiting for the built-in's results,
-                    // and the call depth counts those frames only.
+                    // and the call depth counts those frames (plus every
+                    // parked thread's), not the import itself.
                     match return_state {
                         Some(state) => pending_frames.push(state),
                         None => {
-                            self.call_frames_count = self.call_frames_count.saturating_sub(1);
+                            self.call_frames_count =
+                                self.call_frames_count.checked_sub(1).ok_or_else(|| {
+                                    kiln_error::Error::runtime_error(
+                                        "call depth accounting underflow at a P3 thread built-in",
+                                    )
+                                })?;
                         },
                     }
                     let sched = threads.get_or_insert_with(CoopScheduler::new);
@@ -2258,8 +2289,14 @@ impl StacklessEngine {
                     ) {
                         Ok(resumption) => step = Some(resumption),
                         Err(e) => {
-                            self.call_frames_count =
-                                self.call_frames_count.saturating_sub(pending_frames.len());
+                            self.call_frames_count = self
+                                .call_frames_count
+                                .checked_sub(pending_frames.len())
+                                .ok_or_else(|| {
+                                    kiln_error::Error::runtime_error(
+                                        "call depth accounting underflow at a P3 thread built-in",
+                                    )
+                                })?;
                             return Err(e);
                         },
                     }
@@ -2280,13 +2317,24 @@ impl StacklessEngine {
                     return_state,
                 }) => {
                     // Regular call - save caller state and set up callee
+                    // A saved caller moves from "running" (counted) onto the
+                    // pending stack; without one, the running frame is an
+                    // import redirect that is still counted.
+                    let running_counted = usize::from(return_state.is_none());
                     if let Some(state) = return_state {
                         pending_frames.push(state);
                     }
-                    // Check call depth for the new callee
+                    // Check call depth for the new callee. The count also
+                    // holds parked P3 threads' frames (SR-82), so it must be
+                    // unwound exactly: only this thread's frames come off.
                     if self.call_frames_count >= MAX_CALL_DEPTH {
-                        let depth = pending_frames.len() + 1;
-                        self.call_frames_count = self.call_frames_count.saturating_sub(depth);
+                        let depth = pending_frames.len() + running_counted;
+                        self.call_frames_count =
+                            self.call_frames_count.checked_sub(depth).ok_or_else(|| {
+                                kiln_error::Error::runtime_error(
+                                    "call depth accounting underflow at call stack exhaustion",
+                                )
+                            })?;
                         return Err(kiln_error::Error::runtime_trap("call stack exhausted"));
                     }
                     self.call_frames_count += 1;

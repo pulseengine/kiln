@@ -37,6 +37,12 @@ use kiln_foundation::values::Value;
 /// `Trap::CannotBlockSyncTask`).
 pub(crate) const CANNOT_BLOCK_SYNC_TASK: &str = "cannot block a synchronous task before returning";
 
+/// Most threads one task may have alive at once, the implicit thread
+/// included. A not-started thread costs no frames, so without this cap a
+/// spawn loop would grow host memory without bound; the call-depth limit
+/// (which counts parked frames, see the engine) bounds the rest.
+pub(crate) const MAX_COOP_THREADS: usize = 1024;
+
 /// One of the nine cooperative-thread built-ins.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ThreadOp {
@@ -158,6 +164,9 @@ pub(crate) struct CoopScheduler<F> {
     ready: VecDeque<ThreadId>,
     current: ThreadId,
     next_id: ThreadId,
+    /// Frames held by parked threads. The engine keeps them counted in its
+    /// call depth while parked and uncounts them when the task ends.
+    parked_frames: usize,
 }
 
 impl<F> CoopScheduler<F> {
@@ -178,7 +187,13 @@ impl<F> CoopScheduler<F> {
             ready: VecDeque::new(),
             current: IMPLICIT,
             next_id: IMPLICIT + 1,
+            parked_frames: 0,
         }
+    }
+
+    /// Frames held by threads that are parked (not running).
+    pub(crate) fn parked_frames(&self) -> usize {
+        self.parked_frames
     }
 
     /// Whether the running thread is the task's implicit thread.
@@ -229,6 +244,11 @@ impl<F> CoopScheduler<F> {
 
     /// `[thread-new-indirect-v0]`: a new, not started thread; returns its handle.
     pub(crate) fn new_thread(&mut self, owner: u32, start: Continuation<F>) -> Result<u32> {
+        if self.threads.len() >= MAX_COOP_THREADS {
+            return Err(Error::runtime_trap(
+                "P3 [thread-new-indirect-v0]: too many live threads in this task (limit 1024)",
+            ));
+        }
         let id = self.next_id;
         self.next_id = id
             .checked_add(1)
@@ -360,6 +380,11 @@ impl<F> CoopScheduler<F> {
         yielding: bool,
     ) -> Result<Continuation<F>> {
         let current = self.current;
+        if let Continuation::Resume { frames, .. } = &parked {
+            self.parked_frames = self.parked_frames.checked_add(frames.len()).ok_or_else(|| {
+                Error::runtime_error("P3 parked frame count overflow (scheduler bug)")
+            })?;
+        }
         let thread = self
             .threads
             .get_mut(&current)
@@ -381,6 +406,12 @@ impl<F> CoopScheduler<F> {
             .ok_or_else(|| Error::runtime_trap("P3 thread built-in: unknown thread handle"))?;
         match core::mem::replace(&mut thread.state, State::Running) {
             State::Ready(cont) | State::Suspended(cont) => {
+                if let Continuation::Resume { frames, .. } = &cont {
+                    self.parked_frames =
+                        self.parked_frames.checked_sub(frames.len()).ok_or_else(|| {
+                            Error::runtime_error("P3 parked frame count underflow (scheduler bug)")
+                        })?;
+                }
                 self.current = id;
                 Ok(cont)
             },
@@ -501,6 +532,39 @@ mod tests {
         assert!(s.pick_next(0, false, Target::Promote(t)).is_err());
         s.resume_later(0, t)?;
         assert!(s.pick_next(0, false, Target::Promote(t))?.is_some());
+        Ok(())
+    }
+
+    // rivet: verifies SR-82
+    #[test]
+    fn live_threads_are_capped() -> Result<()> {
+        let mut s = Sched::new();
+        // The implicit thread is one of the MAX_COOP_THREADS.
+        for _ in 1..MAX_COOP_THREADS {
+            s.new_thread(0, start())?;
+        }
+        let err = s.new_thread(0, start()).err();
+        assert!(err.is_some_and(|e| e.message().contains("too many live threads")));
+        Ok(())
+    }
+
+    // rivet: verifies SR-82
+    #[test]
+    fn parked_frames_are_counted_until_the_thread_runs_again() -> Result<()> {
+        let mut s = Sched::new();
+        let t = s.new_thread(0, start())?;
+        let next = s.pick_next(0, false, Target::Resume(t))?;
+        let three = Continuation::Resume {
+            frames: vec![1, 2, 3],
+            results: vec![Value::I32(0)],
+        };
+        s.switch_to(next.unwrap_or_default(), three, false)?;
+        assert_eq!(s.parked_frames(), 3);
+        // The worker resumes the implicit thread and exits: its frames are
+        // running again, so they no longer count as parked.
+        s.resume_later(0, 1)?;
+        s.exit_current()?;
+        assert_eq!(s.parked_frames(), 0);
         Ok(())
     }
 

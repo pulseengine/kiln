@@ -233,6 +233,82 @@ fn resume_later_of_an_unknown_handle_traps() {
     );
 }
 
+/// A spawn loop cannot grow host memory without bound: the live threads of
+/// one task are capped (`MAX_COOP_THREADS`, 1024), and the 1025th
+/// `new-indirect` traps instead of allocating another thread.
+// rivet: verifies SR-82
+#[test]
+fn a_thread_spawn_loop_hits_the_thread_cap() {
+    let p = write_wat(
+        "kiln_sr82_thread_cap.wasm",
+        r#"(module
+            (import "$root" "[thread-new-indirect-v0]" (func $new (param i32 i32) (result i32)))
+            (table (export "__meld_thread_table") 2 funcref)
+            (elem (i32.const 1) func $worker)
+            (func $worker (param i32))
+            (func (export "run") (result i32) (local i32)
+              loop
+                i32.const 1 i32.const 0 call $new drop
+                local.get 0 i32.const 1 i32.add local.tee 0
+                i32.const 2000 i32.lt_u br_if 0
+              end
+              i32.const 0))"#,
+    );
+    let (ok, stdout, stderr) = run_kiln(&["--invoke", "run"], &p);
+    assert!(
+        !ok,
+        "2000 live threads must exceed the cap\n{stdout}\n{stderr}"
+    );
+    assert!(
+        stderr.contains("too many live threads"),
+        "the trap must name the thread cap\n{stderr}"
+    );
+}
+
+/// Parked threads keep counting toward the call-depth limit: ten threads
+/// that each suspend 4000 frames deep exceed MAX_CALL_DEPTH (10000) for the
+/// task as a whole, so the third one traps instead of the parked stacks
+/// growing host memory without bound.
+// rivet: verifies SR-82
+#[test]
+fn parked_deep_stacks_hit_the_call_depth_limit() {
+    let p = write_wat(
+        "kiln_sr82_parked_depth.wasm",
+        r#"(module
+            (import "$root" "[thread-new-indirect-v0]" (func $new (param i32 i32) (result i32)))
+            (import "$root" "[thread-yield-then-resume]" (func $ytr (param i32) (result i32)))
+            (import "$root" "[thread-suspend]" (func $suspend (result i32)))
+            (table (export "__meld_thread_table") 2 funcref)
+            (elem (i32.const 1) func $worker)
+            (func $rec (param i32)
+              local.get 0
+              i32.eqz
+              if
+                call $suspend
+                drop
+                return
+              end
+              local.get 0 i32.const 1 i32.sub call $rec)
+            (func $worker (param i32) local.get 0 call $rec)
+            (func (export "run") (result i32) (local i32)
+              loop
+                i32.const 1 i32.const 4000 call $new call $ytr drop
+                local.get 0 i32.const 1 i32.add local.tee 0
+                i32.const 10 i32.lt_u br_if 0
+              end
+              i32.const 0))"#,
+    );
+    let (ok, stdout, stderr) = run_kiln(&["--invoke", "run"], &p);
+    assert!(
+        !ok,
+        "40000 parked frames must exceed the call-depth limit\n{stdout}\n{stderr}"
+    );
+    assert!(
+        stderr.contains("call stack exhausted"),
+        "the trap must be the call-depth limit\n{stderr}"
+    );
+}
+
 /// The export returning while a thread it made ready never ran is refused:
 /// kiln has no event loop to run that thread after the call, and dropping it
 /// would report success for work that did not happen.
