@@ -4,12 +4,16 @@
 //! `cabi_realloc` of the component that owns it. The shape is meld's
 //! (`version` 2): each entry has `index`, `module`, `name`, `memory` and
 //! `realloc`; `memory` is `null`, `{"export", "index"}` or `{"unknown"}`, and
-//! `realloc` is `null`, `{"export", "func"}` or `{"unknown"}`. Anything else
+//! `realloc` is `null`, `{"export", "func"}` or `{"unknown"}`. `component`
+//! (the owning component) and, on a `[thread-new-indirect-v0]` entry,
+//! `thread_table` (`{"export", "index"}`) are read for SR-82. Anything else
 //! is refused, so a map in a shape kiln does not understand is never read as
 //! if it were one it does.
 
 use kiln_error::{Error, Result};
-use kiln_runtime::host_import_map::{HostImportMap, ImportMapEntry, ImportMemory, ImportRealloc};
+use kiln_runtime::host_import_map::{
+    HostImportMap, ImportMapEntry, ImportMemory, ImportRealloc, ThreadTable,
+};
 use serde_json::Value;
 
 /// The only map version this reader understands.
@@ -81,12 +85,39 @@ fn entry(value: &Value) -> Result<ImportMapEntry> {
         },
         _ => return Err(bad("import map entry has no realloc field")),
     };
+    // SR-82: the owning component (thread handles are per owner) and, on a
+    // `[thread-new-indirect-v0]` entry, the table its fn_idx indexes. Both
+    // may be absent or null; present in another shape they are refused.
+    let component = match value.get("component") {
+        None | Some(Value::Null) => None,
+        Some(n) => Some(
+            n.as_u64()
+                .and_then(|n| u32::try_from(n).ok())
+                .ok_or_else(|| bad("import map component is not a u32"))?,
+        ),
+    };
+    let thread_table = match value.get("thread_table") {
+        None | Some(Value::Null) => None,
+        Some(Value::Object(o)) => match (o.get("export").and_then(Value::as_str), o.get("index")) {
+            (Some(export), Some(n)) => Some(ThreadTable {
+                export: export.to_owned(),
+                index: n
+                    .as_u64()
+                    .and_then(|n| u32::try_from(n).ok())
+                    .ok_or_else(|| bad("import map thread_table index is not a u32"))?,
+            }),
+            _ => return Err(bad("import map thread_table has no export and index")),
+        },
+        Some(_) => return Err(bad("import map thread_table is not an object")),
+    };
     Ok(ImportMapEntry {
         index,
         module: text("module")?,
         name: text("name")?,
         memory,
         realloc,
+        component,
+        thread_table,
     })
 }
 
@@ -124,6 +155,39 @@ mod tests {
         let map = parse(VALID)?;
         assert!(map.entry(4, "wasi:cli/exit@0.2.6", "exit$2").is_err());
         assert!(map.entry(9, "wasi:cli/exit@0.2.6", "exit$5").is_err());
+        Ok(())
+    }
+
+    // rivet: verifies SR-82
+    #[test]
+    fn component_and_thread_table_are_read() -> Result<()> {
+        let map = parse(
+            r#"{"version":2,"imports":[
+            {"index":0,"module":"$root","name":"[thread-index]$1","kind":"p3-builtin",
+             "component":1,"memory":null,"realloc":null,"encoding":null},
+            {"index":1,"module":"$root","name":"[thread-new-indirect-v0]","kind":"p3-builtin",
+             "component":0,"memory":null,"realloc":null,"encoding":null,
+             "thread_table":{"export":"__meld_thread_table","index":1}}]}"#,
+        )?;
+        let index = map.entry(0, "$root", "[thread-index]$1")?;
+        assert_eq!(index.component, Some(1));
+        assert_eq!(index.thread_table, None);
+        let new = map.entry(1, "$root", "[thread-new-indirect-v0]")?;
+        assert_eq!(new.component, Some(0));
+        assert_eq!(
+            new.thread_table,
+            Some(ThreadTable {
+                export: "__meld_thread_table".into(),
+                index: 1
+            })
+        );
+        for bad in [
+            r#"{"version":2,"imports":[{"index":0,"module":"a","name":"b","memory":null,"realloc":null,"component":-1}]}"#,
+            r#"{"version":2,"imports":[{"index":0,"module":"a","name":"b","memory":null,"realloc":null,"thread_table":{"index":1}}]}"#,
+            r#"{"version":2,"imports":[{"index":0,"module":"a","name":"b","memory":null,"realloc":null,"thread_table":3}]}"#,
+        ] {
+            assert!(parse(bad).is_err(), "{bad}");
+        }
         Ok(())
     }
 

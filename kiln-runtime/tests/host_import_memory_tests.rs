@@ -96,6 +96,8 @@ fn map_entry(name: &str, memory: ImportMemory) -> Result<HostImportMap> {
         name: name.into(),
         memory,
         realloc: ImportRealloc::NotNeeded,
+        component: None,
+        thread_table: None,
     }])
 }
 
@@ -202,6 +204,8 @@ fn run_reader(realloc: ImportRealloc) -> Result<(u32, Result<Vec<Value>>)> {
         name: READ_FUNC.into(),
         memory: ImportMemory::Index(1),
         realloc,
+        component: None,
+        thread_table: None,
     }])?);
     let wasm =
         wat::parse_str(TWO_ALLOCATORS).map_err(|_| kiln_error::Error::runtime_error("wat"))?;
