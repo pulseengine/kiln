@@ -2713,8 +2713,9 @@ impl StacklessEngine {
                                             Err(e) => return Err(e),
                                         }
                                     }
-                                    // Not a P3 builtin — push args back for WASI dispatch
-                                    for arg in p3_args.into_iter().rev() {
+                                    // Not a P3 builtin — push args back in call order for
+                                    // WASI dispatch, which pops them off again.
+                                    for arg in p3_args {
                                         operand_stack.push(arg);
                                     }
                                 }
@@ -3365,39 +3366,12 @@ impl StacklessEngine {
                                             }
                                         }
 
-                                        // Not P3 — try host handler for unlinked imports
-                                        #[cfg(feature = "wasi")]
-                                        {
-                                            let inst = self.instances.get(&instance_id).cloned();
-                                            if let Some(ref mut handler) = self.host_handler {
-                                                if let Some(inst_arc) = inst {
-                                                    let owner = select_host_call_owner(
-                                                        &inst_arc,
-                                                        self.import_map.as_deref(),
-                                                        &module_name,
-                                                        &field_name,
-                                                        true,
-                                                    )?;
-                                                    let memory = owner.memory.accessor();
-                                                    if let Ok(results) = handler.call_import(
-                                                        &module_name,
-                                                        &field_name,
-                                                        &call_args,
-                                                        memory,
-                                                    ) {
-                                                        for r in results {
-                                                            operand_stack.push(r);
-                                                        }
-                                                        pc += 1;
-                                                        continue;
-                                                    }
-                                                }
-                                            }
-                                        }
-
-                                        // Fall through to legacy WASI dispatch
-                                        for arg in call_args.iter().rev() {
-                                            operand_stack.push(arg.clone());
+                                        // Not P3 — one host dispatch through call_wasi_function,
+                                        // which pre-allocates guest-owned return buffers
+                                        // (cabi_realloc) before calling the handler. It pops the
+                                        // args back off the stack, so restore them in call order.
+                                        for arg in call_args {
+                                            operand_stack.push(arg);
                                         }
                                         let result = self.call_wasi_function(
                                             &module_name,
