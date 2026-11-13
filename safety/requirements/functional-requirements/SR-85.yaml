@@ -3,7 +3,7 @@ artifacts:
   - id: SR-85
     type: requirement
     title: Every published release asset is covered by the cosign-signed SHA256SUMS, except the signature material itself
-    status: approved
+    status: implemented
     release: v0.8.0
     description: "Issue #610. MEASURED 2026-11-05 against the published GitHub Releases: v0.7.0 publishes 15 assets; SHA256SUMS.txt lists 10 (SBOM, VEX, 7 binary archives, rivet snapshot). Of the 5 not listed, 4 are the signature material (SHA256SUMS.txt, .sig, .pem, .cosign.bundle). The fifth, build-env.txt (toolchain provenance including the cosign version), has no checksum and no signature. v0.6.0 has the same gap (build-env.txt published, absent from its SHA256SUMS.txt), so this is not a v0.7.0 regression. Cause: .github/workflows/release.yml writes release-assets/build-env.txt (line 469, after 'cosign version' is available) after SHA256SUMS.txt is generated (line 415) and signed (line 445). REQUIRED: build-env.txt is written before SHA256SUMS.txt is generated, so the signed sums cover it; the release job fails if any uploaded asset other than the four signature files is missing from SHA256SUMS.txt. Verified by: a negative control on a dry-run release job (an extra unsummed asset makes the job fail); on the next release, every published asset other than the signature files appears in SHA256SUMS.txt, and 'sha256sum -c' passes over the downloaded set after 'cosign verify-blob'."
     tags: [release, supply-chain, cosign, issue-610]

@@ -1,0 +1,13 @@
+artifacts:
+
+  - id: SR-101
+    type: requirement
+    title: A wasm32-wasip2 guest that calls descriptor.stat-at runs end to end on kiln and matches wasmtime
+    status: proposed
+    release: v0.8.0
+    description: "Found 2026-11-12 while verifying SR-94 (maintainer decision: SR-94 verified on unit evidence; this end-to-end gap is its own requirement, proposed for v0.8.0; whether it stays in v0.8.0 is the maintainer's call). MEASURED with kiln built from PR #655 head e3b913d0 and main fda1935d, wasmtime 42.0.1, meld 0.66.0, on a host fixture: file f (5 bytes, mtime 1700000000), hard link g -> f, directory d. Twelve probe components, each asserting one field of stat-at's result at its canonical-ABI offset (result discriminant, type, link-count 2 for f and g, size, the three option<datetime> discriminants, mtime seconds and nanoseconds, and for 'f/' error discriminant 1 with not-directory at retptr+8), pass 12/12 on wasmtime. On kiln none of them reach the check: (1) a Rust std guest (rustc nightly, wasm32-wasip2, wasi 0.2.12) fused by meld is refused with 4 unresolved imports: wasi:clocks/monotonic-clock subscribe-duration, wasi:filesystem/types [method]descriptor.write-via-stream, [method]descriptor.append-via-stream and [method]descriptor.get-flags; (2) a minimal component exporting wasi:cli/run@0.2.0 fails 'No core instance exports _start', because the command-entry lookup (kiln-component/src/components/component_instantiation.rs ~2370) knows only _start, run, wasi:cli/run@0.2.3#run and @0.2.6#run; with run@0.2.6 the raw component still fails the same way, and its meld-fused core module fails 'get-directories requires cabi_realloc pre-allocation', because kilnd pre-allocates preopens only on its component path (kilnd/src/lib.rs ~784); (3) on the core-module path, stat-at's result is never written to the guest retptr (the area keeps its 0xAA fill), and blocking-write-and-flush on get-stdout fails 'Invalid WASI handle'. REQUIRED: the Rust std stat probe (and the 12 field probes) run on kiln from a meld-fused component and report the same values as wasmtime; and (maintainer decision 2026-11-13, SR-91 verified on unit evidence) a component that sleeps through subscribe-duration + block runs on kiln with the same output and exit status as wasmtime, its elapsed time at least the requested duration. Verified by: those probes in CI, on kiln and wasmtime, with the fixture above."
+    tags: [wasi, filesystem, component, e2e, differential, sr-94-followup]
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-12T21:40:00Z
