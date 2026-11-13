@@ -466,6 +466,13 @@ impl CapabilityAwareEngine {
         self.inner.set_host_handler(handler);
     }
 
+    /// Supply meld's import map: the memory and allocator of each host import
+    /// of the fused module (SR-81). Without one, host imports run against
+    /// memory 0 and a `$N`-suffixed import in a multi-memory module is refused.
+    pub fn set_import_map(&mut self, map: crate::host_import_map::HostImportMap) {
+        self.inner.set_import_map(map);
+    }
+
     /// Every import of a loaded module that nothing resolves, as
     /// `(module, name)` in import order. [`instantiate`] refuses a module for
     /// which this is non-empty, before running anything (SR-65).

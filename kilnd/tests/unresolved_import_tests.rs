@@ -209,14 +209,41 @@ fn suffixed_import_call_runs_in_a_single_memory_module() {
 }
 
 /// SR-81: with several memories nothing in the module names the memory of the
-/// instance that owns a suffixed import (meld's import map is not consumed and
-/// the suffix is a component index, not a memory index). kiln refuses the
-/// call instead of using memory 0 (the import is named in the trace log).
+/// instance that owns a suffixed import when no `--import-map` is given (the
+/// suffix is a component index, not a memory index). The call is refused
+/// instead of using memory 0.
 // rivet: verifies SR-81
 #[test]
 fn suffixed_import_call_in_a_multi_memory_module_fails_loud() {
     let p = write_fixture(
         "kiln_sr81_multi_memory_call.wasm",
+        r#"(module
+            (import "wasi:cli/terminal-stdin@0.2.6" "get-terminal-stdin$5" (func (param i32)))
+            (memory 1)
+            (memory 1)
+            (func (export "wasi:cli/run@0.2.0#run") (result i32)
+              i32.const 16
+              call 0
+              i32.const 0))"#,
+    );
+    let (ok, _stdout, stderr) = run_kiln(&p);
+    assert!(
+        !ok,
+        "an owner-less suffixed call that needs memory must fail\n{stderr}"
+    );
+    assert!(
+        stderr.contains("owning instance"),
+        "the refusal must say the owner is undeterminable\n{stderr}"
+    );
+}
+
+/// SR-81: without an import map the refusal does not depend on whether the
+/// call happens to use memory; nothing says which instance owns the import.
+// rivet: verifies SR-81
+#[test]
+fn suffixed_import_call_without_memory_is_also_refused_without_a_map() {
+    let p = write_fixture(
+        "kiln_sr81_multi_memory_nomem.wasm",
         r#"(module
             (import "wasi:cli/stderr@0.2.6" "get-stderr$5" (func (result i32)))
             (memory 1)
@@ -228,10 +255,7 @@ fn suffixed_import_call_in_a_multi_memory_module_fails_loud() {
     );
     let (ok, _stdout, stderr) = run_kiln(&p);
     assert!(!ok, "an owner-less suffixed call must fail\n{stderr}");
-    assert!(
-        stderr.contains("owning instance"),
-        "the refusal must say the owner is undeterminable\n{stderr}"
-    );
+    assert!(stderr.contains("owning instance"), "{stderr}");
 }
 
 /// The corpus case behind #527: yolo_inference imports wasi:nn, which the

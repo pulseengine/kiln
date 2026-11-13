@@ -35,7 +35,10 @@ use kiln_foundation::{
     values::{FloatBits32, FloatBits64, V128, Value},
 };
 
-use crate::module_instance::ModuleInstance;
+use crate::{
+    host_import_map::{HostImportMap, ImportMemory, ImportRealloc, RefusedMemory},
+    module_instance::ModuleInstance,
+};
 
 /// Strip the version suffix from a WASI interface name.
 /// e.g., "wasi:cli/stdout@0.2.4" -> "wasi:cli/stdout"
@@ -48,19 +51,134 @@ fn strip_wasi_version(interface: &str) -> &str {
     }
 }
 
-/// The memory a host import runs against (SR-81).
-///
-/// A host import reads and writes the importing instance's memory 0. That is
-/// right only when the instance has one memory. A fused `--memory multi`
-/// module has several, and an import carrying meld's `$N` suffix belongs to
-/// one component's memory; the suffix is a component index, not a memory
-/// index, and nothing in the module (meld's import map has no owner field)
-/// names the memory. Using memory 0 would be a guess, so the call is refused.
-fn host_import_memory(
-    instance: &ModuleInstance,
+/// The memory a host call reads and writes (SR-81).
+enum HostMemory {
+    /// A memory of the calling instance.
+    Instance(crate::module::MemoryWrapper),
+    /// The instance has no memory.
+    Absent,
+    /// The call must not use memory; any access fails with the reason.
+    Refused(RefusedMemory),
+}
+
+impl HostMemory {
+    /// The accessor handed to the host handler.
+    fn accessor(&self) -> Option<&dyn kiln_foundation::MemoryAccessor> {
+        match self {
+            Self::Instance(m) => Some(m.0.as_ref() as &dyn kiln_foundation::MemoryAccessor),
+            Self::Absent => None,
+            Self::Refused(r) => Some(r as &dyn kiln_foundation::MemoryAccessor),
+        }
+    }
+}
+
+/// The guest allocator a host call places its results with (SR-81).
+enum HostRealloc {
+    /// The module's own `cabi_realloc` export (a single-memory module).
+    Export,
+    /// The function index meld's import map names.
+    Func(usize),
+    /// The call must not allocate in the guest; the reason says why.
+    Refused(&'static str),
+}
+
+impl HostRealloc {
+    /// The allocator's function index, or an error when none may be used.
+    /// `Ok(None)` means the module has no `cabi_realloc` export.
+    fn resolve(&self, find_export: impl FnOnce() -> Option<usize>) -> Result<Option<usize>> {
+        match self {
+            Self::Export => Ok(find_export()),
+            Self::Func(idx) => Ok(Some(*idx)),
+            Self::Refused(reason) => Err(kiln_error::Error::runtime_error(reason)),
+        }
+    }
+
+    /// Fails when this call may not allocate in the guest. Call it where an
+    /// allocation is about to be wanted, so a refusal is not swallowed by the
+    /// callers that treat an allocation failure as "no buffer".
+    fn check(&self) -> Result<()> {
+        match self {
+            Self::Refused(reason) => Err(kiln_error::Error::runtime_error(reason)),
+            Self::Export | Self::Func(_) => Ok(()),
+        }
+    }
+}
+
+/// Memory and allocator for one host call, selected before anything touches
+/// guest memory.
+struct HostCallOwner {
+    memory: HostMemory,
+    realloc: HostRealloc,
+}
+
+/// The function-import index of `module_name::field_name` in `module`.
+fn function_import_index(
+    module: &crate::module::Module,
     module_name: &str,
     field_name: &str,
-) -> Result<Option<crate::module::MemoryWrapper>> {
+) -> Option<usize> {
+    use crate::module::RuntimeImportDesc;
+    let mut index = 0usize;
+    for (i, (m, f)) in module.import_order.iter().enumerate() {
+        if let Some(RuntimeImportDesc::Function(_)) = module.import_types.get(i) {
+            if m == module_name && f == field_name {
+                return Some(index);
+            }
+            index += 1;
+        }
+    }
+    None
+}
+
+/// Select the memory and guest allocator for a host call (SR-81).
+///
+/// Every host-call path goes through here before it allocates in the guest or
+/// hands memory to a handler, so no path can skip the rule:
+///
+/// - With meld's import map and an import that is the module's own
+///   (`import_is_in_module`): the entry at the import's function-import index
+///   (checked against its name) names the memory and allocator. `null` means
+///   the call takes none (any access fails), `unknown` means meld could not
+///   say (any access fails).
+/// - Otherwise a host import runs against memory 0, which is right only when
+///   the instance has one memory. A `$N`-suffixed import in a multi-memory
+///   module belongs to one component's memory and the suffix is a component
+///   index, not a memory index, so the call is refused rather than guessed.
+fn select_host_call_owner(
+    instance: &ModuleInstance,
+    import_map: Option<&HostImportMap>,
+    module_name: &str,
+    field_name: &str,
+    import_is_in_module: bool,
+) -> Result<HostCallOwner> {
+    if let (Some(map), true) = (import_map, import_is_in_module) {
+        let index =
+            function_import_index(instance.module(), module_name, field_name).ok_or_else(|| {
+                kiln_error::Error::runtime_import_not_found(
+                    "host import is not a function import of the calling module",
+                )
+            })?;
+        let index = u32::try_from(index)
+            .map_err(|_| kiln_error::Error::runtime_error("function import index exceeds u32"))?;
+        let entry = map.entry(index, module_name, field_name)?;
+        let memory = match &entry.memory {
+            ImportMemory::NotNeeded => HostMemory::Refused(RefusedMemory::NOT_NEEDED),
+            ImportMemory::Unknown(_) => HostMemory::Refused(RefusedMemory::UNKNOWN),
+            ImportMemory::Index(n) => HostMemory::Instance(instance.memory(*n)?),
+        };
+        let realloc = match &entry.realloc {
+            ImportRealloc::NotNeeded => HostRealloc::Refused(
+                "Host call needs a guest allocation, but the import map says it allocates none",
+            ),
+            ImportRealloc::Unknown(_) => HostRealloc::Refused(
+                "Host call needs a guest allocation, but the import map could not determine \
+                 the owning instance's cabi_realloc",
+            ),
+            ImportRealloc::Func(f) => HostRealloc::Func(*f as usize),
+        };
+        return Ok(HostCallOwner { memory, realloc });
+    }
+
     if kiln_foundation::split_instance_suffix(field_name).1.is_some()
         && instance.memory_count()? > 1
     {
@@ -70,14 +188,14 @@ fn host_import_memory(
             field = %field_name,
             "suffixed host import in a multi-memory module has no determinable owning instance"
         );
-        #[cfg(not(feature = "tracing"))]
-        let _ = module_name;
         return Err(kiln_error::Error::runtime_error(
-            "Host import carries a meld $N instance suffix in a multi-memory module; \
-             the owning instance's memory cannot be determined",
+            RefusedMemory::OWNER_UNDETERMINED_REASON,
         ));
     }
-    Ok(instance.memory(0).ok())
+    Ok(HostCallOwner {
+        memory: instance.memory(0).map_or(HostMemory::Absent, HostMemory::Instance),
+        realloc: HostRealloc::Export,
+    })
 }
 
 /// Check if two function types match structurally.
@@ -280,6 +398,9 @@ pub struct StacklessEngine {
     aliased_functions: HashMap<(usize, usize), usize>,
     /// Generic host import handler for all host function calls
     host_handler: Option<Box<dyn kiln_foundation::HostImportHandler>>,
+    /// meld's import map: which memory and allocator each host import of a
+    /// fused module uses (SR-81). `None` until the host supplies one.
+    import_map: Option<Arc<HostImportMap>>,
     /// Optional runtime debugger for profiling and debugging
     #[cfg(feature = "debugger")]
     debugger: Option<Box<dyn RuntimeDebugger>>,
@@ -551,6 +672,7 @@ impl StacklessEngine {
             import_links: HashMap::new(),
             aliased_functions: HashMap::new(),
             host_handler: None,
+            import_map: None,
             #[cfg(feature = "debugger")]
             debugger: None,
             active_exception: None,
@@ -591,6 +713,13 @@ impl StacklessEngine {
     /// Set the host import handler for resolving host function calls
     pub fn set_host_handler(&mut self, handler: Box<dyn kiln_foundation::HostImportHandler>) {
         self.host_handler = Some(handler);
+    }
+
+    /// Supply meld's import map: the memory and allocator of each host import
+    /// of the fused module (SR-81). Without one, host imports run against
+    /// memory 0 and a `$N`-suffixed import in a multi-memory module is refused.
+    pub fn set_import_map(&mut self, map: HostImportMap) {
+        self.import_map = Some(Arc::new(map));
     }
 
     /// Register a lowered function from a canon.lower operation
@@ -831,9 +960,29 @@ impl StacklessEngine {
         instance_id: usize,
         interface: &str,
         function: &str,
+        // The calling module's own import this call came through, when known;
+        // the import map is keyed by it (SR-81).
+        import: Option<(&str, &str)>,
         args: Vec<Value>,
     ) -> Result<Vec<Value>> {
         use crate::wasip2_host::get_wasi_function_signature;
+
+        // SR-81: select the memory and allocator before anything below
+        // allocates in the guest or hands memory to the handler.
+        let instance = self
+            .instances
+            .get(&instance_id)
+            .ok_or_else(|| {
+                kiln_error::Error::runtime_error("Instance not found for canon-lowered dispatch")
+            })?
+            .clone();
+        let owner = select_host_call_owner(
+            &instance,
+            self.import_map.as_deref(),
+            import.map_or(interface, |i| i.0),
+            import.map_or(function, |i| i.1),
+            import.is_some(),
+        )?;
 
         // Look up function signature to determine if results use retptr
         let sig = get_wasi_function_signature(interface, function);
@@ -845,6 +994,8 @@ impl StacklessEngine {
         // allocator corruption). Done before borrowing the handler so the &mut self call has
         // no conflicting borrow.
         let read_alloc: Option<(u32, u32)> = {
+            // The buffer sizing below keys on the base function name (SR-81).
+            let (function, _) = kiln_foundation::split_instance_suffix(function);
             let want = if interface.contains("wasi:io/streams")
                 && (function.contains("input-stream.read")
                     || function.contains("input-stream.blocking-read"))
@@ -882,14 +1033,20 @@ impl StacklessEngine {
                 0
             };
             if want > 0 {
-                self.allocate_wasi_read_buffer(instance_id, want, 1).ok().flatten()
+                owner.realloc.check()?;
+                self.allocate_wasi_read_buffer(instance_id, want, 1, &owner.realloc)
+                    .ok()
+                    .flatten()
             } else if interface.contains("wasi:io/poll") && function == "poll" {
                 // poll: the ready subset is a list<u32> of at most `len` indices
                 // (args = [list_ptr, len, retptr]); align 4. SR-91.
                 match args.get(1) {
                     Some(Value::I32(n)) => {
                         let bytes = (*n as u32).saturating_mul(4);
-                        self.allocate_wasi_read_buffer(instance_id, bytes, 4).ok().flatten()
+                        owner.realloc.check()?;
+                        self.allocate_wasi_read_buffer(instance_id, bytes, 4, &owner.realloc)
+                            .ok()
+                            .flatten()
                     },
                     _ => None,
                 }
@@ -898,17 +1055,7 @@ impl StacklessEngine {
             }
         };
 
-        let instance = self
-            .instances
-            .get(&instance_id)
-            .ok_or_else(|| {
-                kiln_error::Error::runtime_error("Instance not found for canon-lowered dispatch")
-            })?
-            .clone();
-        let mem_wrapper = instance.memory(0).ok();
-        let memory: Option<&dyn kiln_foundation::MemoryAccessor> = mem_wrapper
-            .as_ref()
-            .map(|m| m.0.as_ref() as &dyn kiln_foundation::MemoryAccessor);
+        let memory = owner.memory.accessor();
 
         let handler = self.host_handler.as_mut().ok_or_else(|| {
             kiln_error::Error::runtime_error(
@@ -969,7 +1116,27 @@ impl StacklessEngine {
             .cloned()
             .ok_or_else(|| kiln_error::Error::runtime_error("Lowered function not found"))?;
 
-        self.dispatch_canon_lowered(instance_id, &lowered.interface, &lowered.function, args)
+        // The import map is keyed by the module's own import; a lowered
+        // function past the import range has none (SR-81).
+        let import = {
+            let instance = self
+                .instances
+                .get(&instance_id)
+                .ok_or_else(|| kiln_error::Error::runtime_error("Instance not found"))?;
+            let module = instance.module().clone();
+            if func_idx < self.count_total_imports(&module) {
+                self.find_import_by_index(&module, func_idx).ok()
+            } else {
+                None
+            }
+        };
+        self.dispatch_canon_lowered(
+            instance_id,
+            &lowered.interface,
+            &lowered.function,
+            import.as_ref().map(|(m, f)| (m.as_str(), f.as_str())),
+            args,
+        )
     }
 
     /// Register a cross-instance import link
@@ -1811,6 +1978,7 @@ impl StacklessEngine {
                                     instance_id,
                                     interface,
                                     function,
+                                    Some((module_name.as_str(), field_name.as_str())),
                                     args,
                                 )?;
                                 return Ok(ExecutionOutcome::Complete(results));
@@ -1855,10 +2023,14 @@ impl StacklessEngine {
                     if let Some(ref mut handler) = self.host_handler {
                         let instance = self.instances.get(&instance_id).cloned();
                         if let Some(inst) = instance {
-                            let mem_wrapper = host_import_memory(&inst, &module_name, &field_name)?;
-                            let memory: Option<&dyn kiln_foundation::MemoryAccessor> = mem_wrapper
-                                .as_ref()
-                                .map(|m| m.0.as_ref() as &dyn kiln_foundation::MemoryAccessor);
+                            let owner = select_host_call_owner(
+                                &inst,
+                                self.import_map.as_deref(),
+                                &module_name,
+                                &field_name,
+                                true,
+                            )?;
+                            let memory = owner.memory.accessor();
                             if let Ok(results) =
                                 handler.call_import(&module_name, &field_name, &args, memory)
                             {
@@ -2390,6 +2562,10 @@ impl StacklessEngine {
                                                     instance_id,
                                                     interface,
                                                     function,
+                                                    Some((
+                                                        module_name.as_str(),
+                                                        field_name.as_str(),
+                                                    )),
                                                     args,
                                                 )?;
                                                 for result in results {
@@ -3138,13 +3314,14 @@ impl StacklessEngine {
                                             let inst = self.instances.get(&instance_id).cloned();
                                             if let Some(ref mut handler) = self.host_handler {
                                                 if let Some(inst_arc) = inst {
-                                                    let mem_wrapper = host_import_memory(
+                                                    let owner = select_host_call_owner(
                                                         &inst_arc,
+                                                        self.import_map.as_deref(),
                                                         &module_name,
                                                         &field_name,
+                                                        true,
                                                     )?;
-                                                    let memory: Option<&dyn kiln_foundation::MemoryAccessor> = mem_wrapper.as_ref()
-                                                        .map(|m| m.0.as_ref() as &dyn kiln_foundation::MemoryAccessor);
+                                                    let memory = owner.memory.accessor();
                                                     if let Ok(results) = handler.call_import(
                                                         &module_name,
                                                         &field_name,
@@ -14373,8 +14550,9 @@ impl StacklessEngine {
         &mut self,
         instance_id: usize,
         args: &[String],
+        realloc: &HostRealloc,
     ) -> Result<Option<(u32, Vec<(u32, u32)>)>> {
-        // Find cabi_realloc export
+        // Find cabi_realloc (the import map's, or the module's export)
         let instance = self
             .instances
             .get(&instance_id)
@@ -14382,15 +14560,14 @@ impl StacklessEngine {
             .clone();
         let module = instance.module();
 
-        let cabi_realloc_idx = match self.find_export_index(&module, "cabi_realloc") {
-            Ok(idx) => idx,
-            Err(_) => {
-                #[cfg(feature = "tracing")]
-                trace!(
-                    "[WASI-ALLOC] cabi_realloc not found, falling back to stack-relative allocation"
-                );
-                return Ok(None);
-            },
+        let Some(cabi_realloc_idx) =
+            realloc.resolve(|| self.find_export_index(&module, "cabi_realloc").ok())?
+        else {
+            #[cfg(feature = "tracing")]
+            trace!(
+                "[WASI-ALLOC] cabi_realloc not found, falling back to stack-relative allocation"
+            );
+            return Ok(None);
         };
 
         if args.is_empty() {
@@ -14487,7 +14664,7 @@ impl StacklessEngine {
         );
 
         // Allocate memory - each string is allocated SEPARATELY for proper allocator metadata
-        match self.allocate_wasi_args_memory(instance_id, &args)? {
+        match self.allocate_wasi_args_memory(instance_id, &args, &HostRealloc::Export)? {
             Some((list_ptr, string_ptrs)) => {
                 #[cfg(feature = "tracing")]
                 trace!(
@@ -14619,6 +14796,7 @@ impl StacklessEngine {
         instance_id: usize,
         len: u32,
         align: u32,
+        realloc: &HostRealloc,
     ) -> Result<Option<(u32, u32)>> {
         const MAX_READ_BUF: u32 = 1 << 20; // 1 MiB cap; reads clamp to this, guest loops for more
         let size = len.clamp(1, MAX_READ_BUF);
@@ -14629,9 +14807,10 @@ impl StacklessEngine {
             .ok_or_else(|| kiln_error::Error::runtime_error("Instance not found"))?
             .clone();
         let module = instance.module();
-        let cabi_realloc_idx = match self.find_export_index(&module, "cabi_realloc") {
-            Ok(idx) => idx,
-            Err(_) => return Ok(None),
+        let Some(cabi_realloc_idx) =
+            realloc.resolve(|| self.find_export_index(&module, "cabi_realloc").ok())?
+        else {
+            return Ok(None);
         };
         let ptr = self.call_cabi_realloc(instance_id, cabi_realloc_idx, 0, 0, align, size)?;
         Ok(Some((ptr, size)))
@@ -14836,27 +15015,38 @@ impl StacklessEngine {
             #[cfg(feature = "wasi")]
             let (base_field, _) = kiln_foundation::split_instance_suffix(field_name);
 
-            // SR-81: refuse an owner-less suffixed import before any guest allocation
-            // below touches memory 0.
-            if let Some(inst) = self.instances.get(&instance_id) {
-                host_import_memory(inst, module_name, field_name)?;
-            }
+            // SR-81: select the memory and allocator before any guest allocation below
+            // touches memory (meld's import map, else the single-memory rule).
+            let owner = {
+                let instance = self.instances.get(&instance_id).ok_or_else(|| {
+                    kiln_error::Error::runtime_error("Instance not found for host handler call")
+                })?;
+                select_host_call_owner(
+                    instance,
+                    self.import_map.as_deref(),
+                    module_name,
+                    field_name,
+                    true,
+                )?
+            };
 
             #[cfg(feature = "wasi")]
-            let args_alloc =
-                if module_name.contains("wasi:cli/environment") && base_field == "get-arguments" {
-                    let wasi_args = kiln_wasi::get_global_wasi_args()?;
-                    if !wasi_args.is_empty() {
-                        match self.allocate_wasi_args_memory(instance_id, &wasi_args) {
-                            Ok(alloc) => alloc,
-                            Err(_e) => None,
-                        }
-                    } else {
-                        None
+            let args_alloc = if module_name.contains("wasi:cli/environment")
+                && base_field == "get-arguments"
+            {
+                let wasi_args = kiln_wasi::get_global_wasi_args()?;
+                if !wasi_args.is_empty() {
+                    owner.realloc.check()?;
+                    match self.allocate_wasi_args_memory(instance_id, &wasi_args, &owner.realloc) {
+                        Ok(alloc) => alloc,
+                        Err(_e) => None,
                     }
                 } else {
                     None
-                };
+                }
+            } else {
+                None
+            };
 
             #[cfg(not(feature = "wasi"))]
             let args_alloc: Option<(u32, Vec<(u32, u32)>)> = None;
@@ -14878,7 +15068,8 @@ impl StacklessEngine {
                     })
                     .unwrap_or(0);
                 if len > 0 {
-                    match self.allocate_wasi_read_buffer(instance_id, len, 1) {
+                    owner.realloc.check()?;
+                    match self.allocate_wasi_read_buffer(instance_id, len, 1, &owner.realloc) {
                         Ok(a) => a,
                         Err(_e) => None,
                     }
@@ -14891,7 +15082,9 @@ impl StacklessEngine {
                 match args.get(1) {
                     Some(Value::I32(n)) => {
                         let bytes = (*n as u32).saturating_mul(4);
-                        match self.allocate_wasi_read_buffer(instance_id, bytes, 4) {
+                        owner.realloc.check()?;
+                        match self.allocate_wasi_read_buffer(instance_id, bytes, 4, &owner.realloc)
+                        {
                             Ok(a) => a,
                             Err(_e) => None,
                         }
@@ -14913,20 +15106,8 @@ impl StacklessEngine {
                     handler.set_read_buffer_allocation(ptr, size);
                 }
 
-                // Get instance and memory
-                let instance = self
-                    .instances
-                    .get(&instance_id)
-                    .ok_or_else(|| {
-                        kiln_error::Error::runtime_error("Instance not found for host handler call")
-                    })?
-                    .clone();
-
-                // Get memory as MemoryAccessor
-                let mem_wrapper = host_import_memory(&instance, module_name, field_name)?;
-                let memory: Option<&dyn kiln_foundation::MemoryAccessor> = mem_wrapper
-                    .as_ref()
-                    .map(|m| m.0.as_ref() as &dyn kiln_foundation::MemoryAccessor);
+                // The memory selected above, before any allocation
+                let memory = owner.memory.accessor();
 
                 #[cfg(feature = "tracing")]
                 trace!(
