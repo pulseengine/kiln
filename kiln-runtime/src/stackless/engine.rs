@@ -2582,37 +2582,11 @@ impl StacklessEngine {
                         });
                     }
 
-                    // Try host handler for unlinked WASI imports
-                    #[cfg(feature = "wasi")]
-                    // Same route as the `call` arm: owned-return buffers are allocated and
-                    // handler errors propagate instead of becoming zero results.
-                    if self.host_handler.is_some() {
-                        let results =
-                            self.host_call(instance_id, &module_name, &field_name, args)?;
-                        return Ok(ExecutionOutcome::Complete(results));
-                    }
-
-                    // Import not linked or link unresolvable - return correct number of default results
-                    // based on the imported function's type signature
-                    // NOTE: Do NOT decrement here - execute() will decrement on Complete
-                    if let Some(func) = module.functions.get(func_idx) {
-                        if let Some(func_type) = module.types.get(func.type_idx as usize) {
-                            let mut results = Vec::new();
-                            for result_type in &func_type.results {
-                                let default_value = match result_type {
-                                    kiln_foundation::ValueType::I32 => Value::I32(0),
-                                    kiln_foundation::ValueType::I64 => Value::I64(0),
-                                    kiln_foundation::ValueType::F32 => Value::F32(FloatBits32(0)),
-                                    kiln_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
-                                    _ => Value::I32(0),
-                                };
-                                results.push(default_value);
-                            }
-                            return Ok(ExecutionOutcome::Complete(results));
-                        }
-                    }
-                    // Fallback for corrupted module data
-                    return Ok(ExecutionOutcome::Complete(Vec::new()));
+                    // Same route as the `call` arm: registered host functions, then the host
+                    // handler with owned-return buffers allocated. Errors propagate, and an
+                    // import nothing serves is an error, never made-up zero results.
+                    let results = self.host_call(instance_id, &module_name, &field_name, args)?;
+                    return Ok(ExecutionOutcome::Complete(results));
                 }
             }
         }
@@ -15533,41 +15507,6 @@ impl StacklessEngine {
         #[cfg(feature = "tracing")]
         debug!("WASI: Calling {}::{}", module_name, field_name);
 
-        // NOTE: We skip the host_registry path for WASI functions because it doesn't
-        // properly marshal arguments from the stack. Instead, we fall through to the
-        // wasip2_host dispatch (for WASI Preview 2) or the stub implementations which
-        // properly handle the stack arguments.
-        //
-        // The host_registry is kept for non-WASI host functions that don't need stack args.
-        if let Some(ref registry) = self.host_registry {
-            if Self::registry_serves(registry, module_name, field_name) {
-                #[cfg(feature = "tracing")]
-                debug!(
-                    "WASI: Found {} in host registry, calling implementation",
-                    field_name
-                );
-
-                let args: Vec<kiln_foundation::Value> = vec![];
-                let mut dummy_engine: i32 = 0;
-                match registry.call_host_function(&mut dummy_engine, module_name, field_name, args)
-                {
-                    Ok(result) => {
-                        #[cfg(feature = "tracing")]
-                        debug!("WASI: Host function {} returned successfully", field_name);
-                        if let Some(val) = result.first() {
-                            return Ok(Some(val.clone()));
-                        }
-                        return Ok(None);
-                    },
-                    Err(e) => {
-                        #[cfg(feature = "tracing")]
-                        debug!("WASI: Host function {} failed: {:?}", field_name, e);
-                        return Err(e);
-                    },
-                }
-            }
-        }
-
         // Collect the import's args once, up front. collect_import_args_by_name pops the
         // stack so it must run exactly once.
         let args = Self::collect_import_args_by_name(&module, module_name, field_name, stack);
@@ -15588,6 +15527,20 @@ impl StacklessEngine {
         field_name: &str,
         args: Vec<Value>,
     ) -> Result<Vec<Value>> {
+        // Host functions registered on the engine (e.g. the spec suite's `spectest`
+        // imports) are served first, with the call's real arguments.
+        if let Some(ref registry) = self.host_registry {
+            if Self::registry_serves(registry, module_name, field_name) {
+                let mut dummy_engine: i32 = 0;
+                return registry.call_host_function(
+                    &mut dummy_engine,
+                    module_name,
+                    field_name,
+                    args,
+                );
+            }
+        }
+
         // Use host_handler for WASI dispatch (when configured)
         // This is the proper architecture - host_handler routes to WasiDispatcher
         {
