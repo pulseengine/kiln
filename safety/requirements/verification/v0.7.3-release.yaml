@@ -1,0 +1,31 @@
+artifacts:
+  - id: VER-SR85-001
+    type: verification
+    title: "SR-85: v0.7.3 release run signs SHA256SUMS over every asset but the signature set; guard fails on an unsummed asset"
+    status: verified
+    release: v0.8.0
+    description: "Release run 43464871317 for tag v0.7.3 (fa16dc8d) completed success, all 8 jobs. Its step 'Every release asset is covered by SHA256SUMS (SR-85)' logged 'All 11 release assets are covered by SHA256SUMS.txt'. Downloaded release set (15 assets): cosign verify-blob with identity release.yml@refs/tags/v0.7.3 printed 'Verified OK'; 'shasum -a 256 -c SHA256SUMS.txt' printed OK for all 11 non-signature assets including build-env.txt. Negative control (PR #652 description): the guard body run on a fixture with an extra unsummed asset printed '::error::release asset not covered by SHA256SUMS.txt: extra.txt' and failed."
+    fields:
+      method: test
+    links:
+      - type: verifies
+        target: SR-85
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-13T17:15:00Z
+  - id: VER-SR38-002
+    type: verification
+    title: "SR-38 extended: WASI list/string returns and output-stream.write stay in guest-allocated memory and the return area (GHSA-c54x-6ch8-hwjj, v0.7.3)"
+    status: verified
+    release: v0.7.3
+    description: "PR #662 (squash 145b8943, head f669e61c), all 9 required checks passed on that head. New tests: kilnd/tests/owned_return_tests.rs (get_random_bytes_direct_call_uses_cabi_realloc, get_random_bytes_call_indirect_uses_cabi_realloc, output_stream_write_stays_inside_its_return_area, get_arguments_realloc_trap_is_not_swallowed) and 9 kiln-wasi dispatcher tests (get_random_bytes / get_insecure_random_bytes / initial_cwd / error_to_debug_string *_returns_in_owned_buffer_not_after_retptr and *_fails_loud_without_buffer, get_random_bytes_refuses_oversized_requests). Fail-before: the kilnd fixtures fail on main 63af9418; the dispatcher tests failed on the unfixed dispatcher. Released v0.7.3 aarch64-apple-darwin binary: get-random-bytes via call and call_indirect prints 01010108 (one cabi_realloc, sentinel intact, pointer from the allocation, len 8); output-stream.write leaves the sentinel past its 12-byte return area intact. Differential over 116 WASI probe modules vs main: 19 outcomes moved to match wasmtime, none moved away."
+    fields:
+      method: test
+    links:
+      - type: verifies
+        target: SR-38
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-13T17:15:00Z
