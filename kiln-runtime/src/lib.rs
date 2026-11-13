@@ -75,6 +75,8 @@ pub mod wasip2_host;
 // Component model integration
 pub mod capability_integration;
 pub mod component_unified;
+/// Per-import ownership of a fused module's host imports (meld's import map)
+pub mod host_import_map;
 pub mod memory_adapter;
 pub mod memory_config_adapter;
 pub mod memory_helpers;

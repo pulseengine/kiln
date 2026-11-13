@@ -47,6 +47,10 @@ use kiln_logging::{LogLevel, MinimalLogHandler};
 #[cfg(feature = "std")]
 pub mod bounded_kilnd_infra;
 
+// meld's per-import ownership map (`--import-map`, SR-81)
+#[cfg(all(feature = "std", feature = "kiln-execution"))]
+mod import_map;
+
 // witness MC/DC coverage harness mode (#340)
 pub mod witness_harness;
 
@@ -270,6 +274,10 @@ pub struct KilndConfig {
     /// Module path (for std mode)
     #[cfg(feature = "std")]
     pub module_path: Option<String>,
+    /// meld import map (`--emit-import-map` JSON) for a fused module: which
+    /// memory and allocator each host import uses (SR-81)
+    #[cfg(feature = "std")]
+    pub import_map_path: Option<String>,
     /// Enable WASI support
     #[cfg(feature = "wasi")]
     pub enable_wasi: bool,
@@ -321,6 +329,8 @@ impl Default for KilndConfig {
             module_data: None,
             #[cfg(feature = "std")]
             module_path: None,
+            #[cfg(feature = "std")]
+            import_map_path: None,
             #[cfg(feature = "wasi")]
             enable_wasi: false,
             #[cfg(feature = "wasi")]
@@ -963,6 +973,12 @@ impl KilndEngine {
                 }
             }
 
+            // SR-81: meld's import map, only when given explicitly. It names the memory
+            // and allocator of every host import; nothing is discovered or guessed.
+            if let Some(ref path) = self.config.import_map_path {
+                engine.set_import_map(import_map::load(path)?);
+            }
+
             // Legacy WASI registration (to be removed once dispatcher is verified working)
             #[cfg(feature = "wasi")]
             if self.config.enable_wasi {
@@ -1589,6 +1605,8 @@ impl KilndEngine {
 pub struct SimpleArgs {
     /// Module path for std mode
     pub module_path: Option<String>,
+    /// meld import map path (`--import-map`)
+    pub import_map_path: Option<String>,
     /// Function name to execute
     pub function_name: Option<String>,
     /// Maximum fuel
@@ -1645,6 +1663,7 @@ impl SimpleArgs {
         let mut result = Self {
             module_path: None,
             function_name: None,
+            import_map_path: None,
             max_fuel: None,
             max_memory: None,
             force_nostd: false,
@@ -1698,6 +1717,10 @@ impl SimpleArgs {
                     println!("Options:");
                     println!("  --function <name>     Function to execute (default: start)");
                     println!("  --fuel <amount>       Maximum fuel limit");
+                    println!(
+                        "  --import-map <path>   meld --emit-import-map JSON: the memory and \
+                         allocator of each host import of a fused --memory multi module"
+                    );
                     println!("  --memory <bytes>      Maximum memory limit");
                     println!("  --no-std             Force no-std execution mode");
                     println!("  --memory-profile     Enable memory profiling");
@@ -1742,6 +1765,12 @@ impl SimpleArgs {
                     i += 1;
                     if i < args.len() {
                         result.max_fuel = args[i].parse().ok();
+                    }
+                },
+                "--import-map" => {
+                    i += 1;
+                    if i < args.len() {
+                        result.import_map_path = Some(args[i].clone());
                     }
                 },
                 "--memory" => {
@@ -1967,6 +1996,7 @@ pub fn run(bin_name: &str) -> Result<()> {
     let mut config = KilndConfig::default();
     config.verbose = verbose;
     config.module_path = args.module_path;
+    config.import_map_path = args.import_map_path;
     config.function_name = args.function_name;
 
     if let Some(fuel) = args.max_fuel {

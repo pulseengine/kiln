@@ -1516,6 +1516,7 @@ dependencies = [
  "kiln-runtime",
  "kiln-wasi",
  "linked_list_allocator",
+ "serde_json",
  "serial_test 4.0.1",
  "tracing",
  "tracing-subscriber",
