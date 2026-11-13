@@ -1699,3 +1699,75 @@ pub trait HostImportHandler: Send + Sync {
         // Default no-op for handlers that don't need this
     }
 }
+
+/// Splits meld's per-instance suffix off a host import's field name (SR-81).
+///
+/// Under `--memory multi` meld gives a second component's copy of an import
+/// the suffix `$N` on the field name. Returns the base name and the suffix.
+/// A name with no `$`, or one whose text after the last `$` is not one or more
+/// ASCII digits fitting a `u32`, is returned whole with no suffix; the caller
+/// then looks the whole name up and refuses it if nothing serves it.
+///
+/// The suffix is meld's component index. It is not a memory index and does
+/// not by itself say which instance owns the import.
+#[must_use]
+pub fn split_instance_suffix(field: &str) -> (&str, Option<u32>) {
+    let Some(pos) = field.rfind('$') else {
+        return (field, None);
+    };
+    let digits = &field[pos + 1..];
+    // `parse` alone also accepts a leading `+`, so require digits explicitly.
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return (field, None);
+    }
+    match digits.parse::<u32>() {
+        Ok(n) => (&field[..pos], Some(n)),
+        Err(_) => (field, None),
+    }
+}
+
+#[cfg(test)]
+mod instance_suffix_tests {
+    use super::split_instance_suffix;
+
+    // rivet: verifies SR-81
+    #[test]
+    fn numeric_suffix_is_split_off() {
+        assert_eq!(
+            split_instance_suffix("get-stderr$5"),
+            ("get-stderr", Some(5))
+        );
+        assert_eq!(
+            split_instance_suffix("[method]output-stream.blocking-write-and-flush$2"),
+            ("[method]output-stream.blocking-write-and-flush", Some(2))
+        );
+        assert_eq!(
+            split_instance_suffix("[task-return]3$2"),
+            ("[task-return]3", Some(2))
+        );
+    }
+
+    // rivet: verifies SR-81
+    #[test]
+    fn names_without_a_numeric_suffix_are_unchanged() {
+        for name in [
+            "get-stderr",
+            "get-stderr$",
+            "get-stderr$x",
+            "get-stderr$5x",
+            "get-stderr$+5",
+            "get-stderr$-5",
+            "get-stderr$99999999999",
+            "",
+            "$",
+        ] {
+            assert_eq!(split_instance_suffix(name), (name, None), "{name}");
+        }
+    }
+
+    // rivet: verifies SR-81
+    #[test]
+    fn only_the_last_suffix_is_split() {
+        assert_eq!(split_instance_suffix("a$1$2"), ("a$1", Some(2)));
+    }
+}

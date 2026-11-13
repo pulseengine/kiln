@@ -485,7 +485,7 @@ pub use safety_system::{
 };
 pub use traits::{BoundedCapacity, Checksummed, FromFormat, ToFormat, Validatable};
 #[cfg(feature = "std")]
-pub use traits::{HostImportHandler, MemoryAccessor, SliceMemory};
+pub use traits::{HostImportHandler, MemoryAccessor, SliceMemory, split_instance_suffix};
 // Re-export type factory types - only when allocation is available
 #[cfg(any(feature = "std", feature = "alloc"))]
 pub use type_factory::{

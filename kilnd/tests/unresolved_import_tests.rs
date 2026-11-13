@@ -129,6 +129,111 @@ fn served_wasi_imports_are_not_refused() {
     );
 }
 
+/// SR-81: meld's `$N` suffix on a served WASI function is not an unresolved
+/// import; the link check resolves it to the base function.
+// rivet: verifies SR-81
+#[test]
+fn suffixed_served_wasi_imports_are_not_refused() {
+    let p = write_fixture(
+        "kiln_sr81_suffixed.wasm",
+        r#"(module
+            (import "wasi:cli/stderr@0.2.6" "get-stderr$5" (func (result i32)))
+            (import "wasi:cli/exit@0.2.6" "exit$2" (func (param i32)))
+            (import "wasi:io/streams@0.2.6" "[method]output-stream.blocking-write-and-flush$5"
+              (func (param i32 i32 i32 i32)))
+            (func (export "wasi:cli/run@0.2.0#run") (result i32)
+              i32.const 0))"#,
+    );
+    let (ok, _stdout, stderr) = run_kiln(&p);
+    assert!(
+        ok,
+        "suffixed imports kiln serves must not be refused\n{stderr}"
+    );
+    assert!(
+        !stderr.contains("unresolved import"),
+        "no import here is unresolved\n{stderr}"
+    );
+}
+
+/// SR-81: a suffixed name whose base is not a served function is still
+/// refused with E21A0, as are an empty or non-numeric suffix.
+// rivet: verifies SR-81
+#[test]
+fn suffixed_unknown_and_malformed_imports_are_still_refused() {
+    let p = write_fixture(
+        "kiln_sr81_unknown.wasm",
+        r#"(module
+            (import "wasi:cli/stderr@0.2.6" "not-a-function$3" (func))
+            (import "wasi:cli/stderr@0.2.6" "get-stderr$" (func (result i32)))
+            (import "wasi:cli/stderr@0.2.6" "get-stderr$x" (func (result i32)))
+            (func (export "wasi:cli/run@0.2.0#run") (result i32)
+              i32.const 0))"#,
+    );
+    let (ok, _stdout, stderr) = run_kiln(&p);
+    assert!(!ok, "unknown suffixed imports must be refused\n{stderr}");
+    assert!(
+        stderr.contains("E21A0"),
+        "the E21A0 path must be taken\n{stderr}"
+    );
+    for name in [
+        "wasi:cli/stderr@0.2.6::not-a-function$3",
+        "wasi:cli/stderr@0.2.6::get-stderr$,",
+        "wasi:cli/stderr@0.2.6::get-stderr$x",
+    ] {
+        // The empty-suffix name is followed by a separator in the listing.
+        let needle = name.trim_end_matches(',');
+        assert!(stderr.contains(needle), "{needle} must be named\n{stderr}");
+    }
+}
+
+/// SR-81: with one memory the owner of a suffixed import is unambiguous and
+/// the call runs.
+// rivet: verifies SR-81
+#[test]
+fn suffixed_import_call_runs_in_a_single_memory_module() {
+    let p = write_fixture(
+        "kiln_sr81_single_memory_call.wasm",
+        r#"(module
+            (import "wasi:cli/stderr@0.2.6" "get-stderr$5" (func (result i32)))
+            (memory 1)
+            (func (export "wasi:cli/run@0.2.0#run") (result i32)
+              call 0
+              drop
+              i32.const 0))"#,
+    );
+    let (ok, _stdout, stderr) = run_kiln(&p);
+    assert!(
+        ok,
+        "a suffixed call in a one-memory module must run\n{stderr}"
+    );
+}
+
+/// SR-81: with several memories nothing in the module names the memory of the
+/// instance that owns a suffixed import (meld's import map is not consumed and
+/// the suffix is a component index, not a memory index). kiln refuses the
+/// call instead of using memory 0 (the import is named in the trace log).
+// rivet: verifies SR-81
+#[test]
+fn suffixed_import_call_in_a_multi_memory_module_fails_loud() {
+    let p = write_fixture(
+        "kiln_sr81_multi_memory_call.wasm",
+        r#"(module
+            (import "wasi:cli/stderr@0.2.6" "get-stderr$5" (func (result i32)))
+            (memory 1)
+            (memory 1)
+            (func (export "wasi:cli/run@0.2.0#run") (result i32)
+              call 0
+              drop
+              i32.const 0))"#,
+    );
+    let (ok, _stdout, stderr) = run_kiln(&p);
+    assert!(!ok, "an owner-less suffixed call must fail\n{stderr}");
+    assert!(
+        stderr.contains("owning instance"),
+        "the refusal must say the owner is undeterminable\n{stderr}"
+    );
+}
+
 /// The corpus case behind #527: yolo_inference imports wasi:nn, which the
 /// default kiln build does not serve. It must be refused, not counted as a pass.
 #[cfg(not(feature = "wasi-nn"))]

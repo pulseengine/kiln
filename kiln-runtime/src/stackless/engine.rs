@@ -48,6 +48,38 @@ fn strip_wasi_version(interface: &str) -> &str {
     }
 }
 
+/// The memory a host import runs against (SR-81).
+///
+/// A host import reads and writes the importing instance's memory 0. That is
+/// right only when the instance has one memory. A fused `--memory multi`
+/// module has several, and an import carrying meld's `$N` suffix belongs to
+/// one component's memory; the suffix is a component index, not a memory
+/// index, and nothing in the module (meld's import map has no owner field)
+/// names the memory. Using memory 0 would be a guess, so the call is refused.
+fn host_import_memory(
+    instance: &ModuleInstance,
+    module_name: &str,
+    field_name: &str,
+) -> Result<Option<crate::module::MemoryWrapper>> {
+    if kiln_foundation::split_instance_suffix(field_name).1.is_some()
+        && instance.memory_count()? > 1
+    {
+        #[cfg(feature = "tracing")]
+        error!(
+            import = %module_name,
+            field = %field_name,
+            "suffixed host import in a multi-memory module has no determinable owning instance"
+        );
+        #[cfg(not(feature = "tracing"))]
+        let _ = module_name;
+        return Err(kiln_error::Error::runtime_error(
+            "Host import carries a meld $N instance suffix in a multi-memory module; \
+             the owning instance's memory cannot be determined",
+        ));
+    }
+    Ok(instance.memory(0).ok())
+}
+
 /// Check if two function types match structurally.
 /// WebAssembly uses structural type equivalence: two function types are compatible
 /// if they have the same parameter and result types in the same order.
@@ -472,13 +504,9 @@ impl P3Builtin {
         }
 
         // Strip optional instance suffix ($2, $3, …) added by Meld for
-        // second/third component instance of the same type.
-        let base_name = match field_name.rfind('$') {
-            Some(pos) if field_name[pos + 1..].chars().all(|c| c.is_ascii_digit()) => {
-                &field_name[..pos]
-            },
-            _ => field_name,
-        };
+        // second/third component instance of the same type (SR-81: the one
+        // splitter the WASI resolver uses too).
+        let (base_name, _instance) = kiln_foundation::split_instance_suffix(field_name);
 
         if let Some(slot) = Self::context_slot(base_name, "[context-get-") {
             return Some(Self::ContextGet(slot));
@@ -1827,7 +1855,7 @@ impl StacklessEngine {
                     if let Some(ref mut handler) = self.host_handler {
                         let instance = self.instances.get(&instance_id).cloned();
                         if let Some(inst) = instance {
-                            let mem_wrapper = inst.memory(0).ok();
+                            let mem_wrapper = host_import_memory(&inst, &module_name, &field_name)?;
                             let memory: Option<&dyn kiln_foundation::MemoryAccessor> = mem_wrapper
                                 .as_ref()
                                 .map(|m| m.0.as_ref() as &dyn kiln_foundation::MemoryAccessor);
@@ -3110,7 +3138,11 @@ impl StacklessEngine {
                                             let inst = self.instances.get(&instance_id).cloned();
                                             if let Some(ref mut handler) = self.host_handler {
                                                 if let Some(inst_arc) = inst {
-                                                    let mem_wrapper = inst_arc.memory(0).ok();
+                                                    let mem_wrapper = host_import_memory(
+                                                        &inst_arc,
+                                                        &module_name,
+                                                        &field_name,
+                                                    )?;
                                                     let memory: Option<&dyn kiln_foundation::MemoryAccessor> = mem_wrapper.as_ref()
                                                         .map(|m| m.0.as_ref() as &dyn kiln_foundation::MemoryAccessor);
                                                     if let Ok(results) = handler.call_import(
@@ -14799,9 +14831,20 @@ impl StacklessEngine {
             // stack so it must run exactly once; the read-buffer sizing below needs the len.
             let args = Self::collect_import_args_by_name(&module, module_name, field_name, stack);
 
+            // SR-81: the host handler knows a function by its base name; meld's `$N`
+            // suffix is stripped for the buffer sizing below, as it is for dispatch.
+            #[cfg(feature = "wasi")]
+            let (base_field, _) = kiln_foundation::split_instance_suffix(field_name);
+
+            // SR-81: refuse an owner-less suffixed import before any guest allocation
+            // below touches memory 0.
+            if let Some(inst) = self.instances.get(&instance_id) {
+                host_import_memory(inst, module_name, field_name)?;
+            }
+
             #[cfg(feature = "wasi")]
             let args_alloc =
-                if module_name.contains("wasi:cli/environment") && field_name == "get-arguments" {
+                if module_name.contains("wasi:cli/environment") && base_field == "get-arguments" {
                     let wasi_args = kiln_wasi::get_global_wasi_args()?;
                     if !wasi_args.is_empty() {
                         match self.allocate_wasi_args_memory(instance_id, &wasi_args) {
@@ -14823,8 +14866,8 @@ impl StacklessEngine {
             // to the requested len (args[1]). Mirrors the get-arguments on-demand pattern.
             #[cfg(feature = "wasi")]
             let read_alloc: Option<(u32, u32)> = if module_name.contains("wasi:io/streams")
-                && (field_name.contains("input-stream.read")
-                    || field_name.contains("input-stream.blocking-read"))
+                && (base_field.contains("input-stream.read")
+                    || base_field.contains("input-stream.blocking-read"))
             {
                 let len = args
                     .get(1)
@@ -14842,7 +14885,7 @@ impl StacklessEngine {
                 } else {
                     None
                 }
-            } else if module_name.contains("wasi:io/poll") && field_name == "poll" {
+            } else if module_name.contains("wasi:io/poll") && base_field == "poll" {
                 // poll: list<u32> of at most `len` ready indices (args = [ptr, len, retptr]),
                 // align 4. SR-91.
                 match args.get(1) {
@@ -14880,7 +14923,7 @@ impl StacklessEngine {
                     .clone();
 
                 // Get memory as MemoryAccessor
-                let mem_wrapper = instance.memory(0).ok();
+                let mem_wrapper = host_import_memory(&instance, module_name, field_name)?;
                 let memory: Option<&dyn kiln_foundation::MemoryAccessor> = mem_wrapper
                     .as_ref()
                     .map(|m| m.0.as_ref() as &dyn kiln_foundation::MemoryAccessor);
