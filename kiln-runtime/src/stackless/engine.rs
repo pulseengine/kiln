@@ -648,6 +648,31 @@ impl P3Builtin {
         }
     }
 
+    /// The trap for a built-in nothing backs yet (SR-83, until SR-84). Errors
+    /// hold a static message, so each built-in has its own string naming it.
+    fn not_implemented(self) -> kiln_error::Error {
+        use kiln_error::Error;
+        match self {
+            Self::WaitableSetPoll => Error::not_implemented_error(
+                "P3 built-in [waitable-set-poll] is not implemented: no async runtime backs it",
+            ),
+            Self::WaitableSetDrop => Error::not_implemented_error(
+                "P3 built-in [waitable-set-drop] is not implemented: no async runtime backs it",
+            ),
+            Self::WaitableJoin => Error::not_implemented_error(
+                "P3 built-in [waitable-join] is not implemented: no async runtime backs it",
+            ),
+            Self::TaskCancel => Error::not_implemented_error(
+                "P3 built-in [task-cancel] is not implemented: no async runtime backs it",
+            ),
+            Self::ContextGet(_) | Self::ContextSet(_) | Self::TaskReturn | Self::WaitableSetNew => {
+                Error::runtime_trap(
+                    "internal error: not_implemented asked for a P3 built-in kiln serves",
+                )
+            },
+        }
+    }
+
     /// The slot N of `<prefix>N]`, or `None` if the name is not that shape.
     fn context_slot(name: &str, prefix: &str) -> Option<u32> {
         name.strip_prefix(prefix)?.strip_suffix(']')?.parse().ok()
@@ -855,7 +880,8 @@ impl StacklessEngine {
         field_name: &str,
         args: &[Value],
     ) -> Option<Result<Vec<Value>>> {
-        match P3Builtin::from_import(module_name, field_name)? {
+        let builtin = P3Builtin::from_import(module_name, field_name)?;
+        match builtin {
             // ── [context-get-N] ──────────────────────────────────────
             // () -> i32 — return the value stored in context slot N
             P3Builtin::ContextGet(slot) => {
@@ -866,11 +892,14 @@ impl StacklessEngine {
             // ── [context-set-N] ──────────────────────────────────────
             // (i32) -> () — store value in context slot N
             P3Builtin::ContextSet(slot) => {
-                let val = match args.first() {
-                    Some(Value::I32(v)) => *v,
-                    _ => 0,
+                // A missing or non-i32 argument is a caller bug: storing 0
+                // would hide it (SR-83).
+                let Some(Value::I32(val)) = args.first() else {
+                    return Some(Err(kiln_error::Error::runtime_trap(
+                        "P3 built-in [context-set-N] requires one i32 argument: missing or mistyped",
+                    )));
                 };
-                self.p3_context_slots.insert((instance_id, slot), val);
+                self.p3_context_slots.insert((instance_id, slot), *val);
                 Some(Ok(vec![]))
             },
 
@@ -890,22 +919,15 @@ impl StacklessEngine {
                 Some(Ok(vec![Value::I32(handle as i32)]))
             },
 
-            // ── [waitable-set-poll] ──────────────────────────────────
-            // (i32, i32) -> i32  — poll set; synchronous mode: return 0
-            // (no pending async work in single-threaded interpreter)
-            P3Builtin::WaitableSetPoll => Some(Ok(vec![Value::I32(0)])),
-
-            // ── [waitable-set-drop] ──────────────────────────────────
-            // (i32) -> () — destroy waitable set (no-op)
-            P3Builtin::WaitableSetDrop => Some(Ok(vec![])),
-
-            // ── [waitable-join] ──────────────────────────────────────
-            // (i32, i32) -> () — join waitable to set (no-op for sync)
-            P3Builtin::WaitableJoin => Some(Ok(vec![])),
-
-            // ── [task-cancel] ────────────────────────────────────────
-            // () -> () or (i32) -> i32 — cancel task (no-op for sync)
-            P3Builtin::TaskCancel => Some(Ok(vec![])),
+            // ── [waitable-set-poll] / [waitable-set-drop] /
+            //    [waitable-join] / [task-cancel] ─────────────────────
+            // Nothing backs these until kiln-async does (SR-84). Returning 0
+            // or nothing would claim a poll found no event, a join happened
+            // or a task was cancelled when none did, so they refuse (SR-83).
+            P3Builtin::WaitableSetPoll
+            | P3Builtin::WaitableSetDrop
+            | P3Builtin::WaitableJoin
+            | P3Builtin::TaskCancel => Some(Err(builtin.not_implemented())),
         }
     }
 
