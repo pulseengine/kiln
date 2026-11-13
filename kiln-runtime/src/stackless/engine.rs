@@ -169,6 +169,81 @@ fn function_import_index(
     None
 }
 
+/// The number of core results `module` declares for its import
+/// `module_name::field_name`.
+fn import_core_result_count(
+    module: &crate::module::Module,
+    module_name: &str,
+    field_name: &str,
+) -> Option<usize> {
+    use crate::module::RuntimeImportDesc;
+    module.import_order.iter().enumerate().find_map(|(i, (m, f))| {
+        match module.import_types.get(i) {
+            Some(RuntimeImportDesc::Function(type_idx)) if m == module_name && f == field_name => {
+                module.types.get(*type_idx as usize).map(|t| t.results.len())
+            },
+            _ => None,
+        }
+    })
+}
+
+/// Give the results of a host call the shape the guest's core import type
+/// expects (SR-102).
+///
+/// A function whose canonical-ABI result does not fit one flat value is lowered
+/// by the guest as `(params..., retptr)` with no core results. Some host arms
+/// write the return area themselves and return nothing; others return the
+/// result as core values. For those, the values are written to the retptr (the
+/// last argument) in the canonical layout and no value is returned, so every
+/// route to a host function (`call`, `call_indirect`, `call_ref`,
+/// `return_call*`, the canon-lowered link) leaves the return area written and
+/// the operand stack balanced.
+///
+/// `core_result_count` is the result count of the importing module's core
+/// import type, when known. Values the host returns beyond it, for a function
+/// with no retptr signature, are an error rather than a dropped value.
+#[cfg(feature = "wasi")]
+fn lower_host_results(
+    module_name: &str,
+    field_name: &str,
+    args: &[Value],
+    results: Vec<Value>,
+    memory: Option<&dyn kiln_foundation::MemoryAccessor>,
+    core_result_count: Option<usize>,
+) -> Result<Vec<Value>> {
+    if results.is_empty() {
+        return Ok(results);
+    }
+    let (base_field, _) = kiln_foundation::split_instance_suffix(field_name);
+    let sig = crate::wasip2_host::get_wasi_function_signature(module_name, base_field);
+    if let Some(sig) = sig.filter(|s| s.result_needs_retptr()) {
+        let retptr = match args.last() {
+            Some(Value::I32(p)) => *p as u32,
+            _ => {
+                return Err(kiln_error::Error::runtime_error(
+                    "Host function returned values for a return area but its last argument is not an i32 retptr",
+                ));
+            },
+        };
+        let mem = memory.ok_or_else(|| {
+            kiln_error::Error::runtime_error(
+                "Host function returned values for a return area but no memory is available to write them",
+            )
+        })?;
+        let mut offset = retptr;
+        crate::wasip2_host::lower_results_to_retptr(&sig.results, &results, mem, &mut offset)?;
+        return Ok(Vec::new());
+    }
+    if let Some(count) = core_result_count {
+        if results.len() > count {
+            return Err(kiln_error::Error::runtime_error(
+                "Host function returned more values than its core import type declares",
+            ));
+        }
+    }
+    Ok(results)
+}
+
 /// Select the memory and guest allocator for a host call (SR-81).
 ///
 /// Every host-call path goes through here before it allocates in the guest or
@@ -1382,8 +1457,6 @@ impl StacklessEngine {
         import: Option<(&str, &str)>,
         args: Vec<Value>,
     ) -> Result<Vec<Value>> {
-        use crate::wasip2_host::get_wasi_function_signature;
-
         // SR-81: select the memory and allocator before anything below
         // allocates in the guest or hands memory to the handler.
         let instance = self
@@ -1400,10 +1473,6 @@ impl StacklessEngine {
             import.map_or(function, |i| i.1),
             import.is_some(),
         )?;
-
-        // Look up function signature to determine if results use retptr
-        let sig = get_wasi_function_signature(interface, function);
-        let needs_retptr = sig.as_ref().map_or(false, |s| s.result_needs_retptr());
 
         // ON-DEMAND ALLOCATION for guest-owned list/string returns (SR-38, SR-39): the
         // returned list<u8>/string is owned and freed by the guest, so a fresh cabi_realloc'd
@@ -1488,33 +1557,9 @@ impl StacklessEngine {
         // Always pass all args to handler (including retptr if present).
         // Handlers that already handle memory writes (e.g., get-arguments)
         // will use the retptr themselves. Handlers that return component values
-        // as core Values get automatic retptr lowering below.
+        // as core Values get the same retptr lowering as on every other route.
         let results = handler.call_import(interface, function, &args, memory)?;
-
-        if needs_retptr && !results.is_empty() && !args.is_empty() {
-            // Handler returned core values for a retptr-based function.
-            // Write them to memory at the retptr address using canonical ABI layout.
-            let retptr = match args.last() {
-                Some(Value::I32(p)) => *p as u32,
-                _ => return Ok(results), // Can't determine retptr, return as-is
-            };
-
-            if let (Some(mem), Some(sig)) = (memory, &sig) {
-                let mut offset = retptr;
-                crate::wasip2_host::lower_results_to_retptr(
-                    &sig.results,
-                    &results,
-                    mem,
-                    &mut offset,
-                )?;
-            }
-            // retptr-based results consumed — return empty
-            Ok(vec![])
-        } else {
-            // Either simple return (values go on stack) or handler already
-            // wrote to memory (returned empty vec)
-            Ok(results)
-        }
+        lower_host_results(interface, function, &args, results, memory, None)
     }
 
     /// Execute a lowered function via the host import handler
@@ -15640,6 +15685,12 @@ impl StacklessEngine {
             #[cfg(not(feature = "wasi"))]
             let read_alloc: Option<(u32, u32)> = None;
 
+            #[cfg(feature = "wasi")]
+            let core_result_count = self
+                .instances
+                .get(&instance_id)
+                .and_then(|i| import_core_result_count(i.module(), module_name, field_name));
+
             if let Some(ref mut handler) = self.host_handler {
                 if let Some((list_ptr, string_ptrs)) = args_alloc {
                     handler.set_args_allocation(list_ptr, string_ptrs);
@@ -15667,6 +15718,20 @@ impl StacklessEngine {
                     "[HOST_HANDLER] Handler returned successfully"
                 );
 
+                // SR-102: the results take the shape the guest's core import type
+                // expects, whichever route the call came through.
+                #[cfg(feature = "wasi")]
+                {
+                    return lower_host_results(
+                        module_name,
+                        field_name,
+                        &args,
+                        results,
+                        memory,
+                        core_result_count,
+                    );
+                }
+                #[cfg(not(feature = "wasi"))]
                 return Ok(results);
             }
         }
