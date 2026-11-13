@@ -35,10 +35,15 @@ use kiln_foundation::{
     values::{FloatBits32, FloatBits64, V128, Value},
 };
 
+use super::coop_threads::{Continuation, CoopScheduler, ThreadOp};
 use crate::{
     host_import_map::{HostImportMap, ImportMemory, ImportRealloc, RefusedMemory},
     module_instance::ModuleInstance,
 };
+
+/// The funcref table meld exports for `[thread-new-indirect-v0]`'s `fn_idx`
+/// (meld ADR-9, #547).
+const MELD_THREAD_TABLE: &str = "__meld_thread_table";
 
 /// Strip the version suffix from a WASI interface name.
 /// e.g., "wasi:cli/stdout@0.2.4" -> "wasi:cli/stdout"
@@ -362,6 +367,23 @@ enum ExecutionOutcome {
         /// None = import redirect (no state to save, caller already on pending stack).
         return_state: Option<SuspendedFrame>,
     },
+    /// A P3 cooperative-thread built-in (SR-82). It may switch the running
+    /// thread's whole frame stack, which only the trampoline owns, so the
+    /// trampoline carries it out.
+    ThreadBuiltin {
+        /// Which of the nine built-ins.
+        op: ThreadOp,
+        /// Instance whose import was called.
+        instance_id: usize,
+        /// The import's module and field name, exactly as in the module.
+        import: (String, String),
+        /// The call's arguments.
+        args: Vec<Value>,
+        /// Caller's saved state, resumed with the built-in's results.
+        /// None when the import itself was the trampoline target (its caller
+        /// is already on the pending stack).
+        return_state: Option<SuspendedFrame>,
+    },
 }
 
 /// Pre-allocated WASI stub memory regions
@@ -649,6 +671,33 @@ enum P3Builtin {
     WaitableJoin,
     /// `[task-cancel]`
     TaskCancel,
+    /// One of the nine `[thread-*]` cooperative-thread built-ins (SR-82).
+    Thread(ThreadOp),
+}
+
+/// How the trampoline continues after a cooperative-thread built-in (SR-82).
+enum Resumption {
+    /// Resume the innermost pending frame with these results (or, with no
+    /// frame left, complete the running thread with them).
+    Deliver(Vec<Value>),
+    /// Start a thread: call this function on an empty frame stack.
+    Start {
+        /// Engine instance of the start function.
+        instance_id: usize,
+        /// Function index of the start function.
+        func_idx: usize,
+        /// `[arg]`.
+        args: Vec<Value>,
+    },
+}
+
+/// What dispatching a P3 built-in at a call site produced.
+enum P3Dispatch {
+    /// The built-in ran; push these results and continue.
+    Done(Vec<Value>),
+    /// A cooperative-thread built-in: the call site hands it to the
+    /// trampoline as [`ExecutionOutcome::ThreadBuiltin`].
+    Thread(ThreadOp),
 }
 
 impl P3Builtin {
@@ -671,6 +720,9 @@ impl P3Builtin {
         }
         if base_name.starts_with("[task-return]") {
             return Some(Self::TaskReturn);
+        }
+        if let Some(op) = ThreadOp::from_base_name(base_name) {
+            return Some(Self::Thread(op));
         }
         match base_name {
             "[waitable-set-new]" => Some(Self::WaitableSetNew),
@@ -699,11 +751,13 @@ impl P3Builtin {
             Self::TaskCancel => Error::not_implemented_error(
                 "P3 built-in [task-cancel] is not implemented: no async runtime backs it",
             ),
-            Self::ContextGet(_) | Self::ContextSet(_) | Self::TaskReturn | Self::WaitableSetNew => {
-                Error::runtime_trap(
-                    "internal error: not_implemented asked for a P3 built-in kiln serves",
-                )
-            },
+            Self::ContextGet(_)
+            | Self::ContextSet(_)
+            | Self::TaskReturn
+            | Self::WaitableSetNew
+            | Self::Thread(_) => Error::runtime_trap(
+                "internal error: not_implemented asked for a P3 built-in kiln serves",
+            ),
         }
     }
 
@@ -906,21 +960,26 @@ impl StacklessEngine {
     // these builtins from the "$root" namespace.  For synchronous interpreter
     // execution the semantics collapse to simple state-machine operations.
     //
-    // Returns Some(results) if the import was a P3 builtin, None otherwise.
+    // Returns Some(..) if the import was a P3 builtin, None otherwise. The
+    // cooperative-thread built-ins are not run here: they may switch the
+    // whole frame stack, so the call site hands them to the trampoline.
     fn try_dispatch_p3_builtin(
         &mut self,
         instance_id: usize,
         module_name: &str,
         field_name: &str,
         args: &[Value],
-    ) -> Option<Result<Vec<Value>>> {
+    ) -> Option<Result<P3Dispatch>> {
         let builtin = P3Builtin::from_import(module_name, field_name)?;
+        let done = |results: Vec<Value>| Some(Ok(P3Dispatch::Done(results)));
         match builtin {
+            P3Builtin::Thread(op) => Some(Ok(P3Dispatch::Thread(op))),
+
             // ── [context-get-N] ──────────────────────────────────────
             // () -> i32 — return the value stored in context slot N
             P3Builtin::ContextGet(slot) => {
                 let val = self.p3_context_slots.get(&(instance_id, slot)).copied().unwrap_or(0);
-                Some(Ok(vec![Value::I32(val)]))
+                done(vec![Value::I32(val)])
             },
 
             // ── [context-set-N] ──────────────────────────────────────
@@ -934,7 +993,7 @@ impl StacklessEngine {
                     )));
                 };
                 self.p3_context_slots.insert((instance_id, slot), *val);
-                Some(Ok(vec![]))
+                done(vec![])
             },
 
             // ── [task-return]N ───────────────────────────────────────
@@ -942,7 +1001,7 @@ impl StacklessEngine {
             // The async-lift wrapper calls this to signal completion.
             P3Builtin::TaskReturn => {
                 self.p3_task_return_values.insert(instance_id, args.to_vec());
-                Some(Ok(vec![]))
+                done(vec![])
             },
 
             // ── [waitable-set-new] ───────────────────────────────────
@@ -950,7 +1009,7 @@ impl StacklessEngine {
             P3Builtin::WaitableSetNew => {
                 let handle = self.p3_next_waitable_set;
                 self.p3_next_waitable_set += 1;
-                Some(Ok(vec![Value::I32(handle as i32)]))
+                done(vec![Value::I32(handle as i32)])
             },
 
             // ── [waitable-set-poll] / [waitable-set-drop] /
@@ -962,6 +1021,308 @@ impl StacklessEngine {
             | P3Builtin::WaitableSetDrop
             | P3Builtin::WaitableJoin
             | P3Builtin::TaskCancel => Some(Err(builtin.not_implemented())),
+        }
+    }
+
+    // ── P3 cooperative threads (SR-82) ────────────────────────────────
+
+    /// The component instance that owns a thread built-in import: thread
+    /// handles are per owner. With meld's import map it is the entry's
+    /// `component` (the entry is checked against the import, as for memory in
+    /// SR-81). Without a map an unsuffixed import has the single table 0 and a
+    /// `$N`-suffixed one has no determinable owner, so it is refused.
+    fn thread_owner(&self, instance_id: usize, module_name: &str, field_name: &str) -> Result<u32> {
+        if let Some(map) = self.import_map.as_deref() {
+            let instance = self.instances.get(&instance_id).ok_or_else(|| {
+                kiln_error::Error::runtime_error("Instance not found for a P3 thread built-in")
+            })?;
+            let index = function_import_index(instance.module(), module_name, field_name)
+                .and_then(|i| u32::try_from(i).ok())
+                .ok_or_else(|| {
+                    kiln_error::Error::runtime_import_not_found(
+                        "P3 thread built-in is not a function import of the calling module",
+                    )
+                })?;
+            return map.entry(index, module_name, field_name)?.component.ok_or_else(|| {
+                kiln_error::Error::validation_invalid_input(
+                    "import map gives a P3 thread built-in no owning component",
+                )
+            });
+        }
+        if kiln_foundation::split_instance_suffix(field_name).1.is_some() {
+            #[cfg(feature = "tracing")]
+            error!(
+                import = %module_name,
+                field = %field_name,
+                "suffixed P3 thread built-in has no determinable owning instance"
+            );
+            return Err(kiln_error::Error::runtime_error(
+                "P3 thread built-in carries a meld $N instance suffix; its owning instance \
+                 cannot be determined without an import map",
+            ));
+        }
+        Ok(0)
+    }
+
+    /// Check the import's declared core type against the producer ABI of `op`
+    /// and return its i32 arguments. A mismatch is refused, never coerced.
+    fn thread_builtin_args(
+        &self,
+        instance_id: usize,
+        op: ThreadOp,
+        import: &(String, String),
+        args: &[Value],
+    ) -> Result<Vec<i32>> {
+        let (params, results) = match op {
+            ThreadOp::NewIndirect => (2, 1),
+            ThreadOp::Index | ThreadOp::Yield | ThreadOp::Suspend => (0, 1),
+            ThreadOp::ResumeLater => (1, 0),
+            ThreadOp::YieldThenResume
+            | ThreadOp::SuspendThenResume
+            | ThreadOp::YieldThenPromote
+            | ThreadOp::SuspendThenPromote => (1, 1),
+        };
+        let instance = self.instances.get(&instance_id).ok_or_else(|| {
+            kiln_error::Error::runtime_error("Instance not found for a P3 thread built-in")
+        })?;
+        let module = instance.module();
+        let declared = function_import_index(module, &import.0, &import.1)
+            .and_then(|i| module.functions.get(i))
+            .and_then(|f| module.types.get(f.type_idx as usize))
+            .ok_or_else(|| {
+                kiln_error::Error::runtime_import_not_found(
+                    "P3 thread built-in is not a function import of the calling module",
+                )
+            })?;
+        let is_i32 = |t: &kiln_foundation::ValueType| *t == kiln_foundation::ValueType::I32;
+        if declared.params.len() != params
+            || declared.results.len() != results
+            || !declared.params.iter().all(is_i32)
+            || !declared.results.iter().all(is_i32)
+        {
+            return Err(kiln_error::Error::runtime_type_mismatch(
+                "P3 thread built-in is imported with a core type other than the producer ABI's",
+            ));
+        }
+        args.iter()
+            .map(|v| match v {
+                Value::I32(n) => Ok(*n),
+                _ => Err(kiln_error::Error::runtime_trap(
+                    "P3 thread built-in requires i32 arguments: missing or mistyped",
+                )),
+            })
+            .collect()
+    }
+
+    /// `[thread-new-indirect-v0]`'s `fn_idx`: an element of the funcref table
+    /// the module exports as `__meld_thread_table`, which must hold a function
+    /// of type `(i32) -> ()`. Returns its (engine instance, function index).
+    fn resolve_thread_start(
+        &self,
+        instance_id: usize,
+        import: &(String, String),
+        fn_idx: u32,
+    ) -> Result<(usize, usize)> {
+        use crate::module::ExportKind;
+
+        let instance = self.instances.get(&instance_id).ok_or_else(|| {
+            kiln_error::Error::runtime_error("Instance not found for a P3 thread built-in")
+        })?;
+        let module = instance.module();
+        let table_idx = module
+            .exports
+            .iter()
+            .find_map(|(name, export)| {
+                (name.as_str().ok() == Some(MELD_THREAD_TABLE)
+                    && matches!(export.kind, ExportKind::Table))
+                .then_some(export.index)
+            })
+            .ok_or_else(|| {
+                kiln_error::Error::runtime_error(
+                    "P3 [thread-new-indirect-v0] resolves fn_idx through the funcref table meld \
+                     exports as __meld_thread_table, and this module exports no such table",
+                )
+            })?;
+        // meld also records the table on the import's map entry; the two must
+        // agree, or the map belongs to another fusion.
+        if let Some(map) = self.import_map.as_deref() {
+            let index = function_import_index(module, &import.0, &import.1)
+                .and_then(|i| u32::try_from(i).ok())
+                .ok_or_else(|| {
+                    kiln_error::Error::runtime_import_not_found(
+                        "P3 thread built-in is not a function import of the calling module",
+                    )
+                })?;
+            if let Some(recorded) = &map.entry(index, &import.0, &import.1)?.thread_table {
+                if recorded.export != MELD_THREAD_TABLE || recorded.index != table_idx {
+                    return Err(kiln_error::Error::validation_invalid_input(
+                        "import map's thread_table disagrees with the module's \
+                         __meld_thread_table export",
+                    ));
+                }
+            }
+        }
+
+        let element = instance.table(table_idx)?.0.get(fn_idx).map_err(|_| {
+            kiln_error::Error::runtime_trap(
+                "P3 [thread-new-indirect-v0]: fn_idx is out of bounds of __meld_thread_table",
+            )
+        })?;
+        let fref = match element {
+            Some(Value::FuncRef(Some(fref))) => fref,
+            _ => {
+                return Err(kiln_error::Error::runtime_trap(
+                    "P3 [thread-new-indirect-v0]: uninitialized element in __meld_thread_table",
+                ));
+            },
+        };
+        // A funcref written by another instance (shared table) names that
+        // instance by its ModuleInstance id; translate it as call_indirect does.
+        let target_id = match fref.instance_id {
+            None => instance_id,
+            Some(module_instance_id) => self
+                .instances
+                .iter()
+                .find(|(_, inst)| inst.instance_id() == module_instance_id as usize)
+                .map(|(engine_id, _)| *engine_id)
+                .ok_or_else(|| {
+                    kiln_error::Error::runtime_trap(
+                        "P3 [thread-new-indirect-v0]: start function's instance not found",
+                    )
+                })?,
+        };
+        let func_idx = fref.index as usize;
+        let target_module = self
+            .instances
+            .get(&target_id)
+            .ok_or_else(|| {
+                kiln_error::Error::runtime_trap(
+                    "P3 [thread-new-indirect-v0]: start function's instance not found",
+                )
+            })?
+            .module();
+        let start_type = target_module
+            .functions
+            .get(func_idx)
+            .and_then(|f| target_module.types.get(f.type_idx as usize))
+            .ok_or_else(|| {
+                kiln_error::Error::runtime_trap(
+                    "P3 [thread-new-indirect-v0]: start function index out of bounds",
+                )
+            })?;
+        let is_i32_to_unit = start_type.params.len() == 1
+            && start_type.params.iter().all(|t| *t == kiln_foundation::ValueType::I32)
+            && start_type.results.is_empty();
+        if !is_i32_to_unit {
+            return Err(kiln_error::Error::runtime_trap(
+                "P3 [thread-new-indirect-v0]: the thread start function must have type \
+                 (i32) -> ()",
+            ));
+        }
+        Ok((target_id, func_idx))
+    }
+
+    /// Carry out a cooperative-thread built-in for the trampoline.
+    /// `pending_frames` is the running thread's whole frame stack, the
+    /// innermost frame waiting for the built-in's results.
+    fn run_thread_builtin(
+        &mut self,
+        threads: &mut CoopScheduler<SuspendedFrame>,
+        op: ThreadOp,
+        instance_id: usize,
+        import: &(String, String),
+        args: &[Value],
+        pending_frames: &mut Vec<SuspendedFrame>,
+    ) -> Result<Resumption> {
+        #[cfg(feature = "tracing")]
+        trace!(op = ?op, field = %import.1, "[P3_THREAD] built-in");
+        let owner = self.thread_owner(instance_id, &import.0, &import.1)?;
+        let args = self.thread_builtin_args(instance_id, op, import, args)?;
+        let arg = |n: usize| {
+            args.get(n).copied().ok_or_else(|| {
+                kiln_error::Error::runtime_trap("P3 thread built-in is missing an argument")
+            })
+        };
+        match op {
+            ThreadOp::Index => Ok(Resumption::Deliver(vec![Value::I32(
+                threads.index(owner)? as i32
+            )])),
+            ThreadOp::NewIndirect => {
+                let (start_instance, start_func) =
+                    self.resolve_thread_start(instance_id, import, arg(0)? as u32)?;
+                let handle = threads.new_thread(
+                    owner,
+                    Continuation::Start {
+                        instance_id: start_instance,
+                        func_idx: start_func,
+                        arg: arg(1)?,
+                    },
+                )?;
+                Ok(Resumption::Deliver(vec![Value::I32(handle as i32)]))
+            },
+            ThreadOp::ResumeLater => {
+                threads.resume_later(owner, arg(0)? as u32)?;
+                Ok(Resumption::Deliver(Vec::new()))
+            },
+            ThreadOp::Yield
+            | ThreadOp::Suspend
+            | ThreadOp::YieldThenResume
+            | ThreadOp::SuspendThenResume
+            | ThreadOp::YieldThenPromote
+            | ThreadOp::SuspendThenPromote => {
+                let handle = args.first().map(|h| *h as u32);
+                let (yielding, target) = op.suspension(handle).ok_or_else(|| {
+                    kiln_error::Error::runtime_trap("P3 thread built-in is missing a thread handle")
+                })?;
+                // All of them return 0 (not cancelled): kiln has no
+                // cancellation of a synchronous task.
+                let not_cancelled = vec![Value::I32(0)];
+                match threads.pick_next(owner, yielding, target)? {
+                    None => Ok(Resumption::Deliver(not_cancelled)),
+                    Some(next) => {
+                        // The parked frames stay counted in
+                        // call_frames_count: the depth limit covers the
+                        // task's threads together, so parking deep stacks
+                        // cannot grow host memory without bound.
+                        let frames = core::mem::take(pending_frames);
+                        let parked = Continuation::Resume {
+                            frames,
+                            results: not_cancelled,
+                        };
+                        let cont = threads.switch_to(next, parked, yielding)?;
+                        Ok(self.install_thread(cont, pending_frames))
+                    },
+                }
+            },
+        }
+    }
+
+    /// Make `cont` the running thread's state: its parked frames become the
+    /// pending stack (they stayed counted toward the call depth while
+    /// parked), or its start function is to be called on an empty stack.
+    fn install_thread(
+        &self,
+        cont: Continuation<SuspendedFrame>,
+        pending_frames: &mut Vec<SuspendedFrame>,
+    ) -> Resumption {
+        match cont {
+            Continuation::Resume { frames, results } => {
+                *pending_frames = frames;
+                Resumption::Deliver(results)
+            },
+            Continuation::Start {
+                instance_id,
+                func_idx,
+                arg,
+            } => {
+                // Only reached with an empty stack: after the running thread's
+                // frames were parked, or after its root frame returned.
+                Resumption::Start {
+                    instance_id,
+                    func_idx,
+                    args: vec![Value::I32(arg)],
+                }
+            },
         }
     }
 
@@ -1795,6 +2156,33 @@ impl StacklessEngine {
         func_idx: usize,
         args: Vec<Value>,
     ) -> Result<Vec<Value>> {
+        // SR-82: this call is one synchronous task. Its cooperative threads
+        // exist from the first thread built-in until the call ends. Frames of
+        // parked threads stay counted in call_frames_count while the task
+        // runs (the depth limit covers all its threads), so they are uncounted
+        // here, whichever way the task ended.
+        let mut threads: Option<CoopScheduler<SuspendedFrame>> = None;
+        let result = self.run_task(instance_id, func_idx, args, &mut threads);
+        if let Some(sched) = threads {
+            self.call_frames_count =
+                self.call_frames_count.checked_sub(sched.parked_frames()).ok_or_else(|| {
+                    kiln_error::Error::runtime_error(
+                        "call depth accounting underflow when a task with P3 threads ended",
+                    )
+                })?;
+        }
+        result
+    }
+
+    /// The trampoline of [`Self::execute`]; `threads` is the task's
+    /// cooperative-thread scheduler, created by the first thread built-in.
+    fn run_task(
+        &mut self,
+        instance_id: usize,
+        func_idx: usize,
+        args: Vec<Value>,
+        threads: &mut Option<CoopScheduler<SuspendedFrame>>,
+    ) -> Result<Vec<Value>> {
         // Full call trampoline: handles TailCall, regular Call, and exception unwinding.
         // Instead of recursive Rust stack frames (which overflow in debug mode at ~50-100
         // levels due to the ~100-160KB frame size of execute_function_body), we maintain
@@ -1805,6 +2193,11 @@ impl StacklessEngine {
         let mut current_args = args;
         let mut pending_frames: Vec<SuspendedFrame> = Vec::new();
         let mut resume_state: Option<SuspendedFrame> = None;
+        // SR-82: `pending_frames` is always the running thread's stack;
+        // `threads` holds the others.
+        // Results the trampoline produced itself (a thread built-in's), to be
+        // handled like a callee's completion before any more code runs.
+        let mut injected: Option<Vec<Value>> = None;
 
         // Check call depth for the initial function
         if self.call_frames_count >= MAX_CALL_DEPTH {
@@ -1813,12 +2206,17 @@ impl StacklessEngine {
         self.call_frames_count += 1;
 
         loop {
-            let outcome = self.execute_function_body(
-                current_instance_id,
-                current_func_idx,
-                std::mem::take(&mut current_args),
-                resume_state.take(),
-            );
+            let outcome = match injected.take() {
+                Some(results) => Ok(ExecutionOutcome::Complete(results)),
+                None => self.execute_function_body(
+                    current_instance_id,
+                    current_func_idx,
+                    std::mem::take(&mut current_args),
+                    resume_state.take(),
+                ),
+            };
+            // How a thread built-in or a thread's exit continues.
+            let mut step: Option<Resumption> = None;
 
             match outcome {
                 Ok(ExecutionOutcome::Complete(results)) => {
@@ -1834,9 +2232,73 @@ impl StacklessEngine {
                         current_args = Vec::new(); // unused when resuming
                         resume_state = Some(frame);
                     } else {
-                        // Top-level return - trampoline is done
+                        // The running thread's root returned.
                         self.call_frames_count = self.call_frames_count.saturating_sub(1);
-                        return Ok(results);
+                        match threads.as_mut() {
+                            // An explicit thread finished: the next ready
+                            // thread runs, or the synchronous task would block.
+                            Some(sched) if !sched.implicit_is_running() => {
+                                let next = sched.exit_current()?;
+                                step = Some(self.install_thread(next, &mut pending_frames));
+                            },
+                            // The implicit thread returned with work still
+                            // ready to run. kiln has no event loop to run it
+                            // after the call, so refuse rather than drop it.
+                            Some(sched) if sched.ready_count() > 0 => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "P3 cooperative threads: the export returned while other \
+                                     threads were still ready to run; kiln has no event loop to \
+                                     run them after the call returns",
+                                ));
+                            },
+                            // Top-level return - trampoline is done
+                            _ => return Ok(results),
+                        }
+                    }
+                },
+                Ok(ExecutionOutcome::ThreadBuiltin {
+                    op,
+                    instance_id: caller,
+                    import,
+                    args: builtin_args,
+                    return_state,
+                }) => {
+                    // Normalise: the thread is now exactly `pending_frames`,
+                    // its innermost frame waiting for the built-in's results,
+                    // and the call depth counts those frames (plus every
+                    // parked thread's), not the import itself.
+                    match return_state {
+                        Some(state) => pending_frames.push(state),
+                        None => {
+                            self.call_frames_count =
+                                self.call_frames_count.checked_sub(1).ok_or_else(|| {
+                                    kiln_error::Error::runtime_error(
+                                        "call depth accounting underflow at a P3 thread built-in",
+                                    )
+                                })?;
+                        },
+                    }
+                    let sched = threads.get_or_insert_with(CoopScheduler::new);
+                    match self.run_thread_builtin(
+                        sched,
+                        op,
+                        caller,
+                        &import,
+                        &builtin_args,
+                        &mut pending_frames,
+                    ) {
+                        Ok(resumption) => step = Some(resumption),
+                        Err(e) => {
+                            self.call_frames_count = self
+                                .call_frames_count
+                                .checked_sub(pending_frames.len())
+                                .ok_or_else(|| {
+                                    kiln_error::Error::runtime_error(
+                                        "call depth accounting underflow at a P3 thread built-in",
+                                    )
+                                })?;
+                            return Err(e);
+                        },
                     }
                 },
                 Ok(ExecutionOutcome::TailCall {
@@ -1855,13 +2317,24 @@ impl StacklessEngine {
                     return_state,
                 }) => {
                     // Regular call - save caller state and set up callee
+                    // A saved caller moves from "running" (counted) onto the
+                    // pending stack; without one, the running frame is an
+                    // import redirect that is still counted.
+                    let running_counted = usize::from(return_state.is_none());
                     if let Some(state) = return_state {
                         pending_frames.push(state);
                     }
-                    // Check call depth for the new callee
+                    // Check call depth for the new callee. The count also
+                    // holds parked P3 threads' frames (SR-82), so it must be
+                    // unwound exactly: only this thread's frames come off.
                     if self.call_frames_count >= MAX_CALL_DEPTH {
-                        let depth = pending_frames.len() + 1;
-                        self.call_frames_count = self.call_frames_count.saturating_sub(depth);
+                        let depth = pending_frames.len() + running_counted;
+                        self.call_frames_count =
+                            self.call_frames_count.checked_sub(depth).ok_or_else(|| {
+                                kiln_error::Error::runtime_error(
+                                    "call depth accounting underflow at call stack exhaustion",
+                                )
+                            })?;
                         return Err(kiln_error::Error::runtime_trap("call stack exhausted"));
                     }
                     self.call_frames_count += 1;
@@ -1901,6 +2374,31 @@ impl StacklessEngine {
                     return Err(e);
                 },
             }
+
+            match step {
+                None => {},
+                // Handled as a completion by the next iteration, which pops
+                // (and uncounts) the frame it resumes; count it here so the
+                // depth stays balanced.
+                Some(Resumption::Deliver(results)) => {
+                    self.call_frames_count += 1;
+                    injected = Some(results);
+                },
+                Some(Resumption::Start {
+                    instance_id: start_instance,
+                    func_idx: start_func,
+                    args: start_args,
+                }) => {
+                    if self.call_frames_count >= MAX_CALL_DEPTH {
+                        return Err(kiln_error::Error::runtime_trap("call stack exhausted"));
+                    }
+                    self.call_frames_count += 1;
+                    current_instance_id = start_instance;
+                    current_func_idx = start_func;
+                    current_args = start_args;
+                    resume_state = None;
+                },
+            }
         }
     }
 
@@ -1936,7 +2434,7 @@ impl StacklessEngine {
                     "leaf function attempted tail call (cabi_realloc contract violation)",
                 ))
             },
-            Ok(ExecutionOutcome::Call { .. }) => {
+            Ok(ExecutionOutcome::Call { .. } | ExecutionOutcome::ThreadBuiltin { .. }) => {
                 // Leaf functions must not call other functions
                 Err(kiln_error::Error::runtime_error(
                     "leaf function attempted call (cabi_realloc contract violation)",
@@ -2072,7 +2570,16 @@ impl StacklessEngine {
                     if let Some(result) =
                         self.try_dispatch_p3_builtin(instance_id, &module_name, &field_name, &args)
                     {
-                        return result.map(ExecutionOutcome::Complete);
+                        return result.map(|dispatch| match dispatch {
+                            P3Dispatch::Done(results) => ExecutionOutcome::Complete(results),
+                            P3Dispatch::Thread(op) => ExecutionOutcome::ThreadBuiltin {
+                                op,
+                                instance_id,
+                                import: (module_name, field_name),
+                                args,
+                                return_state: None,
+                            },
+                        });
                     }
 
                     // Try host handler for unlinked WASI imports
@@ -2702,15 +3209,36 @@ impl StacklessEngine {
                                         &field_name,
                                         &p3_args,
                                     ) {
-                                        match result {
-                                            Ok(results) => {
+                                        match result? {
+                                            P3Dispatch::Done(results) => {
                                                 for r in results {
                                                     operand_stack.push(r);
                                                 }
                                                 pc += 1;
                                                 continue;
                                             },
-                                            Err(e) => return Err(e),
+                                            P3Dispatch::Thread(op) => {
+                                                #[cfg(feature = "debugger")]
+                                                {
+                                                    self.debugger = debugger_opt;
+                                                }
+                                                return Ok(ExecutionOutcome::ThreadBuiltin {
+                                                    op,
+                                                    instance_id,
+                                                    import: (module_name, field_name),
+                                                    args: p3_args,
+                                                    return_state: Some(SuspendedFrame {
+                                                        instance_id,
+                                                        func_idx: caller_func_idx,
+                                                        pc: pc + 1,
+                                                        locals,
+                                                        operand_stack,
+                                                        block_stack,
+                                                        block_depth,
+                                                        instruction_count,
+                                                    }),
+                                                });
+                                            },
                                         }
                                     }
                                     // Not a P3 builtin — push args back in call order for
@@ -3354,15 +3882,36 @@ impl StacklessEngine {
                                             &field_name,
                                             &call_args,
                                         ) {
-                                            match result {
-                                                Ok(results) => {
+                                            match result? {
+                                                P3Dispatch::Done(results) => {
                                                     for r in results {
                                                         operand_stack.push(r);
                                                     }
                                                     pc += 1;
                                                     continue;
                                                 },
-                                                Err(e) => return Err(e),
+                                                P3Dispatch::Thread(op) => {
+                                                    #[cfg(feature = "debugger")]
+                                                    {
+                                                        self.debugger = debugger_opt;
+                                                    }
+                                                    return Ok(ExecutionOutcome::ThreadBuiltin {
+                                                        op,
+                                                        instance_id,
+                                                        import: (module_name, field_name),
+                                                        args: call_args,
+                                                        return_state: Some(SuspendedFrame {
+                                                            instance_id,
+                                                            func_idx: caller_func_idx,
+                                                            pc: pc + 1,
+                                                            locals,
+                                                            operand_stack,
+                                                            block_stack,
+                                                            block_depth,
+                                                            instruction_count,
+                                                        }),
+                                                    });
+                                                },
                                             }
                                         }
 
@@ -17606,5 +18155,46 @@ mod p3_builtin_tests {
         assert_eq!(P3Builtin::from_import("$root", "[context-get-x]"), None);
         assert_eq!(P3Builtin::from_import("$root", "[stream-new-0]"), None);
         assert_eq!(P3Builtin::from_import("env", "[waitable-join]"), None);
+    }
+
+    /// SR-82: the nine cooperative-thread built-ins in the producer ABI's
+    /// names, `$N`-suffixed too; wasi-threads and other spellings are not.
+    // rivet: verifies SR-82
+    #[test]
+    fn the_nine_thread_builtins_are_recognised() {
+        use super::ThreadOp;
+        for (name, op) in [
+            ("[thread-new-indirect-v0]", ThreadOp::NewIndirect),
+            ("[thread-index]", ThreadOp::Index),
+            ("[thread-yield]", ThreadOp::Yield),
+            ("[thread-suspend]", ThreadOp::Suspend),
+            ("[thread-resume-later]", ThreadOp::ResumeLater),
+            ("[thread-yield-then-resume]", ThreadOp::YieldThenResume),
+            ("[thread-suspend-then-resume]", ThreadOp::SuspendThenResume),
+            ("[thread-yield-then-promote]", ThreadOp::YieldThenPromote),
+            (
+                "[thread-suspend-then-promote]",
+                ThreadOp::SuspendThenPromote,
+            ),
+        ] {
+            assert_eq!(
+                P3Builtin::from_import("$root", name),
+                Some(P3Builtin::Thread(op))
+            );
+            assert_eq!(
+                P3Builtin::from_import("$root", &format!("{name}$1")),
+                Some(P3Builtin::Thread(op))
+            );
+        }
+        assert_eq!(P3Builtin::from_import("wasi", "thread-spawn"), None);
+        assert_eq!(
+            P3Builtin::from_import("$root", "[thread-spawn-indirect]"),
+            None
+        );
+        assert_eq!(
+            P3Builtin::from_import("$root", "[thread-new-indirect]"),
+            None
+        );
+        assert_eq!(P3Builtin::from_import("env", "[thread-yield]"), None);
     }
 }

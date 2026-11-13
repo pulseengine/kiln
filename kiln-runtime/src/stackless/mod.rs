@@ -9,6 +9,7 @@
 
 use alloc::string::String;
 
+mod coop_threads;
 pub mod engine;
 pub mod extensions;
 pub mod frame;

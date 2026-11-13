@@ -1,0 +1,29 @@
+{
+  "imports": [
+    {
+      "component": 0,
+      "encoding": null,
+      "index": 0,
+      "kind": "p3-builtin",
+      "memory": null,
+      "module": "$root",
+      "name": "[thread-suspend-then-resume]",
+      "realloc": null
+    },
+    {
+      "component": 0,
+      "encoding": null,
+      "index": 1,
+      "kind": "p3-builtin",
+      "memory": null,
+      "module": "$root",
+      "name": "[thread-new-indirect-v0]",
+      "realloc": null,
+      "thread_table": {
+        "export": "__meld_thread_table",
+        "index": 1
+      }
+    }
+  ],
+  "version": 2
+}

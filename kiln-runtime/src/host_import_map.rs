@@ -50,6 +50,22 @@ pub struct ImportMapEntry {
     pub memory: ImportMemory,
     /// Allocator the host calls to place guest-owned results.
     pub realloc: ImportRealloc,
+    /// The fused component that owns the import (meld's `component`), when
+    /// the map names one. P3 thread handles are per owner (SR-82).
+    pub component: Option<u32>,
+    /// `[thread-new-indirect-v0]` only: the funcref table its `fn_idx`
+    /// indexes, as meld records it (SR-82).
+    pub thread_table: Option<ThreadTable>,
+}
+
+/// The table meld exports for `[thread-new-indirect-v0]` (meld's
+/// `thread_table`: `{"export", "index"}`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ThreadTable {
+    /// Export name (meld exports `__meld_thread_table`).
+    pub export: String,
+    /// The fused module's table index.
+    pub index: u32,
 }
 
 /// meld's import map for one fused module.
@@ -147,6 +163,8 @@ mod tests {
             name: name.into(),
             memory,
             realloc: ImportRealloc::NotNeeded,
+            component: None,
+            thread_table: None,
         }
     }
 
