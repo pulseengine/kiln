@@ -30,7 +30,9 @@ const ALLOCATOR: &str = r#"
     (func (export "cabi_realloc") (param i32 i32 i32 i32) (result i32)
       (global.set $calls (i32.add (global.get $calls) (i32.const 1)))
       (global.set $last (global.get $next))
-      (global.set $next (i32.add (global.get $next) (local.get 3)))
+      ;; blocks stay 8-aligned, as the canonical ABI requires of every result
+      (global.set $next (i32.add (global.get $next)
+        (i32.and (i32.add (local.get 3) (i32.const 7)) (i32.const -8))))
       (global.get $last))"#;
 
 /// A `cabi_realloc` that always traps.

@@ -1230,6 +1230,15 @@ impl WasiDispatcher {
         }
     }
 
+    /// The address `offset` bytes into the return area at `retptr`. A guest-supplied
+    /// `retptr` near the top of a u32 address space must fail, not wrap to the start
+    /// of memory.
+    fn retptr_at(retptr: u32, offset: u32) -> Result<u32> {
+        retptr.checked_add(offset).ok_or_else(|| {
+            Error::memory_out_of_bounds("Return area offset overflows the address space")
+        })
+    }
+
     /// Write a guest-owned `list<u8>`/`string` payload into the engine-supplied
     /// cabi_realloc'd buffer and return its `(ptr, len)` for the return-area header.
     ///
@@ -1280,7 +1289,7 @@ impl WasiDispatcher {
         let mem = mem.ok_or_else(|| Error::wasi_invalid_argument("random bytes: no memory"))?;
         let (ptr, len) = Self::write_owned_return(mem, read_buf, what, &bytes)?;
         mem.write_bytes(retptr, &ptr.to_le_bytes())?;
-        mem.write_bytes(retptr + 4, &len.to_le_bytes())?;
+        mem.write_bytes(Self::retptr_at(retptr, 4)?, &len.to_le_bytes())?;
         Ok(())
     }
 
@@ -1680,7 +1689,7 @@ impl WasiDispatcher {
                     if args_to_use.is_empty() {
                         // Empty list: write (0, 0) to return pointer
                         mem.write_bytes(retptr, &0u32.to_le_bytes())?;
-                        mem.write_bytes(retptr + 4, &0u32.to_le_bytes())?;
+                        mem.write_bytes(Self::retptr_at(retptr, 4)?, &0u32.to_le_bytes())?;
                         return Ok(vec![]);
                     }
 
@@ -1738,13 +1747,14 @@ impl WasiDispatcher {
                             );
                         }
 
-                        // Bounds check
+                        // An allocation that does not fit memory is an error, never an
+                        // empty list the guest would take for "no arguments".
                         if (*string_ptr as usize + bytes.len()) > mem.size() {
                             #[cfg(feature = "tracing")]
                             warn!("not enough memory for arg data");
-                            mem.write_bytes(retptr, &0u32.to_le_bytes())?;
-                            mem.write_bytes(retptr + 4, &0u32.to_le_bytes())?;
-                            return Ok(vec![]);
+                            return Err(Error::memory_out_of_bounds(
+                                "get-arguments: an argument allocation lies past the end of memory",
+                            ));
                         }
 
                         // Write string bytes to its individually allocated location
@@ -1773,7 +1783,10 @@ impl WasiDispatcher {
 
                     // Write (list_ptr, count) to the return pointer
                     mem.write_bytes(retptr, &list_ptr.to_le_bytes())?;
-                    mem.write_bytes(retptr + 4, &(args_to_use.len() as u32).to_le_bytes())?;
+                    mem.write_bytes(
+                        Self::retptr_at(retptr, 4)?,
+                        &(args_to_use.len() as u32).to_le_bytes(),
+                    )?;
 
                     #[cfg(feature = "tracing")]
                     trace!(
@@ -1919,7 +1932,10 @@ impl WasiDispatcher {
                     mem.write_bytes(buf_ptr + 4 * i as u32, &idx.to_le_bytes())?;
                 }
                 mem.write_bytes(retptr, &buf_ptr.to_le_bytes())?;
-                mem.write_bytes(retptr + 4, &(ready.len() as u32).to_le_bytes())?;
+                mem.write_bytes(
+                    Self::retptr_at(retptr, 4)?,
+                    &(ready.len() as u32).to_le_bytes(),
+                )?;
                 Ok(vec![])
             },
 
@@ -1986,7 +2002,7 @@ impl WasiDispatcher {
                     };
                     // Write success discriminant (0) and capacity
                     mem.write_bytes(retptr, &0u32.to_le_bytes())?;
-                    mem.write_bytes(retptr + 8, &65536u64.to_le_bytes())?;
+                    mem.write_bytes(Self::retptr_at(retptr, 8)?, &65536u64.to_le_bytes())?;
                 }
                 Ok(vec![])
             },
@@ -2036,7 +2052,7 @@ impl WasiDispatcher {
                     // Write seconds (u64, 8 bytes) at retptr
                     mem.write_bytes(retptr, &seconds.to_le_bytes())?;
                     // Write nanoseconds as u32 (4 bytes) at retptr + 8
-                    mem.write_bytes(retptr + 8, &nanoseconds.to_le_bytes())?;
+                    mem.write_bytes(Self::retptr_at(retptr, 8)?, &nanoseconds.to_le_bytes())?;
 
                     #[cfg(feature = "tracing")]
                     trace!(
@@ -2077,7 +2093,7 @@ impl WasiDispatcher {
                     // Write seconds (0) at retptr
                     mem.write_bytes(retptr, &0u64.to_le_bytes())?;
                     // Write nanoseconds (1) as i64 at retptr + 8
-                    mem.write_bytes(retptr + 8, &1u64.to_le_bytes())?;
+                    mem.write_bytes(Self::retptr_at(retptr, 8)?, &1u64.to_le_bytes())?;
                     Ok(vec![])
                 } else {
                     Ok(vec![
@@ -2278,29 +2294,28 @@ impl WasiDispatcher {
                     //   discriminant 0 = ok (no payload)
                     //   discriminant 1 = err (followed by error info)
                     // Canonical ABI uses i32 (4 bytes) for discriminant
+                    // An out-of-range retptr is an error from the write, never skipped.
                     if let Some(rp) = retptr {
-                        if (rp as usize + 4) <= mem.size() {
-                            match &result {
-                                Ok(()) => {
-                                    // Ok variant: discriminant = 0 (4 bytes, little-endian)
-                                    mem.write_bytes(rp, &0u32.to_le_bytes())?;
-                                    #[cfg(feature = "tracing")]
-                                    trace!(
-                                        retptr = format_args!("0x{:x}", rp),
-                                        "wrote Ok discriminant (0)"
-                                    );
-                                },
-                                Err(_) => {
-                                    // Err variant: discriminant = 1 (4 bytes, little-endian)
-                                    // Note: stream-error payload would need more data, but for now just set discriminant
-                                    mem.write_bytes(rp, &1u32.to_le_bytes())?;
-                                    #[cfg(feature = "tracing")]
-                                    trace!(
-                                        retptr = format_args!("0x{:x}", rp),
-                                        "wrote Err discriminant (1)"
-                                    );
-                                },
-                            }
+                        match &result {
+                            Ok(()) => {
+                                // Ok variant: discriminant = 0 (4 bytes, little-endian)
+                                mem.write_bytes(rp, &0u32.to_le_bytes())?;
+                                #[cfg(feature = "tracing")]
+                                trace!(
+                                    retptr = format_args!("0x{:x}", rp),
+                                    "wrote Ok discriminant (0)"
+                                );
+                            },
+                            Err(_) => {
+                                // Err variant: discriminant = 1 (4 bytes, little-endian)
+                                // Note: stream-error payload would need more data, but for now just set discriminant
+                                mem.write_bytes(rp, &1u32.to_le_bytes())?;
+                                #[cfg(feature = "tracing")]
+                                trace!(
+                                    retptr = format_args!("0x{:x}", rp),
+                                    "wrote Err discriminant (1)"
+                                );
+                            },
                         }
                     }
 
@@ -2321,9 +2336,7 @@ impl WasiDispatcher {
                 {
                     // In no_std, we can't write to stdout, but still write Ok to retptr
                     if let Some(rp) = retptr {
-                        if (rp as usize + 4) <= mem.size() {
-                            mem.write_bytes(rp, &0u32.to_le_bytes())?; // Ok discriminant (4 bytes)
-                        }
+                        mem.write_bytes(rp, &0u32.to_le_bytes())?; // Ok discriminant (4 bytes)
                     }
                     Ok(vec![])
                 }
@@ -3692,7 +3705,7 @@ impl WasiDispatcher {
                     if self.preopens.is_empty() {
                         // No preopens: empty list (ptr=0, len=0)
                         mem.write_bytes(retptr, &0u32.to_le_bytes())?;
-                        mem.write_bytes(retptr + 4, &0u32.to_le_bytes())?;
+                        mem.write_bytes(Self::retptr_at(retptr, 4)?, &0u32.to_le_bytes())?;
                         return Ok(vec![]);
                     }
 
@@ -3730,7 +3743,10 @@ impl WasiDispatcher {
                     }
                     // Write list header (ptr, len) into the return area.
                     mem.write_bytes(retptr, &list_ptr.to_le_bytes())?;
-                    mem.write_bytes(retptr + 4, &(self.preopens.len() as u32).to_le_bytes())?;
+                    mem.write_bytes(
+                        Self::retptr_at(retptr, 4)?,
+                        &(self.preopens.len() as u32).to_le_bytes(),
+                    )?;
                 }
                 Ok(vec![])
             },
@@ -3763,8 +3779,8 @@ impl WasiDispatcher {
                             )?;
                             // Write Some discriminant (1), ptr, len
                             mem.write_bytes(retptr, &1u32.to_le_bytes())?;
-                            mem.write_bytes(retptr + 4, &data_ptr.to_le_bytes())?;
-                            mem.write_bytes(retptr + 8, &len.to_le_bytes())?;
+                            mem.write_bytes(Self::retptr_at(retptr, 4)?, &data_ptr.to_le_bytes())?;
+                            mem.write_bytes(Self::retptr_at(retptr, 8)?, &len.to_le_bytes())?;
                         } else {
                             // Write None discriminant (0)
                             mem.write_bytes(retptr, &0u32.to_le_bytes())?;
@@ -3807,7 +3823,7 @@ impl WasiDispatcher {
                         debug_str,
                     )?;
                     mem.write_bytes(retptr, &data_ptr.to_le_bytes())?;
-                    mem.write_bytes(retptr + 4, &len.to_le_bytes())?;
+                    mem.write_bytes(Self::retptr_at(retptr, 4)?, &len.to_le_bytes())?;
                     Ok(vec![])
                 } else {
                     Ok(vec![CoreValue::I32(0), CoreValue::I32(0)])

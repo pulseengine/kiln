@@ -62,7 +62,13 @@ fn strip_wasi_version(interface: &str) -> &str {
 enum OwnedReturn {
     /// One fresh `cabi_realloc`'d buffer of `size` bytes aligned to `align`
     /// (a `list<u8>`, a `string` or the `list<u32>` of `poll`).
-    Buffer { size: u32, align: u32 },
+    ///
+    /// `exact` says `size` is the length of the list the host returns. Otherwise
+    /// it is only an upper bound the host reserves (a read returns at most the
+    /// requested length; wasmtime allocates the length it returns), so the
+    /// allocation must start inside memory and be aligned, and the bytes the
+    /// handler writes are bounds-checked as it writes them.
+    Buffer { size: u32, align: u32, exact: bool },
     /// The `list<string>` of `wasi:cli/environment::get-arguments`: a list
     /// array plus one buffer per argument.
     Arguments,
@@ -83,41 +89,48 @@ enum OwnedReturn {
 /// version. Returns `None` for every function that returns no such value.
 #[cfg(feature = "wasi")]
 fn owned_return_policy(interface: &str, function: &str, args: &[Value]) -> Option<OwnedReturn> {
-    // The length argument at `index`; `at_least_one` gives a zero-length request a
-    // guest-owned (empty) list. The allocator clamps to [1, 1 MiB].
-    let requested_len = |index: usize, at_least_one: bool| -> Option<u32> {
+    // The length argument at `index`; `saturate` keeps an i64 length above u32::MAX at
+    // u32::MAX (the allocator then clamps it to 1 MiB) instead of truncating it. A
+    // zero length stays zero: the guest is asked for an empty buffer, as the
+    // canonical ABI does for an empty list.
+    let requested_len = |index: usize, saturate: bool| -> Option<u32> {
         let len = match args.get(index)? {
-            Value::I64(n) if at_least_one => u32::try_from(*n).unwrap_or(u32::MAX).max(1),
+            Value::I64(n) if saturate => u32::try_from(*n).unwrap_or(u32::MAX),
             Value::I64(n) => *n as u32,
-            Value::I32(n) if at_least_one => (*n as u32).max(1),
             Value::I32(n) => *n as u32,
             _ => return None,
         };
         Some(len)
     };
-    let bytes = |size: Option<u32>| size.map(|size| OwnedReturn::Buffer { size, align: 1 });
+    let bytes = |size: Option<u32>, exact: bool| {
+        size.map(|size| OwnedReturn::Buffer {
+            size,
+            align: 1,
+            exact,
+        })
+    };
 
     if (interface.contains("wasi:random/random") && function == "get-random-bytes")
         || (interface.contains("wasi:random/insecure") && function == "get-insecure-random-bytes")
     {
-        // list<u8> of the requested length (the allocator clamps to [1, 1 MiB]).
-        bytes(requested_len(0, true))
+        // list<u8> of exactly the requested length (the allocator clamps to 1 MiB).
+        bytes(requested_len(0, true), true)
     } else if interface.contains("wasi:cli/environment") && function == "initial-cwd" {
         // option<string>: a working directory fits a path-sized buffer (the host refuses,
         // rather than truncates, anything longer).
-        bytes(Some(4096))
+        bytes(Some(4096), false)
     } else if interface.contains("wasi:cli/environment") && function == "get-arguments" {
         Some(OwnedReturn::Arguments)
     } else if interface.contains("wasi:filesystem/preopens") && function == "get-directories" {
         Some(OwnedReturn::Preopens)
     } else if interface.contains("wasi:io/error") && function == "[method]error.to-debug-string" {
-        bytes(Some(256))
+        bytes(Some(256), false)
     } else if interface.contains("wasi:io/streams")
         && (function.contains("input-stream.read")
             || function.contains("input-stream.blocking-read"))
     {
         // args = [self, len, ...]; a zero-length read takes no buffer.
-        bytes(requested_len(1, false).filter(|len| *len > 0))
+        bytes(requested_len(1, false).filter(|len| *len > 0), false)
     } else if interface.contains("wasi:io/poll") && function == "poll" {
         // The ready subset is a list<u32> of at most `len` indices
         // (args = [list_ptr, len, retptr]).
@@ -125,24 +138,27 @@ fn owned_return_policy(interface: &str, function: &str, args: &[Value]) -> Optio
             Some(Value::I32(n)) => Some(OwnedReturn::Buffer {
                 size: (*n as u32).saturating_mul(4),
                 align: 4,
+                exact: false,
             }),
             _ => None,
         }
     } else if interface.contains("wasi:filesystem/types") {
         if function.contains("read-directory-entry") {
             // directory-entry name string: no len arg, use a filename-sized buffer.
-            bytes(Some(512))
+            bytes(Some(512), false)
         } else if function == "[method]descriptor.read" {
             // list<u8> sized to the requested length
             // (args = [self, length: i64, offset: i64, retptr]).
             match args.get(1) {
-                Some(Value::I64(n)) => bytes(Some(u32::try_from(*n).unwrap_or(u32::MAX).max(1))),
+                Some(Value::I64(n)) => {
+                    bytes(Some(u32::try_from(*n).unwrap_or(u32::MAX).max(1)), false)
+                },
                 _ => None,
             }
         } else if function == "[method]descriptor.readlink-at" {
             // string result; a link target never exceeds a path-sized buffer (the host
             // refuses, rather than truncates, anything longer).
-            bytes(Some(4096))
+            bytes(Some(4096), false)
         } else {
             None
         }
@@ -179,6 +195,105 @@ impl HostMemory {
             Self::Refused(r) => Some(r as &dyn kiln_foundation::MemoryAccessor),
         }
     }
+
+    /// The current size in bytes of the memory a guest pointer must lie in.
+    fn size(&self) -> Result<usize> {
+        self.accessor().map(|m| m.size()).ok_or_else(|| {
+            kiln_error::Error::runtime_error(
+                "Guest pointer cannot be checked: the instance has no memory",
+            )
+        })
+    }
+}
+
+/// Which guest-supplied pointer [`check_guest_range`] validates; it picks the error.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GuestPointer {
+    /// The return-area pointer of a call whose result does not fit one core value.
+    ReturnArea,
+    /// The result of a host-initiated `cabi_realloc` call.
+    ReallocResult,
+}
+
+/// Validate `[ptr, ptr + size)` against a memory of `mem_size` bytes and the
+/// canonical-ABI alignment `align`, trapping on a violation (SR-102).
+///
+/// The canonical ABI requires a return-area pointer and a `cabi_realloc` result
+/// to be aligned for the type stored there and to keep the whole range inside
+/// linear memory (wasmtime traps with "pointer not aligned", "pointer out of
+/// bounds" and "realloc return: beyond end of memory"). The host checks before
+/// it writes anywhere near the pointer and never rounds or skips a bad one.
+fn check_guest_range(
+    mem_size: usize,
+    ptr: u32,
+    size: u32,
+    align: u32,
+    kind: GuestPointer,
+) -> Result<()> {
+    if align > 1 && ptr % align != 0 {
+        return Err(match kind {
+            GuestPointer::ReturnArea => kiln_error::Error::runtime_unaligned_memory_access(
+                "Return area pointer not aligned for the result type",
+            ),
+            GuestPointer::ReallocResult => kiln_error::Error::runtime_unaligned_memory_access(
+                "cabi_realloc return: pointer not aligned for the requested alignment",
+            ),
+        });
+    }
+    let out_of_bounds = || match kind {
+        GuestPointer::ReturnArea => kiln_error::Error::runtime_out_of_bounds(
+            "Return area pointer out of bounds: the area runs past the end of memory",
+        ),
+        GuestPointer::ReallocResult => {
+            kiln_error::Error::runtime_out_of_bounds("cabi_realloc return: beyond end of memory")
+        },
+    };
+    let end = u64::from(ptr).checked_add(u64::from(size)).ok_or_else(out_of_bounds)?;
+    if end > mem_size as u64 {
+        return Err(out_of_bounds());
+    }
+    Ok(())
+}
+
+/// Validate the return-area pointer of a host call before any handler runs
+/// (SR-102).
+///
+/// A function whose result does not fit one core value takes its return-area
+/// pointer as the last argument; its size and alignment come from the canonical
+/// layout of the result in the signature table.
+#[cfg(feature = "wasi")]
+fn check_return_area(
+    module_name: &str,
+    field_name: &str,
+    args: &[Value],
+    memory: &HostMemory,
+) -> Result<()> {
+    let (base_field, _) = kiln_foundation::split_instance_suffix(field_name);
+    let Some(sig) = crate::wasip2_host::get_wasi_function_signature(module_name, base_field)
+        .filter(|s| s.result_needs_retptr())
+    else {
+        return Ok(());
+    };
+    let retptr = match args.last() {
+        Some(Value::I32(p)) => *p as u32,
+        _ => {
+            return Err(kiln_error::Error::runtime_error(
+                "Host function returns a value through a return area but its last argument is not an i32 pointer",
+            ));
+        },
+    };
+    // A refused memory fails any access with its own reason, which the handler reports.
+    if matches!(memory, HostMemory::Refused(_)) {
+        return Ok(());
+    }
+    let (size, align) = crate::wasip2_host::canonical_result_layout(&sig.results);
+    check_guest_range(
+        memory.size()?,
+        retptr,
+        size,
+        align,
+        GuestPointer::ReturnArea,
+    )
 }
 
 /// The guest allocator a host call places its results with (SR-81).
@@ -1569,19 +1684,23 @@ impl StacklessEngine {
     ) -> Result<Vec<Value>> {
         // The policy keys on the base function name (SR-81).
         let (base_function, _) = kiln_foundation::split_instance_suffix(function);
+
+        // The return area must be valid before the guest is asked to allocate or a
+        // handler writes (SR-102).
+        check_return_area(interface, function, args, &owner.memory)?;
+
         let mut alloc = OwnedAllocation::default();
         match owned_return_policy(interface, base_function, args) {
-            Some(OwnedReturn::Buffer { size, align }) => {
+            Some(OwnedReturn::Buffer { size, align, exact }) => {
                 owner.realloc.check()?;
                 alloc.buffer =
-                    self.allocate_wasi_read_buffer(instance_id, size, align, &owner.realloc)?;
+                    self.allocate_wasi_read_buffer(instance_id, size, align, exact, owner)?;
             },
             Some(OwnedReturn::Arguments) => {
                 let wasi_args = kiln_wasi::get_global_wasi_args()?;
                 if !wasi_args.is_empty() {
                     owner.realloc.check()?;
-                    alloc.args =
-                        self.allocate_wasi_args_memory(instance_id, &wasi_args, &owner.realloc)?;
+                    alloc.args = self.allocate_wasi_args_memory(instance_id, &wasi_args, owner)?;
                 }
             },
             Some(OwnedReturn::Preopens) => {
@@ -1596,7 +1715,7 @@ impl StacklessEngine {
                 if !paths.is_empty() {
                     owner.realloc.check()?;
                     alloc.preopens =
-                        self.allocate_wasi_preopens_memory(instance_id, &paths, &owner.realloc)?;
+                        self.allocate_wasi_preopens_memory(instance_id, &paths, owner)?;
                 }
             },
             None => {},
@@ -15163,27 +15282,32 @@ impl StacklessEngine {
         args
     }
 
-    /// Call cabi_realloc to allocate memory in WASM instance
+    /// Call cabi_realloc to make a new allocation of `new_size` bytes aligned to
+    /// `align` in the WASM instance (`old_ptr` and `old_size` are 0: the host
+    /// only allocates, the guest frees).
+    ///
+    /// The result is validated against `memory` (the memory the host call
+    /// writes into) after the call, since the allocator may have grown it: it
+    /// must be aligned for `align` and `[ptr, ptr + fits)` must lie inside
+    /// memory (SR-102). `fits` is `new_size` when the host fills the whole
+    /// allocation; for a buffer reserved as an upper bound it is 0 (the
+    /// allocation starts inside memory, and the handler's writes are
+    /// bounds-checked).
+    #[cfg(feature = "wasi")]
     fn call_cabi_realloc(
         &mut self,
         instance_id: usize,
         func_idx: usize,
-        old_ptr: u32,
-        old_size: u32,
+        memory: &HostMemory,
         align: u32,
         new_size: u32,
+        fits: u32,
     ) -> Result<u32> {
         #[cfg(feature = "tracing")]
-        trace!(
-            old_ptr = old_ptr,
-            old_size = old_size,
-            align = align,
-            new_size = new_size,
-            "[CABI_REALLOC] Calling"
-        );
+        trace!(align = align, new_size = new_size, "[CABI_REALLOC] Calling");
         let args = vec![
-            Value::I32(old_ptr as i32),
-            Value::I32(old_size as i32),
+            Value::I32(0),
+            Value::I32(0),
             Value::I32(align as i32),
             Value::I32(new_size as i32),
         ];
@@ -15193,13 +15317,20 @@ impl StacklessEngine {
         // Use full execute() — cabi_realloc may call the allocator (e.g., __rust_alloc).
         let results = self.execute(instance_id, func_idx, args)?;
 
-        if let Some(Value::I32(ptr)) = results.first() {
-            Ok(*ptr as u32)
-        } else {
-            Err(kiln_error::Error::runtime_error(
+        let Some(Value::I32(ptr)) = results.first() else {
+            return Err(kiln_error::Error::runtime_error(
                 "cabi_realloc returned invalid value",
-            ))
-        }
+            ));
+        };
+        let ptr = *ptr as u32;
+        check_guest_range(
+            memory.size()?,
+            ptr,
+            fits,
+            align,
+            GuestPointer::ReallocResult,
+        )?;
+        Ok(ptr)
     }
 
     /// Allocate memory for WASI arguments using cabi_realloc
@@ -15219,7 +15350,7 @@ impl StacklessEngine {
         &mut self,
         instance_id: usize,
         args: &[String],
-        realloc: &HostRealloc,
+        owner: &HostCallOwner,
     ) -> Result<Option<(u32, Vec<(u32, u32)>)>> {
         // Find cabi_realloc (the import map's, or the module's export)
         let instance = self
@@ -15230,7 +15361,7 @@ impl StacklessEngine {
         let module = instance.module();
 
         let Some(cabi_realloc_idx) =
-            realloc.resolve(|| self.find_export_index(&module, "cabi_realloc").ok())?
+            owner.realloc.resolve(|| self.find_export_index(&module, "cabi_realloc").ok())?
         else {
             #[cfg(feature = "tracing")]
             trace!(
@@ -15257,9 +15388,9 @@ impl StacklessEngine {
         let list_ptr = self.call_cabi_realloc(
             instance_id,
             cabi_realloc_idx,
-            0, // old_ptr (NULL for new allocation)
-            0, // old_size
+            &owner.memory,
             8, // align (8-byte alignment for pointers)
+            list_size as u32,
             list_size as u32,
         )?;
 
@@ -15280,9 +15411,9 @@ impl StacklessEngine {
             let string_ptr = self.call_cabi_realloc(
                 instance_id,
                 cabi_realloc_idx,
-                0, // old_ptr (NULL for new allocation)
-                0, // old_size
+                &owner.memory,
                 1, // align (1-byte alignment for strings)
+                string_len,
                 string_len,
             )?;
 
@@ -15311,7 +15442,7 @@ impl StacklessEngine {
         &mut self,
         instance_id: usize,
         paths: &[String],
-        realloc: &HostRealloc,
+        owner: &HostCallOwner,
     ) -> Result<Option<(u32, Vec<(u32, u32)>)>> {
         let instance = self
             .instances
@@ -15322,7 +15453,7 @@ impl StacklessEngine {
 
         // The import map's allocator, else the module's own export
         let Some(cabi_realloc_idx) =
-            realloc.resolve(|| self.find_export_index(&module, "cabi_realloc").ok())?
+            owner.realloc.resolve(|| self.find_export_index(&module, "cabi_realloc").ok())?
         else {
             #[cfg(feature = "tracing")]
             trace!("[WASI-ALLOC] cabi_realloc not found for preopens");
@@ -15338,9 +15469,9 @@ impl StacklessEngine {
         let list_ptr = self.call_cabi_realloc(
             instance_id,
             cabi_realloc_idx,
-            0, // old_ptr
-            0, // old_size
+            &owner.memory,
             4, // align (4-byte for the u32 fields)
+            list_size,
             list_size,
         )?;
 
@@ -15351,10 +15482,10 @@ impl StacklessEngine {
             let string_ptr = self.call_cabi_realloc(
                 instance_id,
                 cabi_realloc_idx,
-                0,
-                0,
+                &owner.memory,
                 1,
-                path_len.max(1), // never request 0 bytes
+                path_len,
+                path_len,
             )?;
             string_ptrs.push((string_ptr, path_len));
         }
@@ -15369,16 +15500,20 @@ impl StacklessEngine {
     /// to the guest's requested `len`, capped to a sane maximum. Returns None if the
     /// component has no cabi_realloc export. `align` is the element alignment of the
     /// returned list (1 for bytes, 4 for the `list<u32>` of `poll`, SR-91). SR-38.
+    /// `exact` says the host fills all `len` bytes (see [`OwnedReturn::Buffer`]); the
+    /// allocation is then validated to lie wholly inside memory (SR-102).
     #[cfg(feature = "wasi")]
     fn allocate_wasi_read_buffer(
         &mut self,
         instance_id: usize,
         len: u32,
         align: u32,
-        realloc: &HostRealloc,
+        exact: bool,
+        owner: &HostCallOwner,
     ) -> Result<Option<(u32, u32)>> {
         const MAX_READ_BUF: u32 = 1 << 20; // 1 MiB cap; reads clamp to this, guest loops for more
-        let size = len.clamp(1, MAX_READ_BUF);
+        // A zero-length request stays zero: the canonical ABI asks for an empty list.
+        let size = len.min(MAX_READ_BUF);
 
         let instance = self
             .instances
@@ -15387,11 +15522,19 @@ impl StacklessEngine {
             .clone();
         let module = instance.module();
         let Some(cabi_realloc_idx) =
-            realloc.resolve(|| self.find_export_index(&module, "cabi_realloc").ok())?
+            owner.realloc.resolve(|| self.find_export_index(&module, "cabi_realloc").ok())?
         else {
             return Ok(None);
         };
-        let ptr = self.call_cabi_realloc(instance_id, cabi_realloc_idx, 0, 0, align, size)?;
+        let fits = if exact { size } else { 0 };
+        let ptr = self.call_cabi_realloc(
+            instance_id,
+            cabi_realloc_idx,
+            &owner.memory,
+            align,
+            size,
+            fits,
+        )?;
         Ok(Some((ptr, size)))
     }
 
