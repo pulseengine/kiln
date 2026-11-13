@@ -201,6 +201,7 @@ enum WasiFn {
     CliExit,
     PreviewOneProcExit,
     Poll,
+    PollableReady,
     PollableBlock,
     PollableDrop,
     OutputStreamCheckWrite,
@@ -224,6 +225,10 @@ enum WasiFn {
     MonotonicClockNow,
     #[cfg(feature = "wasi-clocks")]
     MonotonicClockResolution,
+    #[cfg(feature = "wasi-clocks")]
+    MonotonicClockSubscribeDuration,
+    #[cfg(feature = "wasi-clocks")]
+    MonotonicClockSubscribeInstant,
     #[cfg(feature = "wasi-random")]
     GetRandomBytes,
     #[cfg(feature = "wasi-random")]
@@ -367,6 +372,11 @@ const SERVED_WASI_IMPORTS: &[(&str, &str, WasiFn)] = &[
     ("wasi:io/poll", "poll", WasiFn::Poll),
     (
         "wasi:io/poll",
+        "[method]pollable.ready",
+        WasiFn::PollableReady,
+    ),
+    (
+        "wasi:io/poll",
         "[method]pollable.block",
         WasiFn::PollableBlock,
     ),
@@ -497,6 +507,18 @@ const SERVED_WASI_IMPORTS: &[(&str, &str, WasiFn)] = &[
         "wasi:clocks/monotonic-clock",
         "resolution",
         WasiFn::MonotonicClockResolution,
+    ),
+    #[cfg(feature = "wasi-clocks")]
+    (
+        "wasi:clocks/monotonic-clock",
+        "subscribe-duration",
+        WasiFn::MonotonicClockSubscribeDuration,
+    ),
+    #[cfg(feature = "wasi-clocks")]
+    (
+        "wasi:clocks/monotonic-clock",
+        "subscribe-instant",
+        WasiFn::MonotonicClockSubscribeInstant,
     ),
     #[cfg(feature = "wasi-random")]
     (
@@ -768,6 +790,36 @@ pub struct WasiDispatcher {
     /// the cursor and returns none at the end. SR-39.
     #[cfg(feature = "std")]
     dir_streams: HashMap<u32, (Vec<(u8, String)>, usize)>,
+    /// Live `wasi:io/poll` pollable resources, keyed by their guest handle (SR-91).
+    #[cfg(feature = "std")]
+    pollables: HashMap<u32, Pollable>,
+    /// Next pollable handle to issue (handles are never reused).
+    #[cfg(feature = "std")]
+    next_pollable: u32,
+}
+
+/// The kind of a `wasi:io/poll` pollable resource (SR-91).
+#[cfg(feature = "std")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Pollable {
+    /// A monotonic-clock subscription: ready once `Instant::now()` reaches the deadline.
+    Deadline(std::time::Instant),
+    /// A stream subscription. Output streams (stdout/stderr and file writes) and
+    /// file-backed input streams never block in kiln: writes are synchronous and
+    /// `check-write` always reports capacity, reads are synchronous. So the
+    /// pollable is ready from creation, and `block` returns immediately.
+    AlwaysReady,
+}
+
+#[cfg(feature = "std")]
+impl Pollable {
+    /// The deadline to wait for, or `None` if ready now.
+    fn pending_until(&self, now: std::time::Instant) -> Option<std::time::Instant> {
+        match self {
+            Self::Deadline(d) if *d > now => Some(*d),
+            Self::Deadline(_) | Self::AlwaysReady => None,
+        }
+    }
 }
 
 impl WasiDispatcher {
@@ -832,7 +884,41 @@ impl WasiDispatcher {
             stream_files: HashMap::new(),
             #[cfg(feature = "std")]
             dir_streams: HashMap::new(),
+            #[cfg(feature = "std")]
+            pollables: HashMap::new(),
+            #[cfg(feature = "std")]
+            next_pollable: 1,
         })
+    }
+
+    /// Register a pollable and return its guest handle.
+    #[cfg(feature = "std")]
+    fn insert_pollable(&mut self, kind: Pollable) -> Result<u32> {
+        let handle = self.next_pollable;
+        self.next_pollable = handle
+            .checked_add(1)
+            .ok_or_else(|| Error::runtime_error("pollable handle space exhausted"))?;
+        self.pollables.insert(handle, kind);
+        Ok(handle)
+    }
+
+    /// Look up a live pollable; an unknown handle is an error.
+    #[cfg(feature = "std")]
+    fn pollable(&self, handle: u32) -> Result<Pollable> {
+        self.pollables.get(&handle).copied().ok_or_else(|| {
+            Error::wasi_invalid_argument("pollable handle does not name a live pollable")
+        })
+    }
+
+    /// Sleep until `deadline` has passed (no busy loop).
+    #[cfg(feature = "std")]
+    fn sleep_until(deadline: std::time::Instant) {
+        while let Some(rem) = deadline.checked_duration_since(std::time::Instant::now()) {
+            if rem.is_zero() {
+                break;
+            }
+            std::thread::sleep(rem);
+        }
     }
 
     /// Create a dispatcher with default (full) capabilities
@@ -1692,31 +1778,136 @@ impl WasiDispatcher {
             // wasi:io/poll - Async I/O polling interfaces
             // ================================================================
             WasiFn::Poll => {
-                // poll(pollables: list<borrow<pollable>>) -> list<u32>
-                // Returns indices of ready pollables
-                // For simple synchronous execution, return first item ready
-                // Args: list_ptr, list_len, retptr
-                if let Some(mem) = memory {
-                    let retptr = match args.get(2) {
-                        Some(CoreValue::I32(p)) => *p as u32,
-                        _ => return Ok(vec![]),
-                    };
-                    // Write empty list (0, 0) - all items "ready"
-                    mem.write_bytes(retptr, &0u32.to_le_bytes())?;
-                    mem.write_bytes(retptr + 4, &0u32.to_le_bytes())?;
+                // poll(in: list<borrow<pollable>>) -> list<u32>   (SR-91)
+                // Args: list_ptr, list_len, retptr. Returns the indices (input
+                // order) of the ready pollables; when none is ready, waits for the
+                // earliest deadline first. The result list lives in a fresh
+                // cabi_realloc'd guest buffer (read_buf_alloc, sized `4 * len` by the
+                // engine) that the guest owns and frees.
+                let read_buf = self.read_buf_alloc.take();
+                let mem = memory.ok_or_else(|| {
+                    Error::runtime_error("poll requires guest memory to read the pollable list")
+                })?;
+                let (list_ptr, len, retptr) = match (args.first(), args.get(1), args.get(2)) {
+                    (Some(CoreValue::I32(p)), Some(CoreValue::I32(l)), Some(CoreValue::I32(r))) => {
+                        (*p as u32, *l as u32, *r as u32)
+                    },
+                    _ => {
+                        return Err(Error::wasi_invalid_argument(
+                            "poll expects (list_ptr, list_len, retptr) as i32",
+                        ));
+                    },
+                };
+                // The WIT contract: the list must be non-empty (an empty poll would
+                // block forever).
+                if len == 0 {
+                    return Err(Error::wasi_invalid_argument(
+                        "poll requires a non-empty pollable list",
+                    ));
+                }
+                let byte_len =
+                    (len as usize).checked_mul(4).filter(|b| *b <= mem.size()).ok_or_else(
+                        || Error::wasi_invalid_argument("poll list exceeds guest memory"),
+                    )?;
+                let mut raw = vec![0u8; byte_len];
+                mem.read_bytes(list_ptr, &mut raw)?;
+                let mut kinds = Vec::with_capacity(len as usize);
+                for chunk in raw.chunks_exact(4) {
+                    let handle = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+                    kinds.push(self.pollable(handle)?);
+                }
+
+                let mut now = std::time::Instant::now();
+                let mut ready: Vec<u32> = Vec::new();
+                for (i, k) in kinds.iter().enumerate() {
+                    if k.pending_until(now).is_none() {
+                        ready.push(i as u32);
+                    }
+                }
+                if ready.is_empty() {
+                    // All are deadlines still in the future: sleep until the earliest.
+                    let earliest = kinds.iter().filter_map(|k| k.pending_until(now)).min();
+                    if let Some(deadline) = earliest {
+                        Self::sleep_until(deadline);
+                    }
+                    now = std::time::Instant::now();
+                    for (i, k) in kinds.iter().enumerate() {
+                        if k.pending_until(now).is_none() {
+                            ready.push(i as u32);
+                        }
+                    }
+                }
+                if ready.is_empty() {
+                    return Err(Error::runtime_error(
+                        "poll woke with no ready pollable after its earliest deadline",
+                    ));
+                }
+
+                let (buf_ptr, buf_size) = read_buf.ok_or_else(|| {
+                    Error::runtime_error(
+                        "poll requires a cabi_realloc'd result buffer (read_buf_alloc not set)",
+                    )
+                })?;
+                let need = ready.len() * 4;
+                if need > buf_size as usize {
+                    return Err(Error::runtime_error(
+                        "poll result buffer is smaller than the ready list",
+                    ));
+                }
+                for (i, idx) in ready.iter().enumerate() {
+                    mem.write_bytes(buf_ptr + 4 * i as u32, &idx.to_le_bytes())?;
+                }
+                mem.write_bytes(retptr, &buf_ptr.to_le_bytes())?;
+                mem.write_bytes(retptr + 4, &(ready.len() as u32).to_le_bytes())?;
+                Ok(vec![])
+            },
+
+            WasiFn::PollableReady => {
+                // [method]pollable.ready(self: borrow<pollable>) -> bool   (SR-91)
+                let handle = match args.first() {
+                    Some(CoreValue::I32(h)) => *h as u32,
+                    _ => {
+                        return Err(Error::wasi_invalid_argument(
+                            "pollable.ready expects a pollable handle",
+                        ));
+                    },
+                };
+                let ready =
+                    self.pollable(handle)?.pending_until(std::time::Instant::now()).is_none();
+                Ok(vec![CoreValue::I32(i32::from(ready))])
+            },
+
+            WasiFn::PollableBlock => {
+                // [method]pollable.block(self: borrow<pollable>)   (SR-91)
+                let handle = match args.first() {
+                    Some(CoreValue::I32(h)) => *h as u32,
+                    _ => {
+                        return Err(Error::wasi_invalid_argument(
+                            "pollable.block expects a pollable handle",
+                        ));
+                    },
+                };
+                if let Some(deadline) =
+                    self.pollable(handle)?.pending_until(std::time::Instant::now())
+                {
+                    Self::sleep_until(deadline);
                 }
                 Ok(vec![])
             },
 
-            WasiFn::PollableBlock => {
-                // block() -> void - block until pollable is ready
-                // For synchronous execution, return immediately
-                Ok(vec![])
-            },
-
             WasiFn::PollableDrop => {
-                // Drop pollable resource - no action needed for simple impl
-                Ok(vec![])
+                // [resource-drop]pollable(self: own<pollable>)   (SR-91)
+                let handle = match args.first() {
+                    Some(CoreValue::I32(h)) => *h as u32,
+                    _ => {
+                        return Err(Error::wasi_invalid_argument(
+                            "pollable drop expects a pollable handle",
+                        ));
+                    },
+                };
+                self.pollables.remove(&handle).map(|_| Vec::new()).ok_or_else(|| {
+                    Error::wasi_invalid_argument("dropped a pollable handle that is not live")
+                })
             },
 
             // ================================================================
@@ -1740,9 +1931,10 @@ impl WasiDispatcher {
             },
 
             WasiFn::OutputStreamSubscribe => {
-                // subscribe(self) -> pollable
-                // Return a pollable handle (use 0 for simple impl)
-                Ok(vec![CoreValue::I32(0)])
+                // subscribe(self) -> pollable: a real table entry. Output streams
+                // never block in kiln (see `Pollable::AlwaysReady`).
+                let handle = self.insert_pollable(Pollable::AlwaysReady)?;
+                Ok(vec![CoreValue::I32(handle as i32)])
             },
 
             // Clock functions
@@ -1846,6 +2038,66 @@ impl WasiDispatcher {
 
                 let ns = PlatformTime::monotonic_ns();
                 Ok(vec![CoreValue::I64(ns as i64)])
+            },
+
+            // subscribe-duration(when: duration) -> own<pollable>   (SR-91)
+            #[cfg(feature = "wasi-clocks")]
+            WasiFn::MonotonicClockSubscribeDuration => {
+                if !self.capabilities.clocks.monotonic_access {
+                    return Err(Error::wasi_permission_denied(
+                        "Monotonic clock access denied",
+                    ));
+                }
+                let ns = match args.first() {
+                    Some(CoreValue::I64(n)) => *n as u64,
+                    _ => {
+                        return Err(Error::wasi_invalid_argument(
+                            "subscribe-duration expects a u64 duration",
+                        ));
+                    },
+                };
+                let deadline = std::time::Instant::now()
+                    .checked_add(std::time::Duration::from_nanos(ns))
+                    .ok_or_else(|| {
+                        Error::wasi_invalid_argument(
+                            "subscribe-duration deadline is not representable",
+                        )
+                    })?;
+                let handle = self.insert_pollable(Pollable::Deadline(deadline))?;
+                Ok(vec![CoreValue::I32(handle as i32)])
+            },
+
+            // subscribe-instant(when: instant) -> own<pollable>   (SR-91)
+            // `when` is an absolute reading of the same monotonic clock `now` returns,
+            // so the remaining wait is `when - now` on that clock; a past instant is
+            // ready immediately.
+            #[cfg(feature = "wasi-clocks")]
+            WasiFn::MonotonicClockSubscribeInstant => {
+                use kiln_platform::time::PlatformTime;
+
+                if !self.capabilities.clocks.monotonic_access {
+                    return Err(Error::wasi_permission_denied(
+                        "Monotonic clock access denied",
+                    ));
+                }
+                let when = match args.first() {
+                    Some(CoreValue::I64(n)) => *n as u64,
+                    _ => {
+                        return Err(Error::wasi_invalid_argument(
+                            "subscribe-instant expects a u64 instant",
+                        ));
+                    },
+                };
+                let remaining = when.saturating_sub(PlatformTime::monotonic_ns());
+                let deadline = std::time::Instant::now()
+                    .checked_add(std::time::Duration::from_nanos(remaining))
+                    .ok_or_else(|| {
+                        Error::wasi_invalid_argument(
+                            "subscribe-instant deadline is not representable",
+                        )
+                    })?;
+                let handle = self.insert_pollable(Pollable::Deadline(deadline))?;
+                Ok(vec![CoreValue::I32(handle as i32)])
             },
 
             // I/O functions that need memory access
@@ -3347,8 +3599,9 @@ impl WasiDispatcher {
             },
 
             WasiFn::InputStreamSubscribe => {
-                // Return a pollable handle (reuse input stream creation)
-                let handle = self.resource_manager.create_input_stream("pollable")?;
+                // subscribe(self) -> pollable: a real table entry. Input streams are
+                // synchronous in kiln (see `Pollable::AlwaysReady`).
+                let handle = self.insert_pollable(Pollable::AlwaysReady)?;
                 Ok(vec![CoreValue::I32(handle as i32)])
             },
 
@@ -7102,5 +7355,242 @@ mod tests {
             sr96_symlink_at_dir_dotdot_link_slash,
             sr96_symlink_at_file_slash
         );
+    }
+
+    /// SR-91 / #625: monotonic-clock `subscribe-duration` / `subscribe-instant`
+    /// return real pollables on the monotonic clock; `ready`, `block` and
+    /// `wasi:io/poll::poll` honour their deadlines. Driven through the live
+    /// `dispatch_core` path.
+    #[cfg(all(feature = "wasi-clocks", feature = "std"))]
+    mod sr91 {
+        use super::*;
+        use kiln_foundation::HostImportHandler;
+        use kiln_foundation::traits::SliceMemory;
+        use kiln_foundation::values::Value as CV;
+        use std::time::{Duration, Instant};
+
+        const CLOCK: &str = "wasi:clocks/monotonic-clock";
+        const POLL: &str = "wasi:io/poll";
+        const LIST_PTR: u32 = 0x1000;
+        const RET_PTR: u32 = 0x100;
+        const RESULT_BUF: u32 = 0x2000;
+
+        struct Fx {
+            d: WasiDispatcher,
+            mem: SliceMemory,
+        }
+
+        impl Fx {
+            fn new() -> Result<Self> {
+                MemoryInitializer::ensure_initialized()?;
+                Ok(Self {
+                    d: WasiDispatcher::with_defaults()?,
+                    mem: SliceMemory::with_size(0x10000),
+                })
+            }
+
+            fn call(&mut self, iface: &str, func: &str, args: &[CV]) -> Result<Vec<CV>> {
+                self.d.dispatch_core(iface, func, args, Some(&self.mem))
+            }
+
+            fn now_ns(&mut self) -> u64 {
+                match self.call(CLOCK, "now", &[]).unwrap().as_slice() {
+                    [CV::I64(n)] => *n as u64,
+                    other => panic!("now returned {:?}", other),
+                }
+            }
+
+            fn handle(r: Result<Vec<CV>>) -> i32 {
+                match r.unwrap().as_slice() {
+                    [CV::I32(h)] => *h,
+                    other => panic!("expected one handle, got {:?}", other),
+                }
+            }
+
+            fn subscribe_duration(&mut self, ns: u64) -> i32 {
+                let r = self.call(CLOCK, "subscribe-duration", &[CV::I64(ns as i64)]);
+                Self::handle(r)
+            }
+
+            fn subscribe_instant(&mut self, ns: u64) -> i32 {
+                let r = self.call(CLOCK, "subscribe-instant", &[CV::I64(ns as i64)]);
+                Self::handle(r)
+            }
+
+            fn ready(&mut self, h: i32) -> Result<bool> {
+                let r = self.call(POLL, "[method]pollable.ready", &[CV::I32(h)])?;
+                match r.as_slice() {
+                    [CV::I32(b)] => Ok(*b != 0),
+                    other => panic!("ready returned {:?}", other),
+                }
+            }
+
+            fn block(&mut self, h: i32) -> Result<Vec<CV>> {
+                self.call(POLL, "[method]pollable.block", &[CV::I32(h)])
+            }
+
+            /// poll over `hs`; returns the indices read back from guest memory.
+            fn poll(&mut self, hs: &[i32]) -> Result<Vec<u32>> {
+                for (i, h) in hs.iter().enumerate() {
+                    self.mem.write_bytes(LIST_PTR + 4 * i as u32, &h.to_le_bytes()).unwrap();
+                }
+                self.d.set_read_buffer_allocation(RESULT_BUF, 64);
+                let r = self.call(
+                    POLL,
+                    "poll",
+                    &[
+                        CV::I32(LIST_PTR as i32),
+                        CV::I32(hs.len() as i32),
+                        CV::I32(RET_PTR as i32),
+                    ],
+                )?;
+                assert!(r.is_empty(), "poll lowers via retptr, got {:?}", r);
+                let mut word = [0u8; 4];
+                self.mem.read_bytes(RET_PTR, &mut word).unwrap();
+                let ptr = u32::from_le_bytes(word);
+                self.mem.read_bytes(RET_PTR + 4, &mut word).unwrap();
+                let len = u32::from_le_bytes(word);
+                assert_eq!(ptr, RESULT_BUF, "result list lives in the guest allocation");
+                let mut out = Vec::new();
+                for i in 0..len {
+                    self.mem.read_bytes(ptr + 4 * i, &mut word).unwrap();
+                    out.push(u32::from_le_bytes(word));
+                }
+                Ok(out)
+            }
+        }
+
+        #[test]
+        fn subscribe_duration_ready_false_then_block_waits_then_ready() -> Result<()> {
+            let mut fx = Fx::new()?;
+            let p = fx.subscribe_duration(50_000_000);
+            assert!(!fx.ready(p)?, "not ready before the deadline");
+            let t = Instant::now();
+            fx.block(p)?;
+            assert!(
+                t.elapsed() >= Duration::from_millis(50),
+                "block returned after {:?}",
+                t.elapsed()
+            );
+            assert!(fx.ready(p)?, "ready after the deadline");
+            Ok(())
+        }
+
+        #[test]
+        fn subscribe_instant_future_and_past() -> Result<()> {
+            let mut fx = Fx::new()?;
+            let now = fx.now_ns();
+            let p = fx.subscribe_instant(now + 30_000_000);
+            assert!(!fx.ready(p)?, "future instant not ready yet");
+            let t = Instant::now();
+            fx.block(p)?;
+            assert!(
+                t.elapsed() >= Duration::from_millis(25),
+                "block waited only {:?}",
+                t.elapsed()
+            );
+            assert!(fx.ready(p)?);
+
+            let now = fx.now_ns();
+            let past = fx.subscribe_instant(now.saturating_sub(1_000_000));
+            assert!(fx.ready(past)?, "past instant is ready immediately");
+            Ok(())
+        }
+
+        #[test]
+        fn poll_waits_for_the_earliest_deadline() -> Result<()> {
+            let mut fx = Fx::new()?;
+            let late = fx.subscribe_duration(200_000_000);
+            let early = fx.subscribe_duration(40_000_000);
+            let t = Instant::now();
+            let ready = fx.poll(&[late, early])?;
+            let took = t.elapsed();
+            assert_eq!(ready, vec![1]);
+            assert!(
+                took >= Duration::from_millis(40),
+                "poll took only {:?}",
+                took
+            );
+            assert!(took < Duration::from_millis(150), "poll took {:?}", took);
+            Ok(())
+        }
+
+        #[test]
+        fn poll_returns_all_ready_indices_in_input_order() -> Result<()> {
+            let mut fx = Fx::new()?;
+            let a = fx.subscribe_duration(0);
+            let pending = fx.subscribe_duration(5_000_000_000);
+            let b = fx.subscribe_duration(0);
+            let t = Instant::now();
+            assert_eq!(fx.poll(&[a, pending, b])?, vec![0, 2]);
+            assert!(t.elapsed() < Duration::from_millis(500), "must not wait");
+            Ok(())
+        }
+
+        #[test]
+        fn poll_without_result_allocation_fails_loud() -> Result<()> {
+            let mut fx = Fx::new()?;
+            let a = fx.subscribe_duration(0);
+            fx.mem.write_bytes(LIST_PTR, &a.to_le_bytes()).unwrap();
+            let r = fx.call(
+                POLL,
+                "poll",
+                &[
+                    CV::I32(LIST_PTR as i32),
+                    CV::I32(1),
+                    CV::I32(RET_PTR as i32),
+                ],
+            );
+            assert!(r.is_err());
+            Ok(())
+        }
+
+        #[test]
+        fn unknown_pollable_handle_is_an_error() -> Result<()> {
+            let mut fx = Fx::new()?;
+            assert!(fx.ready(999).is_err(), "ready");
+            assert!(fx.block(999).is_err(), "block");
+            assert!(fx.poll(&[999]).is_err(), "poll");
+            let drop = fx.call(POLL, "[resource-drop]pollable", &[CV::I32(999)]);
+            assert!(drop.is_err(), "drop");
+            let live = fx.subscribe_duration(0);
+            assert!(fx.poll(&[live, 999]).is_err(), "poll with one unknown");
+            Ok(())
+        }
+
+        #[test]
+        fn dropped_pollable_is_gone() -> Result<()> {
+            let mut fx = Fx::new()?;
+            let p = fx.subscribe_duration(0);
+            fx.call(POLL, "[resource-drop]pollable", &[CV::I32(p)])?;
+            assert!(fx.ready(p).is_err());
+            let again = fx.call(POLL, "[resource-drop]pollable", &[CV::I32(p)]);
+            assert!(again.is_err(), "double drop");
+            Ok(())
+        }
+
+        #[test]
+        fn stream_subscribe_is_a_real_always_ready_pollable() -> Result<()> {
+            let mut fx = Fx::new()?;
+            let out = fx.call("wasi:cli/stdout", "get-stdout", &[])?;
+            let CV::I32(os) = out[0] else {
+                panic!("handle")
+            };
+            let p = Fx::handle(fx.call(
+                "wasi:io/streams",
+                "[method]output-stream.subscribe",
+                &[CV::I32(os)],
+            ));
+            assert!(fx.ready(p)?);
+            assert_eq!(fx.poll(&[p])?, vec![0]);
+            Ok(())
+        }
+
+        #[test]
+        fn empty_poll_list_is_an_error() -> Result<()> {
+            let mut fx = Fx::new()?;
+            assert!(fx.poll(&[]).is_err());
+            Ok(())
+        }
     }
 }

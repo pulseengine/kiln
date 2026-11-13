@@ -854,7 +854,17 @@ impl StacklessEngine {
                 0
             };
             if want > 0 {
-                self.allocate_wasi_read_buffer(instance_id, want).ok().flatten()
+                self.allocate_wasi_read_buffer(instance_id, want, 1).ok().flatten()
+            } else if interface.contains("wasi:io/poll") && function == "poll" {
+                // poll: the ready subset is a list<u32> of at most `len` indices
+                // (args = [list_ptr, len, retptr]); align 4. SR-91.
+                match args.get(1) {
+                    Some(Value::I32(n)) => {
+                        let bytes = (*n as u32).saturating_mul(4);
+                        self.allocate_wasi_read_buffer(instance_id, bytes, 4).ok().flatten()
+                    },
+                    _ => None,
+                }
             } else {
                 None
             }
@@ -14569,12 +14579,14 @@ impl StacklessEngine {
     /// The `list<u8>` returned by blocking-read/read is owned and freed by the guest, so
     /// each read needs its own allocation (a reused buffer would be use-after-free). Sized
     /// to the guest's requested `len`, capped to a sane maximum. Returns None if the
-    /// component has no cabi_realloc export. SR-38.
+    /// component has no cabi_realloc export. `align` is the element alignment of the
+    /// returned list (1 for bytes, 4 for the `list<u32>` of `poll`, SR-91). SR-38.
     #[cfg(feature = "wasi")]
     fn allocate_wasi_read_buffer(
         &mut self,
         instance_id: usize,
         len: u32,
+        align: u32,
     ) -> Result<Option<(u32, u32)>> {
         const MAX_READ_BUF: u32 = 1 << 20; // 1 MiB cap; reads clamp to this, guest loops for more
         let size = len.clamp(1, MAX_READ_BUF);
@@ -14589,7 +14601,7 @@ impl StacklessEngine {
             Ok(idx) => idx,
             Err(_) => return Ok(None),
         };
-        let ptr = self.call_cabi_realloc(instance_id, cabi_realloc_idx, 0, 0, 1, size)?;
+        let ptr = self.call_cabi_realloc(instance_id, cabi_realloc_idx, 0, 0, align, size)?;
         Ok(Some((ptr, size)))
     }
 
@@ -14823,12 +14835,25 @@ impl StacklessEngine {
                     })
                     .unwrap_or(0);
                 if len > 0 {
-                    match self.allocate_wasi_read_buffer(instance_id, len) {
+                    match self.allocate_wasi_read_buffer(instance_id, len, 1) {
                         Ok(a) => a,
                         Err(_e) => None,
                     }
                 } else {
                     None
+                }
+            } else if module_name.contains("wasi:io/poll") && field_name == "poll" {
+                // poll: list<u32> of at most `len` ready indices (args = [ptr, len, retptr]),
+                // align 4. SR-91.
+                match args.get(1) {
+                    Some(Value::I32(n)) => {
+                        let bytes = (*n as u32).saturating_mul(4);
+                        match self.allocate_wasi_read_buffer(instance_id, bytes, 4) {
+                            Ok(a) => a,
+                            Err(_e) => None,
+                        }
+                    },
+                    _ => None,
                 }
             } else {
                 None
