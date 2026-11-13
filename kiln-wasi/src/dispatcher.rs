@@ -1643,6 +1643,10 @@ impl WasiDispatcher {
                 // - Write string data at another location
                 // - Write (element_array_ptr, count) to the return pointer
 
+                // The engine allocated this call's lists (cabi_realloc); the guest owns and
+                // may free them, so they are consumed here and never handed out twice.
+                let args_alloc = self.args_alloc.take();
+
                 // Get args - prefer local args, fall back to global args
                 #[cfg(feature = "std")]
                 let args_to_use: Vec<String> =
@@ -1665,7 +1669,7 @@ impl WasiDispatcher {
                     arg_count = args_to_use.len(),
                     args = ?args_to_use,
                     retptr = format_args!("0x{:x}", retptr),
-                    args_alloc = ?self.args_alloc,
+                    args_alloc = ?args_alloc,
                     "get-arguments dispatch"
                 );
 
@@ -1684,7 +1688,7 @@ impl WasiDispatcher {
                     // IMPORTANT: Each string has its own allocation to ensure proper
                     // allocator metadata (prevents crash when component frees strings)
                     let (list_ptr, string_ptrs) =
-                        if let Some((alloc_list, ref alloc_strings)) = self.args_alloc {
+                        if let Some((alloc_list, ref alloc_strings)) = args_alloc {
                             #[cfg(feature = "tracing")]
                             trace!(
                                 list_ptr = format_args!("0x{:x}", alloc_list),
@@ -3673,6 +3677,9 @@ impl WasiDispatcher {
                 // a list backed by memory it never allocated, so preview2 libc registers
                 // no usable preopen and every file op returns noent. This mirrors the
                 // get-arguments path exactly (see preopens_alloc / pre_allocate_wasi_preopens).
+                // This call's allocation is consumed whether or not it is used: the guest
+                // owns (and may free) the list, so it is never handed out twice.
+                let preopens_alloc = self.preopens_alloc.take();
                 if let Some(mem) = memory {
                     let retptr = match args.first() {
                         Some(CoreValue::I32(v)) => *v as u32,
@@ -3692,8 +3699,8 @@ impl WasiDispatcher {
                     // Use pre-allocated cabi_realloc memory. NO FALLBACK — per FAIL-LOUD,
                     // if the engine did not pre-allocate (no cabi_realloc export) we error
                     // rather than scribble into unowned guest memory.
-                    let (list_ptr, string_ptrs) = match &self.preopens_alloc {
-                        Some((lp, sp)) => (*lp, sp.clone()),
+                    let (list_ptr, string_ptrs) = match preopens_alloc {
+                        Some((lp, sp)) => (lp, sp),
                         None => {
                             return Err(Error::runtime_error(
                                 "get-directories requires cabi_realloc pre-allocation (preopens_alloc not set)",
@@ -4393,6 +4400,64 @@ mod tests {
         assert!(
             res.is_err(),
             "must fail loud when cabi_realloc pre-allocation is missing"
+        );
+        Ok(())
+    }
+
+    /// SR-102: the allocation the engine made for one `get-directories` call is
+    /// consumed by it. The guest owns (and may free) that list, so a second call
+    /// without a fresh allocation fails loud instead of rewriting the same memory.
+    // rivet: verifies SR-102
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn get_directories_allocation_is_consumed_by_one_call() -> Result<()> {
+        use kiln_foundation::{HostImportHandler, traits::SliceMemory};
+        MemoryInitializer::ensure_initialized()?;
+        let mut dispatcher = WasiDispatcher::with_defaults()?;
+        dispatcher.add_preopen(".")?;
+        dispatcher.set_preopens_allocation(0x2000, vec![(0x3000, 1)]);
+        let mem = SliceMemory::with_size(0x10000);
+        let call = |d: &mut WasiDispatcher| {
+            d.dispatch_core(
+                "wasi:filesystem/preopens",
+                "get-directories",
+                &[kiln_foundation::values::Value::I32(0x1000)],
+                Some(&mem),
+            )
+        };
+        assert!(call(&mut dispatcher).is_ok());
+        assert!(
+            call(&mut dispatcher).is_err(),
+            "a second call must not reuse the first call's allocation"
+        );
+        Ok(())
+    }
+
+    /// SR-102: the allocation made for one `get-arguments` call is consumed by it.
+    // rivet: verifies SR-102
+    #[cfg(feature = "std")]
+    #[serial_test::serial]
+    #[test]
+    fn get_arguments_allocation_is_consumed_by_one_call() -> Result<()> {
+        use kiln_foundation::{HostImportHandler, traits::SliceMemory};
+        MemoryInitializer::ensure_initialized()?;
+        let mut dispatcher = WasiDispatcher::with_defaults()?;
+        dispatcher.set_args(vec!["prog".to_string()]);
+        dispatcher.set_args_allocation(0x2000, vec![(0x3000, 4)]);
+        let mem = SliceMemory::with_size(0x10000);
+        let call = |d: &mut WasiDispatcher| {
+            d.dispatch_core(
+                "wasi:cli/environment",
+                "get-arguments",
+                &[kiln_foundation::values::Value::I32(0x1000)],
+                Some(&mem),
+            )
+        };
+        assert!(call(&mut dispatcher).is_ok());
+        assert!(
+            call(&mut dispatcher).is_err(),
+            "a second call must not reuse the first call's allocation"
         );
         Ok(())
     }
