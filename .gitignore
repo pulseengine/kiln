@@ -2,6 +2,8 @@ target/
 
 # Ignore all WASM files but keep WAT files which are the source format
 *.wasm
+# SR-82 oracle fixtures are meld output (no WAT source exists): tracked
+!kilnd/tests/fixtures/p3_threads/*.wasm
 
 # Ignore local Zephyr workspace
 .zephyrproject/
