@@ -2332,7 +2332,7 @@ impl WasiDispatcher {
                 trace!(args = ?args, has_memory = memory.is_some(), "output-stream.write dispatch");
 
                 // Args: handle (i32), data_ptr (i32), data_len (i32), retptr (i32)
-                // Returns result<u64, stream-error> via retptr
+                // Returns result<_, stream-error> via retptr
                 if args.len() < 3 {
                     return Err(Error::wasi_invalid_argument(
                         "output-stream.write requires 3+ args",
@@ -2374,29 +2374,42 @@ impl WasiDispatcher {
 
                     // Look up resource and write
                     let resource = self.resource_manager.get_resource(handle)?;
-                    let bytes_written = match resource.resource_type() {
+                    // `write` accepts the whole list or fails: it never reports a
+                    // partial count.
+                    let written = match resource.resource_type() {
                         crate::host_provider::resource_manager::WasiResourceType::OutputStream { name, .. } => {
                             let name_str = name.as_str().unwrap_or("unknown");
                             match name_str {
                                 "stdout" => {
                                     use std::io::Write;
-                                    std::io::stdout().write(&data).unwrap_or(0)
+                                    std::io::stdout().write_all(&data)
                                 }
                                 "stderr" => {
                                     use std::io::Write;
-                                    std::io::stderr().write(&data).unwrap_or(0)
+                                    std::io::stderr().write_all(&data)
                                 }
-                                _ => data.len(), // Treat as sink
+                                _ => Ok(()), // Treat as sink
                             }
                         }
                         _ => return Err(Error::wasi_invalid_fd("Handle is not an output stream")),
                     };
 
-                    // Write result<u64, stream-error> to retptr
+                    // result<_, stream-error>: 12-byte return area. ok = discriminant 0
+                    // and no payload; a failed host write is err(closed) =
+                    // discriminant 1, stream-error case 1 at +4.
                     if let Some(rp) = retptr {
-                        // discriminant 0 = ok, followed by u64 bytes written
-                        mem.write_bytes(rp, &0u32.to_le_bytes())?;
-                        mem.write_bytes(rp + 8, &(bytes_written as u64).to_le_bytes())?;
+                        match written {
+                            Ok(()) => mem.write_bytes(rp, &0u32.to_le_bytes())?,
+                            Err(_) => {
+                                let case_ptr = rp.checked_add(4).ok_or_else(|| {
+                                    Error::wasi_invalid_argument(
+                                        "output-stream.write: retptr overflows",
+                                    )
+                                })?;
+                                mem.write_bytes(rp, &1u32.to_le_bytes())?;
+                                mem.write_bytes(case_ptr, &1u32.to_le_bytes())?;
+                            },
+                        }
                     }
 
                     Ok(vec![])
@@ -2404,10 +2417,10 @@ impl WasiDispatcher {
 
                 #[cfg(not(feature = "std"))]
                 {
+                    // result<_, stream-error>: ok is discriminant 0, no payload.
                     if let Some(rp) = retptr {
                         if let Some(mem) = memory {
                             mem.write_bytes(rp, &0u32.to_le_bytes())?;
-                            mem.write_bytes(rp + 8, &(data_len as u64).to_le_bytes())?;
                         }
                     }
                     Ok(vec![])

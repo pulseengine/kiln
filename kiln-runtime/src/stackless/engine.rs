@@ -15062,22 +15062,20 @@ impl StacklessEngine {
             };
 
             #[cfg(feature = "wasi")]
-            let args_alloc = if module_name.contains("wasi:cli/environment")
-                && base_field == "get-arguments"
-            {
-                let wasi_args = kiln_wasi::get_global_wasi_args()?;
-                if !wasi_args.is_empty() {
-                    owner.realloc.check()?;
-                    match self.allocate_wasi_args_memory(instance_id, &wasi_args, &owner.realloc) {
-                        Ok(alloc) => alloc,
-                        Err(_e) => None,
+            let args_alloc =
+                if module_name.contains("wasi:cli/environment") && base_field == "get-arguments" {
+                    let wasi_args = kiln_wasi::get_global_wasi_args()?;
+                    if !wasi_args.is_empty() {
+                        owner.realloc.check()?;
+                        // A cabi_realloc trap propagates: swallowing it left the dispatcher
+                        // writing into the previous call's (guest-owned, maybe freed) lists.
+                        self.allocate_wasi_args_memory(instance_id, &wasi_args, &owner.realloc)?
+                    } else {
+                        None
                     }
                 } else {
                     None
-                }
-            } else {
-                None
-            };
+                };
 
             #[cfg(not(feature = "wasi"))]
             let args_alloc: Option<(u32, Vec<(u32, u32)>)> = None;
@@ -15126,10 +15124,7 @@ impl StacklessEngine {
                 // random bytes, initial-cwd, error.to-debug-string: guest-owned returns
                 // that must live in a fresh cabi_realloc'd buffer (SR-38).
                 owner.realloc.check()?;
-                match self.allocate_wasi_read_buffer(instance_id, size, 1, &owner.realloc) {
-                    Ok(a) => a,
-                    Err(_e) => None,
-                }
+                self.allocate_wasi_read_buffer(instance_id, size, 1, &owner.realloc)?
             } else {
                 None
             };
