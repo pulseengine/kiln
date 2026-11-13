@@ -2584,23 +2584,12 @@ impl StacklessEngine {
 
                     // Try host handler for unlinked WASI imports
                     #[cfg(feature = "wasi")]
-                    if let Some(ref mut handler) = self.host_handler {
-                        let instance = self.instances.get(&instance_id).cloned();
-                        if let Some(inst) = instance {
-                            let owner = select_host_call_owner(
-                                &inst,
-                                self.import_map.as_deref(),
-                                &module_name,
-                                &field_name,
-                                true,
-                            )?;
-                            let memory = owner.memory.accessor();
-                            if let Ok(results) =
-                                handler.call_import(&module_name, &field_name, &args, memory)
-                            {
-                                return Ok(ExecutionOutcome::Complete(results));
-                            }
-                        }
+                    // Same route as the `call` arm: owned-return buffers are allocated and
+                    // handler errors propagate instead of becoming zero results.
+                    if self.host_handler.is_some() {
+                        let results =
+                            self.host_call(instance_id, &module_name, &field_name, args)?;
+                        return Ok(ExecutionOutcome::Complete(results));
                     }
 
                     // Import not linked or link unresolvable - return correct number of default results
@@ -15579,6 +15568,26 @@ impl StacklessEngine {
             }
         }
 
+        // Collect the import's args once, up front. collect_import_args_by_name pops the
+        // stack so it must run exactly once.
+        let args = Self::collect_import_args_by_name(&module, module_name, field_name, stack);
+
+        // Return first result if any
+        Ok(self.host_call(instance_id, module_name, field_name, args)?.into_iter().next())
+    }
+
+    /// Call an unlinked import served by the host handler, with its arguments
+    /// already collected. Every route that reaches a WASI host function (the
+    /// `call` arm, `call_indirect`, and the function-entry prelude used by
+    /// `call_ref` and `return_call*`) goes through here, so owned-return buffer
+    /// allocation and error propagation are the same on all of them.
+    fn host_call(
+        &mut self,
+        instance_id: usize,
+        module_name: &str,
+        field_name: &str,
+        args: Vec<Value>,
+    ) -> Result<Vec<Value>> {
         // Use host_handler for WASI dispatch (when configured)
         // This is the proper architecture - host_handler routes to WasiDispatcher
         {
@@ -15586,9 +15595,6 @@ impl StacklessEngine {
             // This MUST happen AFTER _start has initialized the component's allocator.
             // Pre-allocating before _start causes memory collisions where the allocator
             // reuses our memory for other purposes.
-            // Collect the import's args once, up front. collect_import_args_by_name pops the
-            // stack so it must run exactly once; the read-buffer sizing below needs the len.
-            let args = Self::collect_import_args_by_name(&module, module_name, field_name, stack);
 
             // SR-81: the host handler knows a function by its base name; meld's `$N`
             // suffix is stripped for the buffer sizing below, as it is for dispatch.
@@ -15708,8 +15714,7 @@ impl StacklessEngine {
                     "[HOST_HANDLER] Handler returned successfully"
                 );
 
-                // Return first result if any
-                return Ok(results.into_iter().next());
+                return Ok(results);
             }
         }
 
