@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: AD-LINK-002
+    type: design-decision
+    title: "A host import with meld's $N suffix resolves through one shared splitter, and its memory and allocator come from meld's import map"
+    status: implemented
+    release: v0.8.0
+    description: "Implements SR-81 (PR #658, main 49f252d8). kiln_foundation::split_instance_suffix splits a trailing $<digits> (1+ ASCII digits fitting u32) off an import's field name; served_wasi_fn (kiln-wasi, behind both the link check and dispatch_core, AD-LINK-001) and P3Builtin::from_import use it, so get-stderr$5 resolves to the same WasiFn as get-stderr and not-a-function$3 is still refused with E21A0. kilnd --import-map <path> reads meld's --emit-import-map JSON (version 2; never auto-discovered); each host import's entry is found by function-import index and checked against module and name. memory {index: n} selects fused memory n; memory null or unknown makes any memory access fail; realloc {func: n} places pre-allocated guest buffers, and a call that needs one with no known realloc is refused before allocating. Without a map, a $N import in a multi-memory module fails loud (E1B58); a single-memory module runs as before. Every host-call path, including dispatch_canon_lowered, selects memory and allocator through select_host_call_owner before any allocation."
+    tags: [kilnd, linking, meld, multi-memory, import-map]
+    fields:
+      alternatives: "(1) Read the owner from the $N suffix: it is meld's component index, not a memory index (fused memories memory/memory$0/memory$5 are 0/1/2 while the imports carry $2 and $5). (2) Default an unknown owner to memory 0: the fallback CLAUDE.md bans, and wrong-instance memory access. (3) Auto-discover <module>.imports.json next to the module: hides which map was used."
+      rationale: "meld already states each import's component, memory, realloc and encoding (meld#513, in 0.66.0); taking the owner from that contract means kiln never guesses, and one selection helper means no host-call path can skip it (the canon-lowered path did, found by the automated security review)."
+    links:
+      - type: satisfies
+        target: SR-81
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-13T10:00:00Z

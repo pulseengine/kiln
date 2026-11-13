@@ -1,0 +1,33 @@
+artifacts:
+
+  - id: VER-SR81-001
+    type: verification
+    title: "SR-81: $N-suffixed host imports resolve and run against the memory meld's import map names; the fused p3_cli runs end to end"
+    status: verified
+    release: v0.8.0
+    description: "Maintainer decision 2026-11-13: SR-81 is verified on the CI tests plus the recorded end-to-end runs; the comparison against wasmtime follows once wasm-component-examples#27 provides a p3_cli that current wasmtime accepts (tracked under SR-101). Main push 49f252d8 (PR #658, head 5591f1b4); all 9 required checks passed on the PR. Rust CI run 43383471363 completed success; Core Tests job 131746368671 logs 19 SR-81 tests ok, among them suffixed_imports_resolve_to_the_base_function_for_link_check_and_dispatch, suffixed_unknown_and_malformed_imports_are_still_refused, the_map_sends_a_suffixed_import_to_the_memory_it_names, without_a_map_the_suffixed_import_is_refused and canon_lowered_suffixed_call_in_a_multi_memory_module_is_refused_without_a_map. Fail-before (agent runs, output in PR #658): the splitter tests, the resolver test, 3 unresolved_import_tests cases, 5 of 7 import_map_tests and the canon-lowered guard failed. End to end (supervisor, release build of 5591f1b4, whose tree equals main 49f252d8): wasm-component-examples v0.5.0 rust_p3/p3_cli.wasm fused by meld 0.66.0 (covalent layer 2026.11.1, --memory multi --emit-import-map), then kiln --import-map p3_cli.imports.json p3_cli.fused.wasm: 'fibonacci 10' -> 'fibonacci(10) = 55', 'prime 97' -> '97 is prime', 'transform uppercase hello' -> 'HELLO', each exit 0; without --import-map, exit 1 with E1B58. Before (main 0715bf1f): refused with E21A0 listing 14 imports suffixed $2 and $5. Open: with no arguments p3_cli's run returns Err after printing usage, yet kiln exited 0; the exit-status mapping is to be checked against wasmtime with the rebuilt fixture."
+    fields:
+      method: test
+    links:
+      - type: verifies
+        target: SR-81
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-13T10:00:00Z
+
+  - id: VER-SR83-001
+    type: verification
+    title: "SR-83: unbacked P3 built-ins trap naming themselves (interpreter) and exit 70 naming themselves (kiln-builtins); main CI green"
+    status: verified
+    release: v0.8.0
+    description: "Main push fb2313c9 (PR #659, head 9e099914, which merged main 3771c6ba after #658 changed engine.rs); all 9 required checks passed on that head. Rust CI run 43394522701 completed success; Core Tests job 131782108947 logs ok for kilnd p3_builtin_refusal_tests waitable_set_poll_traps_naming_itself, waitable_join_traps_naming_itself, waitable_set_drop_traps_naming_itself, task_cancel_traps_naming_itself, context_set_with_a_missing_argument_is_refused, context_set_with_a_mistyped_argument_is_refused, and kiln-builtins tests::test_unbacked_builtins_refuse_and_exit, test_unbacked_kinds_have_a_message_naming_them, test_served_kinds_do_not_refuse. Fail-before (agent run on main 0715bf1f, output in PR #659): 7 of the 8 kilnd tests failed ('must trap, not return' / 'must trap'); the valid context-get/set + task-return case passed before and after. Supervisor re-run on the merged head: p3_builtin_refusal_tests 8/8, import_map_tests 7/7, unresolved_import_tests 10/10, kiln-runtime lib 113/113, clippy 1.100.0 clean; kiln-builtins 16/16 and cargo check --target thumbv7em-none-eabihf rc 0 on the PR head. No existing test changed outcome."
+    fields:
+      method: test
+    links:
+      - type: verifies
+        target: SR-83
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-13T12:00:00Z
