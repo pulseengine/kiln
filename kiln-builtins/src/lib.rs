@@ -216,7 +216,8 @@ static P3_NEXT_WAITABLE_SET: AtomicU32 = AtomicU32::new(1);
 /// - `[context-get-0]`: returns stored context slot value
 /// - `[context-set-0]`: stores context slot value
 /// - `[waitable-set-new]`: returns incrementing handle
-/// - `[waitable-set-poll/drop/join]`, `[task-cancel]`: no-ops
+/// - `[waitable-set-poll/drop/join]`, `[task-cancel]`: refuse (see
+///   [`__p3_waitable_set_poll`] and friends), they are not no-ops (SR-83)
 #[unsafe(no_mangle)]
 pub extern "C" fn __meld_dispatch_import(import_index: u32) -> u32 {
     let p = PLATFORM.load(Ordering::Acquire);
@@ -238,10 +239,10 @@ pub extern "C" fn __meld_dispatch_import(import_index: u32) -> u32 {
     //       ImportKind::ContextSet => p3_context_set(arg0),
     //       ImportKind::TaskReturn => p3_task_return(arg0),
     //       ImportKind::WaitableSetNew => p3_waitable_set_new(),
-    //       ImportKind::WaitableSetPoll => 0, // sync no-op
-    //       ImportKind::WaitableSetDrop => 0, // no-op
-    //       ImportKind::WaitableJoin => 0,    // no-op
-    //       ImportKind::TaskCancel => 0,      // no-op
+    //       ImportKind::WaitableSetPoll => __p3_waitable_set_poll(..), // refuses
+    //       ImportKind::WaitableSetDrop => __p3_waitable_set_drop(..), // refuses
+    //       ImportKind::WaitableJoin => __p3_waitable_join(..),        // refuses
+    //       ImportKind::TaskCancel => __p3_task_cancel(),              // refuses
     //       ImportKind::Wasi => dispatch_wasi(import_index, platform),
     //       _ => 0,
     //   }
@@ -276,6 +277,88 @@ pub extern "C" fn __p3_task_return(value: u32) {
 #[unsafe(no_mangle)]
 pub extern "C" fn __p3_waitable_set_new() -> u32 {
     P3_NEXT_WAITABLE_SET.fetch_add(1, Ordering::AcqRel)
+}
+
+// ── Unbacked P3 built-ins (SR-83) ─────────────────────────────────────
+// Nothing backs these until kiln-async does (SR-84). Returning 0 would claim a
+// poll found no event, a join happened or a task was cancelled when none did,
+// so each refuses the way this crate ends execution it cannot continue: it
+// writes a message naming the built-in to stderr through the platform, then
+// calls the platform's `exit`, which must not return.
+
+/// Exit code passed to the platform when an unbacked P3 built-in is called.
+pub const P3_NOT_IMPLEMENTED_EXIT: i32 = 70;
+
+/// The refusal message for an unbacked P3 built-in, or `None` for a kind this
+/// crate serves.
+fn p3_refusal_message(kind: &ImportKind) -> Option<&'static [u8]> {
+    match kind {
+        ImportKind::WaitableSetPoll => {
+            Some(b"kiln-builtins: [waitable-set-poll] is not implemented\n")
+        },
+        ImportKind::WaitableSetDrop => {
+            Some(b"kiln-builtins: [waitable-set-drop] is not implemented\n")
+        },
+        ImportKind::WaitableJoin => Some(b"kiln-builtins: [waitable-join] is not implemented\n"),
+        ImportKind::TaskCancel => Some(b"kiln-builtins: [task-cancel] is not implemented\n"),
+        ImportKind::TaskReturn
+        | ImportKind::ContextGet
+        | ImportKind::ContextSet
+        | ImportKind::WaitableSetNew
+        | ImportKind::Wasi
+        | ImportKind::Unknown => None,
+    }
+}
+
+/// Writes `message` to stderr through the platform. Returns whether a
+/// platform was registered to receive it.
+fn p3_report_refusal(message: &[u8]) -> bool {
+    let p = PLATFORM.load(Ordering::Acquire);
+    if p.is_null() {
+        return false;
+    }
+    let platform = unsafe { &*p };
+    unsafe { (platform.write)(2, message.as_ptr(), message.len() as u32) };
+    true
+}
+
+/// Reports the refusal and ends execution. With no platform registered there
+/// is nothing to report through, so it halts like the panic handler does.
+fn p3_refuse(kind: ImportKind) -> ! {
+    if let Some(message) = p3_refusal_message(&kind) {
+        if p3_report_refusal(message) {
+            let p = PLATFORM.load(Ordering::Acquire);
+            let platform = unsafe { &*p };
+            unsafe { (platform.exit)(P3_NOT_IMPLEMENTED_EXIT) }
+        }
+    }
+    loop {
+        core::hint::spin_loop();
+    }
+}
+
+/// P3 `[waitable-set-poll]`: refuses; no async runtime backs it yet.
+#[unsafe(no_mangle)]
+pub extern "C" fn __p3_waitable_set_poll(_set: u32, _result_ptr: u32) -> u32 {
+    p3_refuse(ImportKind::WaitableSetPoll)
+}
+
+/// P3 `[waitable-set-drop]`: refuses; no async runtime backs it yet.
+#[unsafe(no_mangle)]
+pub extern "C" fn __p3_waitable_set_drop(_set: u32) {
+    p3_refuse(ImportKind::WaitableSetDrop)
+}
+
+/// P3 `[waitable-join]`: refuses; no async runtime backs it yet.
+#[unsafe(no_mangle)]
+pub extern "C" fn __p3_waitable_join(_waitable: u32, _set: u32) {
+    p3_refuse(ImportKind::WaitableJoin)
+}
+
+/// P3 `[task-cancel]`: refuses; no async runtime backs it yet.
+#[unsafe(no_mangle)]
+pub extern "C" fn __p3_task_cancel() {
+    p3_refuse(ImportKind::TaskCancel)
 }
 
 // ============================================================================
@@ -420,6 +503,107 @@ mod tests {
         assert_eq!(h1, 1);
         assert_eq!(h2, 2);
         assert_ne!(h1, h2);
+    }
+
+    // -- unbacked P3 built-ins (SR-83) --
+
+    const UNBACKED: [(&str, &str); 4] = [
+        ("poll", "[waitable-set-poll]"),
+        ("drop", "[waitable-set-drop]"),
+        ("join", "[waitable-join]"),
+        ("cancel", "[task-cancel]"),
+    ];
+
+    // rivet: verifies SR-83
+    #[test]
+    fn test_unbacked_kinds_have_a_message_naming_them() {
+        let kinds = [
+            ImportKind::WaitableSetPoll,
+            ImportKind::WaitableSetDrop,
+            ImportKind::WaitableJoin,
+            ImportKind::TaskCancel,
+        ];
+        for (kind, (_, name)) in kinds.iter().zip(UNBACKED) {
+            let message = p3_refusal_message(kind).expect("unbacked kind must refuse");
+            let message = core::str::from_utf8(message).unwrap();
+            assert!(message.contains(name), "{message:?} must name {name}");
+        }
+    }
+
+    // rivet: verifies SR-83
+    #[test]
+    fn test_served_kinds_do_not_refuse() {
+        for kind in [
+            ImportKind::TaskReturn,
+            ImportKind::ContextGet,
+            ImportKind::ContextSet,
+            ImportKind::WaitableSetNew,
+        ] {
+            assert!(p3_refusal_message(&kind).is_none());
+        }
+    }
+
+    /// Child half of `test_unbacked_builtins_refuse_and_exit`: calls the
+    /// built-in named by `KILN_P3_CHILD` against a platform whose `exit`
+    /// ends the process. Does nothing when run as an ordinary test.
+    #[test]
+    fn test_p3_refusal_child() {
+        let Ok(which) = std::env::var("KILN_P3_CHILD") else {
+            return;
+        };
+        unsafe extern "C" fn write(_fd: u32, data: *const u8, len: u32) -> i32 {
+            use std::io::Write;
+            let bytes = unsafe { core::slice::from_raw_parts(data, len as usize) };
+            let _ = std::io::stderr().write_all(bytes);
+            len as i32
+        }
+        unsafe extern "C" fn clock() -> u64 {
+            0
+        }
+        unsafe extern "C" fn random(_buf: *mut u8, _len: u32) -> i32 {
+            0
+        }
+        unsafe extern "C" fn exit(code: i32) -> ! {
+            std::process::exit(code)
+        }
+        reset();
+        let platform = Box::leak(Box::new(Platform {
+            write,
+            clock_ns: clock,
+            random,
+            exit,
+        }));
+        unsafe { __kiln_init(platform, 0x1000) };
+        match which.as_str() {
+            "poll" => {
+                __p3_waitable_set_poll(1, 0);
+            },
+            "drop" => __p3_waitable_set_drop(1),
+            "join" => __p3_waitable_join(1, 2),
+            _ => __p3_task_cancel(),
+        }
+        // Reaching here means the built-in returned.
+        std::process::exit(0);
+    }
+
+    // rivet: verifies SR-83
+    #[test]
+    fn test_unbacked_builtins_refuse_and_exit() {
+        let exe = std::env::current_exe().unwrap();
+        for (which, name) in UNBACKED {
+            let out = std::process::Command::new(&exe)
+                .args(["--exact", "tests::test_p3_refusal_child", "--nocapture"])
+                .env("KILN_P3_CHILD", which)
+                .output()
+                .unwrap();
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            assert_eq!(
+                out.status.code(),
+                Some(P3_NOT_IMPLEMENTED_EXIT),
+                "{name} must exit through the platform\n{stderr}"
+            );
+            assert!(stderr.contains(name), "{name} must be named\n{stderr}");
+        }
     }
 
     // -- cabi_realloc tests --
