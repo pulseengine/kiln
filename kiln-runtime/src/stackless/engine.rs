@@ -51,6 +51,40 @@ fn strip_wasi_version(interface: &str) -> &str {
     }
 }
 
+/// Size of the fresh guest buffer a WASI call needs for a guest-owned `list<u8>`/`string`
+/// return, for the calls whose payload is not tied to an input-stream/filesystem read.
+///
+/// The guest owns and frees these returns, so the host must write them into memory the
+/// guest handed over via `cabi_realloc`, never next to the return area. `function` is the
+/// base function name (instance suffix already removed); `interface` may carry a version.
+/// Returns `None` for every other function. SR-38.
+#[cfg(feature = "wasi")]
+fn wasi_owned_return_size(interface: &str, function: &str, args: &[Value]) -> Option<u32> {
+    // At least 1 byte so a zero-length request still gets a guest-owned (empty) list.
+    let requested_len = || {
+        args.first().map(|v| match v {
+            Value::I64(n) => u32::try_from(*n).unwrap_or(u32::MAX).max(1),
+            Value::I32(n) => (*n as u32).max(1),
+            _ => 0,
+        })
+    };
+    if interface.contains("wasi:random/random") && function == "get-random-bytes" {
+        // list<u8> of the requested length (allocate_wasi_read_buffer clamps to [1, 1 MiB]).
+        requested_len()
+    } else if interface.contains("wasi:random/insecure") && function == "get-insecure-random-bytes"
+    {
+        requested_len()
+    } else if interface.contains("wasi:cli/environment") && function == "initial-cwd" {
+        // option<string>: a working directory fits a path-sized buffer (the host refuses,
+        // rather than truncates, anything longer).
+        Some(4096)
+    } else if interface.contains("wasi:io/error") && function == "[method]error.to-debug-string" {
+        Some(256)
+    } else {
+        None
+    }
+}
+
 /// The memory a host call reads and writes (SR-81).
 enum HostMemory {
     /// A memory of the calling instance.
@@ -1052,7 +1086,8 @@ impl StacklessEngine {
                 // buffer (the host refuses, rather than truncates, anything longer). SR-72.
                 4096
             } else {
-                0
+                // random bytes, initial-cwd, error.to-debug-string (SR-38).
+                wasi_owned_return_size(interface, function, &args).unwrap_or(0)
             };
             if want > 0 {
                 owner.realloc.check()?;
@@ -2678,8 +2713,9 @@ impl StacklessEngine {
                                             Err(e) => return Err(e),
                                         }
                                     }
-                                    // Not a P3 builtin — push args back for WASI dispatch
-                                    for arg in p3_args.into_iter().rev() {
+                                    // Not a P3 builtin — push args back in call order for
+                                    // WASI dispatch, which pops them off again.
+                                    for arg in p3_args {
                                         operand_stack.push(arg);
                                     }
                                 }
@@ -3330,39 +3366,12 @@ impl StacklessEngine {
                                             }
                                         }
 
-                                        // Not P3 — try host handler for unlinked imports
-                                        #[cfg(feature = "wasi")]
-                                        {
-                                            let inst = self.instances.get(&instance_id).cloned();
-                                            if let Some(ref mut handler) = self.host_handler {
-                                                if let Some(inst_arc) = inst {
-                                                    let owner = select_host_call_owner(
-                                                        &inst_arc,
-                                                        self.import_map.as_deref(),
-                                                        &module_name,
-                                                        &field_name,
-                                                        true,
-                                                    )?;
-                                                    let memory = owner.memory.accessor();
-                                                    if let Ok(results) = handler.call_import(
-                                                        &module_name,
-                                                        &field_name,
-                                                        &call_args,
-                                                        memory,
-                                                    ) {
-                                                        for r in results {
-                                                            operand_stack.push(r);
-                                                        }
-                                                        pc += 1;
-                                                        continue;
-                                                    }
-                                                }
-                                            }
-                                        }
-
-                                        // Fall through to legacy WASI dispatch
-                                        for arg in call_args.iter().rev() {
-                                            operand_stack.push(arg.clone());
+                                        // Not P3 — one host dispatch through call_wasi_function,
+                                        // which pre-allocates guest-owned return buffers
+                                        // (cabi_realloc) before calling the handler. It pops the
+                                        // args back off the stack, so restore them in call order.
+                                        for arg in call_args {
+                                            operand_stack.push(arg);
                                         }
                                         let result = self.call_wasi_function(
                                             &module_name,
@@ -15053,22 +15062,20 @@ impl StacklessEngine {
             };
 
             #[cfg(feature = "wasi")]
-            let args_alloc = if module_name.contains("wasi:cli/environment")
-                && base_field == "get-arguments"
-            {
-                let wasi_args = kiln_wasi::get_global_wasi_args()?;
-                if !wasi_args.is_empty() {
-                    owner.realloc.check()?;
-                    match self.allocate_wasi_args_memory(instance_id, &wasi_args, &owner.realloc) {
-                        Ok(alloc) => alloc,
-                        Err(_e) => None,
+            let args_alloc =
+                if module_name.contains("wasi:cli/environment") && base_field == "get-arguments" {
+                    let wasi_args = kiln_wasi::get_global_wasi_args()?;
+                    if !wasi_args.is_empty() {
+                        owner.realloc.check()?;
+                        // A cabi_realloc trap propagates: swallowing it left the dispatcher
+                        // writing into the previous call's (guest-owned, maybe freed) lists.
+                        self.allocate_wasi_args_memory(instance_id, &wasi_args, &owner.realloc)?
+                    } else {
+                        None
                     }
                 } else {
                     None
-                }
-            } else {
-                None
-            };
+                };
 
             #[cfg(not(feature = "wasi"))]
             let args_alloc: Option<(u32, Vec<(u32, u32)>)> = None;
@@ -15113,6 +15120,11 @@ impl StacklessEngine {
                     },
                     _ => None,
                 }
+            } else if let Some(size) = wasi_owned_return_size(module_name, base_field, &args) {
+                // random bytes, initial-cwd, error.to-debug-string: guest-owned returns
+                // that must live in a fresh cabi_realloc'd buffer (SR-38).
+                owner.realloc.check()?;
+                self.allocate_wasi_read_buffer(instance_id, size, 1, &owner.realloc)?
             } else {
                 None
             };
