@@ -721,12 +721,17 @@ impl<T, const N: usize> StaticVec<T, N> {
             if should_retain {
                 i += 1;
             } else {
-                // Remove this element by shifting
-                unsafe {
-                    self.data[i].assume_init_drop();
-                }
+                // Remove this element by shifting. Its `Drop` runs only after
+                // the vector is consistent again, so a panicking `Drop` cannot
+                // leave a dropped slot counted as initialized.
+                // SAFETY: i < self.len, so this element is initialized; the
+                // slot is overwritten (or excluded by the len decrement) below
+                // before anything can observe it again.
+                let removed = unsafe { self.data[i].assume_init_read() };
 
                 for j in i..self.len - 1 {
+                    // SAFETY: j + 1 < self.len, so the source is initialized;
+                    // slot j was already moved out, so overwriting it is fine.
                     unsafe {
                         let src = self.data[j + 1].assume_init_read();
                         self.data[j].write(src);
@@ -734,6 +739,7 @@ impl<T, const N: usize> StaticVec<T, N> {
                 }
 
                 self.len -= 1;
+                drop(removed);
             }
         }
     }
@@ -1251,10 +1257,21 @@ impl<T, const N: usize> Iterator for StaticVecIntoIter<T, N> {
 
 impl<T, const N: usize> Drop for StaticVecIntoIter<T, N> {
     fn drop(&mut self) {
-        // Drop any remaining elements that weren't consumed
-        while self.next().is_some() {}
-        // Set vec len to 0 to prevent double-drop
+        // Drop any remaining elements that weren't consumed. The vector's
+        // length is reset first so that a panicking element `Drop` cannot make
+        // the vector drop these (or already consumed) elements again;
+        // `drop_in_place` on a slice keeps dropping the rest while unwinding.
+        let start = self.index;
+        let remaining = self.vec.len - start;
         self.vec.len = 0;
+        self.index = 0;
+        // SAFETY: the elements in start..start + remaining are initialized and
+        // have not been moved out (`next` advances `index` past moved-out
+        // elements). `len` is now 0, so nothing else will drop them.
+        unsafe {
+            let first = self.vec.data.as_mut_ptr().add(start).cast::<T>();
+            core::ptr::drop_in_place(core::ptr::slice_from_raw_parts_mut(first, remaining));
+        }
     }
 }
 

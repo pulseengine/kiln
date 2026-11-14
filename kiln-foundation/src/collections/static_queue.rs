@@ -221,18 +221,31 @@ impl<T, const N: usize> StaticQueue<T, N> {
     ///
     /// O(n) where n = len. WCET = ~15 * len CPU cycles.
     pub fn clear(&mut self) {
-        while self.len > 0 {
-            // SAFETY: head < N, and element is initialized
-            unsafe {
-                self.data[self.head].assume_init_drop();
-            }
-            self.head = (self.head + 1) % N;
-            self.len -= 1;
-        }
+        let head = self.head;
+        let len = self.len;
 
-        // Reset to clean state
+        // Reset to the empty state first so a panicking element `Drop` cannot
+        // cause the queue to drop already dropped elements again.
         self.head = 0;
         self.tail = 0;
+        self.len = 0;
+
+        // The live elements occupy head..head + len, wrapping around at N.
+        let first_len = len.min(N - head);
+        let second_len = len - first_len;
+        let base = self.data.as_mut_ptr().cast::<T>();
+
+        // SAFETY: the circular range is initialized, was just detached from the
+        // queue (len is 0), and is split into two non-overlapping slices.
+        // `second` is dropped by the guard even if dropping `first` unwinds;
+        // `drop_in_place` on a slice keeps dropping the rest while unwinding.
+        unsafe {
+            let _second = DropSlice(core::ptr::slice_from_raw_parts_mut(base, second_len));
+            core::ptr::drop_in_place(core::ptr::slice_from_raw_parts_mut(
+                base.add(head),
+                first_len,
+            ));
+        }
     }
 
     /// Returns an iterator over the queue.
@@ -245,6 +258,20 @@ impl<T, const N: usize> StaticQueue<T, N> {
             queue: self,
             index: 0,
         }
+    }
+}
+
+/// Drops the pointed-to slice's elements when it goes out of scope, including
+/// during unwinding.
+///
+/// The creator guarantees the slice is initialized, owned by nobody else, and
+/// not dropped through any other path.
+struct DropSlice<T>(*mut [T]);
+
+impl<T> Drop for DropSlice<T> {
+    fn drop(&mut self) {
+        // SAFETY: guaranteed by the creator of the guard (see type docs).
+        unsafe { core::ptr::drop_in_place(self.0) }
     }
 }
 
