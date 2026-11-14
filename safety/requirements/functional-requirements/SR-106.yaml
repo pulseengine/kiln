@@ -1,0 +1,16 @@
+artifacts:
+
+  - id: SR-106
+    type: requirement
+    title: A refused WASI path returns a filesystem error-code to the guest, and a `..` that stays inside the preopen resolves
+    status: proposed
+    release: v0.9.0
+    description: "MEASURED 2026-11-14, kiln 00f1a6ce against wasmtime 42.0.1 (WASI 0.2 differential, every candidate re-run 3 times with identical results): (1) a path the sandbox refuses traps the guest, where wasmtime returns error-code not-permitted / access through the result; (2) any `..` component is rejected even when the resolved path stays inside the preopen (open-at on sub/../a.txt fails, wasmtime opens a.txt); (3) an empty path opens the preopen itself, where wasmtime returns an error. No path left the preopen in 95 hand-written escape attempts and 9 two-step symlink probes; this requirement is about error reporting and in-sandbox resolution, not containment. REQUIRED: refused paths surface as the error-code wasmtime returns for the same call; `..` is resolved lexically against the preopen and refused only when it would leave it; the empty path behaves as in wasmtime. Verified by: kilnd tests per case on dispatch_core, and the differential with these candidates matching wasmtime."
+    tags: [wasi, filesystem, conformance, wasmtime-differential]
+    links:
+      - type: refines
+        target: SR-49
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-14T10:00:00Z

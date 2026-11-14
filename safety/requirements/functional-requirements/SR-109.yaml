@@ -1,0 +1,16 @@
+artifacts:
+
+  - id: SR-109
+    type: requirement
+    title: Returned buffers are allocated at their real size, and invalid self handles and allocator results are refused as in wasmtime
+    status: proposed
+    release: v0.9.0
+    description: "MEASURED 2026-11-14, kiln 00f1a6ce against wasmtime 42.0.1 (WASI 0.2 differential, re-run 3 times): (1) kiln asks the guest's cabi_realloc for a fixed worst-case size before it knows the result length (readlink-at 4096 bytes, descriptor.read and input-stream.read up to 1 MiB, read-directory-entry names 512 bytes), so a guest allocator that refuses large requests makes a 12-byte read trap; wasmtime allocates the actual length. Host writes stayed inside the requested allocation. This is the known limit recorded in VER-SR102-001 and needs typed dispatcher returns (host-call step S7). (2) A resource method called with self handle 0xFFFFFFFF is accepted, where wasmtime traps with an unknown-handle error. (3) An allocator result one past the end of memory is accepted, where wasmtime traps; out-of-range write buffers are already refused as in wasmtime. REQUIRED: each returned list or string is allocated with its real length after the host call produces it; an unknown self handle traps; an allocator result is refused unless the whole allocation, and for a zero-size allocation its start, lies inside memory as wasmtime decides. Verified by: kilnd tests with a size-limited guest allocator, an unknown-handle test, an allocator-at-end test, and the differential matching wasmtime."
+    tags: [wasi, canonical-abi, host-call, conformance, wasmtime-differential]
+    links:
+      - type: refines
+        target: SR-102
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-14T10:00:00Z
