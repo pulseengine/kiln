@@ -1,0 +1,16 @@
+artifacts:
+
+  - id: SR-108
+    type: requirement
+    title: stat-at honours symlink-follow, and stream reads report end-of-stream and zero-length reads as wasmtime does
+    status: proposed
+    release: v0.9.0
+    description: "MEASURED 2026-11-14, kiln 00f1a6ce against wasmtime 42.0.1 (WASI 0.2 differential, re-run 3 times): (1) descriptor.stat-at ignores path-flags symlink-follow, so a stat of a symlink reports the same result with and without it; (2) descriptor.read returns end-of-file true when a read ends exactly at the end of the file, where wasmtime reports it only on the following read; (3) a zero-length read on an input-stream of an empty file returns an error, where wasmtime returns ok with an empty list. REQUIRED: stat-at reports the link itself without symlink-follow and its target with it; the end-of-file flag and zero-length stream reads follow wasmtime. Verified by: kilnd tests per case and the differential matching wasmtime on these candidates."
+    tags: [wasi, filesystem, streams, conformance, wasmtime-differential]
+    links:
+      - type: refines
+        target: SR-72
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-14T10:00:00Z

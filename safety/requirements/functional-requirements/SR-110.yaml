@@ -1,0 +1,16 @@
+artifacts:
+
+  - id: SR-110
+    type: requirement
+    title: kiln-wasi serves descriptor is-same-object, sync, advise, write-via-stream and append-via-stream
+    status: proposed
+    release: v0.9.0
+    description: "MEASURED 2026-11-14, kiln 00f1a6ce against wasmtime 42.0.1 (WASI 0.2 differential): wasi:filesystem/types [method]descriptor.is-same-object, .sync, .advise, .write-via-stream and .append-via-stream are not served, so a component importing any of them is refused at link time, while wasmtime runs it. Sockets are not built by default and their import names differ from WASI 0.2.0; wasi:http is absent. Those are out of scope here. REQUIRED: the five descriptor methods are served inside the preopen sandbox (SR-49), with write-via-stream and append-via-stream returning an output-stream that writes at the given offset or at the end. Verified by: kilnd tests per method on dispatch_core, and the differential components that import them running with wasmtime's results."
+    tags: [wasi, filesystem, conformance, wasmtime-differential]
+    links:
+      - type: refines
+        target: SR-72
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-14T10:00:00Z

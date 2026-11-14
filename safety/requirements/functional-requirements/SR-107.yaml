@@ -1,0 +1,16 @@
+artifacts:
+
+  - id: SR-107
+    type: requirement
+    title: descriptor.open-at honours its open-flags (create, exclusive, truncate) and works relative to any directory descriptor
+    status: proposed
+    release: v0.9.0
+    description: "MEASURED 2026-11-14, kiln 00f1a6ce against wasmtime 42.0.1 (WASI 0.2 differential, re-run 3 times): open-at ignores its open-flags. With create on a missing file the call fails; with exclusive on an existing file it succeeds; truncate leaves the file's contents in place. open-at relative to a directory descriptor that was itself opened with open-at (not a preopen) returns bad-descriptor. wasmtime creates, refuses with exist, truncates, and resolves relative to the opened directory. Ignored truncate and exclusive flags can silently keep or overwrite data a guest expects gone or protected. REQUIRED: create, exclusive (create + exclusive fails with exist on an existing path) and truncate take effect as in wasmtime, inside the sandbox rules of SR-49; open-at accepts any directory descriptor the guest holds. Verified by: kilnd tests per flag and for a nested directory descriptor, and the differential matching wasmtime on these candidates."
+    tags: [wasi, filesystem, conformance, wasmtime-differential]
+    links:
+      - type: refines
+        target: SR-72
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-14T10:00:00Z
