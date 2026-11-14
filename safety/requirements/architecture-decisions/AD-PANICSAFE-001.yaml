@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: AD-PANICSAFE-001
+    type: design-decision
+    title: "Collections detach elements before dropping them: update len/head first, then drop the detached slice with drop_in_place"
+    status: approved
+    release: v0.8.0
+    description: "For SR-104. Every kiln-foundation collection operation that drops several elements first makes the container consistent (len, head, tail or count updated so the elements are no longer reachable), then drops the detached elements with core::ptr::drop_in_place on a slice, which keeps dropping the remaining elements while unwinding. StaticVec::retain moves the removed element out, shifts the tail down and decrements len before dropping the moved-out value. A wrapped StaticQueue range is dropped as two slices, with a drop guard that drops the second slice even if the first unwinds."
+    tags: [foundation, collections, soundness, panic-safety]
+    fields:
+      alternatives: "(1) Leave the order and document that element Drop must not panic: the API is safe, so a panicking Drop in safe code must not cause undefined behaviour. (2) Abort on a panicking Drop with a guard that calls abort: avoids the double drop but turns a recoverable panic into process exit for consumers that unwind."
+      rationale: "This is the order std's Vec and VecDeque use. The non-panicking path does the same work in the same order of element drops, and the container never observes a dropped slot as live, whatever an element's Drop does."
+    links:
+      - type: satisfies
+        target: SR-104
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-14T12:00:00Z

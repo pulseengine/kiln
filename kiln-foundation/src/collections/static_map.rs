@@ -280,13 +280,17 @@ impl<K: Ord, V, const N: usize> StaticMap<K, V, N> {
     ///
     /// O(n). WCET: ~15 * len CPU cycles.
     pub fn clear(&mut self) {
-        for i in 0..self.len {
-            // SAFETY: i < len, so element is initialized
-            unsafe {
-                self.entries[i].assume_init_drop();
-            }
-        }
+        let len = self.len;
+        // Reset first so a panicking element `Drop` cannot cause the map to
+        // drop already dropped entries again.
         self.len = 0;
+        // SAFETY: the first `len` entries were initialized and are no longer
+        // reachable through the map since `self.len` is now 0.
+        // `drop_in_place` on a slice keeps dropping the rest while unwinding.
+        unsafe {
+            let first = self.entries.as_mut_ptr().cast::<(K, V)>();
+            core::ptr::drop_in_place(core::ptr::slice_from_raw_parts_mut(first, len));
+        }
     }
 
     /// Returns an iterator over the map entries in sorted order.

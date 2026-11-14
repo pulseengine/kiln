@@ -1,0 +1,13 @@
+artifacts:
+
+  - id: SR-104
+    type: requirement
+    title: kiln-foundation's collections drop each element exactly once even when an element's Drop panics
+    status: approved
+    release: v0.8.0
+    description: "Maintainer decision 2026-11-14 (public fix, no advisory). MEASURED on main b4e7096e: StaticVec::retain, StaticVecIntoIter's Drop, StaticMap::clear and StaticQueue::clear run an element's Drop before updating the container's len/head. If that Drop panics and the panic is caught, the dropped slot is still counted as initialized and the container's own Drop drops it again (double drop, use-after-free). A drop-count test shows count 2 for the panicking element in all four operations. Exposure: none in shipped binaries (the dev and release profiles set panic = \"abort\"), and the crates are not published; it matters for any consumer that unwinds. REQUIRED: these operations put the container in a consistent state (len/head/count updated) before any element's Drop runs, and keep dropping the remaining elements while unwinding, so every element is dropped exactly once. Verified by: kiln-foundation/tests/collections_panic_safety.rs (per-element drop counters, a panic on one element's first drop, catch_unwind, then the container's own Drop) failing on the unfixed code and passing on the fix, including a wrapped StaticQueue, and the same tests clean under Miri."
+    tags: [foundation, collections, soundness, panic-safety]
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-14T12:00:00Z
