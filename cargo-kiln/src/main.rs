@@ -613,7 +613,7 @@ enum Commands {
         #[arg(long)]
         run_cm_wast: bool,
 
-        /// Directory holding upstream/ and meld-<version>/ for --run-cm-wast
+        /// Directory holding `upstream/` and `meld-<version>/` for --run-cm-wast
         #[arg(long, default_value = "tests/component-model")]
         cm_wast_dir: String,
 
