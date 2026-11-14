@@ -31,3 +31,19 @@ artifacts:
       created-by: ai
       model: claude-opus-5-5
       timestamp: 2026-11-13T12:00:00Z
+
+  - id: VER-SR82-001
+    type: verification
+    title: "SR-82: the seven #620 oracle programs fused by meld 0.67.0 give wasmtime's results on kiln; main CI green"
+    status: verified
+    release: v0.8.0
+    description: "Main push 88db9c30 (PR #668, head 57946c8c); all 9 required checks passed on that head. Main CI on 88db9c30: Rust CI run 43507401513, CodeQL, Security Audit and Analysis, Verification honesty gate and Pages all completed success. Core Tests job 132168536769 logs kilnd p3_thread_tests 15 passed, 0 failed, including the seven oracle programs from kilnd/tests/fixtures/p3_threads (fused by meld 0.67.0): new_resume_returns_7, yield_index_returns_3, suspend_resume_returns_2, yield_then_resume_returns_9, many_threads_returns_36, suspend_then_resume_traps_with_the_synchronous_task_error, promote_traps_with_the_synchronous_task_error (wasmtime 50.0.1 gives the same values and the same 'cannot block a synchronous task before returning' trap). The other eight cover refusals: suffixed thread import without a map in multi-memory, new-indirect without __meld_thread_table, mistyped start function, unknown resume-later handle, wasi-threads spawn, a ready thread left at return, the 1024 live-thread cap, and parked frames counting against the call-depth limit. Supervisor re-run on a fresh build of the PR head gave the same seven values. SR-82 depends on SR-93 (meld >= 0.68 layer), which is not yet verified; this artifact covers SR-82's own oracle only."
+    fields:
+      method: test
+    links:
+      - type: verifies
+        target: SR-82
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-14T02:00:00Z
