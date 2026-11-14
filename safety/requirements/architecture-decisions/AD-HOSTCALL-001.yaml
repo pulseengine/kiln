@@ -3,7 +3,7 @@ artifacts:
   - id: AD-HOSTCALL-001
     type: design-decision
     title: "One host_call seam in the engine; every guest route to a served import goes through it, and steps S2-S4 grow that one function"
-    status: approved
+    status: implemented
     release: v0.8.0
     description: "For SR-102. S1 extracts host_call(instance_id, module, field, args) from call_wasi_function in kiln-runtime/src/stackless/engine.rs. call_wasi_function collects the args from the operand stack and calls it; the function-entry prelude used by call_ref and return_call calls it too, so host errors propagate on all routes, and an import with no link, builtin or host handler is an error instead of zero results. S2 moves return-area lowering into host_call keyed by the import's signature, S3 replaces the two buffer name lists with one policy, S4 validates return-area pointers and cabi_realloc results there. Later steps (typed dispatcher returns, link-time import resolution) are separate decisions."
     tags: [wasi, host-call, canonical-abi, refactor]

@@ -4,7 +4,7 @@ artifacts:
     type: requirement
     title: Every declared kiln-wasi feature either builds in CI or is removed
     status: proposed
-    release: v0.8.0
+    release: v0.9.0
     description: "MEASURED on main f2cae5c7 (cargo check -p kiln-wasi --lib, one run per combination, bash, CARGO_TARGET_DIR on /Volumes/Home). CI builds kiln-wasi only via cargo build/clippy/test --workspace with default features; no workspace crate enables wasi-sockets, preview3-prep, component-model or the nn-* features (kilnd exposes only wasi, wasi-filesystem/cli/clocks/io/random/nn). Results: rc=0 for default, tracing, preview3-prep, wasi-sockets, component-model, nn-core, nn-preview2, and --no-default-features --features std. FAIL: nn-preview3 (rc=101, 4x E0433 'cannot find sync_bridge in super'); --no-default-features (rc=101, 9 errors: 3x E0107 wrong generic arity, 2x E0308, others). Until #641 (SR-99) wasi-sockets did not compile either (13x E0308) and nobody noticed. With wasi-sockets, cargo clippy -D warnings reports 7 lints in preview2/sockets.rs (77,175,734-735), preview3/preparation.rs (222,247) and wit_bindings.rs (118). Acceptance (maintainer chooses): (A) a CI job checks + clippies each declared kiln-wasi feature (e.g. cargo hack --each-feature) and the 2 failing combinations plus the 7 lints are fixed; or (B) features with no consumer (nn-preview3, preview3-prep/wasi-sockets, no_std-without-std) are deleted per the no-dead-code rule and the rest are covered by (A)'s job; or a mix decided per feature."
     tags: [kiln-wasi, ci, feature-matrix, build]
     provenance:
