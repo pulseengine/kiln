@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: VER-SR104-001
+    type: verification
+    title: "SR-104: StaticVec::retain, StaticVecIntoIter's Drop, StaticMap::clear and StaticQueue::clear drop each element exactly once when an element's Drop panics; main CI green"
+    status: verified
+    release: v0.8.0
+    description: "Main push aeb3d9ae (PR #676, head a0f4e7eb); all 9 required checks passed on that head. Main CI on aeb3d9ae: Rust CI run 43608097904, CodeQL, Security Audit and Analysis and Verification honesty gate completed success (the Pages deploy was cancelled by the next main push and does not test this). Core Tests job 132487010502 logs ok for kiln-foundation/tests/collections_panic_safety.rs: retain_drops_each_element_once_when_a_drop_panics, into_iter_drop_drops_each_element_once_when_a_drop_panics, map_clear_drops_each_element_once_when_a_drop_panics, queue_clear_drops_each_element_once_when_a_drop_panics and queue_clear_drops_each_element_once_when_a_drop_panics_after_wrapping. Fail-before (agent run on origin/main b4e7096e, each test alone): the panicking element's drop count is 2, expected 1, in all five, including the wrapped queue. Supervisor re-run on a0f4e7eb: 5 passed; Miri (nightly-2025-11-21, -Zmiri-ignore-leaks for the deliberate counter leak) 5 passed with no UB reported; fmt clean; CI clippy exit 0. The same tests exercise AD-PANICSAFE-001's order (container consistent before any element Drop, drop_in_place on the detached slice, drop guard for a wrapped queue's second slice)."
+    fields:
+      method: test
+    links:
+      - type: verifies
+        target: SR-104
+      - type: verifies
+        target: AD-PANICSAFE-001
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-14T21:00:00Z
