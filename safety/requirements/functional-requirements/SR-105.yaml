@@ -1,0 +1,16 @@
+artifacts:
+
+  - id: SR-105
+    type: requirement
+    title: Instantiation writes no host data into guest linear memory beyond what the module's data segments and start function produce
+    status: approved
+    release: v0.8.0
+    description: "Maintainer decision 2026-11-14 (public fix). MEASURED on main 00f1a6ce and b4e7096e: after data-segment initialization, initialize_wasi_stubs in kiln-runtime/src/stackless/engine.rs writes 16 zero bytes at fixed guest address 0x100, so a module whose data segment or stack occupies bytes 256..271 sees them zeroed before its first instruction. A WASI 0.2 differential against wasmtime 42.0.1 shows it: a data segment KILNKILNKILNKILN at 256 reads back as 16 zero bytes on kiln and intact on wasmtime, for a raw core module run with WASI and for a meld-fused component. In a fused module all components share one memory, so the write can land in another component's data. It stays inside the guest's memory (not an escape). The stub table the write fills is never read. REQUIRED: instantiation leaves linear memory exactly as the data segments and start function leave it; the host writes into guest memory only into buffers the guest allocated or a return area it passed. Verified by: a kilnd test that a data segment at 0x100 survives instantiation on the WASI path, failing before the fix."
+    tags: [runtime, wasi, memory, conformance]
+    links:
+      - type: refines
+        target: SR-38
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-14T16:00:00Z
