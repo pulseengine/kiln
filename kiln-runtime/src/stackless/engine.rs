@@ -646,21 +646,6 @@ enum ExecutionOutcome {
     },
 }
 
-/// Pre-allocated WASI stub memory regions
-#[derive(Debug, Clone)]
-pub struct WasiStubMemory {
-    /// Pointer to empty list structure (ptr=0, len=0)
-    pub empty_list: u32,
-    /// Pointer to option None discriminant (0)
-    pub option_none: u32,
-    /// Pointer to empty environment list
-    pub empty_env: u32,
-    /// Stdout handle value
-    pub stdout_handle: u32,
-    /// Stderr handle value
-    pub stderr_handle: u32,
-}
-
 /// A lowered function produced by canon.lower
 ///
 /// Per Component Model spec, `canon lower` takes a component function and produces
@@ -702,8 +687,6 @@ pub struct StacklessEngine {
     instruction_pointer: AtomicU64,
     /// Host function registry for calling imported functions
     host_registry: Option<Arc<kiln_host::CallbackRegistry>>,
-    /// Pre-allocated WASI stub memory for each instance
-    wasi_stubs: HashMap<usize, WasiStubMemory>,
     /// Dropped data segments per instance (for data.drop/memory.init)
     /// Maps instance_id -> `Vec<bool>` where true means segment was dropped
     dropped_data_segments: HashMap<usize, Vec<bool>>,
@@ -1040,7 +1023,6 @@ impl StacklessEngine {
             fuel: AtomicU64::new(u64::MAX),
             instruction_pointer: AtomicU64::new(0),
             host_registry: None,
-            wasi_stubs: HashMap::new(),
             dropped_data_segments: HashMap::new(),
             import_links: HashMap::new(),
             aliased_functions: HashMap::new(),
@@ -2333,28 +2315,6 @@ impl StacklessEngine {
         }
 
         self.instances.insert(instance_id, instance.clone());
-
-        // Initialize WASI stub memory for this instance
-        #[cfg(feature = "tracing")]
-        debug!(
-            "Attempting to initialize WASI stubs for instance {}",
-            instance_id
-        );
-        let module = instance.module();
-        match self.initialize_wasi_stubs(instance_id, module) {
-            Ok(_) => {
-                #[cfg(feature = "tracing")]
-                info!(
-                    "✓ Successfully initialized WASI stubs for instance {}",
-                    instance_id
-                );
-            },
-            Err(e) => {
-                #[cfg(feature = "tracing")]
-                warn!("Failed to initialize WASI stubs: {:?}", e);
-                // Continue anyway - not all modules need WASI
-            },
-        }
 
         self.current_instance_id = Some(instance_id);
         Ok(instance_id)
@@ -15596,80 +15556,6 @@ impl StacklessEngine {
 
         memory.0.write_shared(addr, data)?;
         Ok(())
-    }
-
-    /// Initialize WASI stub memory for an instance
-    ///
-    /// For now, we use a simple fixed address (0x100) for stub data since memory cloning
-    /// has issues preserving size. This is safe because:
-    /// - Address 0x100 (256 bytes) is well within even small WASM memories
-    /// - The data is just zeros which won't interfere with normal operation
-    /// - WASM code that reads these pointers will get valid empty lists/None values
-    fn initialize_wasi_stubs(
-        &mut self,
-        instance_id: usize,
-        module: &crate::module::Module,
-    ) -> Result<()> {
-        #[cfg(feature = "tracing")]
-
-        debug!(
-            "WASI init: Initializing WASI stubs for instance {}",
-            instance_id
-        );
-
-        // Use a low fixed address that's guaranteed to be valid in most WASM memories
-        // We need 16 bytes total: 8 for empty list + 1 for option None + 7 padding
-        let base_ptr = 0x100u32; // 256 bytes into memory
-
-        // Try to write stub data - if this fails, memory isn't ready yet (which is normal for many instances)
-        match self.write_to_instance(instance_id, base_ptr, &[0u8; 16]) {
-            Ok(_) => {
-                #[cfg(feature = "tracing")]
-
-                info!(
-                    "WASI init: ✓ Wrote 16 bytes of stub data at ptr={:#x}",
-                    base_ptr
-                );
-
-                // Cache the pointers
-                let stub_mem = WasiStubMemory {
-                    empty_list: base_ptr,      // Points to 8 bytes of zeros = (ptr=0, len=0)
-                    option_none: base_ptr + 8, // Points to 1 byte zero = None
-                    empty_env: base_ptr,       // Reuse empty_list
-                    stdout_handle: 1,
-                    stderr_handle: 2,
-                };
-
-                self.wasi_stubs.insert(instance_id, stub_mem);
-                #[cfg(feature = "tracing")]
-
-                info!("WASI init: ✓ WASI stubs initialized with memory write");
-                Ok(())
-            },
-            Err(_e) => {
-                #[cfg(feature = "tracing")]
-
-                debug!("WASI init: Instance has no accessible memory (normal for adapter modules)");
-                #[cfg(feature = "tracing")]
-
-                debug!(
-                    "WASI init: Using fallback pointers (stub WASI functions will return empty values)"
-                );
-
-                // Even if we can't write, we can still return valid pointers
-                // The WASM memory likely has zeros at these addresses anyway
-                let stub_mem = WasiStubMemory {
-                    empty_list: base_ptr,
-                    option_none: base_ptr + 8,
-                    empty_env: base_ptr,
-                    stdout_handle: 1,
-                    stderr_handle: 2,
-                };
-
-                self.wasi_stubs.insert(instance_id, stub_mem);
-                Ok(()) // Don't fail - just use the pointers anyway
-            },
-        }
     }
 
     /// Call a WASI host function
