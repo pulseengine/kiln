@@ -42,11 +42,13 @@ impl HostImportHandler for MarkingHandler {
 }
 
 /// Two memories; `run` calls the suffixed import (function import 0).
+/// `get-terminal-stdin` returns `option<terminal-input>` through a return
+/// area, so its canonical core type takes one i32 return-area pointer.
 const TWO_MEMORIES: &str = r#"(module
-    (import "wasi:cli/terminal-stdin@0.2.6" "get-terminal-stdin$3" (func))
+    (import "wasi:cli/terminal-stdin@0.2.6" "get-terminal-stdin$3" (func (param i32)))
     (memory (export "memory") 1)
     (memory (export "memory$3") 1)
-    (func (export "run") call 0))"#;
+    (func (export "run") i32.const 16 call 0))"#;
 
 fn marker_at_zero(
     engine: &CapabilityAwareEngine,
