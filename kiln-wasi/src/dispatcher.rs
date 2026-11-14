@@ -8168,3 +8168,2131 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod global_wasi_state_tests {
+    use super::*;
+
+    #[cfg(feature = "std")]
+    #[serial_test::serial]
+    #[test]
+    fn global_args_round_trip_and_fallback() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        set_global_wasi_args(vec!["prog".to_string(), "--flag".to_string()]);
+        let got = get_global_wasi_args()?;
+        set_global_wasi_args(Vec::new());
+        assert_eq!(got, vec!["prog".to_string(), "--flag".to_string()]);
+        let fallback = get_global_wasi_args()?;
+        let expected: Vec<String> = std::env::args().collect();
+        assert!(!expected.is_empty());
+        assert_eq!(fallback, expected);
+        Ok(())
+    }
+
+    #[cfg(feature = "std")]
+    #[serial_test::serial]
+    #[test]
+    fn global_env_round_trip() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let env = vec![
+            ("KILN_TEST_ENV_A".to_string(), "1".to_string()),
+            ("KILN_TEST_ENV_B".to_string(), "2".to_string()),
+        ];
+        set_global_wasi_env(env.clone());
+        let got = get_global_wasi_env()?;
+        set_global_wasi_env(Vec::new());
+        assert_eq!(got, env);
+        let fallback = get_global_wasi_env()?;
+        let expected: Vec<(String, String)> = std::env::vars().collect();
+        assert_eq!(fallback, expected);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod pollable_deadline_tests {
+    use super::*;
+    #[test]
+    fn deadline_equal_to_now_is_ready_and_future_is_pending() {
+        let now = std::time::Instant::now();
+        assert_eq!(Pollable::Deadline(now).pending_until(now), None);
+        let later = now + std::time::Duration::from_secs(5);
+        assert_eq!(Pollable::Deadline(later).pending_until(now), Some(later));
+        assert_eq!(Pollable::AlwaysReady.pending_until(now), None);
+    }
+}
+
+#[cfg(test)]
+#[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+mod create_directory_at_fd_table_preopen_tests {
+    use super::*;
+    use kiln_foundation::memory_init::MemoryInitializer;
+    use kiln_foundation::traits::SliceMemory;
+    use kiln_foundation::values::Value as CV;
+
+    struct Cleanup(std::path::PathBuf);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn fd_table_only_preopen_is_a_base() -> Result<()> {
+        MemoryInitializer::ensure_initialized()?;
+        let root =
+            std::env::temp_dir().join(format!("kiln_create_dir_fd_table_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let sandbox = root.join("sandbox");
+        std::fs::create_dir_all(&sandbox).unwrap();
+        let _guard = Cleanup(root.clone());
+        let mut d = WasiDispatcher::new(WasiCapabilities::system_utility()?)?;
+        d.capabilities.filesystem.write_access = true;
+        d.fd_table.insert(
+            0x7777,
+            FileDescriptorEntry {
+                fd_type: FileDescriptorType::PreopenDirectory(sandbox.clone()),
+                read: true,
+                write: true,
+                file: None,
+            },
+        );
+        let mem = SliceMemory::with_size(0x10000);
+        mem.write_bytes(0x1000, b"newdir")?;
+        let res = d.dispatch_core(
+            "wasi:filesystem/types",
+            "[method]descriptor.create-directory-at",
+            &[CV::I32(0x7777), CV::I32(0x1000), CV::I32(6), CV::I32(0x100)],
+            Some(&mem),
+        )?;
+        assert!(matches!(res.as_slice(), [CV::I32(0)]));
+        assert!(sandbox.join("newdir").is_dir());
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+#[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+mod create_directory_capability_tests {
+    use super::*;
+    use kiln_foundation::memory_init::MemoryInitializer;
+    use kiln_foundation::traits::SliceMemory;
+    use kiln_foundation::values::Value as CV;
+
+    struct Cleanup(std::path::PathBuf);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn mkdir_refused_without_write_capability() -> Result<()> {
+        MemoryInitializer::ensure_initialized()?;
+        let root =
+            std::env::temp_dir().join(format!("kiln_create_dir_capability_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let sandbox = root.join("sandbox");
+        std::fs::create_dir_all(&sandbox).unwrap();
+        let _guard = Cleanup(root.clone());
+        let mut d = WasiDispatcher::new(WasiCapabilities::system_utility()?)?;
+        let dir = d.add_preopen(&sandbox)?;
+        d.capabilities.filesystem.write_access = false;
+        let mem = SliceMemory::with_size(0x10000);
+        mem.write_bytes(0x1000, b"newdir")?;
+        let res = d.dispatch_core(
+            "wasi:filesystem/types",
+            "[method]descriptor.create-directory-at",
+            &[
+                CV::I32(dir as i32),
+                CV::I32(0x1000),
+                CV::I32(6),
+                CV::I32(0x100),
+            ],
+            Some(&mem),
+        );
+        assert!(res.is_err());
+        assert!(!sandbox.join("newdir").exists());
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+#[cfg(all(feature = "wasi-random", feature = "std"))]
+mod get_random_bytes_tests {
+    use super::*;
+    use kiln_foundation::memory_init::MemoryInitializer;
+    use kiln_foundation::traits::SliceMemory;
+    use kiln_foundation::values::Value as CV;
+
+    #[serial_test::serial]
+    #[test]
+    fn random_request_of_4096_bytes_is_served() -> Result<()> {
+        MemoryInitializer::ensure_initialized()?;
+        let mut d = WasiDispatcher::new(WasiCapabilities::system_utility()?)?;
+        d.capabilities.random.secure_random = true;
+        d.read_buf_alloc = Some((0x2000, 4096));
+        let mem = SliceMemory::with_size(0x10000);
+        let res = d.dispatch_core(
+            "wasi:random/random",
+            "get-random-bytes",
+            &[CV::I64(4096), CV::I32(0x100)],
+            Some(&mem),
+        )?;
+        assert!(res.is_empty());
+        let mut hdr = [0u8; 8];
+        mem.read_bytes(0x100, &mut hdr)?;
+        assert_eq!(u32::from_le_bytes([hdr[0], hdr[1], hdr[2], hdr[3]]), 0x2000);
+        assert_eq!(u32::from_le_bytes([hdr[4], hdr[5], hdr[6], hdr[7]]), 4096);
+        Ok(())
+    }
+
+    const MAX: i64 = 1024 * 1024;
+
+    fn run(len: i64) -> Result<(Vec<CV>, SliceMemory)> {
+        let mut d = WasiDispatcher::new(WasiCapabilities::system_utility()?)?;
+        d.capabilities.random.secure_random = true;
+        d.read_buf_alloc = Some((0x1000, MAX as u32));
+        let mem = SliceMemory::with_size(0x110000);
+        let res = d.dispatch_core(
+            "wasi:random/random",
+            "get-random-bytes",
+            &[CV::I64(len), CV::I32(0x100)],
+            Some(&mem),
+        )?;
+        Ok((res, mem))
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn exactly_one_mib_is_accepted() -> Result<()> {
+        MemoryInitializer::ensure_initialized()?;
+        let (res, mem) = run(MAX)?;
+        assert!(res.is_empty());
+        let mut hdr = [0u8; 8];
+        mem.read_bytes(0x100, &mut hdr)?;
+        assert_eq!(
+            u32::from_le_bytes([hdr[4], hdr[5], hdr[6], hdr[7]]),
+            MAX as u32
+        );
+        Ok(())
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn over_one_mib_is_refused() -> Result<()> {
+        MemoryInitializer::ensure_initialized()?;
+        assert!(run(MAX + 1).is_err());
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+#[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+mod descriptor_write_full_memory_tests {
+    use super::*;
+    use kiln_foundation::memory_init::MemoryInitializer;
+    use kiln_foundation::traits::SliceMemory;
+    use kiln_foundation::values::Value as CV;
+
+    struct Cleanup(std::path::PathBuf);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn write_buffer_spanning_whole_memory_is_accepted() -> Result<()> {
+        MemoryInitializer::ensure_initialized()?;
+        let root =
+            std::env::temp_dir().join(format!("kiln_descriptor_write_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let sandbox = root.join("sandbox");
+        std::fs::create_dir_all(&sandbox).unwrap();
+        std::fs::write(sandbox.join("f.txt"), b"x").unwrap();
+        let _guard = Cleanup(root.clone());
+        let mut d = WasiDispatcher::new(WasiCapabilities::system_utility()?)?;
+        d.capabilities.filesystem.read_access = true;
+        d.capabilities.filesystem.write_access = true;
+        let dir = d.add_preopen(&sandbox)?;
+        let mem = SliceMemory::with_size(4096);
+        mem.write_bytes(0x100, b"f.txt")?;
+        let opened = d.dispatch_core(
+            "wasi:filesystem/types",
+            "[method]descriptor.open-at",
+            &[
+                CV::I32(dir as i32),
+                CV::I32(0),
+                CV::I32(0x100),
+                CV::I32(5),
+                CV::I32(0),
+                CV::I32(3),
+            ],
+            Some(&mem),
+        )?;
+        let fd = match opened.as_slice() {
+            [CV::I32(0), CV::I32(h)] => *h,
+            _ => panic!("open-at failed"),
+        };
+        let res = d.dispatch_core(
+            "wasi:filesystem/types",
+            "[method]descriptor.write",
+            &[
+                CV::I32(fd),
+                CV::I32(0),
+                CV::I32(4096),
+                CV::I64(0),
+                CV::I32(0x100),
+            ],
+            Some(&mem),
+        )?;
+        assert!(matches!(res.as_slice(), [CV::I32(0), CV::I64(4096)]));
+        assert_eq!(
+            std::fs::metadata(sandbox.join("f.txt")).unwrap().len(),
+            4096
+        );
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+#[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+mod fs_error_code_tests {
+    use super::*;
+    use kiln_foundation::memory_init::MemoryInitializer;
+
+    #[serial_test::serial]
+    #[test]
+    fn permission_denied_maps_to_access() -> Result<()> {
+        MemoryInitializer::ensure_initialized()?;
+        let err = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
+        assert_eq!(WasiDispatcher::fs_error_code(&err), fs_error::ACCESS);
+        assert_eq!(WasiDispatcher::fs_error_code(&err), 0);
+        let other = std::io::Error::from(std::io::ErrorKind::Other);
+        assert_eq!(WasiDispatcher::fs_error_code(&other), fs_error::IO);
+        Ok(())
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn invalid_input_maps_to_invalid_error_code() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let e = std::io::Error::from(std::io::ErrorKind::InvalidInput);
+        assert_eq!(WasiDispatcher::fs_error_code(&e), fs_error::INVALID);
+        assert_eq!(fs_error::INVALID, 12);
+        let other = std::io::Error::from(std::io::ErrorKind::BrokenPipe);
+        assert_eq!(WasiDispatcher::fs_error_code(&other), fs_error::IO);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod verify_handle_contained_tests {
+    use super::*;
+
+    #[cfg(all(feature = "wasi-filesystem", feature = "std", unix))]
+    #[serial_test::serial]
+    #[test]
+    fn handle_for_other_inode_in_same_dir_is_refused() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let root = std::env::temp_dir().join(format!(
+            "kiln_verify_handle_{}_{}",
+            std::process::id(),
+            nanos
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("a.txt"), b"A").unwrap();
+        std::fs::write(root.join("b.txt"), b"B").unwrap();
+        let handle = std::fs::File::open(root.join("a.txt")).unwrap();
+        let good = WasiDispatcher::verify_handle_contained(&root, &root.join("a.txt"), &handle);
+        let bad = WasiDispatcher::verify_handle_contained(&root, &root.join("b.txt"), &handle);
+        std::fs::remove_dir_all(&root).unwrap();
+        assert!(good.is_ok());
+        assert!(bad.is_err());
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod get_preopens_tests {
+    use super::*;
+
+    #[cfg(feature = "std")]
+    #[serial_test::serial]
+    #[test]
+    fn get_preopens_returns_registered_preopen() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let root = std::env::temp_dir().join(format!(
+            "kiln_get_preopens_{}_{}",
+            std::process::id(),
+            nanos
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let mut d = WasiDispatcher::new(WasiCapabilities::minimal()?)?;
+        assert!(WasiDispatcher::get_preopens(&d).is_empty());
+        let h = d.add_preopen(root.clone())?;
+        let list = WasiDispatcher::get_preopens(&d);
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].0, h);
+        assert_eq!(list[0].1, root);
+        std::fs::remove_dir_all(&root).unwrap();
+        Ok(())
+    }
+
+    #[cfg(feature = "std")]
+    #[serial_test::serial]
+    #[test]
+    fn get_preopens_two_entries_exact() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let root = std::env::temp_dir().join(format!(
+            "kiln_get_preopens_two_{}_{}",
+            std::process::id(),
+            nanos
+        ));
+        let a = root.join("a");
+        let b = root.join("b");
+        std::fs::create_dir_all(&a).unwrap();
+        std::fs::create_dir_all(&b).unwrap();
+        let mut d = WasiDispatcher::new(WasiCapabilities::minimal()?)?;
+        let ha = d.add_preopen(a.clone())?;
+        let hb = d.add_preopen(b.clone())?;
+        let list = WasiDispatcher::get_preopens(&d);
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0], (ha, a.clone()));
+        assert_eq!(list[1], (hb, b.clone()));
+        std::fs::remove_dir_all(&root).unwrap();
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod dispatcher_configuration_tests {
+    use super::*;
+
+    #[serial_test::serial]
+    #[test]
+    fn set_args_replaces_args() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let mut d = WasiDispatcher::new(WasiCapabilities::system_utility()?)?;
+        assert!(d.args().is_empty());
+        d.set_args(vec![String::from("prog"), String::from("--flag")]);
+        assert_eq!(d.args(), &[String::from("prog"), String::from("--flag")]);
+        Ok(())
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn set_env_replaces_env_vars() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let mut d = WasiDispatcher::new(WasiCapabilities::system_utility()?)?;
+        assert!(d.env_vars.is_empty());
+        d.set_env(vec![(String::from("K"), String::from("V"))]);
+        assert_eq!(d.env_vars, vec![(String::from("K"), String::from("V"))]);
+        Ok(())
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn args_alloc_none_then_exact_then_cleared() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let mut d = WasiDispatcher::with_defaults()?;
+        assert!(d.get_args_alloc().is_none());
+        d.set_args_alloc(0x2000, vec![(0x3000, 5), (0x3010, 3)]);
+        let got = d.get_args_alloc().expect("alloc set");
+        assert_eq!(got.0, 0x2000);
+        assert_eq!(got.1, vec![(0x3000u32, 5u32), (0x3010u32, 3u32)]);
+        d.clear_args_alloc();
+        assert!(d.get_args_alloc().is_none());
+        Ok(())
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn args_returns_configured_args() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let mut d = WasiDispatcher::with_defaults()?;
+        d.set_args(vec!["alpha".to_string(), "beta".to_string()]);
+        let expected = ["alpha".to_string(), "beta".to_string()];
+        assert_eq!(d.args(), &expected[..]);
+        d.set_args(Vec::new());
+        assert!(d.args().is_empty());
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod get_arguments_alloc_count_tests {
+    use super::*;
+    use kiln_foundation::traits::SliceMemory;
+    use kiln_foundation::values::Value as CV;
+    fn run(allocs: Vec<(u32, u32)>) -> Result<Vec<CV>> {
+        let mut d = WasiDispatcher::with_defaults()?;
+        d.set_args(vec!["abcd".to_string()]);
+        d.set_args_alloc(0x200, allocs);
+        let mem = SliceMemory::with_size(0x1000);
+        d.dispatch_core(
+            "wasi:cli/environment",
+            "get-arguments",
+            &[CV::I32(0x100)],
+            Some(&mem),
+        )
+    }
+    #[serial_test::serial]
+    #[test]
+    fn matching_alloc_count_succeeds() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let r = run(vec![(0x300, 4)])?;
+        assert!(r.is_empty());
+        Ok(())
+    }
+    #[serial_test::serial]
+    #[test]
+    fn mismatched_alloc_count_is_error() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        assert!(run(vec![(0x300, 4), (0x400, 4)]).is_err());
+        assert!(run(vec![]).is_err());
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod get_arguments_memory_bounds_tests {
+    use super::*;
+    use kiln_foundation::traits::SliceMemory;
+    use kiln_foundation::values::Value as CV;
+    fn run(sp: u32) -> Result<(Result<Vec<CV>>, SliceMemory)> {
+        let mut d = WasiDispatcher::with_defaults()?;
+        d.set_args(vec!["abcd".to_string()]);
+        d.set_args_alloc(0x200, vec![(sp, 4)]);
+        let mem = SliceMemory::with_size(0x1000);
+        mem.write_bytes(0x100, &[0xFF; 8])?;
+        let r = d.dispatch_core(
+            "wasi:cli/environment",
+            "get-arguments",
+            &[CV::I32(0x100)],
+            Some(&mem),
+        );
+        Ok((r, mem))
+    }
+    #[serial_test::serial]
+    #[test]
+    fn string_ending_exactly_at_memory_end_is_written() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let (r, mem) = run(0xFFC)?;
+        assert!(r?.is_empty());
+        let mut s = [0u8; 4];
+        mem.read_bytes(0xFFC, &mut s)?;
+        assert_eq!(&s, b"abcd");
+        let mut h = [0u8; 8];
+        mem.read_bytes(0x100, &mut h)?;
+        assert_eq!(u32::from_le_bytes([h[0], h[1], h[2], h[3]]), 0x200);
+        assert_eq!(u32::from_le_bytes([h[4], h[5], h[6], h[7]]), 1);
+        Ok(())
+    }
+    #[serial_test::serial]
+    #[test]
+    fn string_overflowing_memory_end_is_an_error_and_leaves_header_untouched() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let (r, mem) = run(0xFFD)?;
+        let err = r.expect_err("an allocation past the end of memory must be refused");
+        assert!(
+            err.message.contains("lies past the end of memory"),
+            "unexpected message: {}",
+            err.message
+        );
+        let mut h = [0u8; 8];
+        mem.read_bytes(0x100, &mut h)?;
+        assert_eq!(h, [0xFFu8; 8]);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod get_arguments_layout_tests {
+    use super::*;
+    use kiln_foundation::traits::SliceMemory;
+    use kiln_foundation::values::Value as CV;
+
+    fn rd(mem: &SliceMemory, p: u32) -> u32 {
+        let mut b = [0u8; 4];
+        mem.read_bytes(p, &mut b).unwrap();
+        u32::from_le_bytes(b)
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn get_arguments_two_entries_layout() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let mut d = WasiDispatcher::with_defaults()?;
+        d.set_args(vec!["abc".to_string(), "de".to_string()]);
+        d.set_args_alloc(0x200, vec![(0x300, 3), (0x400, 2)]);
+        let mem = SliceMemory::with_size(0x1000);
+        let retptr = 0x100u32;
+        let r = d.dispatch_core(
+            "wasi:cli/environment",
+            "get-arguments",
+            &[CV::I32(retptr as i32)],
+            Some(&mem),
+        )?;
+        assert!(r.is_empty());
+        assert_eq!(rd(&mem, retptr), 0x200);
+        assert_eq!(rd(&mem, retptr + 4), 2);
+        assert_eq!(rd(&mem, 0x200), 0x300);
+        assert_eq!(rd(&mem, 0x204), 3);
+        assert_eq!(rd(&mem, 0x208), 0x400);
+        assert_eq!(rd(&mem, 0x20C), 2);
+        let mut s = [0u8; 3];
+        mem.read_bytes(0x300, &mut s)?;
+        assert_eq!(&s, b"abc");
+        let mut s2 = [0u8; 2];
+        mem.read_bytes(0x400, &mut s2)?;
+        assert_eq!(&s2, b"de");
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod poll_return_buffer_tests {
+    use super::*;
+    use kiln_foundation::traits::SliceMemory;
+    use kiln_foundation::values::Value as CV;
+    #[cfg(feature = "std")]
+    #[serial_test::serial]
+    #[test]
+    fn poll_exact_size_buffer_is_accepted() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let mut d = WasiDispatcher::with_defaults()?;
+        let h = d.dispatch_core(
+            "wasi:io/streams",
+            "[method]output-stream.subscribe",
+            &[CV::I32(0)],
+            None,
+        )?;
+        let handle = match h[0] {
+            CV::I32(v) => v,
+            _ => panic!("bad handle"),
+        };
+        let mem = SliceMemory::with_size(0x10000);
+        mem.write_bytes(0x100, &(handle as u32).to_le_bytes())?;
+        d.read_buf_alloc = Some((0x2000, 4));
+        let res = d.dispatch_core(
+            "wasi:io/poll",
+            "poll",
+            &[CV::I32(0x100), CV::I32(1), CV::I32(0x300)],
+            Some(&mem),
+        )?;
+        assert!(res.is_empty());
+        let mut b = [0u8; 4];
+        mem.read_bytes(0x300, &mut b)?;
+        assert_eq!(u32::from_le_bytes(b), 0x2000);
+        mem.read_bytes(0x304, &mut b)?;
+        assert_eq!(u32::from_le_bytes(b), 1);
+        mem.read_bytes(0x2000, &mut b)?;
+        assert_eq!(u32::from_le_bytes(b), 0);
+        Ok(())
+    }
+    #[cfg(feature = "std")]
+    #[serial_test::serial]
+    #[test]
+    fn poll_too_small_buffer_is_refused() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let mut d = WasiDispatcher::with_defaults()?;
+        let h = d.dispatch_core(
+            "wasi:io/streams",
+            "[method]output-stream.subscribe",
+            &[CV::I32(0)],
+            None,
+        )?;
+        let handle = match h[0] {
+            CV::I32(v) => v,
+            _ => panic!("bad handle"),
+        };
+        let mem = SliceMemory::with_size(0x10000);
+        mem.write_bytes(0x100, &(handle as u32).to_le_bytes())?;
+        d.read_buf_alloc = Some((0x2000, 3));
+        let res = d.dispatch_core(
+            "wasi:io/poll",
+            "poll",
+            &[CV::I32(0x100), CV::I32(1), CV::I32(0x300)],
+            Some(&mem),
+        );
+        assert!(res.is_err());
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod check_write_tests {
+    use super::*;
+    use kiln_foundation::traits::SliceMemory;
+    use kiln_foundation::values::Value as CV;
+    #[cfg(feature = "std")]
+    #[serial_test::serial]
+    #[test]
+    fn check_write_writes_result_at_retptr() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let mut d = WasiDispatcher::with_defaults()?;
+        let mem = SliceMemory::with_size(0x10000);
+        let res = d.dispatch_core(
+            "wasi:io/streams",
+            "[method]output-stream.check-write",
+            &[CV::I32(1), CV::I32(0x100)],
+            Some(&mem),
+        )?;
+        assert!(res.is_empty());
+        let mut b = [0u8; 4];
+        mem.read_bytes(0x100, &mut b)?;
+        assert_eq!(u32::from_le_bytes(b), 0);
+        let mut c = [0u8; 8];
+        mem.read_bytes(0x108, &mut c)?;
+        assert_eq!(u64::from_le_bytes(c), 65536);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod wall_clock_now_tests {
+    use super::*;
+    use kiln_foundation::values::Value as CV;
+    #[cfg(all(feature = "std", feature = "wasi-clocks"))]
+    #[serial_test::serial]
+    #[test]
+    fn wall_clock_now_respects_realtime_capability() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let mut d = WasiDispatcher::with_defaults()?;
+        d.capabilities.clocks.realtime_access = false;
+        let denied = d.dispatch_core("wasi:clocks/wall-clock", "now", &[], None);
+        assert!(denied.is_err());
+        d.capabilities.clocks.realtime_access = true;
+        let ok = d.dispatch_core("wasi:clocks/wall-clock", "now", &[], None)?;
+        assert_eq!(ok.len(), 2);
+        assert!(matches!(ok[0], CV::I64(_)));
+        Ok(())
+    }
+    #[cfg(all(feature = "std", feature = "wasi-clocks"))]
+    #[serial_test::serial]
+    #[test]
+    fn wall_clock_seconds_is_epoch_seconds() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let mut d = WasiDispatcher::with_defaults()?;
+        d.capabilities.clocks.realtime_access = true;
+        let res = d.dispatch_core("wasi:clocks/wall-clock", "now", &[], None)?;
+        assert_eq!(res.len(), 2);
+        let secs = match res[0] {
+            CV::I64(s) => s,
+            _ => panic!("bad seconds"),
+        };
+        let nanos = match res[1] {
+            CV::I32(n) => n,
+            _ => panic!("bad nanos"),
+        };
+        assert!(
+            secs >= 1_600_000_000,
+            "seconds must be epoch seconds, got {}",
+            secs
+        );
+        assert!((0..1_000_000_000).contains(&nanos));
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod wall_clock_now_retptr_layout_tests {
+    use super::*;
+
+    #[cfg(all(feature = "wasi-clocks", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn wall_clock_nanos_written_at_retptr_plus_8() -> Result<()> {
+        use kiln_foundation::MemoryAccessor as _;
+        use kiln_foundation::traits::SliceMemory;
+        use kiln_foundation::values::Value as CV;
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let mut d = WasiDispatcher::with_defaults()?;
+        d.capabilities.clocks.realtime_access = true;
+        let mem = SliceMemory::with_size(0x10000);
+        let retptr = 0x100u32;
+        mem.write_bytes(retptr - 16, &[0xAAu8; 48])?;
+        d.dispatch_core(
+            "wasi:clocks/wall-clock",
+            "now",
+            &[CV::I32(retptr as i32)],
+            Some(&mem),
+        )?;
+        let mut b = [0u8; 12];
+        mem.read_bytes(retptr, &mut b)?;
+        let nanos = u32::from_le_bytes([b[8], b[9], b[10], b[11]]);
+        assert!(nanos < 1_000_000_000, "nanos at +8 not written: {}", nanos);
+        // the bytes just below the record must be untouched
+        let mut below = [0u8; 8];
+        mem.read_bytes(retptr - 8, &mut below)?;
+        assert_eq!(below, [0xAAu8; 8]);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod wall_clock_resolution_tests {
+    use super::*;
+
+    #[cfg(all(feature = "wasi-clocks", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn wall_clock_resolution_writes_record_via_retptr() -> Result<()> {
+        use kiln_foundation::MemoryAccessor as _;
+        use kiln_foundation::traits::SliceMemory;
+        use kiln_foundation::values::Value as CV;
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let mut d = WasiDispatcher::with_defaults()?;
+        let mem = SliceMemory::with_size(0x10000);
+        let retptr = 0x100u32;
+        mem.write_bytes(retptr, &[0xFFu8; 16])?;
+        let res = d.dispatch_core(
+            "wasi:clocks/wall-clock",
+            "resolution",
+            &[CV::I32(retptr as i32)],
+            Some(&mem),
+        )?;
+        assert!(res.is_empty());
+        let mut b = [0u8; 16];
+        mem.read_bytes(retptr, &mut b)?;
+        assert_eq!(u64::from_le_bytes(b[0..8].try_into().unwrap()), 0);
+        assert_eq!(u64::from_le_bytes(b[8..16].try_into().unwrap()), 1);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+#[cfg(all(feature = "wasi-clocks", feature = "std"))]
+mod wall_clock_resolution_versioned_import_tests {
+    use super::*;
+    use kiln_foundation::traits::SliceMemory;
+    use kiln_foundation::values::Value as CV;
+
+    #[serial_test::serial]
+    #[test]
+    fn wall_clock_resolution_writes_nanos_at_retptr_plus_8() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let mut d = WasiDispatcher::with_defaults()?;
+        let mem = SliceMemory::with_size(0x10000);
+        mem.write_bytes(0x100, &[0xFFu8; 16])?;
+        let r = d.dispatch_core(
+            "wasi:clocks/wall-clock@0.2.4",
+            "resolution",
+            &[CV::I32(0x100)],
+            Some(&mem),
+        )?;
+        assert!(r.is_empty());
+        let mut buf = [0u8; 16];
+        mem.read_bytes(0x100, &mut buf)?;
+        assert_eq!(&buf[0..8], &0u64.to_le_bytes());
+        assert_eq!(&buf[8..16], &1u64.to_le_bytes());
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+#[cfg(all(feature = "wasi-io", feature = "std"))]
+mod blocking_write_and_flush_tests {
+    use super::*;
+    use kiln_foundation::traits::SliceMemory;
+    use kiln_foundation::values::Value as CV;
+
+    fn stdout_handle(d: &mut WasiDispatcher) -> Result<i32> {
+        let r = d.dispatch_core("wasi:cli/stdout@0.2.4", "get-stdout", &[], None)?;
+        match r.first() {
+            Some(CV::I32(h)) => Ok(*h),
+            _ => panic!("no handle"),
+        }
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn blocking_write_refused_without_stdout_capability() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let mut d = WasiDispatcher::with_defaults()?;
+        let h = stdout_handle(&mut d)?;
+        d.capabilities.io.stdout_access = false;
+        let mem = SliceMemory::with_size(0x10000);
+        mem.write_bytes(0x1000, b"\n")?;
+        mem.write_bytes(0x2000, &[0xFFu8; 4])?;
+        let r = d.dispatch_core(
+            "wasi:io/streams@0.2.4",
+            "[method]output-stream.blocking-write-and-flush",
+            &[CV::I32(h), CV::I32(0x1000), CV::I32(1), CV::I32(0x2000)],
+            Some(&mem),
+        );
+        assert!(r.is_err());
+        let mut buf = [0u8; 4];
+        mem.read_bytes(0x2000, &mut buf)?;
+        assert_eq!(buf, [0xFFu8; 4]);
+        Ok(())
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn blocking_write_allowed_with_stdout_capability() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let mut d = WasiDispatcher::with_defaults()?;
+        d.capabilities.io.stdout_access = true;
+        let h = stdout_handle(&mut d)?;
+        let mem = SliceMemory::with_size(0x10000);
+        mem.write_bytes(0x1000, b"\n")?;
+        mem.write_bytes(0x2000, &[0xFFu8; 4])?;
+        let r = d.dispatch_core(
+            "wasi:io/streams@0.2.4",
+            "[method]output-stream.blocking-write-and-flush",
+            &[CV::I32(h), CV::I32(0x1000), CV::I32(1), CV::I32(0x2000)],
+            Some(&mem),
+        )?;
+        assert!(r.is_empty());
+        let mut buf = [0u8; 4];
+        mem.read_bytes(0x2000, &mut buf)?;
+        assert_eq!(buf, [0u8; 4]);
+        Ok(())
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn blocking_write_accepts_exactly_three_args() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let mut d = WasiDispatcher::with_defaults()?;
+        d.capabilities.io.stdout_access = true;
+        let r = d.dispatch_core("wasi:cli/stdout@0.2.4", "get-stdout", &[], None)?;
+        let h = match r.first() {
+            Some(CV::I32(h)) => *h,
+            _ => panic!("no handle"),
+        };
+        let mem = SliceMemory::with_size(0x10000);
+        mem.write_bytes(0x1000, b"\n")?;
+        let out = d.dispatch_core(
+            "wasi:io/streams@0.2.4",
+            "[method]output-stream.blocking-write-and-flush",
+            &[CV::I32(h), CV::I32(0x1000), CV::I32(1)],
+            Some(&mem),
+        )?;
+        assert!(out.is_empty());
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod blocking_write_retptr_bounds_tests {
+    use super::*;
+    use kiln_foundation::traits::SliceMemory;
+    use kiln_foundation::values::Value as CV;
+
+    #[cfg(all(feature = "wasi-io", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn retptr_boundary() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let mut d = WasiDispatcher::with_defaults()?;
+        let h = d.dispatch_core("wasi:cli/stdout@0.2.4", "get-stdout", &[], None)?;
+        let handle = match h[0] {
+            CV::I32(v) => v,
+            _ => panic!("handle"),
+        };
+        let mem = SliceMemory::with_size(0x10000);
+        mem.write_bytes(0x100, b"x")?;
+        mem.write_bytes(0xFFFC, &[0xFF; 4])?;
+        // retptr exactly size-4: discriminant fits, must be written
+        d.dispatch_core(
+            "wasi:io/streams@0.2.4",
+            "[method]output-stream.blocking-write-and-flush",
+            &[CV::I32(handle), CV::I32(0x100), CV::I32(1), CV::I32(0xFFFC)],
+            Some(&mem),
+        )?;
+        let mut out = [0xAAu8; 4];
+        mem.read_bytes(0xFFFC, &mut out)?;
+        assert_eq!(out, [0, 0, 0, 0]);
+        // retptr size-2: the discriminant does not fit, so the write is an error
+        // and the return area is left untouched.
+        mem.write_bytes(0xFFFC, &[0xFF; 4])?;
+        let r = d.dispatch_core(
+            "wasi:io/streams@0.2.4",
+            "[method]output-stream.blocking-write-and-flush",
+            &[CV::I32(handle), CV::I32(0x100), CV::I32(1), CV::I32(0xFFFE)],
+            Some(&mem),
+        );
+        assert!(
+            r.is_err(),
+            "a return area that does not fit in memory must be refused"
+        );
+        let mut out = [0u8; 4];
+        mem.read_bytes(0xFFFC, &mut out)?;
+        assert_eq!(out, [0xFF; 4]);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod output_stream_write_zero_length_tests {
+    use super::*;
+    use kiln_foundation::traits::SliceMemory;
+    use kiln_foundation::values::Value as CV;
+
+    #[cfg(all(feature = "wasi-io", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn write_with_exactly_three_args_succeeds() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let mut d = WasiDispatcher::with_defaults()?;
+        let h = d.dispatch_core("wasi:cli/stdout@0.2.4", "get-stdout", &[], None)?;
+        let handle = match h[0] {
+            CV::I32(v) => v,
+            _ => panic!("handle"),
+        };
+        let mem = SliceMemory::with_size(0x10000);
+        let r = d.dispatch_core(
+            "wasi:io/streams@0.2.4",
+            "[method]output-stream.write",
+            &[CV::I32(handle), CV::I32(0x100), CV::I32(0)],
+            Some(&mem),
+        )?;
+        assert!(r.is_empty());
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod output_stream_write_retptr_tests {
+    use super::*;
+    use kiln_foundation::traits::SliceMemory;
+    use kiln_foundation::values::Value as CV;
+
+    #[cfg(all(feature = "wasi-io", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn write_with_four_args_ok_and_two_args_rejected() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let mut d = WasiDispatcher::with_defaults()?;
+        let h = d.dispatch_core("wasi:cli/stdout@0.2.4", "get-stdout", &[], None)?;
+        let handle = match h[0] {
+            CV::I32(v) => v,
+            _ => panic!("handle"),
+        };
+        let mem = SliceMemory::with_size(0x10000);
+        mem.write_bytes(0x200, &[0xFF; 4])?;
+        let r = d.dispatch_core(
+            "wasi:io/streams@0.2.4",
+            "[method]output-stream.write",
+            &[CV::I32(handle), CV::I32(0x100), CV::I32(0), CV::I32(0x200)],
+            Some(&mem),
+        )?;
+        assert!(r.is_empty());
+        let mut out = [0xAAu8; 4];
+        mem.read_bytes(0x200, &mut out)?;
+        assert_eq!(out, [0, 0, 0, 0]);
+        let short = d.dispatch_core(
+            "wasi:io/streams@0.2.4",
+            "[method]output-stream.write",
+            &[CV::I32(handle), CV::I32(0x100)],
+            Some(&mem),
+        );
+        assert!(short.is_err());
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod output_stream_write_stderr_tests {
+    use super::*;
+
+    #[cfg(all(feature = "wasi-io", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn write_with_exactly_three_args_is_accepted() -> Result<()> {
+        use kiln_foundation::MemoryAccessor as _;
+        use kiln_foundation::traits::SliceMemory;
+        use kiln_foundation::values::Value as CV;
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let mut d = WasiDispatcher::with_defaults()?;
+        let h = d.dispatch_core("wasi:cli/stderr", "get-stderr", &[], None)?;
+        let handle = match h.first() {
+            Some(CV::I32(x)) => *x,
+            _ => panic!("expected handle"),
+        };
+        let mem = SliceMemory::with_size(0x1000);
+        mem.write_bytes(0x100, b".")?;
+        let r = d.dispatch_core(
+            "wasi:io/streams",
+            "[method]output-stream.write",
+            &[CV::I32(handle), CV::I32(0x100), CV::I32(1)],
+            Some(&mem),
+        )?;
+        assert!(r.is_empty());
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod get_random_bytes_i32_length_tests {
+    use super::*;
+    #[cfg(all(feature = "wasi-random", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn get_random_bytes_accepts_i32_len() -> Result<()> {
+        use kiln_foundation::MemoryAccessor as _;
+        use kiln_foundation::traits::SliceMemory;
+        use kiln_foundation::values::Value as CV;
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let mut d = WasiDispatcher::with_defaults()?;
+        d.capabilities.random.secure_random = true;
+        d.read_buf_alloc = Some((0x2000, 64));
+        let mem = SliceMemory::with_size(0x10000);
+        let res = d.dispatch_core(
+            "wasi:random/random",
+            "get-random-bytes",
+            &[CV::I32(16), CV::I32(0x100)],
+            Some(&mem),
+        )?;
+        assert!(res.is_empty());
+        let mut hdr = [0u8; 8];
+        mem.read_bytes(0x100, &mut hdr)?;
+        assert_eq!(u32::from_le_bytes([hdr[0], hdr[1], hdr[2], hdr[3]]), 0x2000);
+        assert_eq!(u32::from_le_bytes([hdr[4], hdr[5], hdr[6], hdr[7]]), 16);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod get_random_u64_capability_tests {
+    use super::*;
+    #[cfg(all(feature = "wasi-random", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn get_random_u64_requires_secure_random_capability() -> Result<()> {
+        use kiln_foundation::values::Value as CV;
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let mut d = WasiDispatcher::with_defaults()?;
+        d.capabilities.random.secure_random = false;
+        let denied = d.dispatch_core("wasi:random/random", "get-random-u64", &[], None);
+        assert!(denied.is_err());
+        d.capabilities.random.secure_random = true;
+        let ok = d.dispatch_core("wasi:random/random", "get-random-u64", &[], None)?;
+        assert_eq!(ok.len(), 1);
+        assert!(matches!(ok[0], CV::I64(_)));
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod get_type_preopen_tests {
+    use super::*;
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn get_type_only_preopen_is_directory() -> Result<()> {
+        use kiln_foundation::values::Value as CV;
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let mut d = WasiDispatcher::with_defaults()?;
+        let fd = d.add_preopen(std::env::temp_dir())?;
+        let ty = |d: &mut WasiDispatcher, h: u32| -> Result<i32> {
+            let r = d.dispatch_core(
+                "wasi:filesystem/types",
+                "[method]descriptor.get-type",
+                &[CV::I32(h as i32), CV::I32(0x100)],
+                None,
+            )?;
+            match r.get(1) {
+                Some(CV::I32(t)) => Ok(*t),
+                _ => Err(Error::runtime_error("unexpected result")),
+            }
+        };
+        assert_eq!(ty(&mut d, fd)?, 3);
+        // stdout (fd 1) is not a preopen
+        if fd != 1 {
+            assert_eq!(ty(&mut d, 1)?, 6);
+        }
+        if fd != 9999 {
+            assert_eq!(ty(&mut d, 9999)?, 6);
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+#[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+mod preopen_descriptor_tests {
+    use super::*;
+    use kiln_foundation::traits::SliceMemory;
+    use kiln_foundation::values::Value as CV;
+
+    fn fixture(tag: &str) -> std::path::PathBuf {
+        let n = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let p =
+            std::env::temp_dir().join(format!("kiln_wasi_{}_{}_{}", tag, std::process::id(), n));
+        std::fs::create_dir_all(&p).unwrap();
+        p
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn open_at_resolves_preopen_registered_only_in_fd_table() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let root = fixture("open_at_fd_table");
+        std::fs::write(root.join("f.txt"), b"hello").unwrap();
+        let mut d = WasiDispatcher::with_defaults()?;
+        d.capabilities.filesystem.read_access = true;
+        let fd = 7777u32;
+        d.fd_table.insert(
+            fd,
+            FileDescriptorEntry {
+                fd_type: FileDescriptorType::PreopenDirectory(root.clone()),
+                read: true,
+                write: false,
+                file: None,
+            },
+        );
+        let mem = SliceMemory::with_size(0x10000);
+        mem.write_bytes(0x1000, b"f.txt")?;
+        let res = d.dispatch_core(
+            "wasi:filesystem/types",
+            "[method]descriptor.open-at",
+            &[
+                CV::I32(fd as i32),
+                CV::I32(0),
+                CV::I32(0x1000),
+                CV::I32(5),
+                CV::I32(0),
+                CV::I32(1),
+            ],
+            Some(&mem),
+        );
+        drop(d);
+        let _ = std::fs::remove_dir_all(&root);
+        let res = res?;
+        assert_eq!(res.len(), 2);
+        assert!(
+            matches!(res[0], CV::I32(0)),
+            "open-at through an fd_table preopen must succeed"
+        );
+        Ok(())
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn stat_on_preopen_directory_reports_directory() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let root = fixture("stat_preopen");
+        let mut d = WasiDispatcher::with_defaults()?;
+        let fd = d.add_preopen(root.clone())?;
+        let res = d.dispatch_core(
+            "wasi:filesystem/types",
+            "[method]descriptor.stat",
+            &[CV::I32(fd as i32), CV::I32(0x100)],
+            None,
+        );
+        drop(d);
+        let _ = std::fs::remove_dir_all(&root);
+        let res = res?;
+        assert!(
+            res.len() > 2,
+            "stat of a preopen must be ok, not an error pair"
+        );
+        assert!(matches!(res[0], CV::I32(0)));
+        assert!(
+            matches!(res[1], CV::I32(3)),
+            "descriptor-type must be directory (3)"
+        );
+        Ok(())
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn stat_at_uses_the_named_preopen_not_another() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let root = fixture("stat_at_named");
+        let a = root.join("a");
+        let b = root.join("b");
+        std::fs::create_dir_all(&a).unwrap();
+        std::fs::create_dir_all(&b).unwrap();
+        std::fs::write(a.join("a.txt"), b"hello").unwrap();
+        let mut d = WasiDispatcher::with_defaults()?;
+        let fa = d.add_preopen(a.clone())?;
+        let fb = d.add_preopen(b.clone())?;
+        let mem = SliceMemory::with_size(0x10000);
+        mem.write_bytes(0x1000, b"a.txt")?;
+        let r1 = d.dispatch_core(
+            "wasi:filesystem/types",
+            "[method]descriptor.stat-at",
+            &[CV::I32(fa as i32), CV::I32(0), CV::I32(0x1000), CV::I32(5)],
+            Some(&mem),
+        );
+        let r2 = d.dispatch_core(
+            "wasi:filesystem/types",
+            "[method]descriptor.stat-at",
+            &[CV::I32(fb as i32), CV::I32(0), CV::I32(0x1000), CV::I32(5)],
+            Some(&mem),
+        );
+        drop(d);
+        let _ = std::fs::remove_dir_all(&root);
+        let r1 = r1?;
+        let r2 = r2?;
+        assert!(r1.len() > 3);
+        assert!(matches!(r1[0], CV::I32(0)));
+        assert!(matches!(r1[1], CV::I32(6)));
+        assert!(matches!(r1[3], CV::I64(5)));
+        assert_eq!(r2.len(), 2);
+        assert!(matches!(r2[0], CV::I32(1)));
+        assert!(
+            matches!(r2[1], CV::I32(20)),
+            "a.txt is not in preopen b: no-entry"
+        );
+        Ok(())
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn stat_at_resolves_preopen_registered_only_in_fd_table() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let root = fixture("stat_at_fd_table");
+        std::fs::write(root.join("f.txt"), b"hello").unwrap();
+        let mut d = WasiDispatcher::with_defaults()?;
+        let fd = 7778u32;
+        d.fd_table.insert(
+            fd,
+            FileDescriptorEntry {
+                fd_type: FileDescriptorType::PreopenDirectory(root.clone()),
+                read: true,
+                write: false,
+                file: None,
+            },
+        );
+        let mem = SliceMemory::with_size(0x10000);
+        mem.write_bytes(0x1000, b"f.txt")?;
+        let res = d.dispatch_core(
+            "wasi:filesystem/types",
+            "[method]descriptor.stat-at",
+            &[CV::I32(fd as i32), CV::I32(0), CV::I32(0x1000), CV::I32(5)],
+            Some(&mem),
+        );
+        drop(d);
+        let _ = std::fs::remove_dir_all(&root);
+        let res = res?;
+        assert!(res.len() > 3);
+        assert!(
+            matches!(res[0], CV::I32(0)),
+            "stat-at via fd_table preopen must succeed"
+        );
+        assert!(matches!(res[3], CV::I64(5)));
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod sync_data_regular_file_tests {
+    use super::*;
+    #[cfg(all(unix, feature = "wasi-filesystem", feature = "std"))]
+    use kiln_foundation::values::Value as CV;
+
+    #[cfg(all(unix, feature = "wasi-filesystem", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn sync_data_on_non_writable_descriptor_is_noop_success() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let mut d = WasiDispatcher::with_defaults()?;
+        let fd = 7779u32;
+        d.fd_table.insert(
+            fd,
+            FileDescriptorEntry {
+                fd_type: FileDescriptorType::RegularFile(std::path::PathBuf::from("/dev/null")),
+                read: false,
+                write: false,
+                file: Some(std::fs::File::open("/dev/null").unwrap()),
+            },
+        );
+        let res = d.dispatch_core(
+            "wasi:filesystem/types",
+            "[method]descriptor.sync-data",
+            &[CV::I32(fd as i32), CV::I32(0x100)],
+            None,
+        )?;
+        assert_eq!(res.len(), 1);
+        assert!(
+            matches!(res[0], CV::I32(0)),
+            "sync-data on a descriptor not open for writing is a no-op success"
+        );
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+#[cfg(all(target_os = "linux", feature = "wasi-filesystem", feature = "std"))]
+mod sync_data_writable_preopen_tests {
+    use super::*;
+    use kiln_foundation::values::Value as CV;
+
+    fn fixture(tag: &str) -> std::path::PathBuf {
+        let n = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let p =
+            std::env::temp_dir().join(format!("kiln_wasi_{}_{}_{}", tag, std::process::id(), n));
+        std::fs::create_dir_all(&p).unwrap();
+        p
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn sync_data_on_writable_preopen_is_ok() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let root = fixture("sync_data_rw");
+        let mut d = WasiDispatcher::with_defaults()?;
+        d.capabilities.filesystem.write_access = true;
+        let fd = d.add_preopen(root.clone())?;
+        let res = d.dispatch_core(
+            "wasi:filesystem/types",
+            "[method]descriptor.sync-data",
+            &[CV::I32(fd as i32), CV::I32(0x100)],
+            None,
+        );
+        drop(d);
+        let _ = std::fs::remove_dir_all(&root);
+        let res = res?;
+        assert_eq!(res.len(), 1);
+        assert!(matches!(res[0], CV::I32(0)));
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+#[cfg(all(unix, feature = "wasi-filesystem", feature = "std"))]
+mod readlink_at_tests {
+    use super::*;
+    use kiln_foundation::traits::SliceMemory;
+    use kiln_foundation::values::Value as CV;
+
+    fn fixture(tag: &str) -> std::path::PathBuf {
+        let n = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let p =
+            std::env::temp_dir().join(format!("kiln_wasi_{}_{}_{}", tag, std::process::id(), n));
+        std::fs::create_dir_all(&p).unwrap();
+        p
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn readlink_at_buffer_boundary() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let root = fixture("readlink");
+        std::fs::write(root.join("target.txt"), b"x").unwrap();
+        std::os::unix::fs::symlink("target.txt", root.join("link")).unwrap();
+        let mut d = WasiDispatcher::with_defaults()?;
+        d.capabilities.filesystem.read_access = true;
+        let fd = d.add_preopen(root.clone())?;
+        let mem = SliceMemory::with_size(0x10000);
+        mem.write_bytes(0x1000, b"link")?;
+        let args = [
+            CV::I32(fd as i32),
+            CV::I32(0x1000),
+            CV::I32(4),
+            CV::I32(0x100),
+        ];
+        d.read_buf_alloc = Some((0x2000, 10));
+        let exact = d.dispatch_core(
+            "wasi:filesystem/types",
+            "[method]descriptor.readlink-at",
+            &args,
+            Some(&mem),
+        );
+        d.read_buf_alloc = Some((0x2000, 9));
+        let small = d.dispatch_core(
+            "wasi:filesystem/types",
+            "[method]descriptor.readlink-at",
+            &args,
+            Some(&mem),
+        );
+        drop(d);
+        let _ = std::fs::remove_dir_all(&root);
+        let exact = exact?;
+        let small = small?;
+        assert_eq!(exact.len(), 3);
+        assert!(
+            matches!(exact[0], CV::I32(0)),
+            "target exactly filling the buffer must be returned"
+        );
+        assert!(matches!(exact[1], CV::I32(0x2000)));
+        assert!(matches!(exact[2], CV::I32(10)));
+        let mut got = [0u8; 10];
+        mem.read_bytes(0x2000, &mut got)?;
+        assert_eq!(&got, b"target.txt");
+        assert_eq!(small.len(), 2);
+        assert!(matches!(small[0], CV::I32(1)));
+        assert!(matches!(small[1], CV::I32(18)));
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod get_directories_tests {
+    use super::*;
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn empty_preopen_list_header_len_written_at_retptr_plus_4() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        use kiln_foundation::traits::SliceMemory;
+        use kiln_foundation::values::Value as CV;
+        let mut d = WasiDispatcher::with_defaults()?;
+        let mem = SliceMemory::with_size(0x10000);
+        mem.write_bytes(0x1000, &[0xFFu8; 8])?;
+        let r = d.dispatch_core(
+            "wasi:filesystem/preopens",
+            "get-directories",
+            &[CV::I32(0x1000)],
+            Some(&mem),
+        )?;
+        assert!(r.is_empty());
+        let mut hdr = [0xAAu8; 8];
+        mem.read_bytes(0x1000, &mut hdr)?;
+        assert_eq!(hdr, [0u8; 8]);
+        Ok(())
+    }
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn second_preopen_entry_is_at_list_ptr_plus_12() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        use kiln_foundation::traits::SliceMemory;
+        use kiln_foundation::values::Value as CV;
+        let root =
+            std::env::temp_dir().join(format!("kiln_get_directories_{}", std::process::id()));
+        let a = root.join("a");
+        let b = root.join("b");
+        std::fs::create_dir_all(&a).unwrap();
+        std::fs::create_dir_all(&b).unwrap();
+        let mut d = WasiDispatcher::with_defaults()?;
+        let h1 = d.add_preopen(a.clone())?;
+        let h2 = d.add_preopen(b.clone())?;
+        let la = a.to_string_lossy().len() as u32;
+        let lb = b.to_string_lossy().len() as u32;
+        d.preopens_alloc = Some((0x2000, vec![(0x3000, la), (0x3400, lb)]));
+        let mem = SliceMemory::with_size(0x10000);
+        let r = d.dispatch_core(
+            "wasi:filesystem/preopens",
+            "get-directories",
+            &[CV::I32(0x1000)],
+            Some(&mem),
+        );
+        let rd = |addr: u32| {
+            let mut x = [0u8; 4];
+            mem.read_bytes(addr, &mut x).unwrap();
+            u32::from_le_bytes(x)
+        };
+        let vals = (
+            rd(0x1000),
+            rd(0x1004),
+            rd(0x2000),
+            rd(0x2004),
+            rd(0x2008),
+            rd(0x200C),
+            rd(0x2010),
+            rd(0x2014),
+        );
+        let _ = std::fs::remove_dir_all(&root);
+        assert!(r?.is_empty());
+        assert_eq!(vals.0, 0x2000);
+        assert_eq!(vals.1, 2);
+        assert_eq!(vals.2, h1);
+        assert_eq!(vals.3, 0x3000);
+        assert_eq!(vals.4, la);
+        assert_eq!(vals.5, h2);
+        assert_eq!(vals.6, 0x3400);
+        assert_eq!(vals.7, lb);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod monotonic_resolution_capability_tests {
+    use super::*;
+    #[cfg(feature = "wasi-clocks")]
+    #[serial_test::serial]
+    #[test]
+    fn monotonic_resolution_respects_capability() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        use kiln_foundation::values::Value as CV;
+        let mut d = WasiDispatcher::with_defaults()?;
+        d.capabilities.clocks.monotonic_access = true;
+        let ok = d.dispatch_core("wasi:clocks/monotonic-clock", "resolution", &[], None)?;
+        assert!(matches!(ok.as_slice(), [CV::I64(1)]));
+        d.capabilities.clocks.monotonic_access = false;
+        let denied = d.dispatch_core("wasi:clocks/monotonic-clock", "resolution", &[], None);
+        assert!(denied.is_err());
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod insecure_random_tests {
+    use super::*;
+    #[cfg(feature = "wasi-random")]
+    #[serial_test::serial]
+    #[test]
+    fn insecure_random_bytes_accepts_i32_length() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        use kiln_foundation::traits::SliceMemory;
+        use kiln_foundation::values::Value as CV;
+        let mut d = WasiDispatcher::with_defaults()?;
+        d.capabilities.random.pseudo_random = true;
+        d.read_buf_alloc = Some((0x2000, 64));
+        let mem = SliceMemory::with_size(0x10000);
+        let r = d.dispatch_core(
+            "wasi:random/insecure",
+            "get-insecure-random-bytes",
+            &[CV::I32(16), CV::I32(0x100)],
+            Some(&mem),
+        )?;
+        assert!(r.is_empty());
+        let mut hdr = [0u8; 8];
+        mem.read_bytes(0x100, &mut hdr)?;
+        assert_eq!(u32::from_le_bytes([hdr[0], hdr[1], hdr[2], hdr[3]]), 0x2000);
+        assert_eq!(u32::from_le_bytes([hdr[4], hdr[5], hdr[6], hdr[7]]), 16);
+        Ok(())
+    }
+    #[cfg(feature = "wasi-random")]
+    #[serial_test::serial]
+    #[test]
+    fn insecure_random_u64_respects_capability() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        use kiln_foundation::values::Value as CV;
+        let mut d = WasiDispatcher::with_defaults()?;
+        d.capabilities.random.pseudo_random = true;
+        let ok = d.dispatch_core("wasi:random/insecure", "get-insecure-random-u64", &[], None)?;
+        assert!(matches!(ok.as_slice(), [CV::I64(_)]));
+        d.capabilities.random.pseudo_random = false;
+        let denied = d.dispatch_core("wasi:random/insecure", "get-insecure-random-u64", &[], None);
+        assert!(denied.is_err());
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod call_import_tests {
+    use super::*;
+
+    #[cfg(feature = "std")]
+    #[serial_test::serial]
+    #[test]
+    fn call_import_delegates_to_dispatch_core() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        use kiln_foundation::HostImportHandler;
+        use kiln_foundation::values::Value as CoreValue;
+        let mut d = WasiDispatcher::with_defaults()?;
+        let out = d.call_import("wasi:cli/environment@0.2.4", "get-environment", &[], None)?;
+        assert_eq!(out.len(), 2);
+        assert!(matches!(out[0], CoreValue::I32(0)));
+        assert!(matches!(out[1], CoreValue::I32(0)));
+        let unknown = d.call_import("wasi:nothing/here", "nope", &[], None);
+        assert!(unknown.is_err());
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod host_import_handler_tests {
+    use super::*;
+
+    #[cfg(feature = "std")]
+    #[serial_test::serial]
+    #[test]
+    fn set_args_allocation_records_allocation() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        use kiln_foundation::HostImportHandler;
+        let mut d = WasiDispatcher::with_defaults()?;
+        d.clear_args_alloc();
+        assert!(d.get_args_alloc().is_none());
+        d.set_args_allocation(0x2000, vec![(0x3000, 4), (0x3100, 7)]);
+        let got = d.get_args_alloc().cloned();
+        assert_eq!(
+            got,
+            Some((0x2000u32, vec![(0x3000u32, 4u32), (0x3100u32, 7u32)]))
+        );
+        Ok(())
+    }
+
+    #[cfg(feature = "std")]
+    #[serial_test::serial]
+    #[test]
+    fn trait_get_preopens_lists_preopens() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let mut d = WasiDispatcher::with_defaults()?;
+        let tmp = std::env::temp_dir();
+        let fd = d.add_preopen(tmp.clone())?;
+        let got = kiln_foundation::HostImportHandler::get_preopens(&d);
+        assert_eq!(got, vec![(fd, tmp.to_string_lossy().into_owned())]);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod fs_error_code_is_directory_tests {
+    use super::*;
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn is_a_directory_maps_to_error_code_14() -> Result<()> {
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let e = std::io::Error::from(std::io::ErrorKind::IsADirectory);
+        assert_eq!(WasiDispatcher::fs_error_code(&e), 14);
+        assert_eq!(WasiDispatcher::fs_error_code(&e), fs_error::IS_DIRECTORY);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod wall_clock_now_split_tests {
+    use super::*;
+    #[cfg(feature = "wasi-clocks")]
+    #[serial_test::serial]
+    #[test]
+    fn wall_clock_now_writes_split_seconds_and_nanos() -> Result<()> {
+        use kiln_foundation::MemoryAccessor as _;
+        use kiln_foundation::traits::SliceMemory;
+        use kiln_foundation::values::Value as CV;
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let mut d = WasiDispatcher::with_defaults()?;
+        d.capabilities.clocks.realtime_access = true;
+        let mem = SliceMemory::with_size(0x1000);
+        let now_ns = || {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        };
+        let tol: u128 = 10_000_000;
+        for _ in 0..4 {
+            let before = now_ns();
+            let res = d.dispatch_core(
+                "wasi:clocks/wall-clock",
+                "now",
+                &[CV::I32(0x100)],
+                Some(&mem),
+            )?;
+            let after = now_ns();
+            assert!(res.is_empty());
+            let mut b = [0u8; 12];
+            mem.read_bytes(0x100, &mut b)?;
+            let secs = u64::from_le_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]]);
+            let nanos = u32::from_le_bytes([b[8], b[9], b[10], b[11]]);
+            assert!(nanos < 1_000_000_000);
+            let total = secs as u128 * 1_000_000_000u128 + nanos as u128;
+            assert!(total + tol >= before);
+            assert!(total <= after + tol);
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod get_type_fd_table_tests {
+    use super::*;
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn get_type_directory_if_in_either_preopen_list_or_fd_table() -> Result<()> {
+        use kiln_foundation::values::Value as CV;
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let mut d = WasiDispatcher::with_defaults()?;
+        d.preopens.push((9999u32, std::path::PathBuf::from(".")));
+        d.fd_table.insert(
+            8888u32,
+            FileDescriptorEntry {
+                fd_type: FileDescriptorType::PreopenDirectory(std::path::PathBuf::from(".")),
+                read: true,
+                write: false,
+                file: None,
+            },
+        );
+        let f = "[method]descriptor.get-type";
+        let a = d.dispatch_core(
+            "wasi:filesystem/types",
+            f,
+            &[CV::I32(9999), CV::I32(0x100)],
+            None,
+        )?;
+        assert!(matches!(a.as_slice(), [CV::I32(0), CV::I32(3)]));
+        let b = d.dispatch_core(
+            "wasi:filesystem/types",
+            f,
+            &[CV::I32(8888), CV::I32(0x100)],
+            None,
+        )?;
+        assert!(matches!(b.as_slice(), [CV::I32(0), CV::I32(3)]));
+        let c = d.dispatch_core(
+            "wasi:filesystem/types",
+            f,
+            &[CV::I32(7777), CV::I32(0x100)],
+            None,
+        )?;
+        assert!(matches!(c.as_slice(), [CV::I32(0), CV::I32(6)]));
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod read_directory_entry_type_tests {
+    use super::*;
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn read_directory_reports_subdirectory_as_type_3() -> Result<()> {
+        use kiln_foundation::traits::SliceMemory;
+        use kiln_foundation::values::Value as CV;
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let dir = std::env::temp_dir().join(format!("kiln_read_dir_subdir_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
+        let out = (|| -> Result<Vec<CV>> {
+            let mut d = WasiDispatcher::with_defaults()?;
+            let fd = d.add_preopen(dir.clone())?;
+            let mem = SliceMemory::with_size(0x10000);
+            let r = d.dispatch_core(
+                "wasi:filesystem/types",
+                "[method]descriptor.read-directory",
+                &[CV::I32(fd as i32), CV::I32(0x100)],
+                Some(&mem),
+            )?;
+            let h = match r.as_slice() {
+                [CV::I32(0), CV::I32(h)] => *h,
+                _ => return Err(Error::runtime_error("read-directory failed")),
+            };
+            d.read_buf_alloc = Some((0x2000, 64));
+            d.dispatch_core(
+                "wasi:filesystem/types",
+                "[method]directory-entry-stream.read-directory-entry",
+                &[CV::I32(h), CV::I32(0x100)],
+                Some(&mem),
+            )
+        })();
+        let _ = std::fs::remove_dir_all(&dir);
+        let ent = out?;
+        assert_eq!(ent.len(), 5);
+        assert!(matches!(&ent[0], CV::I32(0)));
+        assert!(matches!(&ent[1], CV::I32(1)));
+        assert!(matches!(&ent[2], CV::I32(3)));
+        Ok(())
+    }
+    #[cfg(all(feature = "wasi-filesystem", feature = "std", unix))]
+    #[serial_test::serial]
+    #[test]
+    fn read_directory_reports_symlink_as_type_5() -> Result<()> {
+        use kiln_foundation::traits::SliceMemory;
+        use kiln_foundation::values::Value as CV;
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let dir =
+            std::env::temp_dir().join(format!("kiln_read_dir_symlink_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::os::unix::fs::symlink("nonexistent_target", dir.join("lnk")).unwrap();
+        let out = (|| -> Result<Vec<CV>> {
+            let mut d = WasiDispatcher::with_defaults()?;
+            let fd = d.add_preopen(dir.clone())?;
+            let mem = SliceMemory::with_size(0x10000);
+            let r = d.dispatch_core(
+                "wasi:filesystem/types",
+                "[method]descriptor.read-directory",
+                &[CV::I32(fd as i32), CV::I32(0x100)],
+                Some(&mem),
+            )?;
+            let h = match r.as_slice() {
+                [CV::I32(0), CV::I32(h)] => *h,
+                _ => return Err(Error::runtime_error("read-directory failed")),
+            };
+            d.read_buf_alloc = Some((0x2000, 64));
+            d.dispatch_core(
+                "wasi:filesystem/types",
+                "[method]directory-entry-stream.read-directory-entry",
+                &[CV::I32(h), CV::I32(0x100)],
+                Some(&mem),
+            )
+        })();
+        let _ = std::fs::remove_dir_all(&dir);
+        let ent = out?;
+        assert_eq!(ent.len(), 5);
+        assert!(matches!(&ent[2], CV::I32(5)));
+        Ok(())
+    }
+    #[cfg(all(feature = "wasi-filesystem", feature = "std", unix))]
+    #[serial_test::serial]
+    #[test]
+    fn read_directory_reports_socket_entry_as_unknown_0() -> Result<()> {
+        use kiln_foundation::traits::SliceMemory;
+        use kiln_foundation::values::Value as CV;
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let dir = std::env::temp_dir().join(format!("kiln_read_dir_socket_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let listener = match std::os::unix::net::UnixListener::bind(dir.join("s")) {
+            Ok(l) => l,
+            Err(_) => {
+                let _ = std::fs::remove_dir_all(&dir);
+                return Ok(());
+            },
+        };
+        let out = (|| -> Result<Vec<CV>> {
+            let mut d = WasiDispatcher::with_defaults()?;
+            let fd = d.add_preopen(dir.clone())?;
+            let mem = SliceMemory::with_size(0x10000);
+            let r = d.dispatch_core(
+                "wasi:filesystem/types",
+                "[method]descriptor.read-directory",
+                &[CV::I32(fd as i32), CV::I32(0x100)],
+                Some(&mem),
+            )?;
+            let h = match r.as_slice() {
+                [CV::I32(0), CV::I32(h)] => *h,
+                _ => return Err(Error::runtime_error("read-directory failed")),
+            };
+            d.read_buf_alloc = Some((0x2000, 64));
+            d.dispatch_core(
+                "wasi:filesystem/types",
+                "[method]directory-entry-stream.read-directory-entry",
+                &[CV::I32(h), CV::I32(0x100)],
+                Some(&mem),
+            )
+        })();
+        drop(listener);
+        let _ = std::fs::remove_dir_all(&dir);
+        let ent = out?;
+        assert_eq!(ent.len(), 5);
+        assert!(matches!(&ent[2], CV::I32(0)));
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod descriptor_write_directory_tests {
+    use super::*;
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn write_on_preopen_directory_is_is_directory() -> Result<()> {
+        use kiln_foundation::traits::SliceMemory;
+        use kiln_foundation::values::Value as CV;
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let mut d = WasiDispatcher::with_defaults()?;
+        let fd = d.add_preopen(std::env::temp_dir())?;
+        let mem = SliceMemory::with_size(0x10000);
+        let r = d.dispatch_core(
+            "wasi:filesystem/types",
+            "[method]descriptor.write",
+            &[
+                CV::I32(fd as i32),
+                CV::I32(0x1000),
+                CV::I32(1),
+                CV::I64(0),
+                CV::I32(0x100),
+            ],
+            Some(&mem),
+        )?;
+        assert_eq!(r.len(), 2);
+        assert!(matches!(&r[0], CV::I32(1)));
+        assert!(matches!(&r[1], CV::I32(14)));
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod sync_data_write_flag_tests {
+    use super::*;
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn sync_data_on_preopen_honours_write_flag() -> Result<()> {
+        use kiln_foundation::values::Value as CV;
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let p =
+            std::env::temp_dir().join(format!("kiln_sync_data_write_flag_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&p);
+        std::fs::create_dir_all(&p).unwrap();
+        let mut d = WasiDispatcher::with_defaults()?;
+        let fd = d.add_preopen(p.clone())?;
+        std::fs::remove_dir_all(&p).unwrap();
+        let f = "[method]descriptor.sync-data";
+        d.fd_table.get_mut(&fd).unwrap().write = false;
+        let r1 = d.dispatch_core(
+            "wasi:filesystem/types",
+            f,
+            &[CV::I32(fd as i32), CV::I32(0x100)],
+            None,
+        )?;
+        assert_eq!(r1.len(), 1);
+        assert!(matches!(&r1[0], CV::I32(0)));
+        d.fd_table.get_mut(&fd).unwrap().write = true;
+        let r2 = d.dispatch_core(
+            "wasi:filesystem/types",
+            f,
+            &[CV::I32(fd as i32), CV::I32(0x100)],
+            None,
+        )?;
+        assert_eq!(r2.len(), 2);
+        assert!(matches!(&r2[0], CV::I32(1)));
+        assert!(matches!(&r2[1], CV::I32(20)));
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod input_stream_read_length_tests {
+    use super::*;
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn input_stream_read_honours_i64_length() -> Result<()> {
+        use kiln_foundation::MemoryAccessor as _;
+        use kiln_foundation::traits::SliceMemory;
+        use kiln_foundation::values::Value as CV;
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let dir =
+            std::env::temp_dir().join(format!("kiln_input_stream_read_i64_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let content: Vec<u8> = (0..100u8).collect();
+        std::fs::write(dir.join("data.bin"), &content).unwrap();
+        let out = (|| -> Result<(Vec<CV>, Vec<u8>)> {
+            let fs = "wasi:filesystem/types";
+            let mut d = WasiDispatcher::with_defaults()?;
+            let fd = d.add_preopen(dir.clone())?;
+            let mem = SliceMemory::with_size(0x10000);
+            mem.write_bytes(0x1000, b"data.bin")?;
+            let o = d.dispatch_core(
+                fs,
+                "[method]descriptor.open-at",
+                &[
+                    CV::I32(fd as i32),
+                    CV::I32(0),
+                    CV::I32(0x1000),
+                    CV::I32(8),
+                    CV::I32(0),
+                    CV::I32(1),
+                ],
+                Some(&mem),
+            )?;
+            let h = match o.as_slice() {
+                [CV::I32(0), CV::I32(h)] => *h,
+                _ => return Err(Error::runtime_error("open-at failed")),
+            };
+            let s = d.dispatch_core(
+                fs,
+                "[method]descriptor.read-via-stream",
+                &[CV::I32(h), CV::I64(0)],
+                Some(&mem),
+            )?;
+            let sh = match s.as_slice() {
+                [CV::I32(0), CV::I32(x)] => *x,
+                _ => return Err(Error::runtime_error("read-via-stream failed")),
+            };
+            d.read_buf_alloc = Some((0x2000, 4096));
+            let r = d.dispatch_core(
+                "wasi:io/streams",
+                "[method]input-stream.read",
+                &[CV::I32(sh), CV::I64(10)],
+                Some(&mem),
+            )?;
+            let mut b = vec![0u8; 100];
+            mem.read_bytes(0x2000, &mut b)?;
+            Ok((r, b))
+        })();
+        let _ = std::fs::remove_dir_all(&dir);
+        let (r, b) = out?;
+        assert_eq!(r.len(), 3);
+        assert!(matches!(&r[0], CV::I32(0)));
+        assert!(matches!(&r[1], CV::I32(0x2000)));
+        assert!(matches!(&r[2], CV::I32(10)));
+        assert_eq!(&b[..10], &content[..10]);
+        Ok(())
+    }
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn input_stream_read_honours_i32_length() -> Result<()> {
+        use kiln_foundation::MemoryAccessor as _;
+        use kiln_foundation::traits::SliceMemory;
+        use kiln_foundation::values::Value as CV;
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        let dir =
+            std::env::temp_dir().join(format!("kiln_input_stream_read_i32_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let content: Vec<u8> = (0..100u8).collect();
+        std::fs::write(dir.join("data.bin"), &content).unwrap();
+        let out = (|| -> Result<(Vec<CV>, Vec<u8>)> {
+            let fs = "wasi:filesystem/types";
+            let mut d = WasiDispatcher::with_defaults()?;
+            let fd = d.add_preopen(dir.clone())?;
+            let mem = SliceMemory::with_size(0x10000);
+            mem.write_bytes(0x1000, b"data.bin")?;
+            let o = d.dispatch_core(
+                fs,
+                "[method]descriptor.open-at",
+                &[
+                    CV::I32(fd as i32),
+                    CV::I32(0),
+                    CV::I32(0x1000),
+                    CV::I32(8),
+                    CV::I32(0),
+                    CV::I32(1),
+                ],
+                Some(&mem),
+            )?;
+            let h = match o.as_slice() {
+                [CV::I32(0), CV::I32(h)] => *h,
+                _ => return Err(Error::runtime_error("open-at failed")),
+            };
+            let s = d.dispatch_core(
+                fs,
+                "[method]descriptor.read-via-stream",
+                &[CV::I32(h), CV::I64(0)],
+                Some(&mem),
+            )?;
+            let sh = match s.as_slice() {
+                [CV::I32(0), CV::I32(x)] => *x,
+                _ => return Err(Error::runtime_error("read-via-stream failed")),
+            };
+            d.read_buf_alloc = Some((0x2000, 4096));
+            let r = d.dispatch_core(
+                "wasi:io/streams",
+                "[method]input-stream.read",
+                &[CV::I32(sh), CV::I32(10)],
+                Some(&mem),
+            )?;
+            let mut b = vec![0u8; 100];
+            mem.read_bytes(0x2000, &mut b)?;
+            Ok((r, b))
+        })();
+        let _ = std::fs::remove_dir_all(&dir);
+        let (r, b) = out?;
+        assert_eq!(r.len(), 3);
+        assert!(matches!(&r[0], CV::I32(0)));
+        assert!(matches!(&r[1], CV::I32(0x2000)));
+        assert!(matches!(&r[2], CV::I32(10)));
+        assert_eq!(&b[..10], &content[..10]);
+        Ok(())
+    }
+}
