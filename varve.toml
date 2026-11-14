@@ -9,4 +9,4 @@ manifest-version = 1
 [toolchain]
 realm   = "covalent"
 channel = "rolling"
-layer   = "2026.11.7"
+layer   = "2026.11.10"

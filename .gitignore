@@ -4,6 +4,7 @@ target/
 *.wasm
 # SR-82 oracle fixtures are meld output (no WAT source exists): tracked
 !kilnd/tests/fixtures/p3_threads/*.wasm
+!tests/component-model/meld-*/test/**/*.wasm
 
 # Ignore local Zephyr workspace
 .zephyrproject/

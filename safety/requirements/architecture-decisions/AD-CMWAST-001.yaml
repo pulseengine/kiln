@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: AD-CMWAST-001
+    type: design-decision
+    title: "Component WAST runs from committed meld-fused output: kiln vendors the upstream tests and meld's fused modules plus manifest, and regenerates them only when the meld pin moves"
+    status: approved
+    release: v0.8.0
+    description: "For SR-93. tests/component-model/upstream/ vendors WebAssembly/component-model test/ at c818a1925e (78 WASTs, licence, SHA-256 list) as meld v0.68.0 vendors it. tests/component-model/meld-0.68.0/ holds meld's manifest.json and the 182 fused core modules written by meld's cm_wast_ratchet test with MELD_CM_WAST_OUT. `cargo-kiln testsuite --run-cm-wast` parses each WAST with the wast crate, matches every top-level component directive and command to the manifest by order, directive_index, line and kind (any disagreement fails that file), runs fused components' commands on the kiln interpreter, records meld refusals as refused-at-fuse, and writes a per-file verdict report. scripts/cm-wast-gate.sh compares the report with safety/cm-wast-baseline.txt and fails on a worse or unbaselined verdict and on a baselined file that now passes. scripts/regen-cm-wast.sh rebuilds the fused output for a new meld pin."
+    tags: [component-model, wast, conformance, meld, ci]
+    fields:
+      alternatives: "(1) Build meld from source in CI and fuse on every run: no committed binaries, but a meld build plus the ratchet took over two hours on the shared runner host (2026-11-14) and ties kiln's CI to meld's build. (2) Fuse with the released meld CLI per component: the CLI has no WAST mode, so kiln would reimplement meld's directive selection and drift from its ratchet. (3) Download the fused output from a meld release asset: meld does not publish one."
+      rationale: "About 2.5 MB of vendored files makes the run hermetic and fast, and the manifest records the meld version and upstream commit that produced every fused module, so a result is attributable. Regeneration happens with the varve meld pin bump that needs it, reviewed in the same PR."
+    links:
+      - type: satisfies
+        target: SR-93
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-14T15:00:00Z
