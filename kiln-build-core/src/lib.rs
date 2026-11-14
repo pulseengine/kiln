@@ -44,6 +44,7 @@ pub use anyhow::{Context, Result};
 pub mod build;
 pub mod cache;
 pub mod ci;
+pub mod cm_wast;
 pub mod config;
 pub mod diagnostics;
 pub mod error;

@@ -608,6 +608,18 @@ enum Commands {
         /// Timeout for individual tests in milliseconds
         #[arg(long, default_value = "5000")]
         test_timeout_ms: u64,
+
+        /// Run the Component Model WAST suite on meld-fused output (SR-93)
+        #[arg(long)]
+        run_cm_wast: bool,
+
+        /// Directory holding upstream/ and meld-<version>/ for --run-cm-wast
+        #[arg(long, default_value = "tests/component-model")]
+        cm_wast_dir: String,
+
+        /// Output file for the --run-cm-wast markdown report
+        #[arg(long)]
+        cm_wast_report: Option<String>,
     },
 
     /// Requirements verification with SCORE methodology
@@ -1480,6 +1492,9 @@ async fn main() -> Result<()> {
             per_assertion,
             wast_report,
             test_timeout_ms,
+            run_cm_wast,
+            cm_wast_dir,
+            cm_wast_report,
         } => {
             cmd_testsuite(
                 &build_system,
@@ -1493,6 +1508,9 @@ async fn main() -> Result<()> {
                 *per_assertion,
                 wast_report.clone(),
                 *test_timeout_ms,
+                *run_cm_wast,
+                cm_wast_dir.clone(),
+                cm_wast_report.clone(),
                 &mut global,
             )
             .await
@@ -2988,8 +3006,31 @@ async fn cmd_testsuite(
     per_assertion: bool,
     wast_report: Option<String>,
     test_timeout_ms: u64,
+    run_cm_wast: bool,
+    cm_wast_dir: String,
+    cm_wast_report: Option<String>,
     global: &mut GlobalArgs,
 ) -> Result<()> {
+    if run_cm_wast {
+        let workspace_root = build_system.workspace_root();
+        let report = kiln_build_core::cm_wast::run(&workspace_root.join(&cm_wast_dir))
+            .context("Component Model WAST run failed")?;
+        let markdown = report.to_markdown();
+        match cm_wast_report {
+            Some(file) => {
+                let path = workspace_root.join(file);
+                std::fs::write(&path, &markdown)
+                    .with_context(|| format!("writing {}", path.display()))?;
+                println!(
+                    "{} Component Model WAST report written to {}",
+                    "✅".bright_green(),
+                    path.display()
+                );
+            },
+            None => println!("{markdown}"),
+        }
+    }
+
     if clean {
         println!("{} Cleaning extracted test files...", "🧹".bright_blue());
         // TODO: Implement cleaning through kiln-build-core
@@ -3165,7 +3206,7 @@ async fn cmd_testsuite(
         }
     }
 
-    if !extract && !validate && !clean && !run_wast {
+    if !extract && !validate && !clean && !run_wast && !run_cm_wast {
         println!(
             "{} No testsuite operations specified. Available options:",
             "ℹ️".bright_blue()
@@ -3174,6 +3215,7 @@ async fn cmd_testsuite(
         println!("  --validate     Run validation tests");
         println!("  --clean        Clean extracted test files");
         println!("  --run-wast     Run WAST test suite");
+        println!("  --run-cm-wast  Run the Component Model WAST suite on meld-fused output");
         println!();
         println!("Examples:");
         println!("  cargo-kiln testsuite --run-wast");
