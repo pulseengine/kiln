@@ -3,7 +3,7 @@ artifacts:
   - id: AD-PANICSAFE-001
     type: design-decision
     title: "Collections detach elements before dropping them: update len/head first, then drop the detached slice with drop_in_place"
-    status: approved
+    status: verified
     release: v0.8.0
     description: "For SR-104. Every kiln-foundation collection operation that drops several elements first makes the container consistent (len, head, tail or count updated so the elements are no longer reachable), then drops the detached elements with core::ptr::drop_in_place on a slice, which keeps dropping the remaining elements while unwinding. StaticVec::retain moves the removed element out, shifts the tail down and decrements len before dropping the moved-out value. A wrapped StaticQueue range is dropped as two slices, with a drop guard that drops the second slice even if the first unwinds."
     tags: [foundation, collections, soundness, panic-safety]
