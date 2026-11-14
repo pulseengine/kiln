@@ -62,7 +62,7 @@ jobs:
     # Routes fork PRs to GitHub-hosted runners by default. This is NOT a security
     # boundary: a fork PR can edit this file. Isolation is enforced by the org's
     # smithy runner-group policy and fork-PR approval (pulseengine/warte#35).
-    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","linux","x64","rust-cpu"]') }}
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted","linux","x64","rust-cpu"]') || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # v1
@@ -108,7 +108,7 @@ jobs:
     # These are quality metrics, not correctness gates; their findings are
     # tracked as issues. Each step reports its result without failing the job.
     name: Quality Report (informational)
-    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","linux","x64","rust-cpu"]') }}
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted","linux","x64","rust-cpu"]') || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # v1
@@ -131,7 +131,7 @@ jobs:
 
   core_tests_and_analysis:
     name: Core Tests, Analysis & Coverage
-    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","linux","x64","rust-cpu"]') }}
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted","linux","x64","rust-cpu"]') || 'ubuntu-latest' }}
     # This job runs on push, PR, and all manual triggers (regardless of input)
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -166,7 +166,7 @@ jobs:
 
   safety_verification:
     name: SCORE-Inspired Safety Verification
-    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","linux","x64","rust-cpu"]') }}
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted","linux","x64","rust-cpu"]') || 'ubuntu-latest' }}
     # Measured over 25 successful runs (2026-10): 1.2-7.9 min, median 3.8.
     # A hung run held this required check for 2h on #540 (#543); fail fast.
     timeout-minutes: 30
@@ -272,7 +272,7 @@ jobs:
 # Coverage job is still Linux-only as tarpaulin only supports Linux
   coverage:
     name: Code Coverage
-    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","linux","x64","rust-cpu"]') }}
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted","linux","x64","rust-cpu"]') || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -320,7 +320,7 @@ jobs:
 
   traceability:
     name: Traceability (rivet validate)
-    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","linux","x64","light"]') }}
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted","linux","x64","light"]') || 'ubuntu-latest' }}
     permissions:
       contents: read
     steps:

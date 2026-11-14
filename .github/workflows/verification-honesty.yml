@@ -12,7 +12,7 @@ on:
 jobs:
   claim-check:
     name: Claim check (README ↔ evidence)
-    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","linux","x64","light"]') }}
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted","linux","x64","light"]') || 'ubuntu-latest' }}
     permissions:
       contents: read
     steps:
