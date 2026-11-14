@@ -258,6 +258,18 @@ impl kiln_foundation::traits::HostImportHandler for InterComponentHandler {
     fn set_args_allocation(&mut self, list_ptr: u32, string_ptrs: Vec<(u32, u32)>) {
         self.wasi.set_args_allocation(list_ptr, string_ptrs);
     }
+
+    fn get_preopens(&self) -> Vec<(u32, String)> {
+        kiln_foundation::traits::HostImportHandler::get_preopens(&self.wasi)
+    }
+
+    fn set_preopens_allocation(&mut self, list_ptr: u32, string_ptrs: Vec<(u32, u32)>) {
+        self.wasi.set_preopens_allocation(list_ptr, string_ptrs);
+    }
+
+    fn set_read_buffer_allocation(&mut self, ptr: u32, size: u32) {
+        self.wasi.set_read_buffer_allocation(ptr, size);
+    }
 }
 
 /// Configuration for the runtime daemon
@@ -781,21 +793,9 @@ impl KilndEngine {
                 }
             }
 
-            // Pre-allocate WASI args memory via cabi_realloc before calling entry point.
-            // This is needed for components that call get-arguments (e.g., calculator).
-            #[cfg(all(feature = "kiln-execution", feature = "wasi"))]
-            if self.config.enable_wasi {
-                if let Err(_e) = instance.pre_allocate_wasi_args() {
-                    #[cfg(feature = "tracing")]
-                    kiln_foundation::tracing::warn!(error = %_e, "WASI args pre-allocation failed");
-                }
-                // Pre-allocate cabi_realloc'd memory for get-directories so a component
-                // can actually use --wasi-fs preopens (SR-37 / #405).
-                if let Err(_e) = instance.pre_allocate_wasi_preopens() {
-                    #[cfg(feature = "tracing")]
-                    kiln_foundation::tracing::warn!(error = %_e, "WASI preopens pre-allocation failed");
-                }
-            }
+            // get-arguments and get-directories allocate their guest-owned lists
+            // per call, once the guest's allocator is initialised (no pre-entry
+            // allocation).
 
             // Direct Component-Model hosting (#344, AD-COMPONENT-HOST-001):
             // if a specific export was requested with `--invoke`, invoke it and

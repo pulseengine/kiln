@@ -56,38 +56,124 @@ fn strip_wasi_version(interface: &str) -> &str {
     }
 }
 
-/// Size of the fresh guest buffer a WASI call needs for a guest-owned `list<u8>`/`string`
-/// return, for the calls whose payload is not tied to an input-stream/filesystem read.
-///
-/// The guest owns and frees these returns, so the host must write them into memory the
-/// guest handed over via `cabi_realloc`, never next to the return area. `function` is the
-/// base function name (instance suffix already removed); `interface` may carry a version.
-/// Returns `None` for every other function. SR-38.
+/// The guest-owned memory a WASI call returns its result in (SR-38, SR-39, SR-72, SR-91).
 #[cfg(feature = "wasi")]
-fn wasi_owned_return_size(interface: &str, function: &str, args: &[Value]) -> Option<u32> {
-    // At least 1 byte so a zero-length request still gets a guest-owned (empty) list.
-    let requested_len = || {
-        args.first().map(|v| match v {
-            Value::I64(n) => u32::try_from(*n).unwrap_or(u32::MAX).max(1),
-            Value::I32(n) => (*n as u32).max(1),
-            _ => 0,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OwnedReturn {
+    /// One fresh `cabi_realloc`'d buffer of `size` bytes aligned to `align`
+    /// (a `list<u8>`, a `string` or the `list<u32>` of `poll`).
+    ///
+    /// `exact` says `size` is the length of the list the host returns. Otherwise
+    /// it is only an upper bound the host reserves (a read returns at most the
+    /// requested length; wasmtime allocates the length it returns), so the
+    /// allocation must start inside memory and be aligned, and the bytes the
+    /// handler writes are bounds-checked as it writes them.
+    Buffer { size: u32, align: u32, exact: bool },
+    /// The `list<string>` of `wasi:cli/environment::get-arguments`: a list
+    /// array plus one buffer per argument.
+    Arguments,
+    /// The `list<tuple<descriptor, string>>` of
+    /// `wasi:filesystem/preopens::get-directories`: an entry array plus one
+    /// buffer per path.
+    Preopens,
+}
+
+/// Which fresh guest memory a WASI call needs for a guest-owned return.
+///
+/// The one place that decides this, for every route to a host function
+/// (`call`, `call_indirect`, `call_ref`, `return_call*` and the canon-lowered
+/// link). The guest owns and frees these returns, so the host must write them
+/// into memory the guest handed over via `cabi_realloc`, never next to the
+/// return area, and every call gets its own allocation. `function` is the base
+/// function name (instance suffix already removed); `interface` may carry a
+/// version. Returns `None` for every function that returns no such value.
+#[cfg(feature = "wasi")]
+fn owned_return_policy(interface: &str, function: &str, args: &[Value]) -> Option<OwnedReturn> {
+    // The length argument at `index`; `saturate` keeps an i64 length above u32::MAX at
+    // u32::MAX (the allocator then clamps it to 1 MiB) instead of truncating it. A
+    // zero length stays zero: the guest is asked for an empty buffer, as the
+    // canonical ABI does for an empty list.
+    let requested_len = |index: usize, saturate: bool| -> Option<u32> {
+        let len = match args.get(index)? {
+            Value::I64(n) if saturate => u32::try_from(*n).unwrap_or(u32::MAX),
+            Value::I64(n) => *n as u32,
+            Value::I32(n) => *n as u32,
+            _ => return None,
+        };
+        Some(len)
+    };
+    let bytes = |size: Option<u32>, exact: bool| {
+        size.map(|size| OwnedReturn::Buffer {
+            size,
+            align: 1,
+            exact,
         })
     };
-    if interface.contains("wasi:random/random") && function == "get-random-bytes" {
-        // list<u8> of the requested length (allocate_wasi_read_buffer clamps to [1, 1 MiB]).
-        requested_len()
-    } else if interface.contains("wasi:random/insecure") && function == "get-insecure-random-bytes"
+
+    if (interface.contains("wasi:random/random") && function == "get-random-bytes")
+        || (interface.contains("wasi:random/insecure") && function == "get-insecure-random-bytes")
     {
-        requested_len()
+        // list<u8> of exactly the requested length (the allocator clamps to 1 MiB).
+        bytes(requested_len(0, true), true)
     } else if interface.contains("wasi:cli/environment") && function == "initial-cwd" {
         // option<string>: a working directory fits a path-sized buffer (the host refuses,
         // rather than truncates, anything longer).
-        Some(4096)
+        bytes(Some(4096), false)
+    } else if interface.contains("wasi:cli/environment") && function == "get-arguments" {
+        Some(OwnedReturn::Arguments)
+    } else if interface.contains("wasi:filesystem/preopens") && function == "get-directories" {
+        Some(OwnedReturn::Preopens)
     } else if interface.contains("wasi:io/error") && function == "[method]error.to-debug-string" {
-        Some(256)
+        bytes(Some(256), false)
+    } else if interface.contains("wasi:io/streams")
+        && (function.contains("input-stream.read")
+            || function.contains("input-stream.blocking-read"))
+    {
+        // args = [self, len, ...]; a zero-length read takes no buffer.
+        bytes(requested_len(1, false).filter(|len| *len > 0), false)
+    } else if interface.contains("wasi:io/poll") && function == "poll" {
+        // The ready subset is a list<u32> of at most `len` indices
+        // (args = [list_ptr, len, retptr]).
+        match args.get(1) {
+            Some(Value::I32(n)) => Some(OwnedReturn::Buffer {
+                size: (*n as u32).saturating_mul(4),
+                align: 4,
+                exact: false,
+            }),
+            _ => None,
+        }
+    } else if interface.contains("wasi:filesystem/types") {
+        if function.contains("read-directory-entry") {
+            // directory-entry name string: no len arg, use a filename-sized buffer.
+            bytes(Some(512), false)
+        } else if function == "[method]descriptor.read" {
+            // list<u8> sized to the requested length
+            // (args = [self, length: i64, offset: i64, retptr]).
+            match args.get(1) {
+                Some(Value::I64(n)) => {
+                    bytes(Some(u32::try_from(*n).unwrap_or(u32::MAX).max(1)), false)
+                },
+                _ => None,
+            }
+        } else if function == "[method]descriptor.readlink-at" {
+            // string result; a link target never exceeds a path-sized buffer (the host
+            // refuses, rather than truncates, anything longer).
+            bytes(Some(4096), false)
+        } else {
+            None
+        }
     } else {
         None
     }
+}
+
+/// The fresh guest memory one host call returns its result in.
+#[cfg(feature = "wasi")]
+#[derive(Default)]
+struct OwnedAllocation {
+    args: Option<(u32, Vec<(u32, u32)>)>,
+    preopens: Option<(u32, Vec<(u32, u32)>)>,
+    buffer: Option<(u32, u32)>,
 }
 
 /// The memory a host call reads and writes (SR-81).
@@ -109,6 +195,105 @@ impl HostMemory {
             Self::Refused(r) => Some(r as &dyn kiln_foundation::MemoryAccessor),
         }
     }
+
+    /// The current size in bytes of the memory a guest pointer must lie in.
+    fn size(&self) -> Result<usize> {
+        self.accessor().map(|m| m.size()).ok_or_else(|| {
+            kiln_error::Error::runtime_error(
+                "Guest pointer cannot be checked: the instance has no memory",
+            )
+        })
+    }
+}
+
+/// Which guest-supplied pointer [`check_guest_range`] validates; it picks the error.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GuestPointer {
+    /// The return-area pointer of a call whose result does not fit one core value.
+    ReturnArea,
+    /// The result of a host-initiated `cabi_realloc` call.
+    ReallocResult,
+}
+
+/// Validate `[ptr, ptr + size)` against a memory of `mem_size` bytes and the
+/// canonical-ABI alignment `align`, trapping on a violation (SR-102).
+///
+/// The canonical ABI requires a return-area pointer and a `cabi_realloc` result
+/// to be aligned for the type stored there and to keep the whole range inside
+/// linear memory (wasmtime traps with "pointer not aligned", "pointer out of
+/// bounds" and "realloc return: beyond end of memory"). The host checks before
+/// it writes anywhere near the pointer and never rounds or skips a bad one.
+fn check_guest_range(
+    mem_size: usize,
+    ptr: u32,
+    size: u32,
+    align: u32,
+    kind: GuestPointer,
+) -> Result<()> {
+    if align > 1 && ptr % align != 0 {
+        return Err(match kind {
+            GuestPointer::ReturnArea => kiln_error::Error::runtime_unaligned_memory_access(
+                "Return area pointer not aligned for the result type",
+            ),
+            GuestPointer::ReallocResult => kiln_error::Error::runtime_unaligned_memory_access(
+                "cabi_realloc return: pointer not aligned for the requested alignment",
+            ),
+        });
+    }
+    let out_of_bounds = || match kind {
+        GuestPointer::ReturnArea => kiln_error::Error::runtime_out_of_bounds(
+            "Return area pointer out of bounds: the area runs past the end of memory",
+        ),
+        GuestPointer::ReallocResult => {
+            kiln_error::Error::runtime_out_of_bounds("cabi_realloc return: beyond end of memory")
+        },
+    };
+    let end = u64::from(ptr).checked_add(u64::from(size)).ok_or_else(out_of_bounds)?;
+    if end > mem_size as u64 {
+        return Err(out_of_bounds());
+    }
+    Ok(())
+}
+
+/// Validate the return-area pointer of a host call before any handler runs
+/// (SR-102).
+///
+/// A function whose result does not fit one core value takes its return-area
+/// pointer as the last argument; its size and alignment come from the canonical
+/// layout of the result in the signature table.
+#[cfg(feature = "wasi")]
+fn check_return_area(
+    module_name: &str,
+    field_name: &str,
+    args: &[Value],
+    memory: &HostMemory,
+) -> Result<()> {
+    let (base_field, _) = kiln_foundation::split_instance_suffix(field_name);
+    let Some(sig) = crate::wasip2_host::get_wasi_function_signature(module_name, base_field)
+        .filter(|s| s.result_needs_retptr())
+    else {
+        return Ok(());
+    };
+    let retptr = match args.last() {
+        Some(Value::I32(p)) => *p as u32,
+        _ => {
+            return Err(kiln_error::Error::runtime_error(
+                "Host function returns a value through a return area but its last argument is not an i32 pointer",
+            ));
+        },
+    };
+    // A refused memory fails any access with its own reason, which the handler reports.
+    if matches!(memory, HostMemory::Refused(_)) {
+        return Ok(());
+    }
+    let (size, align) = crate::wasip2_host::canonical_result_layout(&sig.results);
+    check_guest_range(
+        memory.size()?,
+        retptr,
+        size,
+        align,
+        GuestPointer::ReturnArea,
+    )
 }
 
 /// The guest allocator a host call places its results with (SR-81).
@@ -167,6 +352,81 @@ fn function_import_index(
         }
     }
     None
+}
+
+/// The number of core results `module` declares for its import
+/// `module_name::field_name`.
+fn import_core_result_count(
+    module: &crate::module::Module,
+    module_name: &str,
+    field_name: &str,
+) -> Option<usize> {
+    use crate::module::RuntimeImportDesc;
+    module.import_order.iter().enumerate().find_map(|(i, (m, f))| {
+        match module.import_types.get(i) {
+            Some(RuntimeImportDesc::Function(type_idx)) if m == module_name && f == field_name => {
+                module.types.get(*type_idx as usize).map(|t| t.results.len())
+            },
+            _ => None,
+        }
+    })
+}
+
+/// Give the results of a host call the shape the guest's core import type
+/// expects (SR-102).
+///
+/// A function whose canonical-ABI result does not fit one flat value is lowered
+/// by the guest as `(params..., retptr)` with no core results. Some host arms
+/// write the return area themselves and return nothing; others return the
+/// result as core values. For those, the values are written to the retptr (the
+/// last argument) in the canonical layout and no value is returned, so every
+/// route to a host function (`call`, `call_indirect`, `call_ref`,
+/// `return_call*`, the canon-lowered link) leaves the return area written and
+/// the operand stack balanced.
+///
+/// `core_result_count` is the result count of the importing module's core
+/// import type, when known. Values the host returns beyond it, for a function
+/// with no retptr signature, are an error rather than a dropped value.
+#[cfg(feature = "wasi")]
+fn lower_host_results(
+    module_name: &str,
+    field_name: &str,
+    args: &[Value],
+    results: Vec<Value>,
+    memory: Option<&dyn kiln_foundation::MemoryAccessor>,
+    core_result_count: Option<usize>,
+) -> Result<Vec<Value>> {
+    if results.is_empty() {
+        return Ok(results);
+    }
+    let (base_field, _) = kiln_foundation::split_instance_suffix(field_name);
+    let sig = crate::wasip2_host::get_wasi_function_signature(module_name, base_field);
+    if let Some(sig) = sig.filter(|s| s.result_needs_retptr()) {
+        let retptr = match args.last() {
+            Some(Value::I32(p)) => *p as u32,
+            _ => {
+                return Err(kiln_error::Error::runtime_error(
+                    "Host function returned values for a return area but its last argument is not an i32 retptr",
+                ));
+            },
+        };
+        let mem = memory.ok_or_else(|| {
+            kiln_error::Error::runtime_error(
+                "Host function returned values for a return area but no memory is available to write them",
+            )
+        })?;
+        let mut offset = retptr;
+        crate::wasip2_host::lower_results_to_retptr(&sig.results, &results, mem, &mut offset)?;
+        return Ok(Vec::new());
+    }
+    if let Some(count) = core_result_count {
+        if results.len() > count {
+            return Err(kiln_error::Error::runtime_error(
+                "Host function returned more values than its core import type declares",
+            ));
+        }
+    }
+    Ok(results)
 }
 
 /// Select the memory and guest allocator for a host call (SR-81).
@@ -1382,8 +1642,6 @@ impl StacklessEngine {
         import: Option<(&str, &str)>,
         args: Vec<Value>,
     ) -> Result<Vec<Value>> {
-        use crate::wasip2_host::get_wasi_function_signature;
-
         // SR-81: select the memory and allocator before anything below
         // allocates in the guest or hands memory to the handler.
         let instance = self
@@ -1401,120 +1659,107 @@ impl StacklessEngine {
             import.is_some(),
         )?;
 
-        // Look up function signature to determine if results use retptr
-        let sig = get_wasi_function_signature(interface, function);
-        let needs_retptr = sig.as_ref().map_or(false, |s| s.result_needs_retptr());
+        self.call_host_handler(instance_id, interface, function, &args, &owner, None)
+    }
 
-        // ON-DEMAND ALLOCATION for guest-owned list/string returns (SR-38, SR-39): the
-        // returned list<u8>/string is owned and freed by the guest, so a fresh cabi_realloc'd
-        // buffer is allocated per call (a reused/fixed buffer would be freed by the guest →
-        // allocator corruption). Done before borrowing the handler so the &mut self call has
-        // no conflicting borrow.
-        let read_alloc: Option<(u32, u32)> = {
-            // The buffer sizing below keys on the base function name (SR-81).
-            let (function, _) = kiln_foundation::split_instance_suffix(function);
-            let want = if interface.contains("wasi:io/streams")
-                && (function.contains("input-stream.read")
-                    || function.contains("input-stream.blocking-read"))
-            {
-                // input-stream read: size to the requested len (args = [self, len, ...]).
-                args.get(1)
-                    .and_then(|v| match v {
-                        Value::I64(n) => Some(*n as u32),
-                        Value::I32(n) => Some(*n as u32),
-                        _ => None,
-                    })
-                    .unwrap_or(0)
-            } else if interface.contains("wasi:filesystem/types")
-                && function.contains("read-directory-entry")
-            {
-                // directory-entry name string: no len arg, use a filename-sized buffer.
-                512
-            } else if interface.contains("wasi:filesystem/types")
-                && function == "[method]descriptor.read"
-            {
-                // descriptor.read: list<u8> sized to the requested length
-                // (args = [self, length: i64, offset: i64, retptr]); at least 1 byte so a
-                // zero-length read still gets a guest-owned (empty) list. SR-72.
-                match args.get(1) {
-                    Some(Value::I64(n)) => u32::try_from(*n).unwrap_or(u32::MAX).max(1),
-                    _ => 0,
-                }
-            } else if interface.contains("wasi:filesystem/types")
-                && function == "[method]descriptor.readlink-at"
-            {
-                // readlink-at: string result; a link target never exceeds a path-sized
-                // buffer (the host refuses, rather than truncates, anything longer). SR-72.
-                4096
-            } else {
-                // random bytes, initial-cwd, error.to-debug-string (SR-38).
-                wasi_owned_return_size(interface, function, &args).unwrap_or(0)
-            };
-            if want > 0 {
+    /// Run the host handler for one call: allocate whatever guest memory the
+    /// call returns its result in ([`owned_return_policy`]), hand it to the
+    /// handler, call it, and lower the results to the shape the guest's import
+    /// type expects. The one tail shared by every route to a host function
+    /// (`host_call` and the canon-lowered link), so they cannot disagree.
+    ///
+    /// The returned list/string is owned and freed by the guest, so each call
+    /// gets a fresh `cabi_realloc` allocation (a reused buffer would be freed by
+    /// the guest and corrupt its allocator). Allocation happens before the
+    /// handler is borrowed, and a failed allocation is the call's error.
+    #[cfg(feature = "wasi")]
+    fn call_host_handler(
+        &mut self,
+        instance_id: usize,
+        interface: &str,
+        function: &str,
+        args: &[Value],
+        owner: &HostCallOwner,
+        core_result_count: Option<usize>,
+    ) -> Result<Vec<Value>> {
+        // The policy keys on the base function name (SR-81).
+        let (base_function, _) = kiln_foundation::split_instance_suffix(function);
+
+        // The return area must be valid before the guest is asked to allocate or a
+        // handler writes (SR-102).
+        check_return_area(interface, function, args, &owner.memory)?;
+
+        let mut alloc = OwnedAllocation::default();
+        match owned_return_policy(interface, base_function, args) {
+            Some(OwnedReturn::Buffer { size, align, exact }) => {
                 owner.realloc.check()?;
-                self.allocate_wasi_read_buffer(instance_id, want, 1, &owner.realloc)
-                    .ok()
-                    .flatten()
-            } else if interface.contains("wasi:io/poll") && function == "poll" {
-                // poll: the ready subset is a list<u32> of at most `len` indices
-                // (args = [list_ptr, len, retptr]); align 4. SR-91.
-                match args.get(1) {
-                    Some(Value::I32(n)) => {
-                        let bytes = (*n as u32).saturating_mul(4);
-                        owner.realloc.check()?;
-                        self.allocate_wasi_read_buffer(instance_id, bytes, 4, &owner.realloc)
-                            .ok()
-                            .flatten()
-                    },
-                    _ => None,
+                alloc.buffer =
+                    self.allocate_wasi_read_buffer(instance_id, size, align, exact, owner)?;
+            },
+            Some(OwnedReturn::Arguments) => {
+                let wasi_args = kiln_wasi::get_global_wasi_args()?;
+                if !wasi_args.is_empty() {
+                    owner.realloc.check()?;
+                    alloc.args = self.allocate_wasi_args_memory(instance_id, &wasi_args, owner)?;
                 }
-            } else {
-                None
-            }
-        };
-
-        let memory = owner.memory.accessor();
+            },
+            Some(OwnedReturn::Preopens) => {
+                let paths: Vec<String> = self
+                    .host_handler
+                    .as_ref()
+                    .map(|h| h.get_preopens())
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|(_fd, path)| path)
+                    .collect();
+                if !paths.is_empty() {
+                    owner.realloc.check()?;
+                    alloc.preopens =
+                        self.allocate_wasi_preopens_memory(instance_id, &paths, owner)?;
+                }
+            },
+            None => {},
+        }
 
         let handler = self.host_handler.as_mut().ok_or_else(|| {
             kiln_error::Error::runtime_error(
-                "Canon-lowered function called but no host_handler configured. \
+                "Host function called but no host_handler configured. \
                  Use engine.set_host_handler() with a WasiDispatcher to enable WASI support.",
             )
         })?;
-        if let Some((ptr, size)) = read_alloc {
+        if let Some((list_ptr, string_ptrs)) = alloc.args {
+            handler.set_args_allocation(list_ptr, string_ptrs);
+        }
+        if let Some((list_ptr, string_ptrs)) = alloc.preopens {
+            handler.set_preopens_allocation(list_ptr, string_ptrs);
+        }
+        if let Some((ptr, size)) = alloc.buffer {
             handler.set_read_buffer_allocation(ptr, size);
         }
+
+        let memory = owner.memory.accessor();
+
+        #[cfg(feature = "tracing")]
+        trace!(
+            args_count = args.len(),
+            has_memory = memory.is_some(),
+            "[HOST_HANDLER] Calling handler"
+        );
 
         // Always pass all args to handler (including retptr if present).
         // Handlers that already handle memory writes (e.g., get-arguments)
         // will use the retptr themselves. Handlers that return component values
-        // as core Values get automatic retptr lowering below.
-        let results = handler.call_import(interface, function, &args, memory)?;
-
-        if needs_retptr && !results.is_empty() && !args.is_empty() {
-            // Handler returned core values for a retptr-based function.
-            // Write them to memory at the retptr address using canonical ABI layout.
-            let retptr = match args.last() {
-                Some(Value::I32(p)) => *p as u32,
-                _ => return Ok(results), // Can't determine retptr, return as-is
-            };
-
-            if let (Some(mem), Some(sig)) = (memory, &sig) {
-                let mut offset = retptr;
-                crate::wasip2_host::lower_results_to_retptr(
-                    &sig.results,
-                    &results,
-                    mem,
-                    &mut offset,
-                )?;
-            }
-            // retptr-based results consumed — return empty
-            Ok(vec![])
-        } else {
-            // Either simple return (values go on stack) or handler already
-            // wrote to memory (returned empty vec)
-            Ok(results)
-        }
+        // as core Values get the same retptr lowering as on every other route.
+        // Errors propagate (no fallback per CLAUDE.md).
+        let results = handler.call_import(interface, function, args, memory)?;
+        lower_host_results(
+            interface,
+            function,
+            args,
+            results,
+            memory,
+            core_result_count,
+        )
     }
 
     /// Execute a lowered function via the host import handler
@@ -2582,48 +2827,11 @@ impl StacklessEngine {
                         });
                     }
 
-                    // Try host handler for unlinked WASI imports
-                    #[cfg(feature = "wasi")]
-                    if let Some(ref mut handler) = self.host_handler {
-                        let instance = self.instances.get(&instance_id).cloned();
-                        if let Some(inst) = instance {
-                            let owner = select_host_call_owner(
-                                &inst,
-                                self.import_map.as_deref(),
-                                &module_name,
-                                &field_name,
-                                true,
-                            )?;
-                            let memory = owner.memory.accessor();
-                            if let Ok(results) =
-                                handler.call_import(&module_name, &field_name, &args, memory)
-                            {
-                                return Ok(ExecutionOutcome::Complete(results));
-                            }
-                        }
-                    }
-
-                    // Import not linked or link unresolvable - return correct number of default results
-                    // based on the imported function's type signature
-                    // NOTE: Do NOT decrement here - execute() will decrement on Complete
-                    if let Some(func) = module.functions.get(func_idx) {
-                        if let Some(func_type) = module.types.get(func.type_idx as usize) {
-                            let mut results = Vec::new();
-                            for result_type in &func_type.results {
-                                let default_value = match result_type {
-                                    kiln_foundation::ValueType::I32 => Value::I32(0),
-                                    kiln_foundation::ValueType::I64 => Value::I64(0),
-                                    kiln_foundation::ValueType::F32 => Value::F32(FloatBits32(0)),
-                                    kiln_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
-                                    _ => Value::I32(0),
-                                };
-                                results.push(default_value);
-                            }
-                            return Ok(ExecutionOutcome::Complete(results));
-                        }
-                    }
-                    // Fallback for corrupted module data
-                    return Ok(ExecutionOutcome::Complete(Vec::new()));
+                    // Same route as the `call` arm: registered host functions, then the host
+                    // handler with owned-return buffers allocated. Errors propagate, and an
+                    // import nothing serves is an error, never made-up zero results.
+                    let results = self.host_call(instance_id, &module_name, &field_name, args)?;
+                    return Ok(ExecutionOutcome::Complete(results));
                 }
             }
         }
@@ -15074,27 +15282,32 @@ impl StacklessEngine {
         args
     }
 
-    /// Call cabi_realloc to allocate memory in WASM instance
+    /// Call cabi_realloc to make a new allocation of `new_size` bytes aligned to
+    /// `align` in the WASM instance (`old_ptr` and `old_size` are 0: the host
+    /// only allocates, the guest frees).
+    ///
+    /// The result is validated against `memory` (the memory the host call
+    /// writes into) after the call, since the allocator may have grown it: it
+    /// must be aligned for `align` and `[ptr, ptr + fits)` must lie inside
+    /// memory (SR-102). `fits` is `new_size` when the host fills the whole
+    /// allocation; for a buffer reserved as an upper bound it is 0 (the
+    /// allocation starts inside memory, and the handler's writes are
+    /// bounds-checked).
+    #[cfg(feature = "wasi")]
     fn call_cabi_realloc(
         &mut self,
         instance_id: usize,
         func_idx: usize,
-        old_ptr: u32,
-        old_size: u32,
+        memory: &HostMemory,
         align: u32,
         new_size: u32,
+        fits: u32,
     ) -> Result<u32> {
         #[cfg(feature = "tracing")]
-        trace!(
-            old_ptr = old_ptr,
-            old_size = old_size,
-            align = align,
-            new_size = new_size,
-            "[CABI_REALLOC] Calling"
-        );
+        trace!(align = align, new_size = new_size, "[CABI_REALLOC] Calling");
         let args = vec![
-            Value::I32(old_ptr as i32),
-            Value::I32(old_size as i32),
+            Value::I32(0),
+            Value::I32(0),
             Value::I32(align as i32),
             Value::I32(new_size as i32),
         ];
@@ -15104,13 +15317,20 @@ impl StacklessEngine {
         // Use full execute() — cabi_realloc may call the allocator (e.g., __rust_alloc).
         let results = self.execute(instance_id, func_idx, args)?;
 
-        if let Some(Value::I32(ptr)) = results.first() {
-            Ok(*ptr as u32)
-        } else {
-            Err(kiln_error::Error::runtime_error(
+        let Some(Value::I32(ptr)) = results.first() else {
+            return Err(kiln_error::Error::runtime_error(
                 "cabi_realloc returned invalid value",
-            ))
-        }
+            ));
+        };
+        let ptr = *ptr as u32;
+        check_guest_range(
+            memory.size()?,
+            ptr,
+            fits,
+            align,
+            GuestPointer::ReallocResult,
+        )?;
+        Ok(ptr)
     }
 
     /// Allocate memory for WASI arguments using cabi_realloc
@@ -15130,7 +15350,7 @@ impl StacklessEngine {
         &mut self,
         instance_id: usize,
         args: &[String],
-        realloc: &HostRealloc,
+        owner: &HostCallOwner,
     ) -> Result<Option<(u32, Vec<(u32, u32)>)>> {
         // Find cabi_realloc (the import map's, or the module's export)
         let instance = self
@@ -15141,7 +15361,7 @@ impl StacklessEngine {
         let module = instance.module();
 
         let Some(cabi_realloc_idx) =
-            realloc.resolve(|| self.find_export_index(&module, "cabi_realloc").ok())?
+            owner.realloc.resolve(|| self.find_export_index(&module, "cabi_realloc").ok())?
         else {
             #[cfg(feature = "tracing")]
             trace!(
@@ -15168,9 +15388,9 @@ impl StacklessEngine {
         let list_ptr = self.call_cabi_realloc(
             instance_id,
             cabi_realloc_idx,
-            0, // old_ptr (NULL for new allocation)
-            0, // old_size
+            &owner.memory,
             8, // align (8-byte alignment for pointers)
+            list_size as u32,
             list_size as u32,
         )?;
 
@@ -15191,9 +15411,9 @@ impl StacklessEngine {
             let string_ptr = self.call_cabi_realloc(
                 instance_id,
                 cabi_realloc_idx,
-                0, // old_ptr (NULL for new allocation)
-                0, // old_size
+                &owner.memory,
                 1, // align (1-byte alignment for strings)
+                string_len,
                 string_len,
             )?;
 
@@ -15212,97 +15432,6 @@ impl StacklessEngine {
         Ok(Some((list_ptr, string_ptrs)))
     }
 
-    /// Pre-allocate memory for WASI arguments before starting execution
-    ///
-    /// This should be called before `execute` to allocate memory via cabi_realloc
-    /// for WASI argument strings. The allocated pointers will be stored in the
-    /// WASI dispatcher and used when get-arguments is called.
-    ///
-    /// # Arguments
-    /// * `instance_id` - The instance ID to allocate memory in
-    ///
-    /// # Returns
-    /// Ok(()) if successful, Err if allocation fails
-    #[cfg(feature = "wasi")]
-    pub fn pre_allocate_wasi_args(&mut self, instance_id: usize) -> Result<()> {
-        // Get args from global state (set by kilnd before execution)
-        // This is more reliable than using internal dispatcher since it
-        // ensures we use the same args that will be returned by get-arguments
-        let args: Vec<String> = kiln_wasi::get_global_wasi_args()?;
-
-        if args.is_empty() {
-            #[cfg(feature = "tracing")]
-            trace!("[WASI-PREALLOC] No args to pre-allocate");
-            return Ok(());
-        }
-
-        #[cfg(feature = "tracing")]
-        trace!(
-            args_len = args.len(),
-            args = ?args,
-            "[WASI-PREALLOC] Pre-allocating memory for args"
-        );
-
-        // Allocate memory - each string is allocated SEPARATELY for proper allocator metadata
-        match self.allocate_wasi_args_memory(instance_id, &args, &HostRealloc::Export)? {
-            Some((list_ptr, string_ptrs)) => {
-                #[cfg(feature = "tracing")]
-                trace!(
-                    list_ptr = format_args!("0x{:x}", list_ptr),
-                    num_strings = string_ptrs.len(),
-                    "[WASI-PREALLOC] Allocated successfully with SEPARATE string allocations"
-                );
-
-                // Set on host_handler (the dispatch target for get-arguments calls)
-                if let Some(ref mut handler) = self.host_handler {
-                    handler.set_args_allocation(list_ptr, string_ptrs);
-                }
-
-                Ok(())
-            },
-            None => {
-                #[cfg(feature = "tracing")]
-                trace!("[WASI-PREALLOC] No allocation needed or cabi_realloc not available");
-                Ok(())
-            },
-        }
-    }
-
-    /// Pre-allocate cabi_realloc'd memory backing `wasi:filesystem/preopens::get-directories`.
-    ///
-    /// The canonical-ABI return area for `func() -> list<tuple<descriptor,string>>` is
-    /// only 8 bytes (ptr+len), so the entry array (N*12 bytes) and each path string must
-    /// live in guest-owned memory. Mirrors [`Self::pre_allocate_wasi_args`]. The preopens are
-    /// read back from the host handler (they were registered via `add_preopen`).
-    #[cfg(feature = "wasi")]
-    pub fn pre_allocate_wasi_preopens(&mut self, instance_id: usize) -> Result<()> {
-        // Read the registered preopens from the host handler.
-        let preopens: Vec<(u32, String)> = match self.host_handler {
-            Some(ref handler) => handler.get_preopens(),
-            None => return Ok(()),
-        };
-        if preopens.is_empty() {
-            #[cfg(feature = "tracing")]
-            trace!("[WASI-PREALLOC] No preopens to pre-allocate");
-            return Ok(());
-        }
-
-        let paths: Vec<String> = preopens.into_iter().map(|(_fd, path)| path).collect();
-        match self.allocate_wasi_preopens_memory(instance_id, &paths)? {
-            Some((list_ptr, string_ptrs)) => {
-                if let Some(ref mut handler) = self.host_handler {
-                    handler.set_preopens_allocation(list_ptr, string_ptrs);
-                }
-                Ok(())
-            },
-            None => {
-                #[cfg(feature = "tracing")]
-                trace!("[WASI-PREALLOC] preopens: cabi_realloc not available");
-                Ok(())
-            },
-        }
-    }
-
     /// Allocate guest memory for the get-directories list return via cabi_realloc.
     ///
     /// Returns (list_ptr, string_ptrs) where list_ptr is the N*12-byte entry array
@@ -15313,6 +15442,7 @@ impl StacklessEngine {
         &mut self,
         instance_id: usize,
         paths: &[String],
+        owner: &HostCallOwner,
     ) -> Result<Option<(u32, Vec<(u32, u32)>)>> {
         let instance = self
             .instances
@@ -15321,13 +15451,13 @@ impl StacklessEngine {
             .clone();
         let module = instance.module();
 
-        let cabi_realloc_idx = match self.find_export_index(&module, "cabi_realloc") {
-            Ok(idx) => idx,
-            Err(_) => {
-                #[cfg(feature = "tracing")]
-                trace!("[WASI-ALLOC] cabi_realloc not found for preopens");
-                return Ok(None);
-            },
+        // The import map's allocator, else the module's own export
+        let Some(cabi_realloc_idx) =
+            owner.realloc.resolve(|| self.find_export_index(&module, "cabi_realloc").ok())?
+        else {
+            #[cfg(feature = "tracing")]
+            trace!("[WASI-ALLOC] cabi_realloc not found for preopens");
+            return Ok(None);
         };
 
         if paths.is_empty() {
@@ -15339,9 +15469,9 @@ impl StacklessEngine {
         let list_ptr = self.call_cabi_realloc(
             instance_id,
             cabi_realloc_idx,
-            0, // old_ptr
-            0, // old_size
+            &owner.memory,
             4, // align (4-byte for the u32 fields)
+            list_size,
             list_size,
         )?;
 
@@ -15352,10 +15482,10 @@ impl StacklessEngine {
             let string_ptr = self.call_cabi_realloc(
                 instance_id,
                 cabi_realloc_idx,
-                0,
-                0,
+                &owner.memory,
                 1,
-                path_len.max(1), // never request 0 bytes
+                path_len,
+                path_len,
             )?;
             string_ptrs.push((string_ptr, path_len));
         }
@@ -15370,16 +15500,20 @@ impl StacklessEngine {
     /// to the guest's requested `len`, capped to a sane maximum. Returns None if the
     /// component has no cabi_realloc export. `align` is the element alignment of the
     /// returned list (1 for bytes, 4 for the `list<u32>` of `poll`, SR-91). SR-38.
+    /// `exact` says the host fills all `len` bytes (see [`OwnedReturn::Buffer`]); the
+    /// allocation is then validated to lie wholly inside memory (SR-102).
     #[cfg(feature = "wasi")]
     fn allocate_wasi_read_buffer(
         &mut self,
         instance_id: usize,
         len: u32,
         align: u32,
-        realloc: &HostRealloc,
+        exact: bool,
+        owner: &HostCallOwner,
     ) -> Result<Option<(u32, u32)>> {
         const MAX_READ_BUF: u32 = 1 << 20; // 1 MiB cap; reads clamp to this, guest loops for more
-        let size = len.clamp(1, MAX_READ_BUF);
+        // A zero-length request stays zero: the canonical ABI asks for an empty list.
+        let size = len.min(MAX_READ_BUF);
 
         let instance = self
             .instances
@@ -15388,11 +15522,19 @@ impl StacklessEngine {
             .clone();
         let module = instance.module();
         let Some(cabi_realloc_idx) =
-            realloc.resolve(|| self.find_export_index(&module, "cabi_realloc").ok())?
+            owner.realloc.resolve(|| self.find_export_index(&module, "cabi_realloc").ok())?
         else {
             return Ok(None);
         };
-        let ptr = self.call_cabi_realloc(instance_id, cabi_realloc_idx, 0, 0, align, size)?;
+        let fits = if exact { size } else { 0 };
+        let ptr = self.call_cabi_realloc(
+            instance_id,
+            cabi_realloc_idx,
+            &owner.memory,
+            align,
+            size,
+            fits,
+        )?;
         Ok(Some((ptr, size)))
     }
 
@@ -15544,196 +15686,84 @@ impl StacklessEngine {
         #[cfg(feature = "tracing")]
         debug!("WASI: Calling {}::{}", module_name, field_name);
 
-        // NOTE: We skip the host_registry path for WASI functions because it doesn't
-        // properly marshal arguments from the stack. Instead, we fall through to the
-        // wasip2_host dispatch (for WASI Preview 2) or the stub implementations which
-        // properly handle the stack arguments.
-        //
-        // The host_registry is kept for non-WASI host functions that don't need stack args.
+        // Collect the import's args once, up front. collect_import_args_by_name pops the
+        // stack so it must run exactly once.
+        let args = Self::collect_import_args_by_name(&module, module_name, field_name, stack);
+
+        // Return first result if any
+        Ok(self.host_call(instance_id, module_name, field_name, args)?.into_iter().next())
+    }
+
+    /// Call an unlinked import served by the host handler, with its arguments
+    /// already collected. Every route that reaches a WASI host function (the
+    /// `call` arm, `call_indirect`, and the function-entry prelude used by
+    /// `call_ref` and `return_call*`) goes through here, so owned-return buffer
+    /// allocation and error propagation are the same on all of them.
+    fn host_call(
+        &mut self,
+        instance_id: usize,
+        module_name: &str,
+        field_name: &str,
+        args: Vec<Value>,
+    ) -> Result<Vec<Value>> {
+        // Host functions registered on the engine (e.g. the spec suite's `spectest`
+        // imports) are served first, with the call's real arguments.
         if let Some(ref registry) = self.host_registry {
             if Self::registry_serves(registry, module_name, field_name) {
-                #[cfg(feature = "tracing")]
-                debug!(
-                    "WASI: Found {} in host registry, calling implementation",
-                    field_name
-                );
-
-                let args: Vec<kiln_foundation::Value> = vec![];
                 let mut dummy_engine: i32 = 0;
-                match registry.call_host_function(&mut dummy_engine, module_name, field_name, args)
-                {
-                    Ok(result) => {
-                        #[cfg(feature = "tracing")]
-                        debug!("WASI: Host function {} returned successfully", field_name);
-                        if let Some(val) = result.first() {
-                            return Ok(Some(val.clone()));
-                        }
-                        return Ok(None);
-                    },
-                    Err(e) => {
-                        #[cfg(feature = "tracing")]
-                        debug!("WASI: Host function {} failed: {:?}", field_name, e);
-                        return Err(e);
-                    },
-                }
-            }
-        }
-
-        // Use host_handler for WASI dispatch (when configured)
-        // This is the proper architecture - host_handler routes to WasiDispatcher
-        {
-            // ON-DEMAND ALLOCATION for get-arguments
-            // This MUST happen AFTER _start has initialized the component's allocator.
-            // Pre-allocating before _start causes memory collisions where the allocator
-            // reuses our memory for other purposes.
-            // Collect the import's args once, up front. collect_import_args_by_name pops the
-            // stack so it must run exactly once; the read-buffer sizing below needs the len.
-            let args = Self::collect_import_args_by_name(&module, module_name, field_name, stack);
-
-            // SR-81: the host handler knows a function by its base name; meld's `$N`
-            // suffix is stripped for the buffer sizing below, as it is for dispatch.
-            #[cfg(feature = "wasi")]
-            let (base_field, _) = kiln_foundation::split_instance_suffix(field_name);
-
-            // SR-81: select the memory and allocator before any guest allocation below
-            // touches memory (meld's import map, else the single-memory rule).
-            let owner = {
-                let instance = self.instances.get(&instance_id).ok_or_else(|| {
-                    kiln_error::Error::runtime_error("Instance not found for host handler call")
-                })?;
-                select_host_call_owner(
-                    instance,
-                    self.import_map.as_deref(),
+                return registry.call_host_function(
+                    &mut dummy_engine,
                     module_name,
                     field_name,
-                    true,
-                )?
-            };
-
-            #[cfg(feature = "wasi")]
-            let args_alloc =
-                if module_name.contains("wasi:cli/environment") && base_field == "get-arguments" {
-                    let wasi_args = kiln_wasi::get_global_wasi_args()?;
-                    if !wasi_args.is_empty() {
-                        owner.realloc.check()?;
-                        // A cabi_realloc trap propagates: swallowing it left the dispatcher
-                        // writing into the previous call's (guest-owned, maybe freed) lists.
-                        self.allocate_wasi_args_memory(instance_id, &wasi_args, &owner.realloc)?
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                };
-
-            #[cfg(not(feature = "wasi"))]
-            let args_alloc: Option<(u32, Vec<(u32, u32)>)> = None;
-
-            // ON-DEMAND ALLOCATION for input-stream reads (SR-38): the returned list<u8> is
-            // owned and freed by the guest, so allocate a fresh guest buffer per read, sized
-            // to the requested len (args[1]). Mirrors the get-arguments on-demand pattern.
-            #[cfg(feature = "wasi")]
-            let read_alloc: Option<(u32, u32)> = if module_name.contains("wasi:io/streams")
-                && (base_field.contains("input-stream.read")
-                    || base_field.contains("input-stream.blocking-read"))
-            {
-                let len = args
-                    .get(1)
-                    .and_then(|v| match v {
-                        Value::I64(n) => Some(*n as u32),
-                        Value::I32(n) => Some(*n as u32),
-                        _ => None,
-                    })
-                    .unwrap_or(0);
-                if len > 0 {
-                    owner.realloc.check()?;
-                    match self.allocate_wasi_read_buffer(instance_id, len, 1, &owner.realloc) {
-                        Ok(a) => a,
-                        Err(_e) => None,
-                    }
-                } else {
-                    None
-                }
-            } else if module_name.contains("wasi:io/poll") && base_field == "poll" {
-                // poll: list<u32> of at most `len` ready indices (args = [ptr, len, retptr]),
-                // align 4. SR-91.
-                match args.get(1) {
-                    Some(Value::I32(n)) => {
-                        let bytes = (*n as u32).saturating_mul(4);
-                        owner.realloc.check()?;
-                        match self.allocate_wasi_read_buffer(instance_id, bytes, 4, &owner.realloc)
-                        {
-                            Ok(a) => a,
-                            Err(_e) => None,
-                        }
-                    },
-                    _ => None,
-                }
-            } else if let Some(size) = wasi_owned_return_size(module_name, base_field, &args) {
-                // random bytes, initial-cwd, error.to-debug-string: guest-owned returns
-                // that must live in a fresh cabi_realloc'd buffer (SR-38).
-                owner.realloc.check()?;
-                self.allocate_wasi_read_buffer(instance_id, size, 1, &owner.realloc)?
-            } else {
-                None
-            };
-
-            #[cfg(not(feature = "wasi"))]
-            let read_alloc: Option<(u32, u32)> = None;
-
-            if let Some(ref mut handler) = self.host_handler {
-                if let Some((list_ptr, string_ptrs)) = args_alloc {
-                    handler.set_args_allocation(list_ptr, string_ptrs);
-                }
-                if let Some((ptr, size)) = read_alloc {
-                    handler.set_read_buffer_allocation(ptr, size);
-                }
-
-                // The memory selected above, before any allocation
-                let memory = owner.memory.accessor();
-
-                #[cfg(feature = "tracing")]
-                trace!(
-                    args_count = args.len(),
-                    has_memory = memory.is_some(),
-                    "[HOST_HANDLER] Calling handler"
+                    args,
                 );
-
-                // Call handler - errors propagate up (no fallback per CLAUDE.md)
-                let results = handler.call_import(module_name, field_name, &args, memory)?;
-
-                #[cfg(feature = "tracing")]
-                trace!(
-                    results_count = results.len(),
-                    "[HOST_HANDLER] Handler returned successfully"
-                );
-
-                // Return first result if any
-                return Ok(results.into_iter().next());
             }
         }
 
-        // NO INLINE WASI DISPATCH - per CLAUDE.md NO FALLBACK LOGIC rule
-        // All WASI calls MUST go through host_handler (set via set_host_handler())
-        // The host_handler routes to WasiDispatcher which handles all WASI functions
-        //
-        // If we reach here, it means:
-        // 1. host_handler was not configured (kilnd should always configure it)
-        // 2. The caller is using the engine without proper WASI setup
-        //
-        // This is NOT a fallback - it's a hard error per CLAUDE.md:
-        // "FAIL LOUD AND EARLY: If data is missing or incorrect, return an error immediately"
-        #[cfg(feature = "tracing")]
-        error!(
-            module_name = %module_name,
-            field_name = %field_name,
-            "[WASI] No host_handler configured - cannot dispatch WASI function"
-        );
+        // SR-81: select the memory and allocator before any guest allocation
+        // touches memory (meld's import map, else the single-memory rule).
+        let owner = {
+            let instance = self.instances.get(&instance_id).ok_or_else(|| {
+                kiln_error::Error::runtime_error("Instance not found for host handler call")
+            })?;
+            select_host_call_owner(
+                instance,
+                self.import_map.as_deref(),
+                module_name,
+                field_name,
+                true,
+            )?
+        };
 
-        Err(kiln_error::Error::runtime_error(
-            "WASI function called but no host_handler configured. \
-             Use engine.set_host_handler() with a WasiDispatcher to enable WASI support.",
-        ))
+        // NO INLINE WASI DISPATCH - per CLAUDE.md NO FALLBACK LOGIC rule: every WASI
+        // call goes through host_handler (set via set_host_handler()), and a missing
+        // handler is a hard error. The guest-owned return buffers, the handler call
+        // and the SR-102 result lowering are shared with the canon-lowered link.
+        #[cfg(feature = "wasi")]
+        {
+            let core_result_count = self
+                .instances
+                .get(&instance_id)
+                .and_then(|i| import_core_result_count(i.module(), module_name, field_name));
+            self.call_host_handler(
+                instance_id,
+                module_name,
+                field_name,
+                &args,
+                &owner,
+                core_result_count,
+            )
+        }
+
+        #[cfg(not(feature = "wasi"))]
+        {
+            let handler = self.host_handler.as_mut().ok_or_else(|| {
+                kiln_error::Error::runtime_error(
+                    "Host function called but no host_handler configured.",
+                )
+            })?;
+            handler.call_import(module_name, field_name, &args, owner.memory.accessor())
+        }
     }
 }
 

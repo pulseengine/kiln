@@ -32,6 +32,7 @@ fn module(call: &str) -> String {
     (global $calls (mut i32) (i32.const 0))
     (global $next (mut i32) (i32.const 4096))
     (global $last (mut i32) (i32.const -1))
+    (func $tail (param i64 i32) (local.get 0) (local.get 1) (return_call $grb))
     (func (export "cabi_realloc") (param i32 i32 i32 i32) (result i32)
       (global.set $calls (i32.add (global.get $calls) (i32.const 1)))
       (global.set $last (global.get $next))
@@ -155,4 +156,47 @@ fn get_arguments_realloc_trap_is_not_swallowed() {
 fn get_random_bytes_call_indirect_uses_cabi_realloc() {
     let wat = module("(call_indirect (type $grb_t) (i64.const 8) (i32.const 128) (i32.const 0))");
     assert_eq!(run("kiln_sr38_grb_indirect.wasm", &wat), EXPECTED);
+}
+
+#[test]
+fn get_random_bytes_call_ref_uses_cabi_realloc() {
+    let wat = module("(i64.const 8) (i32.const 128) (ref.func $grb) (call_ref $grb_t)");
+    assert_eq!(run("kiln_sr38_grb_callref.wasm", &wat), EXPECTED);
+}
+
+#[test]
+fn get_random_bytes_return_call_uses_cabi_realloc() {
+    let wat = module("(call $tail (i64.const 8) (i32.const 128))");
+    assert_eq!(run("kiln_sr38_grb_retcall.wasm", &wat), EXPECTED);
+}
+
+/// Runs `wat` and asserts the run fails: a return area outside linear memory
+/// must fail through `call_ref` exactly as it does through a plain `call`.
+fn assert_run_fails(file: &str, wat: &str) {
+    let path = std::env::temp_dir().join(file);
+    fs::write(&path, wat::parse_str(wat).expect("fixture must assemble")).unwrap();
+    let out = Command::new(KILN)
+        .arg("--wasi")
+        .arg(&path)
+        .env_remove("RUST_LOG")
+        .output()
+        .unwrap();
+    let _ = fs::remove_file(&path);
+    assert!(
+        !out.status.success(),
+        "an out-of-range return area must fail the run, got {:?}",
+        out.status
+    );
+}
+
+#[test]
+fn get_random_bytes_out_of_range_retptr_fails_through_call() {
+    let wat = module("(call $grb (i64.const 8) (i32.const 0xFFFFFF00))");
+    assert_run_fails("kiln_sr38_grb_oob_call.wasm", &wat);
+}
+
+#[test]
+fn get_random_bytes_out_of_range_retptr_fails_through_call_ref() {
+    let wat = module("(i64.const 8) (i32.const 0xFFFFFF00) (ref.func $grb) (call_ref $grb_t)");
+    assert_run_fails("kiln_sr38_grb_oob_callref.wasm", &wat);
 }

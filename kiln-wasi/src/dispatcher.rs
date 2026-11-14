@@ -1230,6 +1230,15 @@ impl WasiDispatcher {
         }
     }
 
+    /// The address `offset` bytes into the return area at `retptr`. A guest-supplied
+    /// `retptr` near the top of a u32 address space must fail, not wrap to the start
+    /// of memory.
+    fn retptr_at(retptr: u32, offset: u32) -> Result<u32> {
+        retptr.checked_add(offset).ok_or_else(|| {
+            Error::memory_out_of_bounds("Return area offset overflows the address space")
+        })
+    }
+
     /// Write a guest-owned `list<u8>`/`string` payload into the engine-supplied
     /// cabi_realloc'd buffer and return its `(ptr, len)` for the return-area header.
     ///
@@ -1280,7 +1289,7 @@ impl WasiDispatcher {
         let mem = mem.ok_or_else(|| Error::wasi_invalid_argument("random bytes: no memory"))?;
         let (ptr, len) = Self::write_owned_return(mem, read_buf, what, &bytes)?;
         mem.write_bytes(retptr, &ptr.to_le_bytes())?;
-        mem.write_bytes(retptr + 4, &len.to_le_bytes())?;
+        mem.write_bytes(Self::retptr_at(retptr, 4)?, &len.to_le_bytes())?;
         Ok(())
     }
 
@@ -1643,6 +1652,10 @@ impl WasiDispatcher {
                 // - Write string data at another location
                 // - Write (element_array_ptr, count) to the return pointer
 
+                // The engine allocated this call's lists (cabi_realloc); the guest owns and
+                // may free them, so they are consumed here and never handed out twice.
+                let args_alloc = self.args_alloc.take();
+
                 // Get args - prefer local args, fall back to global args
                 #[cfg(feature = "std")]
                 let args_to_use: Vec<String> =
@@ -1665,7 +1678,7 @@ impl WasiDispatcher {
                     arg_count = args_to_use.len(),
                     args = ?args_to_use,
                     retptr = format_args!("0x{:x}", retptr),
-                    args_alloc = ?self.args_alloc,
+                    args_alloc = ?args_alloc,
                     "get-arguments dispatch"
                 );
 
@@ -1676,7 +1689,7 @@ impl WasiDispatcher {
                     if args_to_use.is_empty() {
                         // Empty list: write (0, 0) to return pointer
                         mem.write_bytes(retptr, &0u32.to_le_bytes())?;
-                        mem.write_bytes(retptr + 4, &0u32.to_le_bytes())?;
+                        mem.write_bytes(Self::retptr_at(retptr, 4)?, &0u32.to_le_bytes())?;
                         return Ok(vec![]);
                     }
 
@@ -1684,7 +1697,7 @@ impl WasiDispatcher {
                     // IMPORTANT: Each string has its own allocation to ensure proper
                     // allocator metadata (prevents crash when component frees strings)
                     let (list_ptr, string_ptrs) =
-                        if let Some((alloc_list, ref alloc_strings)) = self.args_alloc {
+                        if let Some((alloc_list, ref alloc_strings)) = args_alloc {
                             #[cfg(feature = "tracing")]
                             trace!(
                                 list_ptr = format_args!("0x{:x}", alloc_list),
@@ -1734,13 +1747,14 @@ impl WasiDispatcher {
                             );
                         }
 
-                        // Bounds check
+                        // An allocation that does not fit memory is an error, never an
+                        // empty list the guest would take for "no arguments".
                         if (*string_ptr as usize + bytes.len()) > mem.size() {
                             #[cfg(feature = "tracing")]
                             warn!("not enough memory for arg data");
-                            mem.write_bytes(retptr, &0u32.to_le_bytes())?;
-                            mem.write_bytes(retptr + 4, &0u32.to_le_bytes())?;
-                            return Ok(vec![]);
+                            return Err(Error::memory_out_of_bounds(
+                                "get-arguments: an argument allocation lies past the end of memory",
+                            ));
                         }
 
                         // Write string bytes to its individually allocated location
@@ -1769,7 +1783,10 @@ impl WasiDispatcher {
 
                     // Write (list_ptr, count) to the return pointer
                     mem.write_bytes(retptr, &list_ptr.to_le_bytes())?;
-                    mem.write_bytes(retptr + 4, &(args_to_use.len() as u32).to_le_bytes())?;
+                    mem.write_bytes(
+                        Self::retptr_at(retptr, 4)?,
+                        &(args_to_use.len() as u32).to_le_bytes(),
+                    )?;
 
                     #[cfg(feature = "tracing")]
                     trace!(
@@ -1915,7 +1932,10 @@ impl WasiDispatcher {
                     mem.write_bytes(buf_ptr + 4 * i as u32, &idx.to_le_bytes())?;
                 }
                 mem.write_bytes(retptr, &buf_ptr.to_le_bytes())?;
-                mem.write_bytes(retptr + 4, &(ready.len() as u32).to_le_bytes())?;
+                mem.write_bytes(
+                    Self::retptr_at(retptr, 4)?,
+                    &(ready.len() as u32).to_le_bytes(),
+                )?;
                 Ok(vec![])
             },
 
@@ -1982,7 +2002,7 @@ impl WasiDispatcher {
                     };
                     // Write success discriminant (0) and capacity
                     mem.write_bytes(retptr, &0u32.to_le_bytes())?;
-                    mem.write_bytes(retptr + 8, &65536u64.to_le_bytes())?;
+                    mem.write_bytes(Self::retptr_at(retptr, 8)?, &65536u64.to_le_bytes())?;
                 }
                 Ok(vec![])
             },
@@ -2032,7 +2052,7 @@ impl WasiDispatcher {
                     // Write seconds (u64, 8 bytes) at retptr
                     mem.write_bytes(retptr, &seconds.to_le_bytes())?;
                     // Write nanoseconds as u32 (4 bytes) at retptr + 8
-                    mem.write_bytes(retptr + 8, &nanoseconds.to_le_bytes())?;
+                    mem.write_bytes(Self::retptr_at(retptr, 8)?, &nanoseconds.to_le_bytes())?;
 
                     #[cfg(feature = "tracing")]
                     trace!(
@@ -2073,7 +2093,7 @@ impl WasiDispatcher {
                     // Write seconds (0) at retptr
                     mem.write_bytes(retptr, &0u64.to_le_bytes())?;
                     // Write nanoseconds (1) as i64 at retptr + 8
-                    mem.write_bytes(retptr + 8, &1u64.to_le_bytes())?;
+                    mem.write_bytes(Self::retptr_at(retptr, 8)?, &1u64.to_le_bytes())?;
                     Ok(vec![])
                 } else {
                     Ok(vec![
@@ -2274,29 +2294,28 @@ impl WasiDispatcher {
                     //   discriminant 0 = ok (no payload)
                     //   discriminant 1 = err (followed by error info)
                     // Canonical ABI uses i32 (4 bytes) for discriminant
+                    // An out-of-range retptr is an error from the write, never skipped.
                     if let Some(rp) = retptr {
-                        if (rp as usize + 4) <= mem.size() {
-                            match &result {
-                                Ok(()) => {
-                                    // Ok variant: discriminant = 0 (4 bytes, little-endian)
-                                    mem.write_bytes(rp, &0u32.to_le_bytes())?;
-                                    #[cfg(feature = "tracing")]
-                                    trace!(
-                                        retptr = format_args!("0x{:x}", rp),
-                                        "wrote Ok discriminant (0)"
-                                    );
-                                },
-                                Err(_) => {
-                                    // Err variant: discriminant = 1 (4 bytes, little-endian)
-                                    // Note: stream-error payload would need more data, but for now just set discriminant
-                                    mem.write_bytes(rp, &1u32.to_le_bytes())?;
-                                    #[cfg(feature = "tracing")]
-                                    trace!(
-                                        retptr = format_args!("0x{:x}", rp),
-                                        "wrote Err discriminant (1)"
-                                    );
-                                },
-                            }
+                        match &result {
+                            Ok(()) => {
+                                // Ok variant: discriminant = 0 (4 bytes, little-endian)
+                                mem.write_bytes(rp, &0u32.to_le_bytes())?;
+                                #[cfg(feature = "tracing")]
+                                trace!(
+                                    retptr = format_args!("0x{:x}", rp),
+                                    "wrote Ok discriminant (0)"
+                                );
+                            },
+                            Err(_) => {
+                                // Err variant: discriminant = 1 (4 bytes, little-endian)
+                                // Note: stream-error payload would need more data, but for now just set discriminant
+                                mem.write_bytes(rp, &1u32.to_le_bytes())?;
+                                #[cfg(feature = "tracing")]
+                                trace!(
+                                    retptr = format_args!("0x{:x}", rp),
+                                    "wrote Err discriminant (1)"
+                                );
+                            },
                         }
                     }
 
@@ -2317,9 +2336,7 @@ impl WasiDispatcher {
                 {
                     // In no_std, we can't write to stdout, but still write Ok to retptr
                     if let Some(rp) = retptr {
-                        if (rp as usize + 4) <= mem.size() {
-                            mem.write_bytes(rp, &0u32.to_le_bytes())?; // Ok discriminant (4 bytes)
-                        }
+                        mem.write_bytes(rp, &0u32.to_le_bytes())?; // Ok discriminant (4 bytes)
                     }
                     Ok(vec![])
                 }
@@ -3673,6 +3690,9 @@ impl WasiDispatcher {
                 // a list backed by memory it never allocated, so preview2 libc registers
                 // no usable preopen and every file op returns noent. This mirrors the
                 // get-arguments path exactly (see preopens_alloc / pre_allocate_wasi_preopens).
+                // This call's allocation is consumed whether or not it is used: the guest
+                // owns (and may free) the list, so it is never handed out twice.
+                let preopens_alloc = self.preopens_alloc.take();
                 if let Some(mem) = memory {
                     let retptr = match args.first() {
                         Some(CoreValue::I32(v)) => *v as u32,
@@ -3685,15 +3705,15 @@ impl WasiDispatcher {
                     if self.preopens.is_empty() {
                         // No preopens: empty list (ptr=0, len=0)
                         mem.write_bytes(retptr, &0u32.to_le_bytes())?;
-                        mem.write_bytes(retptr + 4, &0u32.to_le_bytes())?;
+                        mem.write_bytes(Self::retptr_at(retptr, 4)?, &0u32.to_le_bytes())?;
                         return Ok(vec![]);
                     }
 
                     // Use pre-allocated cabi_realloc memory. NO FALLBACK — per FAIL-LOUD,
                     // if the engine did not pre-allocate (no cabi_realloc export) we error
                     // rather than scribble into unowned guest memory.
-                    let (list_ptr, string_ptrs) = match &self.preopens_alloc {
-                        Some((lp, sp)) => (*lp, sp.clone()),
+                    let (list_ptr, string_ptrs) = match preopens_alloc {
+                        Some((lp, sp)) => (lp, sp),
                         None => {
                             return Err(Error::runtime_error(
                                 "get-directories requires cabi_realloc pre-allocation (preopens_alloc not set)",
@@ -3723,7 +3743,10 @@ impl WasiDispatcher {
                     }
                     // Write list header (ptr, len) into the return area.
                     mem.write_bytes(retptr, &list_ptr.to_le_bytes())?;
-                    mem.write_bytes(retptr + 4, &(self.preopens.len() as u32).to_le_bytes())?;
+                    mem.write_bytes(
+                        Self::retptr_at(retptr, 4)?,
+                        &(self.preopens.len() as u32).to_le_bytes(),
+                    )?;
                 }
                 Ok(vec![])
             },
@@ -3756,8 +3779,8 @@ impl WasiDispatcher {
                             )?;
                             // Write Some discriminant (1), ptr, len
                             mem.write_bytes(retptr, &1u32.to_le_bytes())?;
-                            mem.write_bytes(retptr + 4, &data_ptr.to_le_bytes())?;
-                            mem.write_bytes(retptr + 8, &len.to_le_bytes())?;
+                            mem.write_bytes(Self::retptr_at(retptr, 4)?, &data_ptr.to_le_bytes())?;
+                            mem.write_bytes(Self::retptr_at(retptr, 8)?, &len.to_le_bytes())?;
                         } else {
                             // Write None discriminant (0)
                             mem.write_bytes(retptr, &0u32.to_le_bytes())?;
@@ -3800,7 +3823,7 @@ impl WasiDispatcher {
                         debug_str,
                     )?;
                     mem.write_bytes(retptr, &data_ptr.to_le_bytes())?;
-                    mem.write_bytes(retptr + 4, &len.to_le_bytes())?;
+                    mem.write_bytes(Self::retptr_at(retptr, 4)?, &len.to_le_bytes())?;
                     Ok(vec![])
                 } else {
                     Ok(vec![CoreValue::I32(0), CoreValue::I32(0)])
@@ -4393,6 +4416,64 @@ mod tests {
         assert!(
             res.is_err(),
             "must fail loud when cabi_realloc pre-allocation is missing"
+        );
+        Ok(())
+    }
+
+    /// SR-102: the allocation the engine made for one `get-directories` call is
+    /// consumed by it. The guest owns (and may free) that list, so a second call
+    /// without a fresh allocation fails loud instead of rewriting the same memory.
+    // rivet: verifies SR-102
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn get_directories_allocation_is_consumed_by_one_call() -> Result<()> {
+        use kiln_foundation::{HostImportHandler, traits::SliceMemory};
+        MemoryInitializer::ensure_initialized()?;
+        let mut dispatcher = WasiDispatcher::with_defaults()?;
+        dispatcher.add_preopen(".")?;
+        dispatcher.set_preopens_allocation(0x2000, vec![(0x3000, 1)]);
+        let mem = SliceMemory::with_size(0x10000);
+        let call = |d: &mut WasiDispatcher| {
+            d.dispatch_core(
+                "wasi:filesystem/preopens",
+                "get-directories",
+                &[kiln_foundation::values::Value::I32(0x1000)],
+                Some(&mem),
+            )
+        };
+        assert!(call(&mut dispatcher).is_ok());
+        assert!(
+            call(&mut dispatcher).is_err(),
+            "a second call must not reuse the first call's allocation"
+        );
+        Ok(())
+    }
+
+    /// SR-102: the allocation made for one `get-arguments` call is consumed by it.
+    // rivet: verifies SR-102
+    #[cfg(feature = "std")]
+    #[serial_test::serial]
+    #[test]
+    fn get_arguments_allocation_is_consumed_by_one_call() -> Result<()> {
+        use kiln_foundation::{HostImportHandler, traits::SliceMemory};
+        MemoryInitializer::ensure_initialized()?;
+        let mut dispatcher = WasiDispatcher::with_defaults()?;
+        dispatcher.set_args(vec!["prog".to_string()]);
+        dispatcher.set_args_allocation(0x2000, vec![(0x3000, 4)]);
+        let mem = SliceMemory::with_size(0x10000);
+        let call = |d: &mut WasiDispatcher| {
+            d.dispatch_core(
+                "wasi:cli/environment",
+                "get-arguments",
+                &[kiln_foundation::values::Value::I32(0x1000)],
+                Some(&mem),
+            )
+        };
+        assert!(call(&mut dispatcher).is_ok());
+        assert!(
+            call(&mut dispatcher).is_err(),
+            "a second call must not reuse the first call's allocation"
         );
         Ok(())
     }

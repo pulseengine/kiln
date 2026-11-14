@@ -670,6 +670,35 @@ pub fn get_wasi_function_signature(
             vec![],
         )),
 
+        // wasi:clocks/wall-clock.now() / resolution() -> datetime
+        // datetime = record { seconds: u64, nanoseconds: u32 }: returned via a retptr.
+        ("wasi:clocks/wall-clock", "now" | "resolution") => Some(WasiFunctionSignature::new(
+            vec![],
+            vec![WasiComponentType::Tuple(vec![
+                WasiComponentType::U64,
+                WasiComponentType::U32,
+            ])],
+        )),
+
+        // wasi:random/random.get-random-bytes(len: u64) -> list<u8>
+        // wasi:random/insecure.get-insecure-random-bytes(len: u64) -> list<u8>
+        ("wasi:random/random", "get-random-bytes")
+        | ("wasi:random/insecure", "get-insecure-random-bytes") => {
+            Some(WasiFunctionSignature::new(
+                vec![WasiComponentType::U64],
+                vec![WasiComponentType::ListU8],
+            ))
+        },
+
+        // wasi:random/insecure-seed.insecure-seed() -> tuple<u64, u64>
+        ("wasi:random/insecure-seed", "insecure-seed") => Some(WasiFunctionSignature::new(
+            vec![],
+            vec![WasiComponentType::Tuple(vec![
+                WasiComponentType::U64,
+                WasiComponentType::U64,
+            ])],
+        )),
+
         _ => None,
     }
 }
@@ -1252,6 +1281,63 @@ pub fn lower_results_to_retptr(
         lower_type_to_memory(ty, core_values, &mut val_idx, memory, offset)?;
     }
     Ok(())
+}
+
+/// The canonical-ABI `(size, alignment)` of a return area holding `result_types`
+/// (several results lay out like a tuple).
+///
+/// A guest passes a return-area pointer that must be aligned to the second
+/// value and leave `size` bytes inside linear memory; the host validates it
+/// before a handler writes anything.
+pub fn canonical_result_layout(result_types: &[WasiComponentType]) -> (u32, u32) {
+    fn align_to(offset: u32, align: u32) -> u32 {
+        offset.div_ceil(align) * align
+    }
+
+    /// `(size, align)` of a variant with a one-byte discriminant and the given payloads.
+    fn variant_layout(payloads: &[Option<&WasiComponentType>]) -> (u32, u32) {
+        let (mut max_size, mut max_align) = (0, 1);
+        for ty in payloads.iter().flatten() {
+            let (size, align) = layout(ty);
+            max_size = max_size.max(size);
+            max_align = max_align.max(align);
+        }
+        let payload_offset = align_to(1, max_align);
+        (align_to(payload_offset + max_size, max_align), max_align)
+    }
+
+    fn tuple_layout<'a>(types: impl IntoIterator<Item = &'a WasiComponentType>) -> (u32, u32) {
+        let (mut offset, mut max_align) = (0, 1);
+        for ty in types {
+            let (size, align) = layout(ty);
+            offset = align_to(offset, align) + size;
+            max_align = max_align.max(align);
+        }
+        (align_to(offset, max_align), max_align)
+    }
+
+    fn layout(ty: &WasiComponentType) -> (u32, u32) {
+        match ty {
+            WasiComponentType::Bool | WasiComponentType::U8 | WasiComponentType::S8 => (1, 1),
+            WasiComponentType::U16 | WasiComponentType::S16 => (2, 2),
+            WasiComponentType::U32
+            | WasiComponentType::S32
+            | WasiComponentType::F32
+            | WasiComponentType::Char
+            | WasiComponentType::Handle => (4, 4),
+            WasiComponentType::U64 | WasiComponentType::S64 | WasiComponentType::F64 => (8, 8),
+            WasiComponentType::String | WasiComponentType::ListU8 | WasiComponentType::List(_) => {
+                (8, 4)
+            },
+            WasiComponentType::Option(inner) => variant_layout(&[Some(inner)]),
+            WasiComponentType::Result(ok, err) => variant_layout(&[ok.as_deref(), err.as_deref()]),
+            WasiComponentType::Tuple(types) => tuple_layout(types),
+            WasiComponentType::DescriptorStat => (DESCRIPTOR_STAT_SIZE, 8),
+            WasiComponentType::Unit => (0, 1),
+        }
+    }
+
+    tuple_layout(result_types)
 }
 
 /// Lower a single typed value from core values to memory.
@@ -2695,5 +2781,47 @@ mod sr72_lowering_tests {
         // poll returns `list<u32>`: via a retptr, which the dispatcher fills.
         let poll = get_wasi_function_signature("wasi:io/poll", "poll").unwrap();
         assert!(poll.result_needs_retptr());
+    }
+
+    // rivet: verifies SR-102
+    #[test]
+    fn return_areas_have_their_canonical_size_and_alignment() {
+        let layout = |interface: &str, function: &str| {
+            let sig = get_wasi_function_signature(interface, function)
+                .unwrap_or_else(|| panic!("{function} has a signature"));
+            assert!(sig.result_needs_retptr(), "{function} returns via a retptr");
+            canonical_result_layout(&sig.results)
+        };
+        // datetime { u64, u32 }
+        assert_eq!(layout("wasi:clocks/wall-clock@0.2.0", "now"), (16, 8));
+        assert_eq!(
+            layout("wasi:clocks/wall-clock@0.2.0", "resolution"),
+            (16, 8)
+        );
+        // list<u8>, list<string>, option<string>, string
+        assert_eq!(
+            layout("wasi:random/random@0.2.0", "get-random-bytes"),
+            (8, 4)
+        );
+        assert_eq!(
+            layout("wasi:cli/environment@0.2.0", "get-arguments"),
+            (8, 4)
+        );
+        assert_eq!(layout("wasi:cli/environment@0.2.0", "initial-cwd"), (12, 4));
+        assert_eq!(
+            layout("wasi:io/error@0.2.0", "[method]error.to-debug-string"),
+            (8, 4)
+        );
+        // result<_, stream-error>, result<u64, stream-error>
+        let streams = "wasi:io/streams@0.2.0";
+        assert_eq!(layout(streams, "[method]output-stream.write"), (12, 4));
+        assert_eq!(
+            layout(streams, "[method]output-stream.check-write"),
+            (16, 8)
+        );
+        assert_eq!(layout("wasi:io/poll@0.2.0", "poll"), (8, 4));
+        // result<descriptor-stat, error-code>, result<descriptor-type, error-code>
+        assert_eq!(layout(FS, "[method]descriptor.stat"), (104, 8));
+        assert_eq!(layout(FS, "[method]descriptor.get-type"), (2, 1));
     }
 }

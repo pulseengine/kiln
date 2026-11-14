@@ -305,42 +305,6 @@ impl ComponentInstance {
             engine.set_host_handler(handler);
         }
     }
-
-    /// Pre-allocate memory for WASI arguments using cabi_realloc
-    ///
-    /// This must be called after setting the host handler but before calling
-    /// entry points that use `get-arguments` or `get-environment`. The canonical
-    /// ABI requires pre-allocated memory for returning list types.
-    ///
-    /// # Returns
-    /// Ok(()) if pre-allocation succeeded or no engine is available,
-    /// Err if cabi_realloc fails
-    #[cfg(all(feature = "std", feature = "kiln-execution", feature = "wasi"))]
-    pub fn pre_allocate_wasi_args(&mut self) -> kiln_error::Result<()> {
-        if let (Some(engine), Some(handle)) = (&mut self.runtime_engine, self.main_instance_handle)
-        {
-            engine.pre_allocate_wasi_args(handle)
-        } else {
-            // No engine or handle - nothing to pre-allocate
-            Ok(())
-        }
-    }
-
-    /// Pre-allocate memory for WASI filesystem preopens using cabi_realloc.
-    ///
-    /// Must be called after setting the host handler (so the preopens are registered)
-    /// but before calling entry points that use `get-directories`. Mirrors
-    /// [`Self::pre_allocate_wasi_args`]; the canonical ABI requires guest-owned memory for
-    /// returning the `list<tuple<descriptor,string>>` from get-directories.
-    #[cfg(all(feature = "std", feature = "kiln-execution", feature = "wasi"))]
-    pub fn pre_allocate_wasi_preopens(&mut self) -> kiln_error::Result<()> {
-        if let (Some(engine), Some(handle)) = (&mut self.runtime_engine, self.main_instance_handle)
-        {
-            engine.pre_allocate_wasi_preopens(handle)
-        } else {
-            Ok(())
-        }
-    }
 }
 
 /// State of a component instance

@@ -658,42 +658,6 @@ impl CapabilityAwareEngine {
         Ok(())
     }
 
-    /// Pre-allocate memory for WASI arguments using cabi_realloc
-    ///
-    /// This should be called before executing a component to allocate memory
-    /// for WASI argument strings. The allocated pointers will be stored in the
-    /// WASI dispatcher and used when get-arguments is called.
-    ///
-    /// # Arguments
-    /// * `instance_handle` - The instance handle to allocate memory in
-    ///
-    /// # Returns
-    /// Ok(()) if successful or not needed, Err if allocation fails
-    #[cfg(feature = "wasi")]
-    pub fn pre_allocate_wasi_args(&mut self, instance_handle: InstanceHandle) -> Result<()> {
-        // Get the instance index from the handle
-        let instance_idx = self
-            .handle_to_idx
-            .get(&instance_handle)
-            .ok_or_else(|| Error::resource_not_found("Instance not found"))?;
-
-        // Call the inner engine's pre-allocation
-        self.inner.pre_allocate_wasi_args(*instance_idx)
-    }
-
-    /// Pre-allocate cabi_realloc'd memory backing `get-directories` (filesystem preopens).
-    ///
-    /// Mirrors [`Self::pre_allocate_wasi_args`] for `wasi:filesystem/preopens::get-directories`.
-    #[cfg(feature = "wasi")]
-    pub fn pre_allocate_wasi_preopens(&mut self, instance_handle: InstanceHandle) -> Result<()> {
-        let instance_idx = self
-            .handle_to_idx
-            .get(&instance_handle)
-            .ok_or_else(|| Error::resource_not_found("Instance not found"))?;
-
-        self.inner.pre_allocate_wasi_preopens(*instance_idx)
-    }
-
     /// Register a lowered function from a canon.lower operation
     ///
     /// When a module calls a function at this (instance_id, func_idx), the engine
