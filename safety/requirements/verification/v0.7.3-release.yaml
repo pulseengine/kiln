@@ -10,6 +10,8 @@ artifacts:
     links:
       - type: verifies
         target: SR-85
+      - type: verifies
+        target: AD-SUMS-001
     provenance:
       created-by: ai
       model: claude-opus-5-5

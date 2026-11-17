@@ -3,7 +3,7 @@ artifacts:
   - id: AD-NOSTUB-001
     type: design-decision
     title: "No fixed-address host scratch area in guest memory: the WASI stub table at 0x100 is removed, and host results go only to guest-allocated buffers or the guest's return area"
-    status: approved
+    status: verified
     release: v0.8.0
     description: "For SR-105. initialize_wasi_stubs, the WasiStubMemory struct and the engine's wasi_stubs map are deleted. Nothing read the map: empty lists, None options and handles are returned through the host_call path (SR-102), which writes into the return area the guest passes or into a cabi_realloc buffer the guest allocates."
     tags: [runtime, wasi, memory]

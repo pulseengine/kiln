@@ -1,0 +1,16 @@
+artifacts:
+
+  - id: SR-112
+    type: requirement
+    title: StaticVec's range indexing and mutable iterator keep pointer provenance and aliasing valid under Stacked Borrows
+    status: proposed
+    release: v0.9.0
+    description: "MEASURED 2026-11-14 on main b4e7096e by reading, with Miri reports on a replica harness: (1) Index<Range<usize>> for StaticVec (kiln-foundation/src/collections/static_vec.rs) builds the slice from self.data[range.start].as_ptr(), a pointer derived from one element, then reads range.end - range.start elements through it; it also panics on an empty range at start == N because data[N] is out of bounds. (2) StaticVecIterMut::next creates a fresh `&mut *self.vec` on every call, which under Stacked Borrows invalidates the &mut items it already returned. Miri reports both under Stacked Borrows and accepts them under Tree Borrows. Follow-up to SR-104. REQUIRED: the slice pointer comes from self.data.as_ptr().add(range.start), an empty range at any start <= len is accepted, and the mutable iterator derives element pointers once from data.as_mut_ptr(). Verified by: Miri (Stacked Borrows) on tests that hold several iter_mut items at once and index ranges including an empty range at the end of a full vector, failing before and clean after, plus a stable test for the empty-range panic."
+    tags: [foundation, collections, soundness]
+    links:
+      - type: refines
+        target: SR-104
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-14T23:00:00Z

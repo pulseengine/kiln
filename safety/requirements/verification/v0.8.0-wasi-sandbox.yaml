@@ -11,6 +11,8 @@ artifacts:
     links:
       - type: verifies
         target: SR-95
+      - type: verifies
+        target: AD-WASIFS-002
     provenance:
       created-by: ai
       model: claude-opus-5-5
@@ -37,12 +39,14 @@ artifacts:
     title: "SR-99: value-ABI WasiDispatcher::dispatch removed; core path green on main"
     status: verified
     release: v0.8.0
-    description: "Main push f84ba30c (PR #641, head 26826ad1); all 9 required checks passed on the PR; main runs all completed success (Rust CI 42410579836). Evidence: (1) grep '\\.dispatch(' over *.rs finds only Wasip2Host::dispatch (kiln-component/src/canonical_executor.rs:98), a different type; WasiDispatcher has no dispatch method. (2) Core Tests job 128517624253 logs ok for dispatcher::tests::sr72::unlink_file_at_{denies_symlink_escape,refuses_directory,removes_inside_and_denies_lexical_escape,removes_the_symlink_not_its_target}. (3) Supervisor local, head 26826ad1: cargo test -p kiln-wasi --features tracing,wasi-sockets --lib dispatcher 64/64 passed."
+    description: "Main push f84ba30c (PR #641, head 26826ad1); all 9 required checks passed on the PR; main runs all completed success (Rust CI 42410579836). Evidence: (1) grep '\\.dispatch(' over *.rs finds only Wasip2Host::dispatch (kiln-component/src/canonical_executor.rs:98), a different type; WasiDispatcher has no dispatch method. (2) Core Tests job 128517624253 logs ok for dispatcher::tests::sr72::unlink_file_at_{denies_symlink_escape,refuses_directory,removes_inside_and_denies_lexical_escape,removes_the_symlink_not_its_target}. (3) Supervisor local, head 26826ad1: cargo test -p kiln-wasi --features tracing,wasi-sockets --lib dispatcher 64/64 passed. (4) Added 2026-11-17 for AD-WASIFS-003: kiln-wasi dispatcher::call_import_tests::call_import_delegates_to_dispatch_core (HostImportHandler::call_import reaches dispatch_core, dispatcher.rs call_import) logs ok in main Core Tests job 132588858052 (Rust CI 43641171947, main d9f3e865)."
     fields:
       method: test
     links:
       - type: verifies
         target: SR-99
+      - type: verifies
+        target: AD-WASIFS-003
     provenance:
       created-by: ai
       timestamp: 2026-11-08T06:53:45Z
@@ -58,6 +62,8 @@ artifacts:
     links:
       - type: verifies
         target: SR-96
+      - type: verifies
+        target: AD-WASIFS-004
     provenance:
       created-by: ai
       model: claude-opus-5-5
@@ -74,6 +80,8 @@ artifacts:
     links:
       - type: verifies
         target: SR-94
+      - type: verifies
+        target: AD-WASIFS-005
     provenance:
       created-by: ai
       model: claude-opus-5-5
@@ -106,7 +114,27 @@ artifacts:
     links:
       - type: verifies
         target: SR-102
+      - type: verifies
+        target: AD-HOSTCALL-001
     provenance:
       created-by: ai
       model: claude-opus-5-5
       timestamp: 2026-11-14T03:30:00Z
+
+  - id: VER-SR105-001
+    type: verification
+    title: "SR-105: a data segment at guest address 0x100 survives instantiation on the WASI path; main CI green"
+    status: verified
+    release: v0.8.0
+    description: "Main push 0ba920d8 (PR #678, head bb4283cf); all 9 required checks passed on that head. Main CI on 0ba920d8: Rust CI run 43640759089, CodeQL, Security Audit and Analysis and Verification honesty gate completed success (the Pages deploy was cancelled by the next main push and does not test this). Core Tests job 132587591014 logs ok for kilnd/tests/instantiation_memory_tests.rs data_segment_at_0x100_survives_instantiation: a module with data KILNKILNKILNKILN at 256 that imports WASI writes those 16 bytes to stdout. Fail-before (agent run on origin/main): the 16 bytes read back as zeros. The change deletes initialize_wasi_stubs, WasiStubMemory and the engine's wasi_stubs map (114 lines removed, none added in engine.rs), which nothing read, per AD-NOSTUB-001. Supervisor re-run on bb4283cf: the test passes; agent run: kilnd 152 and kiln-runtime (--features wasi) 180 passed, 0 failed; WAST 65980/529 unchanged; hello_rust, calculator (8 + 8 = 16), datetime, C and C++ components unchanged."
+    fields:
+      method: test
+    links:
+      - type: verifies
+        target: SR-105
+      - type: verifies
+        target: AD-NOSTUB-001
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-17T19:00:00Z
