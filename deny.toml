@@ -42,6 +42,11 @@ ignore = [
     # wasm-tools -> wasm-mutate -> egg -> instant
     # TODO: Monitor wasm-tools updates for fix or consider alternative tools
     "RUSTSEC-2024-0384",
+    # RUSTSEC-2026-0543: chrono is unmaintained. Only the build tooling uses it
+    # (cargo-kiln, kiln-build-core: timestamp formatting) plus a kiln-intercept
+    # dev-dependency; `cargo tree -p kilnd -e normal -i chrono` finds no match on
+    # any of the 7 release targets. Removal from the tooling is SR-115.
+    "RUSTSEC-2026-0543",
 ]
 # severity-threshold = "medium" # Removed with version = 2
 
