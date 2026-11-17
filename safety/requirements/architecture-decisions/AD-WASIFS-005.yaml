@@ -3,7 +3,7 @@ artifacts:
   - id: AD-WASIFS-005
     type: design-decision
     title: "stat and stat-at fill descriptor-stat from host metadata and lower it with the canonical-ABI layout; Windows reports link-count 1"
-    status: implemented
+    status: verified
     release: v0.8.0
     description: "Implements SR-94 (PR #655, main 06c21cf6). kiln-wasi dispatch_core builds stat and stat-at results in one helper, stat_core_values: link-count from MetadataExt::nlink, data-access from accessed(), data-modification from modified(), status-change from ctime/ctime_nsec (unix); a time the host cannot give, or one before the epoch, is option none. kiln-runtime declares the ok payload as WasiComponentType::DescriptorStat and lowers result<descriptor-stat, error-code> with the canonical layout: discriminant at +0, payload or error-code at +8, type +8, link-count +16, size +24, then three option<datetime> of 24 bytes at +32, +56 and +80 (104 bytes); missing or mistyped core values are errors. Before, the result went through a sequential 4-byte layout, so every field after the discriminant, and the error-code (+4), was at the wrong offset. Windows (maintainer decision 2026-11-12): stable std has no link-count API, so link-count is 1 and status-change is none; access and modification are real."
     tags: [kiln-wasi, wasi-filesystem, canonical-abi, stat]

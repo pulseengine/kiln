@@ -3,7 +3,7 @@ artifacts:
   - id: AD-MSRV-001
     type: design-decision
     title: "rust-version is declared per crate: 1.85.0 for the 16 crates that build on it, 1.89 for the five that pull 1.89-only dependencies"
-    status: implemented
+    status: verified
     release: v0.8.0
     description: "Implements SR-97 (PR #651, main 8ede5d9c). kiln-error, kiln-sync, kiln-math, kiln-panic, kiln-foundation, kiln-format, kiln-platform, kiln-logging, kiln-instructions, kiln-host, kiln-intercept, kiln-debug, kiln-async, kiln-builtins, kiln-decoder and kiln-wasi set rust-version.workspace = true (1.85.0 from [workspace.package]). kiln-runtime, kiln-component, kilnd, cargo-kiln and kiln-build-core set rust-version = \"1.89\" with a comment naming the dependency that needs it. The ci.yml job 'MSRV (rustc 1.85.0: kiln-platform and the SR-97 crates)' runs cargo +1.85.0 check -p <crate> --lib --locked for each of the 16, so a change that needs a newer compiler in one of them fails CI."
     tags: [msrv, build, toolchain, ci]

@@ -11,6 +11,8 @@ artifacts:
     links:
       - type: verifies
         target: SR-81
+      - type: verifies
+        target: AD-LINK-002
     provenance:
       created-by: ai
       model: claude-opus-5-5
@@ -27,6 +29,8 @@ artifacts:
     links:
       - type: verifies
         target: SR-83
+      - type: verifies
+        target: AD-P3STUB-001
     provenance:
       created-by: ai
       model: claude-opus-5-5
@@ -43,6 +47,8 @@ artifacts:
     links:
       - type: verifies
         target: SR-82
+      - type: verifies
+        target: AD-P3THREAD-001
     provenance:
       created-by: ai
       model: claude-opus-5-5

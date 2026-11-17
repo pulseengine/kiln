@@ -3,7 +3,7 @@ artifacts:
   - id: AD-WASIFS-004
     type: design-decision
     title: "A trailing slash or '/.' on a guest path that names a file returns not-directory; the slash is never passed to the host OS"
-    status: implemented
+    status: verified
     release: v0.8.0
     description: "Implements SR-96 (PR #650, main fda1935d). dispatch_core checks trailing_slash_on_file(guest_path, resolved) after the sandbox resolver in open-at, stat-at, unlink-file-at and rename-at (old and new side): when the guest path ends in '/' or '/.' and symlink_metadata of the resolved path is a regular file, the call returns error-code not-directory (24). create-directory-at keeps exist. The resolvers rebuild the path as real_parent.join(file_name), which drops the slash, so containment is unchanged; the check restores the POSIX meaning of the slash without handing it to the OS."
     tags: [kiln-wasi, wasi-filesystem, sandbox, cve-followup]

@@ -3,7 +3,7 @@ artifacts:
   - id: AD-WASIFS-003
     type: design-decision
     title: "kiln-wasi has one WASI dispatch path: core ABI via HostImportHandler -> dispatch_core"
-    status: implemented
+    status: verified
     release: v0.8.0
     description: "WasiDispatcher exposes WASI only through its HostImportHandler impl (call_import -> dispatch_core), which takes raw core values plus the instance's linear memory and maps host io::ErrorKind to the WIT wasi:filesystem error-code via fs_error_code. The value-ABI WasiDispatcher::dispatch was deleted in #641 (SR-99)."
     tags: [kiln-wasi, wasi-filesystem, dead-code]
