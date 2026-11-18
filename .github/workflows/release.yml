@@ -69,10 +69,10 @@ jobs:
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
+            os: ubuntu-24.04
             archive: tar.gz
           - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
+            os: ubuntu-24.04
             archive: tar.gz
             cross: true
           # Static musl builds (SR-68): run without glibc (Alpine, distroless,
@@ -80,11 +80,11 @@ jobs:
           # fully static, so both are executed on the x86_64 runner for the
           # --version check (aarch64 via qemu-user).
           - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
+            os: ubuntu-24.04
             archive: tar.gz
             zigbuild: true
           - target: aarch64-unknown-linux-musl
-            os: ubuntu-latest
+            os: ubuntu-24.04
             archive: tar.gz
             zigbuild: true
             runner_prefix: qemu-aarch64
@@ -266,7 +266,7 @@ jobs:
   create-release:
     name: Create GitHub Release
     needs: [build-binaries]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       # Keyless signing + provenance need an OIDC token; release-asset
       # upload needs contents: write; build provenance attestation
