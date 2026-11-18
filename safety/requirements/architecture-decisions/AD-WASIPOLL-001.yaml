@@ -3,7 +3,7 @@ artifacts:
   - id: AD-WASIPOLL-001
     type: design-decision
     title: "kiln-wasi keeps a pollable table: clock subscriptions carry a monotonic deadline; stream subscriptions are always ready"
-    status: implemented
+    status: verified
     release: v0.8.0
     description: "Implements SR-91 (PR #656, main 0715bf1f). dispatch_core maps wasi:clocks/monotonic-clock subscribe-duration and subscribe-instant and wasi:io/poll [method]pollable.ready. Each subscription is an entry in a pollable table: Deadline(Instant) for clock subscriptions (subscribe-instant converts against the same monotonic base that now() reports; a past instant is ready at once), AlwaysReady for output-stream and input-stream subscribe (kiln's stream reads and writes are synchronous). ready reports whether the deadline passed; block sleeps until it; poll returns the ready indices in input order, or sleeps to the earliest deadline first; an unknown or dropped handle, a double drop or an empty poll list is an error. poll's list<u32> result is written to guest memory allocated through cabi_realloc before the call (the read-buffer pre-allocation, now with 4-byte alignment); without that buffer poll returns an error. Before, poll wrote an empty list, block returned at once, and subscribe-duration/subscribe-instant were not mapped, so guests importing them were refused."
     tags: [kiln-wasi, wasi-io, wasi-clocks, poll]
