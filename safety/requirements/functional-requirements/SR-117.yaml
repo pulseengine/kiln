@@ -1,0 +1,16 @@
+artifacts:
+
+  - id: SR-117
+    type: requirement
+    title: The global safety monitor gives one caller at a time exclusive access and is released on every exit path
+    status: approved
+    release: v0.9.0
+    description: "kiln-foundation's with_safety_monitor guards the process-global SafetyMonitor with a lock. REQUIRED: the lock is acquired atomically (compare-exchange, Acquire) and released with a Release store on every path out of the closure, including a panic, so that concurrent callers never hold the monitor at the same time and a later caller can always take it. Maintainer decision 2026-11-18. Verified by: integration tests that reach the global monitor (unit tests use a per-thread one): 8 threads x 50,000 record_allocation calls are all counted, and the monitor can be taken again after a closure panics; both fail on the previous implementation."
+    tags: [kiln-foundation, safety-monitor, concurrency]
+    links:
+      - type: refines
+        target: REQ_RESOURCE_004
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-18T21:00:00Z

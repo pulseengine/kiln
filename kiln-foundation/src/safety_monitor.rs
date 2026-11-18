@@ -336,9 +336,21 @@ impl SafetyMonitor {
 #[cfg(not(test))]
 static mut SAFETY_MONITOR: SafetyMonitor = SafetyMonitor::new();
 
-/// Safety monitor lock for thread safety
+/// Lock guarding `SAFETY_MONITOR`: `true` while one caller holds it.
 #[cfg(not(test))]
-static mut MONITOR_LOCK: bool = false;
+static MONITOR_LOCK: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+
+/// Releases `MONITOR_LOCK` when dropped, so the lock is released on every
+/// path out of the critical section, including unwinding.
+#[cfg(not(test))]
+struct MonitorLockGuard;
+
+#[cfg(not(test))]
+impl Drop for MonitorLockGuard {
+    fn drop(&mut self) {
+        MONITOR_LOCK.store(false, core::sync::atomic::Ordering::Release);
+    }
+}
 
 #[cfg(test)]
 std::thread_local! {
@@ -360,25 +372,14 @@ where
     TEST_SAFETY_MONITOR.with(|monitor| f(&mut monitor.borrow_mut()))
 }
 
-/// Get global safety monitor
+/// Run `f` with exclusive access to the global safety monitor.
 ///
-/// # Safety
-/// This function provides thread-safe access to the global safety monitor.
-/// It uses a simple spinlock for mutual exclusion in no_std environments.
-///
-/// # Safety
-///
-/// This function uses unsafe code for lock-free synchronization which is
-/// necessary for runtime safety monitoring in no_std environments. The unsafe
-/// operations are:
-/// 1. Volatile reads/writes to implement a spinlock without std::sync
-///    primitives
-/// 2. Direct memory access to the global monitor instance
-///
-/// Safety is ensured by:
-/// - Using volatile operations to prevent compiler optimizations
-/// - Simple boolean flag prevents data races
-/// - Critical section is minimal to reduce contention
+/// Mutual exclusion is a spinlock on `MONITOR_LOCK`: a caller acquires it with
+/// a compare-exchange from `false` to `true` (`Acquire`) and releases it with a
+/// `Release` store, so the monitor writes of one holder are visible to the
+/// next. The release happens in a guard's `Drop`, so a panic inside `f`
+/// releases the lock too. `f` must not call `with_safety_monitor` itself: the
+/// lock is not re-entrant and a nested call spins forever.
 ///
 /// SW-REQ-ID: ASIL-A-MON-002 - Thread-safe monitor access
 #[cfg(not(test))]
@@ -387,29 +388,20 @@ pub fn with_safety_monitor<F, R>(f: F) -> R
 where
     F: FnOnce(&mut SafetyMonitor) -> R,
 {
-    // Simple spinlock for thread safety
-    // SAFETY: Volatile read ensures visibility across threads
-    while unsafe { core::ptr::read_volatile(&raw const MONITOR_LOCK) } {
+    use core::sync::atomic::Ordering;
+
+    while MONITOR_LOCK
+        .compare_exchange_weak(false, true, Ordering::Acquire, Ordering::Relaxed)
+        .is_err()
+    {
         core::hint::spin_loop();
     }
+    let _guard = MonitorLockGuard;
 
-    // SAFETY: This unsafe block implements a critical section for thread-safe
-    // access:
-    // 1. Volatile writes ensure lock acquisition is visible to other threads
-    // 2. The monitor is only accessed while lock is held
-    // 3. Lock is always released, even if function panics (no panic in no_std)
-    unsafe {
-        // Acquire lock
-        core::ptr::write_volatile(&raw mut MONITOR_LOCK, true);
-
-        // Execute function with monitor
-        let result = f(&mut *core::ptr::addr_of_mut!(SAFETY_MONITOR));
-
-        // Release lock
-        core::ptr::write_volatile(&raw mut MONITOR_LOCK, false);
-
-        result
-    }
+    // SAFETY: this thread set MONITOR_LOCK from false to true above and holds
+    // it until `_guard` drops, so no other reference to SAFETY_MONITOR exists
+    // while `f` runs.
+    f(unsafe { &mut *core::ptr::addr_of_mut!(SAFETY_MONITOR) })
 }
 
 /// Production assertion that records safety violations
