@@ -1,0 +1,18 @@
+artifacts:
+
+  - id: SR-116
+    type: requirement
+    title: A meld-fused wasm32-wasip2 command component that uses exit-with-code, descriptor write-via-stream, append-via-stream and get-flags runs on kiln as on wasmtime
+    status: approved
+    release: v0.9.0
+    description: "Issue #687 (dogfood, pulseengine.eu tools/north-star-check). MEASURED 2026-11-18: the component (sha256 d945a0e9...89f5) fused with meld 0.68.0 'meld fuse --memory multi' (core sha256 6b21b04a...242da) is refused by kiln main 189713f2 at link time, E21A0, 4 unresolved imports: wasi:cli/exit@0.2.12::exit-with-code, wasi:filesystem/types@0.2.12::[method]descriptor.write-via-stream, [method]descriptor.append-via-stream, [method]descriptor.get-flags. wasmtime 50.0.1 with -S cli-exit-with-code=y runs it, exit 0. REQUIRED: kiln-wasi serves these four functions with WASI 0.2 semantics: exit-with-code(code) ends the guest with that exit status, returned to the embedder rather than ending the host process (SR-111); write-via-stream(offset) and append-via-stream() return output streams that write to the descriptor at that offset or its end, within the preopen's permissions (SR-110); get-flags returns the descriptor-flags the descriptor was opened with. A guest calling exit-with-code with a code > 255 gets the same result as on wasmtime. Maintainer decision 2026-11-18: approved as the first v0.9.0 item. Verified by: (1) unit tests on dispatch_core for each function, including write and append offsets and the flags of a read-only and a read-write descriptor; (2) the fused north-star-check runs on kiln with the same stdout and exit status as wasmtime, both for a consistent data/north-star.toml (exit 0) and for one that fails the check (exit 2); (3) pulseengine.eu's CI job north-star-component passes with KILN_GAP removed."
+    tags: [wasi, wasip2, cli, filesystem, dogfood, issue-687]
+    links:
+      - type: refines
+        target: SR-110
+      - type: refines
+        target: SR-111
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-18T14:45:00Z
