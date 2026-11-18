@@ -34,7 +34,7 @@ jobs:
   # Quick verification for all PRs
   quick-verification:
     name: Quick Verification (ASIL-A)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -80,7 +80,7 @@ jobs:
   # Matrix verification for different ASIL levels and packages
   matrix-verification:
     name: Verify ${{ matrix.package }} @ ${{ matrix.asil }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     strategy:
       fail-fast: false
@@ -148,7 +148,7 @@ jobs:
   # Comprehensive verification for main branch
   comprehensive-verification:
     name: Comprehensive Verification (All Packages)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.ref == 'refs/heads/main' || github.event_name == 'schedule'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -237,7 +237,7 @@ jobs:
   # Summary job to ensure all verifications passed
   verification-summary:
     name: Verification Summary
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [quick-verification, matrix-verification]
     if: always()
     steps:
