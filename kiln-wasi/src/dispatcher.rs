@@ -2605,14 +2605,10 @@ impl WasiDispatcher {
                 Err(Error::guest_exit(status))
             },
 
-            // exit-with-code(status-code: u8)
+            // exit-with-code(status-code: u8): the Canonical ABI lifts a u8 from the
+            // core i32 by its low 8 bits (lift_flat_unsigned: i % 2**8).
             WasiFn::CliExitWithCode => match args.first() {
-                Some(CoreValue::I32(code)) => match u8::try_from(*code) {
-                    Ok(status) => Err(Error::guest_exit(status)),
-                    Err(_) => Err(Error::wasi_invalid_argument(
-                        "exit-with-code: status-code is not a u8",
-                    )),
-                },
+                Some(CoreValue::I32(code)) => Err(Error::guest_exit((*code & 0xff) as u8)),
                 _ => Err(Error::wasi_invalid_argument(
                     "exit-with-code: missing status-code",
                 )),
@@ -4323,16 +4319,14 @@ mod tests {
                 Some(code)
             );
         }
-        // u8 parameter: a wider value is not a status; it must not be truncated
-        // into one (the canonical ABI traps on it).
-        let mut d = WasiDispatcher::with_defaults()?;
-        let wide = d.dispatch_core(
-            "wasi:cli/exit@0.2.12",
-            "exit-with-code",
-            &[V::I32(256)],
-            None,
-        );
-        assert!(wide.is_err_and(|e| e.guest_exit_status().is_none()));
+        // u8 parameter: the Canonical ABI lifts it from the core i32 by its low
+        // 8 bits (`lift_flat_unsigned`: i % 2**8).
+        for (wide, status) in [(256, 0u8), (259, 3), (-1, 255)] {
+            assert_eq!(
+                exit_status_of("wasi:cli/exit@0.2.12", "exit-with-code", &[V::I32(wide)]),
+                Some(status)
+            );
+        }
         Ok(())
     }
 

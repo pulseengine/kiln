@@ -49,6 +49,20 @@ fn exit_with_code_0_ends_kiln_with_status_0() {
     assert_eq!(out.status.code(), Some(0));
 }
 
+/// The Canonical ABI lifts a `u8` from the core `i32` by its low 8 bits
+/// (`lift_flat_unsigned`: `i % 2**8`): 259 (0x103) is status 3.
+// rivet: verifies SR-116
+#[test]
+fn exit_with_code_259_lifts_to_status_3() {
+    let out = run("kiln_sr116_exit259.wasm", &exit_with_code(259));
+    assert_eq!(
+        out.status.code(),
+        Some(3),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
 // rivet: verifies SR-116
 #[test]
 fn proc_exit_ends_kiln_with_its_status() {
