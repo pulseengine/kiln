@@ -172,6 +172,35 @@ pub struct FileDescriptorEntry {
     pub file: Option<std::fs::File>,
 }
 
+/// An output-stream backed by a file descriptor (`write-via-stream`,
+/// `append-via-stream`).
+#[cfg(feature = "std")]
+#[derive(Debug)]
+struct FileOutStream {
+    /// Duplicate of the descriptor's `open-at` handle.
+    file: std::fs::File,
+    /// Next write offset; `None` appends: every write goes to the file's end.
+    position: Option<u64>,
+}
+
+#[cfg(feature = "std")]
+impl FileOutStream {
+    /// Write all of `data` at the stream's position and advance it.
+    fn write_all(&mut self, data: &[u8]) -> std::io::Result<()> {
+        use std::io::{Seek as _, SeekFrom, Write as _};
+        let target = match self.position {
+            Some(offset) => SeekFrom::Start(offset),
+            None => SeekFrom::End(0),
+        };
+        let start = self.file.seek(target)?;
+        self.file.write_all(data)?;
+        if self.position.is_some() {
+            self.position = Some(start + data.len() as u64);
+        }
+        Ok(())
+    }
+}
+
 /// A WASI function served by [`WasiDispatcher::dispatch_core`].
 ///
 /// [`SERVED_WASI_IMPORTS`] is the only place an import name is recognised:
@@ -199,6 +228,7 @@ enum WasiFn {
     GetTerminalStderr,
     TerminalResourceDrop,
     CliExit,
+    CliExitWithCode,
     PreviewOneProcExit,
     Poll,
     PollableReady,
@@ -259,6 +289,12 @@ enum WasiFn {
     DescriptorStatAt,
     #[cfg(feature = "wasi-filesystem")]
     DescriptorReadViaStream,
+    #[cfg(feature = "wasi-filesystem")]
+    DescriptorWriteViaStream,
+    #[cfg(feature = "wasi-filesystem")]
+    DescriptorAppendViaStream,
+    #[cfg(feature = "wasi-filesystem")]
+    DescriptorGetFlags,
     #[cfg(feature = "wasi-filesystem")]
     DescriptorReadDirectory,
     #[cfg(feature = "wasi-filesystem")]
@@ -364,6 +400,7 @@ const SERVED_WASI_IMPORTS: &[(&str, &str, WasiFn)] = &[
         WasiFn::TerminalResourceDrop,
     ),
     ("wasi:cli/exit", "exit", WasiFn::CliExit),
+    ("wasi:cli/exit", "exit-with-code", WasiFn::CliExitWithCode),
     (
         "wasi_snapshot_preview1",
         "proc_exit",
@@ -593,6 +630,24 @@ const SERVED_WASI_IMPORTS: &[(&str, &str, WasiFn)] = &[
     #[cfg(feature = "wasi-filesystem")]
     (
         "wasi:filesystem/types",
+        "[method]descriptor.write-via-stream",
+        WasiFn::DescriptorWriteViaStream,
+    ),
+    #[cfg(feature = "wasi-filesystem")]
+    (
+        "wasi:filesystem/types",
+        "[method]descriptor.append-via-stream",
+        WasiFn::DescriptorAppendViaStream,
+    ),
+    #[cfg(feature = "wasi-filesystem")]
+    (
+        "wasi:filesystem/types",
+        "[method]descriptor.get-flags",
+        WasiFn::DescriptorGetFlags,
+    ),
+    #[cfg(feature = "wasi-filesystem")]
+    (
+        "wasi:filesystem/types",
         "[method]descriptor.read-directory",
         WasiFn::DescriptorReadDirectory,
     ),
@@ -788,6 +843,11 @@ pub struct WasiDispatcher {
     /// mistaken for a file descriptor by `descriptor.read`/`write`.
     #[cfg(feature = "std")]
     stream_files: HashMap<u32, std::fs::File>,
+    /// The output-streams `write-via-stream`/`append-via-stream` created, keyed by
+    /// stream handle. Each writes to a duplicate of the descriptor's kept `open-at`
+    /// handle (never a re-opened path), at its own position or at the file's end.
+    #[cfg(feature = "std")]
+    file_out_streams: HashMap<u32, FileOutStream>,
     /// Open directory-entry-streams: a snapshot of (descriptor-type, name) entries plus a
     /// cursor, keyed by the stream handle from read-directory. read-directory-entry walks
     /// the cursor and returns none at the end. SR-39.
@@ -885,6 +945,8 @@ impl WasiDispatcher {
             stream_offsets: HashMap::new(),
             #[cfg(feature = "std")]
             stream_files: HashMap::new(),
+            #[cfg(feature = "std")]
+            file_out_streams: HashMap::new(),
             #[cfg(feature = "std")]
             dir_streams: HashMap::new(),
             #[cfg(feature = "std")]
@@ -1084,8 +1146,12 @@ impl WasiDispatcher {
                 let file_name = joined
                     .file_name()
                     .ok_or_else(|| Error::wasi_permission_denied("Path has no final component"))?;
-                let real_parent = std::fs::canonicalize(parent).map_err(|_| {
-                    Error::wasi_permission_denied("Parent directory cannot be resolved")
+                let real_parent = std::fs::canonicalize(parent).map_err(|e| {
+                    if e.kind() == std::io::ErrorKind::NotFound {
+                        Error::wasi_path_not_found("Parent directory does not exist")
+                    } else {
+                        Error::wasi_permission_denied("Parent directory cannot be resolved")
+                    }
                 })?;
                 if !real_parent.starts_with(&real_base) {
                     return Err(Error::wasi_permission_denied(
@@ -2183,7 +2249,13 @@ impl WasiDispatcher {
                 #[cfg(feature = "tracing")]
                 trace!(args = ?args, has_memory = memory.is_some(), "blocking-write-and-flush dispatch");
 
-                if !self.capabilities.io.stdout_access {
+                // A file output-stream was authorized when `write-via-stream` created it;
+                // the stdout capability gates only the standard streams.
+                let is_file_stream = matches!(
+                    args.first(),
+                    Some(CoreValue::I32(h)) if self.file_out_streams.contains_key(&(*h as u32))
+                );
+                if !is_file_stream && !self.capabilities.io.stdout_access {
                     return Err(Error::wasi_permission_denied("Stream write access denied"));
                 }
 
@@ -2250,6 +2322,27 @@ impl WasiDispatcher {
                 #[cfg(feature = "std")]
                 {
                     use std::io::{self, Write};
+
+                    // A file output-stream writes to its descriptor; a failed host
+                    // write is err(closed) below, like a failed stdout write.
+                    if let Some(out) = self.file_out_streams.get_mut(&handle) {
+                        let result = out.write_all(&data);
+                        if let Some(rp) = retptr {
+                            if result.is_ok() {
+                                mem.write_bytes(rp, &0u32.to_le_bytes())?;
+                            } else {
+                                // err(stream-error::closed): discriminant 1, case 1 at +4.
+                                let case_ptr = rp.checked_add(4).ok_or_else(|| {
+                                    Error::wasi_invalid_argument(
+                                        "blocking-write-and-flush: retptr overflows",
+                                    )
+                                })?;
+                                mem.write_bytes(rp, &1u32.to_le_bytes())?;
+                                mem.write_bytes(case_ptr, &1u32.to_le_bytes())?;
+                            }
+                        }
+                        return Ok(vec![]);
+                    }
 
                     // Look up the resource in the resource manager
                     let resource = self.resource_manager.get_resource(handle)?;
@@ -2389,26 +2482,32 @@ impl WasiDispatcher {
                     let mut data = vec![0u8; data_len as usize];
                     mem.read_bytes(data_ptr, &mut data)?;
 
-                    // Look up resource and write
-                    let resource = self.resource_manager.get_resource(handle)?;
                     // `write` accepts the whole list or fails: it never reports a
-                    // partial count.
-                    let written = match resource.resource_type() {
-                        crate::host_provider::resource_manager::WasiResourceType::OutputStream { name, .. } => {
-                            let name_str = name.as_str().unwrap_or("unknown");
-                            match name_str {
-                                "stdout" => {
-                                    use std::io::Write;
-                                    std::io::stdout().write_all(&data)
+                    // partial count. A file output-stream writes to its descriptor.
+                    let file_written =
+                        self.file_out_streams.get_mut(&handle).map(|out| out.write_all(&data));
+                    let written = if let Some(result) = file_written {
+                        result
+                    } else {
+                        // Look up resource and write
+                        let resource = self.resource_manager.get_resource(handle)?;
+                        match resource.resource_type() {
+                            crate::host_provider::resource_manager::WasiResourceType::OutputStream { name, .. } => {
+                                let name_str = name.as_str().unwrap_or("unknown");
+                                match name_str {
+                                    "stdout" => {
+                                        use std::io::Write;
+                                        std::io::stdout().write_all(&data)
+                                    }
+                                    "stderr" => {
+                                        use std::io::Write;
+                                        std::io::stderr().write_all(&data)
+                                    }
+                                    _ => Ok(()), // Treat as sink
                                 }
-                                "stderr" => {
-                                    use std::io::Write;
-                                    std::io::stderr().write_all(&data)
-                                }
-                                _ => Ok(()), // Treat as sink
                             }
+                            _ => return Err(Error::wasi_invalid_fd("Handle is not an output stream")),
                         }
-                        _ => return Err(Error::wasi_invalid_fd("Handle is not an output stream")),
                     };
 
                     // result<_, stream-error>: 12-byte return area. ok = discriminant 0
@@ -2484,6 +2583,7 @@ impl WasiDispatcher {
                     // (closing it) and its read position.
                     self.stream_files.remove(&handle);
                     self.stream_offsets.remove(&handle);
+                    self.file_out_streams.remove(&handle);
                     drop(self.resource_manager.remove_resource(handle));
                 }
                 Ok(vec![])
@@ -2493,47 +2593,35 @@ impl WasiDispatcher {
             WasiFn::ErrorDrop => Ok(vec![]),
 
             // CLI exit
+            // The guest ends itself. The status goes back to the embedder as a
+            // guest-exit error (`Error::guest_exit`); the dispatcher never ends
+            // the host process (SR-111, SR-116).
+            // exit(status: result): ok = 0 (status 0), err = anything else (status 1).
             WasiFn::CliExit => {
-                let status_ok = match args.first() {
-                    Some(CoreValue::I32(0)) => true,
-                    _ => false,
+                let status = match args.first() {
+                    Some(CoreValue::I32(0)) => 0,
+                    _ => 1,
                 };
-
-                #[cfg(feature = "std")]
-                {
-                    std::process::exit(i32::from(!status_ok));
-                }
-                #[cfg(not(feature = "std"))]
-                {
-                    if status_ok {
-                        Ok(vec![])
-                    } else {
-                        Err(Error::runtime_error("Component exited with failure"))
-                    }
-                }
+                Err(Error::guest_exit(status))
             },
 
-            // WASI Preview1 proc_exit - used by some components for exit
-            WasiFn::PreviewOneProcExit => {
-                let exit_code = match args.first() {
-                    Some(CoreValue::I32(code)) => *code,
-                    _ => 0,
-                };
+            // exit-with-code(status-code: u8)
+            WasiFn::CliExitWithCode => match args.first() {
+                Some(CoreValue::I32(code)) => match u8::try_from(*code) {
+                    Ok(status) => Err(Error::guest_exit(status)),
+                    Err(_) => Err(Error::wasi_invalid_argument(
+                        "exit-with-code: status-code is not a u8",
+                    )),
+                },
+                _ => Err(Error::wasi_invalid_argument(
+                    "exit-with-code: missing status-code",
+                )),
+            },
 
-                #[cfg(feature = "std")]
-                {
-                    std::process::exit(exit_code);
-                }
-                #[cfg(not(feature = "std"))]
-                {
-                    if exit_code == 0 {
-                        Ok(vec![])
-                    } else {
-                        Err(Error::runtime_error(
-                            "Component exited with non-zero status",
-                        ))
-                    }
-                }
+            // WASI Preview1 proc_exit(rval: u32): the host exit status is the low 8 bits.
+            WasiFn::PreviewOneProcExit => match args.first() {
+                Some(CoreValue::I32(code)) => Err(Error::guest_exit((*code & 0xff) as u8)),
+                _ => Err(Error::wasi_invalid_argument("proc_exit: missing rval")),
             },
 
             // WASI Neural Network (wasi-nn) functions
@@ -2910,7 +2998,12 @@ impl WasiDispatcher {
 
                 if let Some(base) = base_path {
                     // Sandbox gate: resolve → contain (symlink-safe) → allow-list.
-                    let full_path = self.resolve_and_authorize(&base, &path_str)?;
+                    let full_path = match self.resolve_and_authorize(&base, &path_str) {
+                        Err(e) if e.is_wasi_path_not_found() => {
+                            return Ok(fs_err(fs_error::NO_ENTRY));
+                        },
+                        resolved => resolved?,
+                    };
                     if Self::trailing_slash_on_file(&path_str, &full_path) {
                         return Ok(fs_err(fs_error::NOT_DIRECTORY));
                     }
@@ -3028,7 +3121,12 @@ impl WasiDispatcher {
 
                 if let Some(base_path) = base {
                     // Sandbox gate: resolve → contain (symlink-safe) → allow-list.
-                    let full_path = self.resolve_and_authorize(&base_path, &path_str)?;
+                    let full_path = match self.resolve_and_authorize(&base_path, &path_str) {
+                        Err(e) if e.is_wasi_path_not_found() => {
+                            return Ok(fs_err(fs_error::NO_ENTRY));
+                        },
+                        resolved => resolved?,
+                    };
                     if Self::trailing_slash_on_file(&path_str, &full_path) {
                         return Ok(fs_err(fs_error::NOT_DIRECTORY));
                     }
@@ -3075,6 +3173,70 @@ impl WasiDispatcher {
                     CoreValue::I32(0),
                     CoreValue::I32(stream_handle as i32),
                 ])
+            },
+
+            #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+            WasiFn::DescriptorWriteViaStream | WasiFn::DescriptorAppendViaStream => {
+                // write-via-stream(self, offset: filesize) -> result<output-stream, error-code>
+                // append-via-stream(self) -> result<output-stream, error-code>
+                // The stream writes to a duplicate of the kept open-at handle (never a
+                // re-opened path). Only a descriptor open-at opened for writing has one;
+                // anything else is bad-descriptor, as for `descriptor.write`.
+                let append = matches!(served, WasiFn::DescriptorAppendViaStream);
+                let fd = Self::core_u32(args, 0, "write-via-stream: missing descriptor")?;
+                let position = if append {
+                    None
+                } else {
+                    Some(Self::core_u64(args, 1, "write-via-stream: missing offset")?)
+                };
+                let file = match self.fd_table.get(&fd) {
+                    Some(FileDescriptorEntry {
+                        fd_type: FileDescriptorType::RegularFile(_),
+                        write: true,
+                        file: Some(f),
+                        ..
+                    }) => match f.try_clone() {
+                        Ok(c) => c,
+                        Err(e) => return Ok(fs_err(Self::fs_error_code(&e))),
+                    },
+                    _ => return Ok(fs_err(fs_error::BAD_DESCRIPTOR)),
+                };
+                let stream_name = format!("file-write:{}", fd);
+                let stream_handle = self.resource_manager.create_output_stream(&stream_name)?;
+                self.file_out_streams.insert(stream_handle, FileOutStream { file, position });
+                Ok(vec![
+                    CoreValue::I32(0),
+                    CoreValue::I32(stream_handle as i32),
+                ])
+            },
+
+            #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+            WasiFn::DescriptorGetFlags => {
+                // get-flags(self) -> result<descriptor-flags, error-code>
+                // descriptor-flags bits: read = 0, write = 1, file-integrity-sync = 2,
+                // data-integrity-sync = 3, requested-write-sync = 4, mutate-directory = 5.
+                // A file reports the access `open-at` granted; a preopen directory is
+                // readable, and mutable when the filesystem capability allows writing.
+                let fd = Self::core_u32(args, 0, "get-flags: missing descriptor")?;
+                const READ: i32 = 1 << 0;
+                const WRITE: i32 = 1 << 1;
+                const MUTATE_DIRECTORY: i32 = 1 << 5;
+                let flags = match self.fd_table.get(&fd) {
+                    Some(FileDescriptorEntry {
+                        fd_type: FileDescriptorType::RegularFile(_),
+                        read,
+                        write,
+                        ..
+                    }) => (i32::from(*read) * READ) | (i32::from(*write) * WRITE),
+                    Some(FileDescriptorEntry {
+                        fd_type: FileDescriptorType::PreopenDirectory(_),
+                        read,
+                        write,
+                        ..
+                    }) => (i32::from(*read) * READ) | (i32::from(*write) * MUTATE_DIRECTORY),
+                    _ => return Ok(fs_err(fs_error::BAD_DESCRIPTOR)),
+                };
+                Ok(vec![CoreValue::I32(0), CoreValue::I32(flags)])
             },
 
             #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
@@ -4133,6 +4295,68 @@ fn fs_err(code: i32) -> Vec<kiln_foundation::values::Value> {
 mod tests {
     use super::*;
     use kiln_foundation::memory_init::MemoryInitializer;
+
+    /// The guest's exit status as the embedder sees it: the error a dispatched
+    /// exit call returns. The dispatcher never ends the host process (SR-111).
+    fn exit_status_of(
+        interface: &str,
+        function: &str,
+        args: &[kiln_foundation::Value],
+    ) -> Option<u8> {
+        let mut d = WasiDispatcher::with_defaults().ok()?;
+        d.dispatch_core(interface, function, args, None).err()?.guest_exit_status()
+    }
+
+    // rivet: verifies SR-116
+    #[serial_test::serial]
+    #[test]
+    fn exit_with_code_returns_the_status_to_the_embedder() -> Result<()> {
+        MemoryInitializer::ensure_initialized()?;
+        use kiln_foundation::Value as V;
+        for code in [0u8, 3, 255] {
+            assert_eq!(
+                exit_status_of(
+                    "wasi:cli/exit@0.2.12",
+                    "exit-with-code",
+                    &[V::I32(i32::from(code))]
+                ),
+                Some(code)
+            );
+        }
+        // u8 parameter: a wider value is not a status; it must not be truncated
+        // into one (the canonical ABI traps on it).
+        let mut d = WasiDispatcher::with_defaults()?;
+        let wide = d.dispatch_core(
+            "wasi:cli/exit@0.2.12",
+            "exit-with-code",
+            &[V::I32(256)],
+            None,
+        );
+        assert!(wide.is_err_and(|e| e.guest_exit_status().is_none()));
+        Ok(())
+    }
+
+    // rivet: verifies SR-116
+    #[serial_test::serial]
+    #[test]
+    fn exit_and_proc_exit_return_their_status_to_the_embedder() -> Result<()> {
+        MemoryInitializer::ensure_initialized()?;
+        use kiln_foundation::Value as V;
+        // wasi:cli/exit.exit(result): ok = 0, err = 1.
+        assert_eq!(
+            exit_status_of("wasi:cli/exit@0.2.6", "exit", &[V::I32(0)]),
+            Some(0)
+        );
+        assert_eq!(
+            exit_status_of("wasi:cli/exit@0.2.6", "exit", &[V::I32(1)]),
+            Some(1)
+        );
+        assert_eq!(
+            exit_status_of("wasi_snapshot_preview1", "proc_exit", &[V::I32(7)]),
+            Some(7)
+        );
+        Ok(())
+    }
 
     /// AD-LINK-001: the link-time check and dispatch read one table. Every
     /// listed import resolves under any `@version`; an import the table does
@@ -5443,6 +5667,7 @@ mod tests {
         const FS: &str = "wasi:filesystem/types";
         // error-code enum indices from wasi:filesystem/types@0.2.x
         const BAD_DESCRIPTOR: i32 = 3;
+        const NO_ENTRY: i32 = 20;
         const IS_DIRECTORY: i32 = 14;
         const NOT_PERMITTED: i32 = 31;
 
@@ -6326,6 +6551,229 @@ mod tests {
             std::fs::remove_dir_all(&root).ok();
             assert_eq!(res.as_deref().ok(), Some(&[CV::I32(0), CV::I64(2)][..]));
             assert_eq!(content, b"aXYdef");
+            Ok(())
+        }
+
+        // ---------------- write-via-stream / append-via-stream / get-flags (SR-116) ----------------
+
+        const IO: &str = "wasi:io/streams";
+
+        /// `[method]output-stream.blocking-write-and-flush` of `data` on `stream`;
+        /// returns the result discriminant written to the return area.
+        fn stream_write(
+            d: &mut WasiDispatcher,
+            mem: &SliceMemory,
+            stream: u32,
+            data: &[u8],
+        ) -> u32 {
+            let [bp, bl] = put(mem, 0x3000, data);
+            d.dispatch_core(
+                IO,
+                "[method]output-stream.blocking-write-and-flush",
+                &[CV::I32(stream as i32), bp, bl, CV::I32(0x200)],
+                Some(mem),
+            )
+            .unwrap();
+            let mut disc = [0u8; 4];
+            mem.read_bytes(0x200, &mut disc).unwrap();
+            u32::from_le_bytes(disc)
+        }
+
+        fn out_stream_of(res: &Result<Vec<CV>>) -> u32 {
+            match res.as_deref() {
+                Ok([CV::I32(0), CV::I32(h)]) => *h as u32,
+                other => panic!("expected ok(output-stream), got {:?}", other),
+            }
+        }
+
+        // rivet: verifies SR-116
+        #[serial_test::serial]
+        #[test]
+        fn write_via_stream_writes_at_offset() -> Result<()> {
+            MemoryInitializer::ensure_initialized()?;
+            let (root, sandbox) = fixture("sr116_wvs");
+            std::fs::write(sandbox.join("f.txt"), b"abcdef").unwrap();
+            let mut d = WasiDispatcher::with_defaults()?;
+            let dir = d.add_preopen(sandbox.clone())?;
+            let mem = SliceMemory::with_size(0x10000);
+            let fd = open_file(&mut d, &mem, dir, b"f.txt")?;
+            let res = call(
+                &mut d,
+                &mem,
+                "[method]descriptor.write-via-stream",
+                &[CV::I32(fd as i32), CV::I64(2)],
+            );
+            let stream = out_stream_of(&res);
+            let first = stream_write(&mut d, &mem, stream, b"XY");
+            let second = stream_write(&mut d, &mem, stream, b"Z");
+            let content = std::fs::read(sandbox.join("f.txt")).unwrap();
+            std::fs::remove_dir_all(&root).ok();
+            assert_eq!((first, second), (0, 0));
+            assert_eq!(content, b"abXYZf", "the stream position advances");
+            Ok(())
+        }
+
+        // rivet: verifies SR-116
+        #[serial_test::serial]
+        #[test]
+        fn append_via_stream_writes_at_end() -> Result<()> {
+            MemoryInitializer::ensure_initialized()?;
+            let (root, sandbox) = fixture("sr116_avs");
+            std::fs::write(sandbox.join("f.txt"), b"abc").unwrap();
+            let mut d = WasiDispatcher::with_defaults()?;
+            let dir = d.add_preopen(sandbox.clone())?;
+            let mem = SliceMemory::with_size(0x10000);
+            let fd = open_file(&mut d, &mem, dir, b"f.txt")?;
+            let res = call(
+                &mut d,
+                &mem,
+                "[method]descriptor.append-via-stream",
+                &[CV::I32(fd as i32)],
+            );
+            let stream = out_stream_of(&res);
+            let first = stream_write(&mut d, &mem, stream, b"DE");
+            let second = stream_write(&mut d, &mem, stream, b"F");
+            let content = std::fs::read(sandbox.join("f.txt")).unwrap();
+            std::fs::remove_dir_all(&root).ok();
+            assert_eq!((first, second), (0, 0));
+            assert_eq!(content, b"abcDEF");
+            Ok(())
+        }
+
+        // rivet: verifies SR-116
+        #[serial_test::serial]
+        #[test]
+        fn write_and_append_via_stream_refuse_a_read_only_descriptor() -> Result<()> {
+            MemoryInitializer::ensure_initialized()?;
+            let (root, sandbox) = fixture("sr116_ro");
+            std::fs::write(sandbox.join("f.txt"), b"abc").unwrap();
+            let mut d = WasiDispatcher::with_defaults()?;
+            let dir = d.add_preopen(sandbox.clone())?;
+            let mem = SliceMemory::with_size(0x10000);
+            let ro = open_file_with(&mut d, &mem, dir, b"f.txt", DESC_READ)?;
+            let write = call(
+                &mut d,
+                &mem,
+                "[method]descriptor.write-via-stream",
+                &[CV::I32(ro as i32), CV::I64(0)],
+            );
+            let append = call(
+                &mut d,
+                &mem,
+                "[method]descriptor.append-via-stream",
+                &[CV::I32(ro as i32)],
+            );
+            let content = std::fs::read(sandbox.join("f.txt")).unwrap();
+            std::fs::remove_dir_all(&root).ok();
+            assert_eq!(err_code(&write), Some(BAD_DESCRIPTOR));
+            assert_eq!(err_code(&append), Some(BAD_DESCRIPTOR));
+            assert_eq!(content, b"abc");
+            Ok(())
+        }
+
+        // rivet: verifies SR-116
+        #[serial_test::serial]
+        #[test]
+        fn dropping_a_file_output_stream_releases_it() -> Result<()> {
+            MemoryInitializer::ensure_initialized()?;
+            let (root, sandbox) = fixture("sr116_drop");
+            std::fs::write(sandbox.join("f.txt"), b"abc").unwrap();
+            let mut d = WasiDispatcher::with_defaults()?;
+            let dir = d.add_preopen(sandbox.clone())?;
+            let mem = SliceMemory::with_size(0x10000);
+            let fd = open_file(&mut d, &mem, dir, b"f.txt")?;
+            let stream = out_stream_of(&call(
+                &mut d,
+                &mem,
+                "[method]descriptor.append-via-stream",
+                &[CV::I32(fd as i32)],
+            ));
+            d.dispatch_core(
+                IO,
+                "[resource-drop]output-stream",
+                &[CV::I32(stream as i32)],
+                Some(&mem),
+            )?;
+            let [bp, bl] = put(&mem, 0x3000, b"X");
+            let after = d.dispatch_core(
+                IO,
+                "[method]output-stream.blocking-write-and-flush",
+                &[CV::I32(stream as i32), bp, bl, CV::I32(0x200)],
+                Some(&mem),
+            );
+            let content = std::fs::read(sandbox.join("f.txt")).unwrap();
+            std::fs::remove_dir_all(&root).ok();
+            assert_eq!(content, b"abc", "a dropped stream writes nothing");
+            assert!(after.is_err(), "a dropped stream handle is not writable");
+            Ok(())
+        }
+
+        /// A path whose parent directory does not exist is `no-entry`, as on
+        /// wasmtime, not a trap: the fused north-star-check probes such paths.
+        // rivet: verifies SR-116
+        #[serial_test::serial]
+        #[test]
+        fn path_under_a_missing_directory_is_no_entry() -> Result<()> {
+            MemoryInitializer::ensure_initialized()?;
+            let (root, sandbox) = fixture("sr116_noent");
+            let mut d = WasiDispatcher::with_defaults()?;
+            let dir = d.add_preopen(sandbox.clone())?;
+            let mem = SliceMemory::with_size(0x10000);
+            let [p, l] = put(&mem, 0x1000, b"no/such/dir/file.txt");
+            let stat = call(
+                &mut d,
+                &mem,
+                "[method]descriptor.stat-at",
+                &[CV::I32(dir as i32), CV::I32(1), p, l, CV::I32(0x100)],
+            );
+            let open = open_with_flags(&mut d, &mem, dir, b"no/such/dir/file.txt", DESC_READ);
+            std::fs::remove_dir_all(&root).ok();
+            assert_eq!(err_code(&stat), Some(NO_ENTRY));
+            assert_eq!(err_code(&open), Some(NO_ENTRY));
+            Ok(())
+        }
+
+        // rivet: verifies SR-116
+        #[serial_test::serial]
+        #[test]
+        fn get_flags_reports_how_the_descriptor_was_opened() -> Result<()> {
+            MemoryInitializer::ensure_initialized()?;
+            let (root, sandbox) = fixture("sr116_flags");
+            std::fs::write(sandbox.join("f.txt"), b"abc").unwrap();
+            let mut d = WasiDispatcher::with_defaults()?;
+            let dir = d.add_preopen(sandbox.clone())?;
+            let mem = SliceMemory::with_size(0x10000);
+            let ro = open_file_with(&mut d, &mem, dir, b"f.txt", DESC_READ)?;
+            let rw = open_file_with(&mut d, &mem, dir, b"f.txt", DESC_READ | DESC_WRITE)?;
+            let ro_flags = call(
+                &mut d,
+                &mem,
+                "[method]descriptor.get-flags",
+                &[CV::I32(ro as i32), CV::I32(0x100)],
+            );
+            let rw_flags = call(
+                &mut d,
+                &mem,
+                "[method]descriptor.get-flags",
+                &[CV::I32(rw as i32), CV::I32(0x100)],
+            );
+            let unknown = call(
+                &mut d,
+                &mem,
+                "[method]descriptor.get-flags",
+                &[CV::I32(9999), CV::I32(0x100)],
+            );
+            std::fs::remove_dir_all(&root).ok();
+            // descriptor-flags: read = bit 0, write = bit 1.
+            assert_eq!(
+                ro_flags.as_deref().ok(),
+                Some(&[CV::I32(0), CV::I32(1)][..])
+            );
+            assert_eq!(
+                rw_flags.as_deref().ok(),
+                Some(&[CV::I32(0), CV::I32(3)][..])
+            );
+            assert_eq!(err_code(&unknown), Some(BAD_DESCRIPTOR));
             Ok(())
         }
 

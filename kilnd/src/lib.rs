@@ -2147,9 +2147,15 @@ pub fn run(bin_name: &str) -> Result<()> {
                 }
             }
         },
-        Err(e) => {
-            eprintln!("✗ Execution failed: {}", e);
-            process::exit(1);
+        // The guest ended itself (`wasi:cli/exit`, `proc_exit`): its status is the
+        // process status, and not a runtime failure. The runtime never ends the
+        // host process itself; this is the one place it happens.
+        Err(e) => match e.guest_exit_status() {
+            Some(status) => process::exit(i32::from(status)),
+            None => {
+                eprintln!("✗ Execution failed: {}", e);
+                process::exit(1);
+            },
         },
     }
 
