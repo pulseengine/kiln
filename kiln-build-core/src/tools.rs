@@ -536,77 +536,37 @@ impl ToolManager {
             },
         }
 
-        // Execute installation command
-        if install_cmd.starts_with("cargo install") {
-            self.execute_cargo_install(tool_name, install_cmd)
-        } else if install_cmd.starts_with("rustup") {
-            self.execute_rustup_command(install_cmd)
-        } else {
+        // Execute each step of the installation command, stopping at the first failure
+        let steps = install_steps(install_cmd);
+        if steps.is_empty() || !steps.iter().all(|argv| matches!(argv[0], "cargo" | "rustup")) {
             println!(
                 "    💡 Manual installation required: {}",
                 install_cmd.bright_yellow()
             );
-            Ok(false)
+            return Ok(false);
         }
+        for argv in &steps {
+            self.execute_install_step(tool_name, argv)?;
+        }
+        println!("    ✅ {} installed successfully", tool_name.bright_green());
+        Ok(true)
     }
 
-    /// Execute cargo install command
-    fn execute_cargo_install(&self, tool_name: &str, install_cmd: &str) -> BuildResult<bool> {
-        let args: Vec<&str> = install_cmd.split_whitespace().skip(1).collect(); // Skip "cargo"
-
-        let output = std::process::Command::new("cargo")
-            .args(&args)
-            .output()
-            .map_err(|e| BuildError::Tool(format!("Failed to execute cargo install: {}", e)))?;
+    /// Run one install step (a cargo or rustup argv) and fail if it exits non-zero
+    fn execute_install_step(&self, tool_name: &str, argv: &[&str]) -> BuildResult<()> {
+        let output =
+            std::process::Command::new(argv[0]).args(&argv[1..]).output().map_err(|e| {
+                BuildError::Tool(format!("Failed to execute `{}`: {}", argv.join(" "), e))
+            })?;
 
         if output.status.success() {
-            println!("    ✅ {} installed successfully", tool_name.bright_green());
-
-            // Run additional setup if needed (e.g., kani setup)
-            if tool_name == "kani" && install_cmd.contains("kani setup") {
-                println!("    🔧 Running kani setup...");
-                let setup_output = std::process::Command::new("cargo")
-                    .args(["kani", "setup"])
-                    .output()
-                    .map_err(|e| BuildError::Tool(format!("Failed to run kani setup: {}", e)))?;
-
-                if setup_output.status.success() {
-                    println!("    ✅ Kani setup completed");
-                } else {
-                    println!(
-                        "    ⚠️  Kani setup had issues: {}",
-                        String::from_utf8_lossy(&setup_output.stderr).bright_yellow()
-                    );
-                }
-            }
-
-            Ok(true)
+            Ok(())
         } else {
-            let error_msg = String::from_utf8_lossy(&output.stderr);
             Err(BuildError::Tool(format!(
-                "Failed to install {}: {}",
-                tool_name, error_msg
-            )))
-        }
-    }
-
-    /// Execute rustup command
-    fn execute_rustup_command(&self, install_cmd: &str) -> BuildResult<bool> {
-        let args: Vec<&str> = install_cmd.split_whitespace().skip(1).collect(); // Skip "rustup"
-
-        let output = std::process::Command::new("rustup")
-            .args(&args)
-            .output()
-            .map_err(|e| BuildError::Tool(format!("Failed to execute rustup: {}", e)))?;
-
-        if output.status.success() {
-            println!("    ✅ Rustup command executed successfully");
-            Ok(true)
-        } else {
-            let error_msg = String::from_utf8_lossy(&output.stderr);
-            Err(BuildError::Tool(format!(
-                "Failed to execute rustup command: {}",
-                error_msg
+                "Failed to install {} at `{}`: {}",
+                tool_name,
+                argv.join(" "),
+                String::from_utf8_lossy(&output.stderr)
             )))
         }
     }
@@ -906,9 +866,79 @@ pub fn is_cargo_fuzz_available() -> bool {
     manager.check_tool("cargo-fuzz").available
 }
 
+/// Split a configured install command into the argv of each `&&`-joined step.
+///
+/// Steps run without a shell, so `&&` separates steps and is never passed to a program.
+fn install_steps(install_cmd: &str) -> Vec<Vec<&str>> {
+    install_cmd
+        .split("&&")
+        .map(|step| step.split_whitespace().collect::<Vec<_>>())
+        .filter(|argv| !argv.is_empty())
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn install_steps_split_on_and_and_never_pass_it_as_an_argument() {
+        let steps = install_steps(
+            "cargo install --locked --version 0.63.0 kani-verifier && cargo kani setup",
+        );
+        assert_eq!(
+            steps,
+            vec![
+                vec![
+                    "cargo",
+                    "install",
+                    "--locked",
+                    "--version",
+                    "0.63.0",
+                    "kani-verifier"
+                ],
+                vec!["cargo", "kani", "setup"],
+            ]
+        );
+    }
+
+    #[test]
+    fn install_steps_keep_a_single_command_whole() {
+        assert_eq!(
+            install_steps("rustup component add clippy"),
+            vec![vec!["rustup", "component", "add", "clippy"]]
+        );
+    }
+
+    #[test]
+    fn every_configured_install_command_runs_without_a_shell() {
+        // Each step must be a cargo or rustup invocation with no shell operator left in it;
+        // otherwise the step is passed to cargo/rustup verbatim (kiln#695).
+        use crate::tool_versions::ToolVersionConfig;
+        let workspace_file =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../tool-versions.yaml");
+        let configs = [
+            ToolVersionConfig::create_fallback_config(),
+            ToolVersionConfig::load_from_file(&workspace_file).expect("tool-versions.yaml parses"),
+        ];
+        for config in &configs {
+            for name in config.get_managed_tools() {
+                let cmd = config.get_install_command(name).unwrap_or_default();
+                if !(cmd.starts_with("cargo") || cmd.starts_with("rustup")) {
+                    continue;
+                }
+                for step in install_steps(cmd) {
+                    assert!(matches!(step[0], "cargo" | "rustup"), "{name}: {step:?}");
+                    for arg in &step {
+                        assert!(
+                            !matches!(*arg, "&&" | "||" | ";" | "|"),
+                            "{name}: shell operator {arg} in {step:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn test_tool_manager_creation() {
