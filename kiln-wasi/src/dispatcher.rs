@@ -1146,19 +1146,38 @@ impl WasiDispatcher {
                 let file_name = joined
                     .file_name()
                     .ok_or_else(|| Error::wasi_permission_denied("Path has no final component"))?;
-                let real_parent = std::fs::canonicalize(parent).map_err(|e| {
-                    if e.kind() == std::io::ErrorKind::NotFound {
-                        Error::wasi_path_not_found("Parent directory does not exist")
-                    } else {
-                        Error::wasi_permission_denied("Parent directory cannot be resolved")
-                    }
-                })?;
-                if !real_parent.starts_with(&real_base) {
-                    return Err(Error::wasi_permission_denied(
-                        "Path escapes sandbox via symlink",
-                    ));
+                match std::fs::canonicalize(parent) {
+                    Ok(real_parent) => {
+                        if !real_parent.starts_with(&real_base) {
+                            return Err(Error::wasi_permission_denied(
+                                "Path escapes sandbox via symlink",
+                            ));
+                        }
+                        real_parent.join(file_name)
+                    },
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                        // The parent does not exist. `no-entry` is only reported
+                        // for a path that would be inside the preopen and allowed,
+                        // so the candidate (the canonical deepest existing ancestor
+                        // plus the missing components) goes through the same
+                        // containment and allow-list checks as any other path.
+                        let candidate = Self::canonical_candidate(&joined)?;
+                        if !candidate.starts_with(&real_base) {
+                            return Err(Error::wasi_permission_denied(
+                                "Path escapes sandbox via symlink",
+                            ));
+                        }
+                        self.check_allow_list(&candidate)?;
+                        return Err(Error::wasi_path_not_found(
+                            "Parent directory does not exist",
+                        ));
+                    },
+                    Err(_) => {
+                        return Err(Error::wasi_permission_denied(
+                            "Parent directory cannot be resolved",
+                        ));
+                    },
                 }
-                real_parent.join(file_name)
             },
         };
         if !resolved.starts_with(&real_base) {
@@ -1168,13 +1187,46 @@ impl WasiDispatcher {
         }
 
         // (3) Allow-list — only enforced when a non-empty allow-list is configured.
+        self.check_allow_list(&resolved)?;
+
+        Ok(resolved)
+    }
+
+    /// The allow-list check: only enforced when a non-empty allow-list is configured.
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    fn check_allow_list(&self, resolved: &std::path::Path) -> Result<()> {
         if self.capabilities.filesystem.has_allowed_paths()
             && !self.capabilities.filesystem.is_path_allowed(&resolved.to_string_lossy())
         {
             return Err(Error::wasi_permission_denied("Path not in allow-list"));
         }
+        Ok(())
+    }
 
-        Ok(resolved)
+    /// The canonical form of a path whose tail does not exist: its deepest
+    /// existing ancestor, canonicalized (symlinks followed), joined with the
+    /// remaining components.
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    fn canonical_candidate(joined: &std::path::Path) -> Result<std::path::PathBuf> {
+        for ancestor in joined.ancestors() {
+            match std::fs::canonicalize(ancestor) {
+                Ok(real) => {
+                    let rest = joined.strip_prefix(ancestor).map_err(|_| {
+                        Error::wasi_permission_denied("Parent directory cannot be resolved")
+                    })?;
+                    return Ok(real.join(rest));
+                },
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {},
+                Err(_) => {
+                    return Err(Error::wasi_permission_denied(
+                        "Parent directory cannot be resolved",
+                    ));
+                },
+            }
+        }
+        Err(Error::wasi_permission_denied(
+            "Parent directory cannot be resolved",
+        ))
     }
 
     /// Sandbox gate for calls that act on the directory entry itself (unlink,
@@ -6699,6 +6751,84 @@ mod tests {
             std::fs::remove_dir_all(&root).ok();
             assert_eq!(content, b"abc", "a dropped stream writes nothing");
             assert!(after.is_err(), "a dropped stream handle is not writable");
+            Ok(())
+        }
+
+        fn stat_at_path(
+            d: &mut WasiDispatcher,
+            mem: &SliceMemory,
+            dir: u32,
+            path: &[u8],
+        ) -> Result<Vec<CV>> {
+            let [p, l] = put(mem, 0x1000, path);
+            call(
+                d,
+                mem,
+                "[method]descriptor.stat-at",
+                &[CV::I32(dir as i32), CV::I32(1), p, l, CV::I32(0x100)],
+            )
+        }
+
+        /// A missing parent is `no-entry` only while the path stays inside the
+        /// preopen: through a symlink that leaves it, the answer is the same
+        /// whether or not the outside directory exists.
+        // rivet: verifies SR-116
+        #[cfg(unix)]
+        #[serial_test::serial]
+        #[test]
+        fn missing_parent_through_an_outward_symlink_gives_the_same_answer() -> Result<()> {
+            MemoryInitializer::ensure_initialized()?;
+            let (root, sandbox) = fixture("sr116_outward");
+            let outside = root.join("outside");
+            std::fs::create_dir_all(&outside).unwrap();
+            std::os::unix::fs::symlink(&outside, sandbox.join("link")).unwrap();
+            let mut d = WasiDispatcher::with_defaults()?;
+            let dir = d.add_preopen(sandbox.clone())?;
+            let mem = SliceMemory::with_size(0x10000);
+            let absent = stat_at_path(&mut d, &mem, dir, b"link/missing/x");
+            std::fs::create_dir_all(outside.join("missing")).unwrap();
+            let present = stat_at_path(&mut d, &mem, dir, b"link/missing/x");
+            let open_absent = open_with_flags(&mut d, &mem, dir, b"link/gone/x", DESC_READ);
+            std::fs::remove_dir_all(&root).ok();
+            assert!(absent.is_err(), "outside missing: {:?}", absent);
+            assert!(present.is_err(), "outside present: {:?}", present);
+            assert!(open_absent.is_err(), "open-at: {:?}", open_absent);
+            Ok(())
+        }
+
+        // rivet: verifies SR-116
+        #[serial_test::serial]
+        #[test]
+        fn missing_parent_inside_the_preopen_is_no_entry() -> Result<()> {
+            MemoryInitializer::ensure_initialized()?;
+            let (root, sandbox) = fixture("sr116_inside");
+            std::fs::create_dir_all(sandbox.join("realdir")).unwrap();
+            let mut d = WasiDispatcher::with_defaults()?;
+            let dir = d.add_preopen(sandbox.clone())?;
+            let mem = SliceMemory::with_size(0x10000);
+            let res = stat_at_path(&mut d, &mem, dir, b"realdir/missing/x");
+            std::fs::remove_dir_all(&root).ok();
+            assert_eq!(err_code(&res), Some(NO_ENTRY));
+            Ok(())
+        }
+
+        // rivet: verifies SR-116
+        #[serial_test::serial]
+        #[test]
+        fn missing_parent_outside_the_allow_list_is_denied() -> Result<()> {
+            MemoryInitializer::ensure_initialized()?;
+            let (root, sandbox) = fixture("sr116_allowlist");
+            std::fs::create_dir_all(sandbox.join("realdir")).unwrap();
+            std::fs::create_dir_all(sandbox.join("allowed")).unwrap();
+            let mut d = WasiDispatcher::with_defaults()?;
+            let dir = d.add_preopen(sandbox.clone())?;
+            d.add_allowed_path(sandbox.join("allowed"))?;
+            let mem = SliceMemory::with_size(0x10000);
+            let excluded = stat_at_path(&mut d, &mem, dir, b"realdir/missing/x");
+            let allowed = stat_at_path(&mut d, &mem, dir, b"allowed/missing/x");
+            std::fs::remove_dir_all(&root).ok();
+            assert!(excluded.is_err(), "excluded: {:?}", excluded);
+            assert_eq!(err_code(&allowed), Some(NO_ENTRY));
             Ok(())
         }
 
