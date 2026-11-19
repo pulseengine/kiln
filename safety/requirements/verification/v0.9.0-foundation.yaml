@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: VER-SR117-001
+    type: verification
+    title: "SR-117: the global safety monitor counts every concurrent update and is released after a panic (main CI green)"
+    status: verified
+    release: v0.9.0
+    description: "Main push 62e3102f (PR #689, head 026ee4e9); all 9 required checks passed on that head. Rust CI run 44426380459 completed success; Core Tests job 135232184899 logs ok for kiln-foundation/tests/safety_monitor_shared.rs concurrent_updates_through_the_global_monitor_are_not_lost (8 threads x 50,000 record_allocation through with_safety_monitor; total_allocations rises by exactly 400,000) and kiln-foundation/tests/safety_monitor_unwind.rs a_panic_inside_the_monitor_releases_it (after a closure panics inside with_safety_monitor, another thread takes the monitor within 10 s). Fail-before (supervisor, local, on main before #689): the first test counted 129,179 of 400,000; the second hit its 10 s timeout. Supervisor re-run on the PR head: both pass in 4 consecutive runs; cargo test -p kiln-foundation --features std --lib --tests passes. Scope: a std-thread stress test, not an exhaustive interleaving check (no loom or shuttle model)."
+    fields:
+      method: test
+    links:
+      - type: verifies
+        target: SR-117
+      - type: verifies
+        target: AD-MONLOCK-001
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-19T19:30:00Z
