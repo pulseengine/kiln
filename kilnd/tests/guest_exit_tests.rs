@@ -75,3 +75,45 @@ fn proc_exit_ends_kiln_with_its_status() {
     let out = run("kiln_sr116_procexit7.wasm", wat);
     assert_eq!(out.status.code(), Some(7));
 }
+
+fn run_returning(result: i32) -> String {
+    format!(
+        r#"(module
+    (memory (export "memory") 1)
+    (func (export "wasi:cli/run@0.2.0#run") (result i32)
+      i32.const {result}))"#
+    )
+}
+
+/// `wasi:cli/run.run` returns `result<_, _>`, lowered to one i32 (0 = ok,
+/// 1 = err). A Rust `main` that returns a failing `ExitCode` ends this way, not
+/// through `wasi:cli/exit`; wasmtime exits 1 (sieve, kiln#687).
+// rivet: verifies SR-116
+#[test]
+fn run_returning_err_ends_kiln_with_status_1() {
+    let out = run("kiln_sr116_run_err.wasm", &run_returning(1));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "stderr: {stderr}");
+    assert!(
+        !stderr.contains("Execution failed"),
+        "a guest-reported failure is not a runtime failure\nstderr: {stderr}"
+    );
+}
+
+// rivet: verifies SR-116
+#[test]
+fn run_returning_ok_ends_kiln_with_status_0() {
+    let out = run("kiln_sr116_run_ok.wasm", &run_returning(0));
+    assert_eq!(out.status.code(), Some(0));
+}
+
+/// Any other discriminant is not a valid `result<_, _>`; kiln refuses it
+/// instead of reading it as success.
+// rivet: verifies SR-116
+#[test]
+fn run_returning_an_invalid_discriminant_is_a_runtime_error() {
+    let out = run("kiln_sr116_run_bad.wasm", &run_returning(7));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "stderr: {stderr}");
+    assert!(stderr.contains("Execution failed"), "stderr: {stderr}");
+}

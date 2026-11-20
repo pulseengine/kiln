@@ -59,6 +59,23 @@ pub mod witness_harness;
 #[cfg(feature = "component-model")]
 pub mod component_host;
 
+/// Map the core results of `wasi:cli/run.run` to the guest's outcome.
+///
+/// `run` returns `result<_, _>`, which the Canonical ABI lowers to a single
+/// i32 discriminant. `0` (ok) is success; `1` (err) ends the guest with exit
+/// status 1, as wasmtime does. Anything else is not a valid `result<_, _>` and
+/// is refused rather than read as success.
+fn run_result_status(results: &[kiln_foundation::Value]) -> Result<()> {
+    use kiln_foundation::Value;
+    match results {
+        [Value::I32(0)] => Ok(()),
+        [Value::I32(1)] => Err(Error::guest_exit(1)),
+        _ => Err(Error::runtime_error(
+            "wasi:cli/run returned a value that is not a result<_, _> discriminant (0 or 1)",
+        )),
+    }
+}
+
 /// Render a core [`kiln_foundation::Value`] for user-facing result output (SR-59).
 ///
 /// `{:?}` prints floats as their raw bit pattern
@@ -1362,8 +1379,13 @@ impl KilndEngine {
                         "Executing Meld-fused P3 module entry point",
                     );
                     // The command entry's result is not program output; it is
-                    // not printed (SR-74).
-                    engine.execute(instance, entry, &[])?;
+                    // not printed (SR-74). It is the guest's exit status:
+                    // `run` returns `result<_, _>`, lowered to one i32
+                    // (0 = ok, 1 = err). A Rust `main` returning a failing
+                    // `ExitCode` ends here, not through `wasi:cli/exit`
+                    // (SR-116, kiln#687).
+                    let results = engine.execute(instance, entry, &[])?;
+                    run_result_status(&results)?;
                 } else {
                     // SR-58 / #480: a module with no command entry is very often
                     // a LIBRARY/reactor component (e.g. scry exports
