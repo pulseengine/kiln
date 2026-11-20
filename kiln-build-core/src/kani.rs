@@ -275,6 +275,13 @@ impl KaniVerifier {
             println!("  {} {} verification passed", "✓".bright_green(), package);
         } else {
             println!("  {} {} verification failed", "✗".bright_red(), package);
+            // The report directory is not kept by CI, so print where Kani
+            // stated the cause (compile errors, failed checks) to the console.
+            println!(
+                "--- last {} lines of cargo kani output ---\n{}",
+                FAILURE_EXCERPT_LINES,
+                failure_excerpt(&output_string, FAILURE_EXCERPT_LINES)
+            );
         }
 
         Ok(PackageVerificationResult {
@@ -550,4 +557,32 @@ pub fn get_kani_version() -> BuildResult<String> {
         .next()
         .unwrap_or("Unknown version")
         .to_string())
+}
+
+/// Lines of `cargo kani` output printed when a package fails.
+const FAILURE_EXCERPT_LINES: usize = 60;
+
+/// The last `max_lines` lines of `output`, where Kani reports why it failed.
+fn failure_excerpt(output: &str, max_lines: usize) -> String {
+    let lines: Vec<&str> = output.lines().collect();
+    lines[lines.len().saturating_sub(max_lines)..].join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn failure_excerpt_keeps_the_last_lines_where_kani_reports_the_cause() {
+        let output = "line 1\nline 2\nline 3\nerror[E0433]: failed to resolve\nerror: could not compile `kiln-sync`\n";
+        assert_eq!(
+            failure_excerpt(output, 2),
+            "error[E0433]: failed to resolve\nerror: could not compile `kiln-sync`"
+        );
+    }
+
+    #[test]
+    fn failure_excerpt_returns_everything_when_output_is_short() {
+        assert_eq!(failure_excerpt("only line", 40), "only line");
+    }
 }
