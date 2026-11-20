@@ -487,11 +487,33 @@ pub fn get_wasi_function_signature(
                 )],
             ))
         },
-        ("wasi:filesystem/types", "[method]descriptor.read-via-stream") => {
+        ("wasi:filesystem/types", "[method]descriptor.read-via-stream")
+        | ("wasi:filesystem/types", "[method]descriptor.write-via-stream") => {
             Some(WasiFunctionSignature::new(
                 vec![WasiComponentType::Handle, WasiComponentType::U64],
                 vec![WasiComponentType::Result(
                     Some(Box::new(WasiComponentType::Handle)),
+                    Some(Box::new(WasiComponentType::U8)),
+                )],
+            ))
+        },
+        // append-via-stream(self) -> result<own<output-stream>, error-code>
+        ("wasi:filesystem/types", "[method]descriptor.append-via-stream") => {
+            Some(WasiFunctionSignature::new(
+                vec![WasiComponentType::Handle],
+                vec![WasiComponentType::Result(
+                    Some(Box::new(WasiComponentType::Handle)),
+                    Some(Box::new(WasiComponentType::U8)),
+                )],
+            ))
+        },
+        // get-flags(self) -> result<descriptor-flags, error-code>; descriptor-flags
+        // has six flags, so it is one u8.
+        ("wasi:filesystem/types", "[method]descriptor.get-flags") => {
+            Some(WasiFunctionSignature::new(
+                vec![WasiComponentType::Handle],
+                vec![WasiComponentType::Result(
+                    Some(Box::new(WasiComponentType::U8)),
                     Some(Box::new(WasiComponentType::U8)),
                 )],
             ))
@@ -2824,5 +2846,24 @@ mod sr72_lowering_tests {
         // result<descriptor-stat, error-code>, result<descriptor-type, error-code>
         assert_eq!(layout(FS, "[method]descriptor.stat"), (104, 8));
         assert_eq!(layout(FS, "[method]descriptor.get-type"), (2, 1));
+    }
+
+    /// The descriptor calls a Rust std file write goes through return their
+    /// result through a retptr; without a signature the engine cannot lower the
+    /// dispatcher's core values there and the call fails (kiln#687).
+    // rivet: verifies SR-116
+    #[test]
+    fn descriptor_write_streams_and_get_flags_return_through_a_retptr() {
+        let layout = |function: &str| {
+            let sig = get_wasi_function_signature(FS, function)
+                .unwrap_or_else(|| panic!("{function} has a signature"));
+            assert!(sig.result_needs_retptr(), "{function} returns via a retptr");
+            canonical_result_layout(&sig.results)
+        };
+        // result<own<output-stream>, error-code>
+        assert_eq!(layout("[method]descriptor.write-via-stream"), (8, 4));
+        assert_eq!(layout("[method]descriptor.append-via-stream"), (8, 4));
+        // result<descriptor-flags, error-code>: both u8-sized
+        assert_eq!(layout("[method]descriptor.get-flags"), (2, 1));
     }
 }
