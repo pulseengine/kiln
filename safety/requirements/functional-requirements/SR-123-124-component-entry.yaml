@@ -1,0 +1,37 @@
+artifacts:
+
+  - id: SR-123
+    type: requirement
+    title: A component that imports an interface holding only type definitions instantiates without a provider for that interface
+    status: proposed
+    description: "From #697 (relay's falcon-cascade component, falcon-v1.142.0). The component imports pulseengine:falcon-cascade/types@0.13.0, which declares records and enums and no functions. kiln 0.7.3 refuses it with E07D6 'Unresolved import: no provider registered'; wasmtime 41 invokes observer#read-state on the same file. REQUIRED: an imported interface with zero functions shall need no registered provider, while an import with at least one function and no provider is still refused. Verified by: a test that runs the #697 export and matches wasmtime's output, and a control in which an imported interface with one function and no provider is still refused with E07D6. Release unassigned: a scope decision for the maintainer."
+    tags: [component, imports, relay-seam, north-star-o5]
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-20T07:10:00Z
+
+  - id: SR-124
+    type: requirement
+    title: kiln refuses an unfused component with an error that names meld fusion as the required step
+    status: approved
+    description: "From #480 comments of 2026-11-19 (plant and witness). A plain cargo wasm32-wasip2 build of a Rust main exports wasi:cli/run@0.2.0 and is not meld-fused. kiln 0.7.3 and kiln 0.8.0 refuse it with E03ED 'No core instance exports _start', which does not say what to do; wasmtime runs it. Under the RFC #46 architecture meld lowers components to core modules at build time, and running unfused components is not a runtime feature. The maintainer chose to refuse (option dialogue, 2026-11-20). REQUIRED: kiln shall refuse any unfused component input, exiting non-zero with an error that names 'meld fuse' as the required step, before executing any guest code. Verified by: plant's and witness's #480 probes exit non-zero with the meld message; a meld-fused build of each still runs and matches wasmtime's stdout and exit status. Release unassigned."
+    tags: [component, entry-point, wasip2, north-star-o5]
+    links:
+      - type: refines
+        target: SR-57
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-20T07:10:00Z
+
+  - id: SR-125
+    type: requirement
+    title: When kiln-builtins starts synth-compiled code, it loads R9, R10 and R11 as synth's relocatable ARM embedder ABI requires before the first wasm call
+    status: approved
+    description: "From synth's answer of 2026-11-20 on synth#1696. Under synth's relocatable ARM embedder ABI (synth docs/embedder-abi-relocatable-arm.md, lines 29-30), the embedder sets R11 to the base of linear memory 0, R10 to its size in bytes and R9 to the globals base before any export runs; synth reserves these registers and never writes them. synth plans to compile every module with a function import this way. Today kiln-builtins only exposes __meld_get_memory_base (returning __wasm_memory_start) and __kiln_init sets none of the three registers. The maintainer confirmed that kiln-builtins is the runtime for synth-compiled objects (option dialogue, 2026-11-20). REQUIRED: the kiln-builtins entry path shall load R9, R10 and R11 from the linked memory and globals sections before the first call into wasm. Verified by: a synth-compiled module whose export stores through linear memory and reads a global, linked with kiln-builtins and run on a Cortex-M target or emulator, returns the expected values; a control with R11 not loaded fails. Release unassigned; implementation waits for synth to land #1696."
+    tags: [kiln-builtins, synth-seam, embedded, abi]
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-20T08:00:00Z
