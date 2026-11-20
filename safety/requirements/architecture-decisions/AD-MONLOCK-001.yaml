@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: AD-MONLOCK-001
+    type: design-decision
+    title: The global safety monitor is guarded by an AtomicBool spinlock acquired by compare-exchange and released by a drop guard
+    status: verified
+    release: v0.9.0
+    description: "Implements SR-117 (PR #689, main 62e3102f). kiln-foundation/src/safety_monitor.rs with_safety_monitor (non-test builds) acquires MONITOR_LOCK, a core::sync::atomic::AtomicBool, with compare_exchange_weak(false, true, Acquire, Relaxed) in a spin loop, and releases it in MonitorLockGuard::drop with store(false, Release). The guard is created right after acquisition, so every path out of the closure, including unwinding, releases the lock. The lock is not re-entrant: a closure that calls with_safety_monitor again spins forever, which the function documents. Unit tests (cfg(test)) use a per-thread monitor, so the shared path is tested only by integration tests."
+    tags: [kiln-foundation, safety-monitor, concurrency]
+    fields:
+      alternatives: "(1) A std Mutex: unavailable in no_std builds of kiln-foundation. (2) A critical-section crate: adds a dependency and a platform hook for one global; the atomic spinlock needs neither."
+      rationale: "compare-exchange makes acquisition a single atomic step, Acquire/Release order the monitor's writes between holders, and the drop guard releases the lock on unwind."
+    links:
+      - type: satisfies
+        target: SR-117
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-19T19:30:00Z

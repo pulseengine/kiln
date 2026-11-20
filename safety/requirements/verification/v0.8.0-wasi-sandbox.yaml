@@ -29,6 +29,8 @@ artifacts:
     links:
       - type: verifies
         target: SR-40
+      - type: verifies
+        target: AD-WASITEST-001
     provenance:
       created-by: ai
       model: claude-opus-5-5

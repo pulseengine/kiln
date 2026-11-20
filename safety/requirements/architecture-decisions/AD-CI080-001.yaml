@@ -1,0 +1,55 @@
+artifacts:
+
+  - id: AD-CI080-001
+    type: design-decision
+    title: "The Verus job passes the runner's PATH to the Bazel test runner and prints failing proofs' test.log"
+    status: verified
+    release: v0.8.0
+    description: "Implements SR-79 (PR #619, main b6b67eb1). The 'Verus Formal Verification' job in .github/workflows/ci.yml runs 'bazel test --test_output=errors --test_env=PATH' over the three verus_proofs targets. rules_verus's runner looks for rustc only under ~/.cargo/bin, ~/.rustup/shims and /usr/local/bin, and Bazel strips PATH from the test environment. On macos-26-arm64 images from 20261021, rustc lives under Homebrew's rustup, so the runner exited 1 in about 0.1 s before Verus ran. Passing PATH lets it find rustc; --test_output=errors puts a failing target's test.log in the job log. Follow-up: rules_verus main resolves rustc itself (rules_verus#32), after which --test_env=PATH can be dropped (kiln#615)."
+    tags: [ci, verus, macos]
+    fields:
+      alternatives: "(1) Pin the older runner image: images are retired, so it only defers the failure. (2) Install rustup into ~/.cargo/bin on the runner: works, but duplicates the toolchain the image already ships."
+      rationale: "The failure came from the test environment, not the proofs; restoring PATH is the smallest change that lets the same proofs run on current images, and the test.log output makes the next environment change diagnosable from the job log."
+    links:
+      - type: satisfies
+        target: SR-79
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-19T19:45:00Z
+
+  - id: AD-CI080-002
+    type: design-decision
+    title: kiln-sync holds parking_lot at 0.12 and a PR-time MSRV job checks the MSRV crates on rustc 1.85.0
+    status: verified
+    release: v0.8.0
+    description: "Implements SR-80 (PR #618, main b6b67eb1). kiln-sync/Cargo.toml pins parking_lot = \"0.12\" because 0.13 (with parking_lot_core 0.10 and lock_api 0.5) requires rustc 1.95, above the declared rust-version 1.85.0. The CI job 'MSRV (rustc 1.85.0: kiln-platform and the SR-97 crates)' runs on every pull request: cargo +1.85.0 check -p kiln-platform --locked --features real-time,std, and cargo +1.85.0 check --lib --locked for each SR-97 crate. A dependency update that raises the MSRV now fails on the PR instead of later in the main-only VxWorks job."
+    tags: [ci, msrv, dependencies]
+    fields:
+      alternatives: "Raise rust-version to 1.95: drops the WindRiver VxWorks SDK toolchain (rustc 1.85.0), a maintainer decision that was not taken."
+      rationale: "Holding one dependency keeps the declared MSRV true; checking it on PRs stops the next update from breaking it unnoticed."
+    links:
+      - type: satisfies
+        target: SR-80
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-19T19:45:00Z
+
+  - id: AD-WASITEST-001
+    type: design-decision
+    title: kiln-wasi tests that draw on the global capability budget run serially
+    status: verified
+    release: v0.8.0
+    description: "Satisfies SR-40. kiln-wasi's tests that construct WasiCapabilities, WasiDispatcher or call MemoryInitializer draw on the process-global capability memory budget; they carry #[serial_test::serial] (141 serial marks in kiln-wasi/src/dispatcher.rs on main 62e3102f) so they do not exhaust the budget concurrently. Tests that use no budget stay parallel. Recorded honestly: VER-SR40-001 measured 10 of 10 green parallel runs, but which change removed the earlier failures was not established; the serial marks are the likely cause. A recurrence reopens SR-40."
+    tags: [kiln-wasi, tests, determinism]
+    fields:
+      alternatives: "(1) A per-test budget instead of the global one: changes the production allocator for test convenience. (2) --test-threads=1 for the whole crate: serializes tests that do not need it."
+      rationale: "Serializing only the budget-drawing tests removes the shared-resource race while keeping the rest of the suite parallel."
+    links:
+      - type: satisfies
+        target: SR-40
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-19T19:45:00Z
