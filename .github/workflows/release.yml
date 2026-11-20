@@ -89,7 +89,7 @@ jobs:
             zigbuild: true
             runner_prefix: qemu-aarch64
           # No x86_64-apple-darwin (Intel macOS) build from v0.9.0 on: Intel Macs
-          # run the aarch64 build under Rosetta 2 or build from source.
+          # build from source (cargo install --git ... kilnd).
           - target: aarch64-apple-darwin
             os: macos-latest
             archive: tar.gz
