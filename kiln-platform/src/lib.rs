@@ -191,8 +191,7 @@ pub mod vxworks_threading;
 // Export macOS specific implementations if enabled and on macOS
 // Export Linux specific implementations if enabled and on Linux
 pub use advanced_sync::{
-    AdvancedRwLock, LockFreeAllocator, MAX_PRIORITY, MIN_PRIORITY, Priority,
-    PriorityInheritanceMutex,
+    AdvancedRwLock, MAX_PRIORITY, MIN_PRIORITY, Priority, PriorityInheritanceMutex,
 };
 #[cfg(feature = "std")]
 pub use advanced_sync::{LockFreeMpscQueue, WaitFreeSpscQueue};

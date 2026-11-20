@@ -175,140 +175,10 @@ unsafe impl<T: Send> Send for LockFreeMpscQueue<T> {}
 #[cfg(feature = "std")]
 unsafe impl<T: Send> Sync for LockFreeMpscQueue<T> {}
 
-/// Binary std/no_std choice
-///
-/// Binary std/no_std choice
-/// Suitable for real-time systems requiring bounded execution time.
-pub struct LockFreeAllocator {
-    /// Free list head
-    free_list: AtomicPtr<FreeBlock>,
-    /// Total blocks available
-    total_blocks: usize,
-    /// Block size in bytes
-    block_size: usize,
-    /// Memory pool base address
-    pool_base: *mut u8,
-}
-
 #[repr(align(8))]
 struct FreeBlock {
     next: *mut FreeBlock,
 }
-
-impl LockFreeAllocator {
-    /// Binary std/no_std choice
-    ///
-    /// # Safety
-    /// `pool` must be a valid memory region of size `pool_size`.
-    /// `block_size` must be >= `size_of::<FreeBlock>()`.
-    pub unsafe fn new(pool: *mut u8, pool_size: usize, block_size: usize) -> Result<Self, Error> {
-        if block_size < core::mem::size_of::<FreeBlock>() {
-            return Err(Error::runtime_execution_error("Block size too small"));
-        }
-
-        let total_blocks = pool_size / block_size;
-        if total_blocks == 0 {
-            return Err(Error::new(
-                kiln_error::ErrorCategory::Validation,
-                kiln_error::codes::VALIDATION_ERROR,
-                "Pool size too small",
-            ));
-        }
-
-        // Initialize free list
-        let mut current = pool as *mut FreeBlock;
-        for i in 0..total_blocks - 1 {
-            // SAFETY: Edition 2024 requires explicit unsafe blocks in unsafe functions.
-            // We're within bounds (i < total_blocks-1) and pool is properly aligned.
-            unsafe {
-                let next = pool.add((i + 1) * block_size) as *mut FreeBlock;
-                (*current).next = next;
-                current = next;
-            }
-        }
-        // SAFETY: current points to the last block, safe to write null terminator
-        unsafe {
-            (*current).next = core::ptr::null_mut();
-        }
-
-        Ok(Self {
-            free_list: AtomicPtr::new(pool as *mut FreeBlock),
-            total_blocks,
-            block_size,
-            pool_base: pool,
-        })
-    }
-
-    /// Allocate a block (lock-free)
-    ///
-    /// Returns `None` if no blocks available.
-    /// Execution time is bounded and deterministic.
-    pub fn allocate(&self) -> Option<NonNull<u8>> {
-        loop {
-            let head = self.free_list.load(Ordering::Acquire);
-
-            if head.is_null() {
-                return None; // No free blocks
-            }
-
-            unsafe {
-                let next = (*head).next;
-
-                // Try to atomically update free list head
-                match self.free_list.compare_exchange_weak(
-                    head,
-                    next,
-                    Ordering::Release,
-                    Ordering::Relaxed,
-                ) {
-                    Ok(_) => return NonNull::new(head as *mut u8),
-                    Err(_) => {}, // Retry due to contention
-                }
-            }
-        }
-    }
-
-    /// Binary std/no_std choice
-    ///
-    /// # Safety
-    /// Binary std/no_std choice
-    pub unsafe fn deallocate(&self, ptr: NonNull<u8>) {
-        let block = ptr.as_ptr() as *mut FreeBlock;
-
-        loop {
-            let head = self.free_list.load(Ordering::Acquire);
-            // SAFETY: Edition 2024 requires explicit unsafe blocks in unsafe functions.
-            // block is a valid FreeBlock pointer from a previous allocation.
-            unsafe {
-                (*block).next = head;
-            }
-
-            // Try to atomically update free list head
-            match self.free_list.compare_exchange_weak(
-                head,
-                block,
-                Ordering::Release,
-                Ordering::Relaxed,
-            ) {
-                Ok(_) => return,
-                Err(_) => {}, // Retry due to contention
-            }
-        }
-    }
-
-    /// Get block size
-    pub fn block_size(&self) -> usize {
-        self.block_size
-    }
-
-    /// Get total number of blocks
-    pub fn total_blocks(&self) -> usize {
-        self.total_blocks
-    }
-}
-
-unsafe impl Send for LockFreeAllocator {}
-unsafe impl Sync for LockFreeAllocator {}
 
 /// Priority inheritance mutex for real-time systems
 ///
@@ -771,35 +641,6 @@ mod tests {
         assert_eq!(queue.dequeue(), Some(84));
         assert_eq!(queue.dequeue(), None);
         assert!(queue.is_empty());
-    }
-
-    #[test]
-    fn test_lock_free_allocator() {
-        const POOL_SIZE: usize = 1024;
-        const BLOCK_SIZE: usize = 64;
-
-        #[cfg(feature = "std")]
-        let mut pool = vec![0u8; POOL_SIZE];
-        #[cfg(not(feature = "std"))]
-        let mut pool = [0u8; POOL_SIZE];
-        let allocator =
-            unsafe { LockFreeAllocator::new(pool.as_mut_ptr(), POOL_SIZE, BLOCK_SIZE).unwrap() };
-
-        // Binary std/no_std choice
-        let ptr1 = allocator.allocate().unwrap();
-        let ptr2 = allocator.allocate().unwrap();
-
-        assert_ne!(ptr1.as_ptr(), ptr2.as_ptr());
-
-        // Binary std/no_std choice
-        unsafe {
-            allocator.deallocate(ptr1);
-            allocator.deallocate(ptr2);
-        }
-
-        // Binary std/no_std choice
-        let ptr3 = allocator.allocate().unwrap();
-        assert!(!ptr3.as_ptr().is_null());
     }
 
     #[test]
