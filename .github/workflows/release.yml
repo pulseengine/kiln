@@ -1,7 +1,7 @@
 name: Release
 
 # Tag-triggered: builds the kiln runtime CLI (plus its deprecated `kilnd`
-# alias, until its removal in v0.8.0 — SR-64/SR-70) for seven targets
+# alias, until its removal in v0.8.0 — SR-64/SR-70) for six targets
 # (including static x86_64/aarch64 musl — SR-68), then
 # publishes a standardised PulseEngine release. Pattern mirrors
 # pulseengine/relay/.github/workflows/release.yml (itself derived from
@@ -88,12 +88,8 @@ jobs:
             archive: tar.gz
             zigbuild: true
             runner_prefix: qemu-aarch64
-          # macos-14 is no longer offered ("configuration 'macos-14-arm64-us-default'
-          # is not supported"), which cancelled the v0.7.1 release run. macos-15-intel
-          # is GitHub's Intel image, so the --version check below runs natively.
-          - target: x86_64-apple-darwin
-            os: macos-15-intel
-            archive: tar.gz
+          # No x86_64-apple-darwin (Intel macOS) build from v0.9.0 on: Intel Macs
+          # run the aarch64 build under Rosetta 2 or build from source.
           - target: aarch64-apple-darwin
             os: macos-latest
             archive: tar.gz
