@@ -34,7 +34,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           submodules: recursive        # external/testsuite is a submodule
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
       - name: Run the official .wast spec suite
         # Informational until the 15 known gaps (GC-proposal validation strictness +
         # custom-descriptors parsing) are closed; then drop continue-on-error to gate.
