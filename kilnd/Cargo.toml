@@ -19,17 +19,11 @@ categories = ["wasm", "command-line-utilities", "network-programming"]
 name = "kilnd"
 path = "src/lib.rs"
 
-# The runtime CLI. `kiln` is the released name; `kilnd` is a deprecated std-only
-# alias that warns on stderr, shipped in v0.6.0 and v0.7.0 and removed in v0.8.0
-# (SR-64, issue #486 ask 3).
+# The runtime CLI. `kiln` is the only binary; the deprecated `kilnd` binary
+# alias was removed (SR-66). The package keeps the name `kilnd`.
 [[bin]]
 name = "kiln"
 path = "src/main.rs"
-
-[[bin]]
-name = "kilnd"
-path = "src/bin/kilnd.rs"
-required-features = ["std"]
 
 [dependencies]
 # Core Kiln dependencies (minimal internal-only dependencies)

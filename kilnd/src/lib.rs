@@ -1969,31 +1969,19 @@ pub fn run_on_large_stack(bin_name: &'static str) -> Result<()> {
         .map_err(|_| Error::runtime_error("Main thread panicked"))?
 }
 
-/// Name of the deprecated binary alias. v0.6.0 ships it next to `kiln`; it is
-/// removed in v0.8.0 (SR-64, issue #486 ask 3).
-pub const DEPRECATED_BIN_NAME: &str = "kilnd";
-
 /// Main entry point
 /// Run the runtime CLI: parse CLI arguments, build the [`KilndConfig`], and
 /// execute the requested module (or the witness-harness flow). This is the
 /// std entry point the binary calls from `fn main` (on a large-stack thread).
 ///
 /// `bin_name` is the installed name of the invoked binary (the binary passes
-/// `env!("CARGO_BIN_NAME")`). Invoking the deprecated [`DEPRECATED_BIN_NAME`]
-/// alias prints a warning on stderr — never stdout, which callers parse.
+/// `env!("CARGO_BIN_NAME")`); it names the binary in usage text.
 ///
 /// # Errors
 ///
 /// Returns an error if argument parsing, module loading, or execution fails.
 #[cfg(feature = "std")]
 pub fn run(bin_name: &str) -> Result<()> {
-    if bin_name == DEPRECATED_BIN_NAME {
-        eprintln!(
-            "warning: `{DEPRECATED_BIN_NAME}` is deprecated and will be removed in v0.8.0; \
-             use `kiln` instead"
-        );
-    }
-
     // Initialize tracing subscriber if tracing feature is enabled
     #[cfg(feature = "tracing")]
     {

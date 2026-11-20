@@ -3,10 +3,6 @@
 Command-line runner for WebAssembly core modules, with WASI Preview 2 host
 support. `kiln <module.wasm>` runs a module and exits; it is not a daemon.
 
-The binary was called `kilnd` up to v0.5.0. v0.6.0 and v0.7.0 ship `kilnd` alongside
-`kiln` as a deprecated alias that behaves the same but prints a warning on
-stderr; the alias is removed in v0.8.0.
-
 ## Components
 
 kiln runs core modules. A Component Model component is lowered to a core
@@ -24,7 +20,7 @@ Passing a component directly is refused with that instruction.
 
 ```bash
 cargo build -p kilnd --release
-# binaries: target/release/kiln (and the deprecated target/release/kilnd)
+# binary: target/release/kiln
 ```
 
 ## Usage
