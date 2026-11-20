@@ -175,11 +175,6 @@ unsafe impl<T: Send> Send for LockFreeMpscQueue<T> {}
 #[cfg(feature = "std")]
 unsafe impl<T: Send> Sync for LockFreeMpscQueue<T> {}
 
-#[repr(align(8))]
-struct FreeBlock {
-    next: *mut FreeBlock,
-}
-
 /// Priority inheritance mutex for real-time systems
 ///
 /// Implements priority inheritance protocol to bound priority inversion.
