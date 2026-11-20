@@ -428,7 +428,9 @@ impl Error {
         if !matches!(self.category, ErrorCategory::Runtime) {
             return None;
         }
-        self.code.checked_sub(codes::GUEST_EXIT_BASE).and_then(|status| u8::try_from(status).ok())
+        self.code
+            .checked_sub(codes::GUEST_EXIT_BASE)
+            .and_then(|status| u8::try_from(status).ok())
     }
 
     /// Create a runtime error
