@@ -2197,10 +2197,11 @@ impl Wasip2Host {
     /// wasi:cli/exit.exit
     /// This is called when the component wants to exit.
     /// The status parameter indicates success (ok variant) or failure.
+    ///
+    /// Always returns the guest-exit error ([`kiln_error::Error::guest_exit`]); the embedder
+    /// decides what ending the guest means. The host process is never ended here.
     pub fn cli_exit(&mut self, status_ok: bool) -> Result<Vec<Value>> {
-        // Actually exit the process
-        let code = if status_ok { 0 } else { 1 };
-        std::process::exit(code);
+        Err(kiln_error::Error::guest_exit(u8::from(!status_ok)))
     }
 
     /// Extract the base interface name without version suffix
@@ -2457,7 +2458,7 @@ impl Wasip2Host {
                     _ => true,
                 };
 
-                std::process::exit(if success { 0 } else { 1 });
+                Err(kiln_error::Error::guest_exit(u8::from(!success)))
             },
 
             // wasi:cli/environment.get-environment() -> list<tuple<string, string>>

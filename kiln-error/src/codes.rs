@@ -119,6 +119,8 @@ pub const WASI_UNSUPPORTED_OPERATION: u16 = 3016;
 pub const WASI_VERIFICATION_FAILED: u16 = 3017;
 /// WASI timeout
 pub const WASI_TIMEOUT: u16 = 3018;
+/// A path names an entry under a directory that does not exist (`no-entry`)
+pub const WASI_PATH_NOT_FOUND: u16 = 3019;
 /// Allocation failed error
 pub const ALLOCATION_FAILED: u16 = 3012;
 /// Memory access denied through wrapper
@@ -363,6 +365,11 @@ pub const INVALID_BYTE_LENGTH: u16 = 6021;
 pub const BOUNDED_COLLECTION_CAPACITY: u16 = 6022;
 
 // Runtime error codes (7000-7999)
+/// First of the 256 guest-exit codes in the `Runtime` category.
+///
+/// A guest that calls `wasi:cli/exit` or `proc_exit` ends with the code
+/// `GUEST_EXIT_BASE + status`, so the range is `GUEST_EXIT_BASE..=GUEST_EXIT_BASE + 255`.
+pub const GUEST_EXIT_BASE: u16 = 7100;
 /// Runtime error
 pub const RUNTIME_ERROR: u16 = 7000;
 /// Execution timeout error

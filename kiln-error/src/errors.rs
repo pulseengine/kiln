@@ -409,6 +409,30 @@ impl Error {
         Self::new(ErrorCategory::Type, codes::TYPE_MISMATCH_ERROR, message)
     }
 
+    /// The guest ended itself with exit status `status` (`wasi:cli/exit`,
+    /// `proc_exit`). Not a failure of the runtime: the embedder turns it into
+    /// its own exit status via [`Error::guest_exit_status`]. The runtime never
+    /// ends the host process itself.
+    #[must_use]
+    pub fn guest_exit(status: u8) -> Self {
+        Self::new(
+            ErrorCategory::Runtime,
+            codes::GUEST_EXIT_BASE + u16::from(status),
+            "guest exited",
+        )
+    }
+
+    /// The exit status when this error is a guest exit ([`Error::guest_exit`]).
+    #[must_use]
+    pub fn guest_exit_status(&self) -> Option<u8> {
+        if !matches!(self.category, ErrorCategory::Runtime) {
+            return None;
+        }
+        self.code
+            .checked_sub(codes::GUEST_EXIT_BASE)
+            .and_then(|status| u8::try_from(status).ok())
+    }
+
     /// Create a runtime error
     #[must_use]
     pub const fn runtime_error(message: &'static str) -> Self {
@@ -568,6 +592,19 @@ impl Error {
             codes::WASI_PERMISSION_DENIED,
             message,
         )
+    }
+
+    /// A guest path names an entry under a directory that does not exist. The
+    /// WASI filesystem reports it as the `no-entry` error-code, not a trap.
+    #[must_use]
+    pub const fn wasi_path_not_found(message: &'static str) -> Self {
+        Self::new(ErrorCategory::Resource, codes::WASI_PATH_NOT_FOUND, message)
+    }
+
+    /// Whether this is a [`Error::wasi_path_not_found`] error.
+    #[must_use]
+    pub const fn is_wasi_path_not_found(&self) -> bool {
+        matches!(self.category, ErrorCategory::Resource) && self.code == codes::WASI_PATH_NOT_FOUND
     }
 
     /// Create a WASI resource limit error
