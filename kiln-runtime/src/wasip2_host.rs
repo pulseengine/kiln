@@ -2198,7 +2198,7 @@ impl Wasip2Host {
     /// This is called when the component wants to exit.
     /// The status parameter indicates success (ok variant) or failure.
     ///
-    /// Always returns the guest-exit error ([`Error::guest_exit`]); the embedder
+    /// Always returns the guest-exit error ([`kiln_error::Error::guest_exit`]); the embedder
     /// decides what ending the guest means. The host process is never ended here.
     pub fn cli_exit(&mut self, status_ok: bool) -> Result<Vec<Value>> {
         Err(kiln_error::Error::guest_exit(u8::from(!status_ok)))
