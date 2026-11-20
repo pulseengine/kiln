@@ -76,6 +76,10 @@ enum OwnedReturn {
     /// `wasi:filesystem/preopens::get-directories`: an entry array plus one
     /// buffer per path.
     Preopens,
+    /// The `list<tuple<string, string>>` of
+    /// `wasi:cli/environment::get-environment`: an entry array plus one buffer
+    /// per name and one per value.
+    Environment,
 }
 
 /// Which fresh guest memory a WASI call needs for a guest-owned return.
@@ -121,6 +125,8 @@ fn owned_return_policy(interface: &str, function: &str, args: &[Value]) -> Optio
         bytes(Some(4096), false)
     } else if interface.contains("wasi:cli/environment") && function == "get-arguments" {
         Some(OwnedReturn::Arguments)
+    } else if interface.contains("wasi:cli/environment") && function == "get-environment" {
+        Some(OwnedReturn::Environment)
     } else if interface.contains("wasi:filesystem/preopens") && function == "get-directories" {
         Some(OwnedReturn::Preopens)
     } else if interface.contains("wasi:io/error") && function == "[method]error.to-debug-string" {
@@ -173,6 +179,7 @@ fn owned_return_policy(interface: &str, function: &str, args: &[Value]) -> Optio
 struct OwnedAllocation {
     args: Option<(u32, Vec<(u32, u32)>)>,
     preopens: Option<(u32, Vec<(u32, u32)>)>,
+    environment: Option<(u32, Vec<(u32, u32)>)>,
     buffer: Option<(u32, u32)>,
 }
 
@@ -1700,6 +1707,15 @@ impl StacklessEngine {
                         self.allocate_wasi_preopens_memory(instance_id, &paths, owner)?;
                 }
             },
+            Some(OwnedReturn::Environment) => {
+                let env =
+                    self.host_handler.as_ref().map(|h| h.get_environment()).unwrap_or_default();
+                if !env.is_empty() {
+                    owner.realloc.check()?;
+                    alloc.environment =
+                        self.allocate_wasi_environment_memory(instance_id, &env, owner)?;
+                }
+            },
             None => {},
         }
 
@@ -1714,6 +1730,9 @@ impl StacklessEngine {
         }
         if let Some((list_ptr, string_ptrs)) = alloc.preopens {
             handler.set_preopens_allocation(list_ptr, string_ptrs);
+        }
+        if let Some((list_ptr, string_ptrs)) = alloc.environment {
+            handler.set_environment_allocation(list_ptr, string_ptrs);
         }
         if let Some((ptr, size)) = alloc.buffer {
             handler.set_read_buffer_allocation(ptr, size);
@@ -15448,6 +15467,65 @@ impl StacklessEngine {
                 path_len,
             )?;
             string_ptrs.push((string_ptr, path_len));
+        }
+
+        Ok(Some((list_ptr, string_ptrs)))
+    }
+
+    /// Allocate guest memory for the get-environment list return via cabi_realloc.
+    ///
+    /// Returns (list_ptr, string_ptrs) where list_ptr is the N*16-byte entry array
+    /// (name_ptr, name_len, value_ptr, value_len per entry) and string_ptrs holds
+    /// 2*N buffers, name then value for each entry, each allocated separately so
+    /// the guest can free them individually.
+    #[cfg(feature = "wasi")]
+    fn allocate_wasi_environment_memory(
+        &mut self,
+        instance_id: usize,
+        env: &[(String, String)],
+        owner: &HostCallOwner,
+    ) -> Result<Option<(u32, Vec<(u32, u32)>)>> {
+        let instance = self
+            .instances
+            .get(&instance_id)
+            .ok_or_else(|| kiln_error::Error::runtime_error("Instance not found"))?
+            .clone();
+        let module = instance.module();
+        let Some(cabi_realloc_idx) =
+            owner.realloc.resolve(|| self.find_export_index(&module, "cabi_realloc").ok())?
+        else {
+            return Ok(None);
+        };
+
+        let list_size = u32::try_from(env.len())
+            .ok()
+            .and_then(|n| n.checked_mul(16))
+            .ok_or_else(|| kiln_error::Error::memory_out_of_bounds("get-environment: list size"))?;
+        let list_ptr = self.call_cabi_realloc(
+            instance_id,
+            cabi_realloc_idx,
+            &owner.memory,
+            4, // align (4-byte for the u32 fields)
+            list_size,
+            list_size,
+        )?;
+
+        let mut string_ptrs: Vec<(u32, u32)> = Vec::with_capacity(env.len() * 2);
+        for (name, value) in env {
+            for text in [name, value] {
+                let len = u32::try_from(text.len()).map_err(|_| {
+                    kiln_error::Error::memory_out_of_bounds("get-environment: string length")
+                })?;
+                let ptr = self.call_cabi_realloc(
+                    instance_id,
+                    cabi_realloc_idx,
+                    &owner.memory,
+                    1,
+                    len,
+                    len,
+                )?;
+                string_ptrs.push((ptr, len));
+            }
         }
 
         Ok(Some((list_ptr, string_ptrs)))
