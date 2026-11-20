@@ -24,3 +24,14 @@ artifacts:
       created-by: ai
       model: claude-opus-5-5
       timestamp: 2026-11-20T07:10:00Z
+
+  - id: SR-125
+    type: requirement
+    title: When kiln-builtins starts synth-compiled code, it loads R9, R10 and R11 as synth's relocatable ARM embedder ABI requires before the first wasm call
+    status: proposed
+    description: "From synth's answer of 2026-11-20 on synth#1696. Under synth's relocatable ARM embedder ABI (synth docs/embedder-abi-relocatable-arm.md, lines 29-30), the embedder sets R11 to the base of linear memory 0, R10 to its size in bytes and R9 to the globals base before any export runs; synth reserves these registers and never writes them. synth plans to compile every module with a function import this way. Today kiln-builtins only exposes __meld_get_memory_base (returning __wasm_memory_start) and __kiln_init sets none of the three registers. REQUIRED: if kiln-builtins is the runtime that enters synth-compiled code, its entry path shall load R9, R10 and R11 from the linked memory and globals sections before the first call into wasm. Verified by: a synth-compiled module whose export stores through linear memory and reads a global, linked with kiln-builtins and run on a Cortex-M target or emulator, returns the expected values; a control with R11 not loaded fails. Release unassigned; this depends on synth landing #1696 and on the maintainer deciding that kiln-builtins is the runtime for synth objects."
+    tags: [kiln-builtins, synth-seam, embedded, abi]
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-20T08:00:00Z
