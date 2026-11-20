@@ -1,0 +1,26 @@
+artifacts:
+
+  - id: SR-123
+    type: requirement
+    title: A component that imports an interface holding only type definitions instantiates without a provider for that interface
+    status: proposed
+    description: "From #697 (relay's falcon-cascade component, falcon-v1.142.0). The component imports pulseengine:falcon-cascade/types@0.13.0, which declares records and enums and no functions. kiln 0.7.3 refuses it with E07D6 'Unresolved import: no provider registered'; wasmtime 41 invokes observer#read-state on the same file. REQUIRED: an imported interface with zero functions shall need no registered provider, while an import with at least one function and no provider is still refused. Verified by: a test that runs the #697 export and matches wasmtime's output, and a control in which an imported interface with one function and no provider is still refused with E07D6. Release unassigned: a scope decision for the maintainer."
+    tags: [component, imports, relay-seam, north-star-o5]
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-20T07:10:00Z
+
+  - id: SR-124
+    type: requirement
+    title: An unfused wasm32-wasip2 command component either runs on kiln as on wasmtime or is refused with an error that names meld fusion as the required step
+    status: proposed
+    description: "From #480 comments of 2026-11-19 (plant and witness). A plain cargo wasm32-wasip2 build of a Rust main exports wasi:cli/run@0.2.0 and is not meld-fused. kiln 0.7.3 and kiln 0.8.0 refuse it with E03ED 'No core instance exports _start', which does not say what to do; wasmtime runs it. Under the RFC #46 architecture (meld lowers components to core modules at build time) running unfused components directly is not a runtime feature, so this requirement leaves the choice to the maintainer: (a) kiln --component runs a single-core wasip2 command component through wasi:cli/run, matching wasmtime's stdout and exit status; or (b) kiln refuses any unfused component input with an error that names 'meld fuse' as the required step. Verified by, for (a): plant's and witness's probes on kiln and wasmtime with equal stdout and exit status; for (b): the same probes exit non-zero with the meld message, and a fused build of each still runs. Release unassigned: a scope decision for the maintainer."
+    tags: [component, entry-point, wasip2, north-star-o5]
+    links:
+      - type: refines
+        target: SR-57
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-20T07:10:00Z
