@@ -45,15 +45,15 @@ Kiln bridges the gap between WebAssembly's portability and the strict requiremen
 # Clone and build
 git clone https://github.com/pulseengine/kiln
 cd kiln
-cargo build --bin kilnd --features "std,kiln-execution"
+cargo build --bin kiln --features "std,kiln-execution"
 
 # Run a WebAssembly component
-./target/debug/kilnd your_component.wasm --component
+./target/debug/kiln your_component.wasm --component
 ```
 
 ## Architecture
 
-- **`kilnd/`** — Runtime daemon (main executable)
+- **`kilnd/`** — Runtime CLI crate (builds the `kiln` binary)
 - **`kiln-runtime/`** — Execution engine
 - **`kiln-component/`** — Component Model support
 - **`kiln-decoder/`** — Binary format parsing
@@ -64,13 +64,13 @@ cargo build --bin kilnd --features "std,kiln-execution"
 
 ```bash
 # Basic component execution
-kilnd component.wasm --component
+kiln component.wasm --component
 
 # With WASI support
-kilnd component.wasm --component --wasi
+kiln component.wasm --component --wasi
 
 # Set resource limits
-kilnd component.wasm --component --fuel 100000 --memory 1048576
+kiln component.wasm --component --fuel 100000 --memory 1048576
 ```
 
 ## Building
@@ -80,7 +80,7 @@ kilnd component.wasm --component --fuel 100000 --memory 1048576
 cargo install --path cargo-kiln
 
 # Build runtime
-cargo build --bin kilnd --features "std,kiln-execution"
+cargo build --bin kiln --features "std,kiln-execution"
 
 # Run tests
 cargo test --workspace
@@ -91,7 +91,7 @@ cargo test --workspace
 **Early Development** — Basic WebAssembly component execution is working:
 
 ```bash
-./target/debug/kilnd hello_rust.wasm --component
+./target/debug/kiln hello_rust.wasm --component
 # Output: Hello wasm component world from Rust!
 ```
 

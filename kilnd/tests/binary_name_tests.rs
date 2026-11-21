@@ -1,17 +1,13 @@
-//! The released runtime binary is `kiln`; `kilnd` is a deprecated alias for one
-//! release (SR-64, issue #486 ask 3).
+//! The released runtime binary is `kiln`, and it is the only one: the
+//! deprecated `kilnd` binary alias was removed (SR-66). The Cargo package keeps
+//! the name `kilnd`.
 //!
 //! The repo, the release tarball and the varve roster all say `kiln`, and the
-//! CLI is a one-shot runner, not a daemon. `kilnd` keeps working for v0.6.0 so
-//! existing callers (witness `--harness`) don't break, but it warns on stderr —
-//! never on stdout, which callers parse.
+//! CLI is a one-shot runner, not a daemon.
 
 use std::process::Command;
 
 const KILN: &str = env!("CARGO_BIN_EXE_kiln");
-const KILND: &str = env!("CARGO_BIN_EXE_kilnd");
-
-const DEPRECATION_MARKER: &str = "`kilnd` is deprecated";
 
 #[test]
 fn kiln_version_reports_the_kiln_name() {
@@ -28,7 +24,7 @@ fn kiln_version_reports_the_kiln_name() {
     );
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
-        !stderr.contains(DEPRECATION_MARKER),
+        stderr.is_empty(),
         "`kiln` must not warn; stderr: {stderr:?}"
     );
 }
@@ -60,37 +56,27 @@ fn kiln_unknown_flag_usage_names_kiln() {
 }
 
 #[test]
-fn kilnd_alias_reports_its_own_name_and_keeps_stdout_clean() {
-    let out = Command::new(KILND).arg("--version").output().expect("kilnd alias must ship");
-    assert!(
-        out.status.success(),
-        "`kilnd --version` must still exit 0 during deprecation"
-    );
-    assert_eq!(
-        String::from_utf8_lossy(&out.stdout).trim(),
-        format!("kilnd {}", env!("CARGO_PKG_VERSION")),
-        "the alias reports its installed name, and stdout carries nothing else"
-    );
-}
+fn only_the_kiln_binary_is_declared_and_released() {
+    let cargo_toml = include_str!("../Cargo.toml");
+    let release_yml = include_str!("../../.github/workflows/release.yml");
 
-#[test]
-fn kilnd_alias_warns_on_stderr_and_points_at_kiln() {
-    let out = Command::new(KILND).arg("--version").output().unwrap();
-    let stderr = String::from_utf8_lossy(&out.stderr);
+    for section in cargo_toml.split("[[bin]]").skip(1) {
+        // A bin section ends at the next table header.
+        let body = section.split("\n[").next().unwrap_or(section);
+        for line in body.lines() {
+            let line = line.trim();
+            assert!(
+                line.replace(' ', "") != "name=\"kilnd\"",
+                "kilnd/Cargo.toml must not declare a `kilnd` [[bin]]; got section {body:?}"
+            );
+        }
+    }
     assert!(
-        stderr.contains(DEPRECATION_MARKER),
-        "alias must warn on stderr; got {stderr:?}"
+        !release_yml.contains("release/kilnd"),
+        "release.yml must not strip or stage a `kilnd` binary"
     );
     assert!(
-        stderr.contains("use `kiln`"),
-        "warning must name the replacement; got {stderr:?}"
-    );
-    assert!(
-        stderr.contains("v0.8.0"),
-        "warning must say when the alias goes away; got {stderr:?}"
-    );
-    assert!(
-        !stderr.contains("v0.7.0"),
-        "warning must not mention v0.7.0; got {stderr:?}"
+        !release_yml.contains("for BIN in kiln kilnd"),
+        "release.yml must not loop over a `kilnd` binary"
     );
 }

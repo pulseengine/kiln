@@ -1,7 +1,7 @@
 name: Release
 
-# Tag-triggered: builds the kiln runtime CLI (plus its deprecated `kilnd`
-# alias, until its removal in v0.8.0 — SR-64/SR-70) for six targets
+# Tag-triggered: builds the kiln runtime CLI (the only released binary;
+# the deprecated `kilnd` alias was removed — SR-66) for six targets
 # (including static x86_64/aarch64 musl — SR-68), then
 # publishes a standardised PulseEngine release. Pattern mirrors
 # pulseengine/relay/.github/workflows/release.yml (itself derived from
@@ -9,7 +9,7 @@ name: Release
 # SLSA build provenance, rivet snapshot, build-env capture.
 #
 # Required release assets, per the standardised pattern:
-#   kiln-vX.Y.Z-<triple>.{tar.gz|zip}          # cross-compiled kiln (+ kilnd alias) binaries
+#   kiln-vX.Y.Z-<triple>.{tar.gz|zip}          # cross-compiled kiln binaries
 #   kiln-X.Y.Z.cdx.json                         # CycloneDX SBOM (kilnd toolchain)
 #   kiln-X.Y.Z.vex.cdx.json                     # CycloneDX VEX: advisory analysis vs the SBOM (SR-69)
 #   rivet-snapshot-vX.Y.Z.json                  # audit-ready rivet artifact graph
@@ -156,7 +156,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for BIN in kiln kilnd; do
+          for BIN in kiln; do
             DESC="$(file -L "target/${TARGET}/release/${BIN}")"
             echo "$DESC"
             case "$DESC" in
@@ -181,12 +181,10 @@ jobs:
         shell: bash
         run: |
           strip "target/${TARGET}/release/kiln" 2>/dev/null || true
-          strip "target/${TARGET}/release/kilnd" 2>/dev/null || true
 
       # #486 / SR-64: the shipped binary must state the version it was tagged
-      # as. Run the freshly built binaries and fail the release if `kiln
-      # --version` is not exactly `kiln <tag without v>` (and the deprecated
-      # `kilnd` alias likewise). Skipped only for the cross-compiled target,
+      # as. Run the freshly built binary and fail the release if `kiln
+      # --version` is not exactly `kiln <tag without v>`. Skipped only for the cross-compiled target,
       # which the x86_64 runner cannot execute.
       - name: Assert --version matches the tag
         if: ${{ !matrix.cross }}
@@ -200,7 +198,7 @@ jobs:
           VERSION="${INPUT_TAG:-${GITHUB_REF#refs/tags/}}"
           EXE=""
           if [ "$ARCHIVE_KIND" = "zip" ]; then EXE=".exe"; fi
-          for BIN in kiln kilnd; do
+          for BIN in kiln; do
             GOT="$($RUN_PREFIX "target/${TARGET}/release/${BIN}${EXE}" --version | tr -d '\r')"
             WANT="${BIN} ${VERSION#v}"
             if [ "$GOT" != "$WANT" ]; then
@@ -224,10 +222,8 @@ jobs:
           VERSION="${INPUT_TAG:-${GITHUB_REF#refs/tags/}}"
           ARCHIVE="kiln-${VERSION}-${TARGET}.tar.gz"
           mkdir -p staging
-          # `kiln` is the runtime binary; `kilnd` is its deprecated alias,
-          # shipped until its removal in v0.8.0 (SR-64, SR-70).
+          # `kiln` is the only released binary (the `kilnd` alias was removed, SR-66).
           cp "target/${TARGET}/release/kiln" staging/
-          cp "target/${TARGET}/release/kilnd" staging/
           cp kilnd/README.md staging/README.md 2>/dev/null || true
           cp CHANGELOG.md staging/ 2>/dev/null || true
           cp LICENSE staging/ 2>/dev/null || true
@@ -245,7 +241,6 @@ jobs:
           ARCHIVE="kiln-${VERSION}-${TARGET}.zip"
           mkdir -p staging
           cp "target/${TARGET}/release/kiln.exe" staging/
-          cp "target/${TARGET}/release/kilnd.exe" staging/
           cp kilnd/README.md staging/README.md 2>/dev/null || true
           cp CHANGELOG.md staging/ 2>/dev/null || true
           cp LICENSE staging/ 2>/dev/null || true
