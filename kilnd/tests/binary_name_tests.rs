@@ -80,3 +80,17 @@ fn only_the_kiln_binary_is_declared_and_released() {
         "release.yml must not loop over a `kilnd` binary"
     );
 }
+
+#[test]
+fn ci_does_not_run_a_kilnd_binary() {
+    // The static musl job runs only on main, so a PR's required checks do not
+    // see it; this test is what catches a leftover `kilnd` binary there.
+    let ci_yml = include_str!("../../.github/workflows/ci.yml");
+    for (n, line) in ci_yml.lines().enumerate() {
+        assert!(
+            !line.contains("for BIN in kiln kilnd") && !line.contains("release/kilnd"),
+            "ci.yml line {} must not run a `kilnd` binary: {line:?}",
+            n + 1
+        );
+    }
+}
