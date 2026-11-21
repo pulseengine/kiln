@@ -449,25 +449,21 @@ jobs:
           sudo apt-get install -y --no-install-recommends qemu-user
           WANT="$(cargo metadata --no-deps --format-version 1 \
             | jq -r '.packages[] | select(.name == "kilnd") | .version')"
-          for BIN in kiln kilnd; do
-            GOT="$(qemu-aarch64 "target/aarch64-unknown-linux-musl/release/${BIN}" --version)"
-            echo "${BIN} --version (qemu-aarch64) -> ${GOT}"
-            [ "$GOT" = "${BIN} ${WANT}" ]
-          done
+          GOT="$(qemu-aarch64 target/aarch64-unknown-linux-musl/release/kiln --version)"
+          echo "kiln --version (qemu-aarch64) -> ${GOT}"
+          [ "$GOT" = "kiln ${WANT}" ]
       - name: Assert binaries are statically linked
         shell: bash
         run: |
           set -euo pipefail
           for T in x86_64-unknown-linux-musl aarch64-unknown-linux-musl; do
-            for BIN in kiln kilnd; do
-              DESC="$(file -L "target/${T}/release/${BIN}")"
-              echo "$DESC"
-              case "$DESC" in
-                *"dynamically linked"*) echo "::error::${T}/${BIN} is dynamically linked"; exit 1 ;;
-                *"statically linked"*|*"static-pie linked"*) ;;
-                *) echo "::error::${T}/${BIN} is not reported as statically linked"; exit 1 ;;
-              esac
-            done
+            DESC="$(file -L "target/${T}/release/kiln")"
+            echo "$DESC"
+            case "$DESC" in
+              *"dynamically linked"*) echo "::error::${T}/kiln is dynamically linked"; exit 1 ;;
+              *"statically linked"*|*"static-pie linked"*) ;;
+              *) echo "::error::${T}/kiln is not reported as statically linked"; exit 1 ;;
+            esac
           done
           # A static binary has no dynamic loader dependencies. ldd exits
           # non-zero ("not a dynamic executable") for the x86_64 binary.
