@@ -269,7 +269,7 @@ impl KaniVerifier {
             .map_err(|e| BuildError::Tool(format!("Failed to write log file: {}", e)))?;
 
         // Parse results
-        let passed = output.status.success();
+        let passed = kani_run_passed(output.status.success(), &output_string);
         let total_checks = self.count_checks(&output_string);
         let passed_checks = self.count_passed_checks(&output_string);
         let failures = if !passed { self.extract_failures(&output_string) } else { Vec::new() };
@@ -564,6 +564,22 @@ pub fn get_kani_version() -> BuildResult<String> {
         .to_string())
 }
 
+/// Whether a `cargo kani` run counts as a pass: it exited 0 and its summary line
+/// (`Complete - <n> successfully verified harnesses, <f> failures, <t> total.`)
+/// reports at least one harness. A run that finds no harness proves nothing.
+fn kani_run_passed(exit_ok: bool, output: &str) -> bool {
+    exit_ok && harnesses_in_summary(output).is_some_and(|total| total > 0)
+}
+
+/// The total harness count from Kani's `Complete - ... <t> total.` line, if any.
+fn harnesses_in_summary(output: &str) -> Option<usize> {
+    output.lines().rev().find_map(|line| {
+        let rest = line.trim().strip_prefix("Complete - ")?;
+        let total = rest.rsplit(", ").next()?.strip_suffix(" total.")?;
+        total.trim().parse().ok()
+    })
+}
+
 /// Lines of `cargo kani` output printed when a package fails.
 const FAILURE_EXCERPT_LINES: usize = 60;
 
@@ -595,6 +611,27 @@ mod tests {
             ["kani", "-p", "kiln-sync", "--tests"],
             "cargo must get `kani` as its subcommand; without it cargo rejects `-p` and no proof runs"
         );
+    }
+
+    #[test]
+    fn a_run_that_verifies_no_harness_fails() {
+        let output = "Manual Harness Summary:\nNo proof harnesses (functions with #[kani::proof]) were found to verify.\n";
+        assert!(
+            !kani_run_passed(true, output),
+            "exit 0 with no harness verified must not count as a pass"
+        );
+    }
+
+    #[test]
+    fn a_run_that_verifies_harnesses_with_no_failures_passes() {
+        let output = "VERIFICATION:- SUCCESSFUL\nComplete - 3 successfully verified harnesses, 0 failures, 3 total.\n";
+        assert!(kani_run_passed(true, output));
+    }
+
+    #[test]
+    fn a_run_whose_cargo_kani_exits_non_zero_fails() {
+        let output = "Complete - 2 successfully verified harnesses, 1 failures, 3 total.\n";
+        assert!(!kani_run_passed(false, output));
     }
 
     #[test]
