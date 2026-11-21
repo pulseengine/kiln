@@ -204,8 +204,27 @@ use kiln_host::CallbackRegistry;
 #[cfg(feature = "wasi")]
 use kiln_wasi::{
     ComponentModelProvider, WasiCapabilities, WasiDispatcher, WasiHostProvider,
-    set_global_wasi_args,
+    set_global_wasi_args, set_global_wasi_env,
 };
+
+/// The guest environment from `--wasi-env` specs, in order.
+///
+/// `NAME=VALUE` passes that pair; `NAME` alone passes the value kiln itself
+/// sees, as `wasmtime --env NAME` does. A `NAME` that kiln does not have is an
+/// error, not an empty or skipped variable.
+#[cfg(feature = "wasi")]
+fn wasi_env_pairs(specs: &[String]) -> Result<Vec<(String, String)>> {
+    specs
+        .iter()
+        .map(|spec| match spec.split_once('=') {
+            Some((name, value)) => Ok((name.to_string(), value.to_string())),
+            None => std::env::var(spec).map(|value| (spec.clone(), value)).map_err(|_| {
+                eprintln!("Error: --wasi-env {spec}: not set in kiln's environment");
+                Error::wasi_invalid_argument("--wasi-env names a variable kiln does not have")
+            }),
+        })
+        .collect()
+}
 
 /// Chained host import handler for WAC-composed P3 components.
 /// Routes WASI calls to WasiDispatcher and inter-component calls
@@ -282,6 +301,14 @@ impl kiln_foundation::traits::HostImportHandler for InterComponentHandler {
 
     fn set_preopens_allocation(&mut self, list_ptr: u32, string_ptrs: Vec<(u32, u32)>) {
         self.wasi.set_preopens_allocation(list_ptr, string_ptrs);
+    }
+
+    fn get_environment(&self) -> Vec<(String, String)> {
+        kiln_foundation::traits::HostImportHandler::get_environment(&self.wasi)
+    }
+
+    fn set_environment_allocation(&mut self, list_ptr: u32, string_ptrs: Vec<(u32, u32)>) {
+        self.wasi.set_environment_allocation(list_ptr, string_ptrs);
     }
 
     fn set_read_buffer_allocation(&mut self, ptr: u32, size: u32) {
@@ -2134,6 +2161,8 @@ pub fn run(bin_name: &str) -> Result<()> {
         let mut full_args = vec![module_name];
         full_args.extend(config.wasi_args.clone());
         set_global_wasi_args(full_args.clone());
+        // The guest environment is exactly the --wasi-env variables (SR-116).
+        set_global_wasi_env(wasi_env_pairs(&config.wasi_env_vars)?);
         if verbose {
             eprintln!(
                 "  - Set {} global WASI args: {:?}",

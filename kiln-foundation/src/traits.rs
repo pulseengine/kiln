@@ -1689,6 +1689,26 @@ pub trait HostImportHandler: Send + Sync {
         // Default no-op for handlers that don't need this
     }
 
+    /// Report the guest environment as (name, value) pairs, in order.
+    ///
+    /// The engine reads this to size the cabi_realloc'd return of
+    /// `wasi:cli/environment::get-environment`. Default empty for handlers that
+    /// give the guest no environment.
+    fn get_environment(&self) -> Vec<(alloc::string::String, alloc::string::String)> {
+        Vec::new()
+    }
+
+    /// Record the cabi_realloc'd memory backing the `get-environment` list return.
+    ///
+    /// `list_ptr` points to the N*16-byte entry array (name_ptr, name_len,
+    /// value_ptr, value_len per entry); `string_ptrs` holds 2*N (ptr, len)
+    /// buffers, name then value for each entry, in environment order.
+    ///
+    /// Default no-op for handlers that give the guest no environment.
+    fn set_environment_allocation(&mut self, _list_ptr: u32, _string_ptrs: Vec<(u32, u32)>) {
+        // Default no-op for handlers that don't need this
+    }
+
     /// Record a fresh cabi_realloc'd guest buffer for the next input-stream read.
     ///
     /// A `list<u8>` returned from `blocking-read`/`read` is owned by the guest, which

@@ -92,7 +92,8 @@ pub fn get_global_wasi_args() -> Result<Vec<String>> {
 
 /// Get the global WASI environment variables
 ///
-/// Falls back to `std::env::vars()` if no global env vars are set
+/// This is exactly the guest environment the embedder set with
+/// [`set_global_wasi_env`]; it is empty until one is set.
 ///
 /// # Errors
 ///
@@ -102,20 +103,14 @@ pub fn get_global_wasi_args() -> Result<Vec<String>> {
 pub fn get_global_wasi_env() -> Result<Vec<(String, String)>> {
     // Per CLAUDE.md: fail loud and early. A poisoned mutex means a thread panicked
     // while holding the lock - the data may be in an inconsistent state.
-    let global_env = GLOBAL_WASI_ENV
+    Ok(GLOBAL_WASI_ENV
         .lock()
         .map_err(|_| {
             Error::wasi_runtime_error(
                 "GLOBAL_WASI_ENV mutex poisoned - a thread panicked while holding the lock",
             )
         })?
-        .clone();
-    if global_env.is_empty() {
-        // Fall back to actual process environment
-        Ok(std::env::vars().collect())
-    } else {
-        Ok(global_env)
-    }
+        .clone())
 }
 
 /// Set the global WASI environment variables
@@ -815,6 +810,10 @@ pub struct WasiDispatcher {
     /// Set by the engine after calling `cabi_realloc`
     /// Each string is allocated separately to ensure proper allocator metadata
     args_alloc: Option<(u32, Vec<(u32, u32)>)>,
+    /// Pre-allocated memory for the get-environment list return (`list_ptr`,
+    /// `string_ptrs`): an N*16-byte entry array and 2*N string buffers (name,
+    /// value per entry). Set by the engine after calling `cabi_realloc`.
+    env_alloc: Option<(u32, Vec<(u32, u32)>)>,
     /// File descriptor table (maps handle -> descriptor info)
     /// Note: This is separate from `resource_manager` - used for filesystem operations
     #[cfg(feature = "std")]
@@ -933,6 +932,7 @@ impl WasiDispatcher {
             args: Vec::new(),
             env_vars: Vec::new(),
             args_alloc: None,
+            env_alloc: None,
             #[cfg(feature = "std")]
             fd_table,
             #[cfg(feature = "std")]
@@ -1923,10 +1923,64 @@ impl WasiDispatcher {
                 }
             },
 
+            // get-environment() -> list<tuple<string, string>>, lowered through a
+            // return pointer: (list_ptr, len) at retptr; each 16-byte entry is
+            // (name_ptr, name_len, value_ptr, value_len). The list and every
+            // string live in the engine's cabi_realloc'd buffers, which the guest
+            // owns, so the allocation is consumed by this call (SR-116).
             WasiFn::GetEnvironment => {
-                // Similar to get-arguments but for env vars
-                // For now, return empty list
-                Ok(vec![CoreValue::I32(0), CoreValue::I32(0)])
+                let env_alloc = self.env_alloc.take();
+                let mem = memory.ok_or_else(|| {
+                    Error::wasi_invalid_argument("get-environment: no memory for the return area")
+                })?;
+                let retptr = match args.first() {
+                    Some(CoreValue::I32(p)) => *p as u32,
+                    _ => {
+                        return Err(Error::wasi_invalid_argument(
+                            "get-environment: missing retptr",
+                        ));
+                    },
+                };
+                if self.env_vars.is_empty() {
+                    mem.write_bytes(retptr, &0u32.to_le_bytes())?;
+                    mem.write_bytes(Self::retptr_at(retptr, 4)?, &0u32.to_le_bytes())?;
+                    return Ok(vec![]);
+                }
+                let (list_ptr, string_ptrs) = env_alloc.ok_or_else(|| {
+                    Error::runtime_error(
+                        "get-environment requires cabi_realloc pre-allocation (env_alloc not set)",
+                    )
+                })?;
+                if string_ptrs.len() != self.env_vars.len() * 2 {
+                    return Err(Error::runtime_error(
+                        "get-environment: string allocation count mismatch",
+                    ));
+                }
+                for (i, (name, value)) in self.env_vars.iter().enumerate() {
+                    // The whole 16-byte entry must be addressable without wrapping.
+                    let entry = list_ptr
+                        .checked_add(i as u32 * 16)
+                        .filter(|e| e.checked_add(16).is_some())
+                        .ok_or_else(|| Error::memory_out_of_bounds("get-environment: entry"))?;
+                    for (field, text) in [(0u32, name), (8u32, value)] {
+                        let (ptr, alloc_len) = string_ptrs[i * 2 + (field / 8) as usize];
+                        let bytes = text.as_bytes();
+                        if bytes.len() as u32 != alloc_len {
+                            return Err(Error::runtime_error(
+                                "get-environment: string allocation length mismatch",
+                            ));
+                        }
+                        mem.write_bytes(ptr, bytes)?;
+                        mem.write_bytes(entry + field, &ptr.to_le_bytes())?;
+                        mem.write_bytes(entry + field + 4, &alloc_len.to_le_bytes())?;
+                    }
+                }
+                mem.write_bytes(retptr, &list_ptr.to_le_bytes())?;
+                mem.write_bytes(
+                    Self::retptr_at(retptr, 4)?,
+                    &(self.env_vars.len() as u32).to_le_bytes(),
+                )?;
+                Ok(vec![])
             },
 
             // ================================================================
@@ -4274,6 +4328,14 @@ impl kiln_foundation::HostImportHandler for WasiDispatcher {
 
     fn set_preopens_allocation(&mut self, list_ptr: u32, string_ptrs: Vec<(u32, u32)>) {
         self.preopens_alloc = Some((list_ptr, string_ptrs));
+    }
+
+    fn get_environment(&self) -> Vec<(String, String)> {
+        self.env_vars.clone()
+    }
+
+    fn set_environment_allocation(&mut self, list_ptr: u32, string_ptrs: Vec<(u32, u32)>) {
+        self.env_alloc = Some((list_ptr, string_ptrs));
     }
 
     fn set_read_buffer_allocation(&mut self, ptr: u32, size: u32) {
@@ -8774,9 +8836,9 @@ mod global_wasi_state_tests {
         let got = get_global_wasi_env()?;
         set_global_wasi_env(Vec::new());
         assert_eq!(got, env);
-        let fallback = get_global_wasi_env()?;
-        let expected: Vec<(String, String)> = std::env::vars().collect();
-        assert_eq!(fallback, expected);
+        // Unset, the guest environment is empty: it holds only what the
+        // embedder set.
+        assert!(get_global_wasi_env()?.is_empty());
         Ok(())
     }
 }
@@ -10376,10 +10438,15 @@ mod call_import_tests {
         use kiln_foundation::HostImportHandler;
         use kiln_foundation::values::Value as CoreValue;
         let mut d = WasiDispatcher::with_defaults()?;
-        let out = d.call_import("wasi:cli/environment@0.2.4", "get-environment", &[], None)?;
-        assert_eq!(out.len(), 2);
-        assert!(matches!(out[0], CoreValue::I32(0)));
-        assert!(matches!(out[1], CoreValue::I32(0)));
+        // get-environment reaches dispatch_core, which refuses a call with no
+        // memory for its return area instead of answering with an empty list.
+        let no_memory = d.call_import(
+            "wasi:cli/environment@0.2.4",
+            "get-environment",
+            &[CoreValue::I32(16)],
+            None,
+        );
+        assert!(no_memory.is_err());
         let unknown = d.call_import("wasi:nothing/here", "nope", &[], None);
         assert!(unknown.is_err());
         Ok(())
