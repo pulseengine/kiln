@@ -3,7 +3,7 @@ artifacts:
   - id: AD-WASIFS-006
     type: design-decision
     title: "open-at maps its open-flags onto cap-std OpenOptions through the preopen's directory handle, and a directory it opens becomes a descriptor that keeps its handle and its preopen"
-    status: implemented
+    status: verified
     release: v0.9.0
     description: "Implements SR-107. kiln-wasi dispatcher.rs open-at runs the existing sandbox gate on the guest path, then acts through a cap_std::fs::Dir opened on the preopen (cap-std 4.0.3; Apache-2.0 WITH LLVM-exception allowed in deny.toml for cap-primitives and winx, maintainer decision 2026-11-21). open-flags map one to one: create to create(true), create + exclusive to create_new(true) (an existing path fails with exist), truncate to truncate(true), directory to an open_dir that fails with not-directory on a file. An existing directory becomes a new descriptor variant, Directory { root, path }, holding the opened directory handle, its canonical path and the preopen it came from. Every path call on such a descriptor (open-at, stat-at, create-directory-at, remove-directory-at, unlink-file-at, rename-at, link-at, symlink-at, readlink-at) resolves the guest path against the directory's path and requires the result to stay inside the preopen root; it first checks that the path still names the directory that was opened (same device and inode on unix; other hosts refuse) and returns not-permitted if it does not. read-directory on it lists through the handle, get-type reports directory, stat and sync-data use the handle, drop releases it. Divergence from wasmtime: wasmtime keeps acting on a directory descriptor after the directory is moved; kiln refuses with not-permitted."
     tags: [kiln-wasi, wasi-filesystem, open-at, sandbox]

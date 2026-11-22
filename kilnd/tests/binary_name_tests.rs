@@ -55,6 +55,7 @@ fn kiln_unknown_flag_usage_names_kiln() {
     );
 }
 
+// rivet: verifies SR-66
 #[test]
 fn only_the_kiln_binary_is_declared_and_released() {
     let cargo_toml = include_str!("../Cargo.toml");
@@ -81,6 +82,7 @@ fn only_the_kiln_binary_is_declared_and_released() {
     );
 }
 
+// rivet: verifies SR-66
 #[test]
 fn ci_does_not_run_a_kilnd_binary() {
     // The static musl job runs only on main, so a PR's required checks do not

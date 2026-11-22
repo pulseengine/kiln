@@ -1,0 +1,37 @@
+artifacts:
+
+  - id: VER-SR127-001
+    type: verification
+    title: "SR-127: a guest reading wasi:cli/stdin receives host stdin, then end-of-stream (main CI green; ordeal differential 21/21)"
+    status: verified
+    release: v0.9.0
+    description: "Main push cae66295 (PR #716, head b25b95b5; every check passed on that head). Rust CI run 44992923580 completed success; Core Tests job 137117713495 logs ok for kilnd/tests/stdin_tests.rs short_stdin_reaches_the_guest (13 bytes echoed), stdin_larger_than_one_read_reaches_the_guest_whole (10000 bytes), empty_stdin_is_end_of_stream_at_once, and kiln-wasi sr127_stdin (small reads then closed, guest-buffer cap, short host reads, empty stdin, refusal without the stdin capability). Fail-before (supervisor, local, main 2211724a): the two non-empty echo tests output 0 of 13 and 0 of 10000 bytes. Product path, release build of cae66295 (supervisor, 2026-11-22): a Rust 1.100.0 wasm32-wasip2 probe calling stdin().read_to_end, meld 0.69.0 fused, reads 151 of 151 piped bytes (main 2211724a: 0; wasmtime 50.0.1: 151); ordeal a7e3cb8's scripts/wasm_native_differential.sh with `kiln --dir . ordeal.fused.wasm` as the runner exits 0, 21 invocations byte-identical to native, as with wasmtime 50.0.1 (main 2211724a: 1 of 21)."
+    fields:
+      method: test
+    links:
+      - type: verifies
+        target: SR-127
+      - type: verifies
+        target: AD-WASISTDIN-001
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-22T07:30:00Z
+
+  - id: VER-SR128-001
+    type: verification
+    title: "SR-128: arguments after the module path reach the guest unchanged, as with wasmtime run (main CI green)"
+    status: verified
+    release: v0.9.0
+    description: "Main push 5791f808 (PR #715, head 0c727246; every check passed on that head); Rust CI run 44991197058 completed success, and again on cae66295, run 44992923580, Core Tests job 137117713495 logs ok for kilnd/tests/guest_args_tests.rs a_dash_after_the_module_reaches_the_guest, version_after_the_module_is_the_guests_argument, options_after_the_module_reach_the_guest_unchanged, double_dash_before_the_module_ends_kiln_options, plain_arguments_reach_the_guest (fixture control) and an_unknown_option_before_the_module_still_exits_2. Fail-before (supervisor, local, main 2211724a): 4 of 6 failed (`-` exit 2, `--version` printed kiln 0.8.0, guest options exit 2, `--` before the module put the module path into argv). Product path, release build of cae66295 (supervisor, 2026-11-22): ordeal's wasm_native_differential.sh passes `check -`, `--format json` and the other guest arguments through `kiln --dir . ordeal.fused.wasm` and exits 0, 21 of 21, as with wasmtime 50.0.1."
+    fields:
+      method: test
+    links:
+      - type: verifies
+        target: SR-128
+      - type: verifies
+        target: AD-CLIARGS-001
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-22T07:30:00Z

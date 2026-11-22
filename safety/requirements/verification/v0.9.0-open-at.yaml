@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: VER-SR107-001
+    type: verification
+    title: "SR-107: open-at honours create, exclusive, truncate and directory, and works relative to a directory descriptor open-at returned (main CI green; Rust std differential)"
+    status: verified
+    release: v0.9.0
+    description: "Main push db17bbe2 (PR #717, head af0136bf; every check passed on that head, including Dependency Review with the cap-primitives and winx license allowance). Rust CI run 45031536063 completed success, Traceability (rivet validate) success; Core Tests job 137235989597 logs ok for all 27 tests in kiln-wasi dispatcher tests sr107, one per open-flag (create on a missing file, create + exclusive on an existing file is exist, truncate, directory on a file is not-directory) and per operation on a directory descriptor open-at returned (open-at, create, nested open, get-type, stat-at, rename-at, read-directory, `..` above it refused, a moved directory refused with not-permitted). Each test failed before the change that added it (supervisor, local). Product path (supervisor, 2026-11-22): a Rust std probe (OpenOptions create, create_new, truncate, append; create_dir, read_dir and remove_dir_all on a subdirectory), wasm32-wasip2, meld 0.69.0 fused, run on kiln and wasmtime 50.0.1 with the same preopen: main b66776a2 differs on 22 lines including remove_dir_all; db17bbe2's code differs on 1 line, create_escape (a refused `..` aborts instead of returning an error-code), which is SR-106, not SR-107. ordeal's wasm/native differential on a release build of db17bbe2: 21/21."
+    fields:
+      method: test
+    links:
+      - type: verifies
+        target: SR-107
+      - type: verifies
+        target: AD-WASIFS-006
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-22T14:40:00Z

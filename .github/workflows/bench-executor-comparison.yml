@@ -1,5 +1,5 @@
 # SR-31: kiln-async vs embassy on an identical yield workload, timed on a
-# fourpi CI host instead of a developer machine (maintainer decision
+# self-hosted x64 CI runner instead of a developer machine (maintainer decision
 # 2026-10-29). Manual only: it is a measurement, not a gate.
 name: Executor comparison bench (SR-31)
 
