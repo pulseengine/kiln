@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: AD-KILNBIN-001
+    type: design-decision
+    title: kilnd declares one [[bin]], kiln; the package keeps the name kilnd, and tests guard release.yml and ci.yml against a kilnd binary
+    status: implemented
+    release: v0.9.0
+    description: "Implements SR-66 (PR #709, main 4177171b; CI follow-up PR #710, main 2211724a). kilnd/Cargo.toml declares a single [[bin]] named kiln; src/bin/kilnd.rs, DEPRECATED_BIN_NAME and its stderr warning are removed. release.yml stages, strips and version-checks only kiln; ci.yml's Static musl build (SR-68) checks only kiln. kilnd/tests/binary_name_tests.rs: only_the_kiln_binary_is_declared_and_released fails if Cargo.toml declares a kilnd [[bin]] or release.yml stages or loops over one; ci_does_not_run_a_kilnd_binary does the same for ci.yml. Main Rust CI on 2211724a: run 44945793692, success, including the musl job. Consumers moved first: jess resolves kiln (jess#287 closed); varve pins archives that predate the removal."
+    tags: [cli, kilnd, release, naming]
+    fields:
+      alternatives: "(1) Rename the Cargo package to kiln too: changes every -p kilnd in CI, release.yml and downstream build scripts for no user-visible gain. (2) Keep kilnd as a hidden alias: the removal was promised for v0.7.0 by SR-64."
+      rationale: "Users see the binary, not the package; one binary name removes the deprecation path. The guard tests run in Core Tests, so a leftover kilnd reference fails a required check instead of only the main-branch musl job."
+    links:
+      - type: satisfies
+        target: SR-66
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-22T00:30:00Z
