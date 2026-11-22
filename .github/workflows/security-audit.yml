@@ -125,5 +125,5 @@ jobs:
           # (maintainer decision 2026-11-21).
           allow-dependencies-licenses: |
             pkg:cargo/chrono@0.4.*
-            pkg:cargo/cap-primitives@4.*
-            pkg:cargo/winx@0.36.*
+            pkg:cargo/cap-primitives
+            pkg:cargo/winx
