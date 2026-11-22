@@ -3916,6 +3916,11 @@ impl WasiDispatcher {
                 // A source may return fewer bytes than asked; that short read is returned
                 // as-is. End-of-input is `stream-error::closed`. SR-127.
                 if self.stdin_streams.contains(&stream_handle) {
+                    // The stdin capability gates host stdin, as stdout_access gates
+                    // writes to the standard output streams.
+                    if !self.capabilities.io.stdin_access {
+                        return Err(Error::wasi_permission_denied("Stream read access denied"));
+                    }
                     if max_len == 0 {
                         // A zero-length read takes no buffer: ok(empty list).
                         return Ok(vec![
@@ -11071,6 +11076,31 @@ mod input_stream_read_length_tests {
             assert_eq!(
                 read(&mut d, "[method]input-stream.blocking-read", h, 100, 3)?,
                 Ok(vec![0, 1, 2])
+            );
+            Ok(())
+        }
+
+        /// Without the stdin capability a read is refused and the host source is not
+        /// touched, as blocking-write-and-flush is refused without stdout_access.
+        #[serial_test::serial]
+        #[test]
+        fn stdin_read_refused_without_stdin_capability() -> Result<()> {
+            let (mut d, h) = dispatcher_with_stdin(b"secret".to_vec())?;
+            d.capabilities.io.stdin_access = false;
+            for func in [
+                "[method]input-stream.blocking-read",
+                "[method]input-stream.read",
+            ] {
+                assert!(
+                    read(&mut d, func, h, 16, 16).is_err(),
+                    "{func} must be refused"
+                );
+            }
+            d.capabilities.io.stdin_access = true;
+            assert_eq!(
+                read(&mut d, "[method]input-stream.read", h, 16, 16)?,
+                Ok(b"secret".to_vec()),
+                "a refused read must not consume host stdin"
             );
             Ok(())
         }
