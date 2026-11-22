@@ -123,7 +123,5 @@ jobs:
           # cap-primitives and winx (via cap-std, SR-107) are Apache-2.0 WITH
           # LLVM-exception; allowed for these crates only, as in deny.toml
           # (maintainer decision 2026-11-21).
-          allow-dependencies-licenses: |
-            pkg:cargo/chrono@0.4.*
-            pkg:cargo/cap-primitives
-            pkg:cargo/winx
+          # The action splits this list on commas, as in its README.
+          allow-dependencies-licenses: pkg:cargo/chrono, pkg:cargo/cap-primitives, pkg:cargo/winx
