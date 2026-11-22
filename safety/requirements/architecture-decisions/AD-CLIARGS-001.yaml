@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: AD-CLIARGS-001
+    type: design-decision
+    title: kiln's argument loop stops at the module path and hands the rest to the guest verbatim; `--` before the module ends kiln's options
+    status: implemented
+    release: v0.9.0
+    description: "Implements SR-128 (#713). kilnd/src/lib.rs SimpleArgs::parse: at the top of each iteration, once module_path is set, args[i..] are appended to wasi_args unchanged and parsing ends. The first argument that does not start with '-' is the module path; `--` before the module makes the next argument the module path. Unknown options before the module still exit 2 (#486). The guest's argv is the module path followed by wasi_args, as before. Help and usage read `[OPTIONS] <module.wasm> [ARGS]...`. Tests: kilnd/tests/guest_args_tests.rs (a guest prints its argv)."
+    tags: [cli, kilnd, wasmtime-compat]
+    fields:
+      alternatives: "(1) Keep parsing kiln options anywhere and require `--` for guest options (the #486 behaviour): scripts written for `wasmtime run` cannot swap in kiln. (2) Pass unknown options after the module to the guest but keep known ones: the guest's argv would depend on kiln's option list."
+      rationale: "Matching `wasmtime run` makes kiln a drop-in runner for fleet scripts; stopping at the module path gives one rule with no dependence on kiln's option names."
+    links:
+      - type: satisfies
+        target: SR-128
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-22T06:00:00Z

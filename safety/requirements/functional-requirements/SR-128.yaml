@@ -3,7 +3,7 @@ artifacts:
   - id: SR-128
     type: requirement
     title: kiln parses its own options only before the module path; every argument after it goes to the guest, as wasmtime run does
-    status: approved
+    status: implemented
     release: v0.9.0
     description: "Issue #713. MEASURED 2026-11-21, kiln main 2211724a with ordeal a7e3cb8 (Rust 1.100.0, wasm32-wasip2, meld 0.69.0 fused) against wasmtime 50.0.1: 'kiln ... ordeal.wasm check -' exits 2 with 'unrecognized argument -', 'check FILE --format json' exits 2 with 'unrecognized argument --format', and 'ordeal.wasm --version' prints kiln's version; wasmtime passes all of these to the guest. kilnd/src/lib.rs parses every argument that starts with '-' as a kiln option wherever it appears; only '--' forwards the rest. REQUIRED: option parsing stops at the first positional argument (the module path); that argument and everything after it are the guest's argv, unchanged, including '-', '--' and arguments that look like kiln options; unknown options before the module path still exit 2 (#486). Verified by: kilnd tests for each measured case and for an unknown option before the module; ordeal's wasm_native_differential.sh run with kiln as the runner passes the same arguments as with wasmtime. Maintainer decision 2026-11-22 (option dialogue): approved for v0.9.0, matching wasmtime."
     tags: [cli, kilnd, wasmtime-compat]
