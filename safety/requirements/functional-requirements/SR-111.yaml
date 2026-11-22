@@ -4,7 +4,7 @@ artifacts:
     type: requirement
     title: A guest's WASI exit returns its exit code to the embedder instead of ending the host process from inside kiln-wasi or kiln-runtime
     status: proposed
-    release: v0.9.0
+    release: backlog
     description: "MEASURED 2026-11-14 on main b4e7096e: wasi:cli/exit.exit and preview1 proc_exit call std::process::exit inside the dispatcher (kiln-wasi/src/dispatcher.rs CliExit and PreviewOneProcExit arms, kiln-runtime/src/wasip2_host.rs at two sites). kilnd runs `run` on a spawned large-stack thread (kilnd/src/lib.rs run_on_large_stack), so exit runs off the main thread, and any program embedding kiln-wasi or kiln-runtime as a library is terminated by a guest. Rust std soundness issues for exit off the main thread were assessed: rust-lang/rust#161018 is fixed in 1.99 (v0.7.3 was built with 1.100.0) and #164243 is not reachable from kiln, so this is not a security fix. REQUIRED: a guest exit unwinds out of the interpreter as a typed outcome carrying the exit code; kilnd's main thread maps it to the process exit status; no library crate calls std::process::exit. Verified by: a kilnd test that a guest exit code reaches the process status unchanged, a library-level test that an embedder receives the code and keeps running, and a check that no library crate references std::process::exit."
     tags: [wasi, embedding, robustness]
     provenance:
