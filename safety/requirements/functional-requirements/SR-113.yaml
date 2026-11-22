@@ -4,7 +4,7 @@ artifacts:
     type: requirement
     title: The WAST validator decodes signed LEB128 without integer overflow
     status: proposed
-    release: v0.9.0
+    release: backlog
     description: "MEASURED 2026-11-14 while building the SR-93 runner: kiln-build-core/src/wast_validator.rs decodes a signed 64-bit LEB128 with `result |= -(1 << (shift + 7))`, which overflows i64 when shift is 56, so a debug build panics on such input and a release build wraps silently. The component WAST runner hit the panic on the vendored suite in a debug build. REQUIRED: signed LEB128 decoding sign-extends without overflow for every valid length, and malformed or over-long encodings return an error. Verified by: unit tests for the boundary encodings (i64::MIN, i64::MAX, -1, a 10-byte encoding, an over-long encoding) in debug and release, and the component WAST runner completing in a debug build."
     tags: [build-tool, wast, decoder]
     provenance:

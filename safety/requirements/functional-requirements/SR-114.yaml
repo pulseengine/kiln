@@ -4,7 +4,7 @@ artifacts:
     type: requirement
     title: The component WAST runner links components the way the WAST wires them, so cross-component tests run instead of failing on unresolved imports
     status: proposed
-    release: v0.9.0
+    release: backlog
     description: "MEASURED 2026-11-14 on the SR-93 runner (main d9f3e865): of 578 failing commands in the upstream Component Model WAST suite, 440 fail with 'unsupported: unresolved host imports', mostly files where one component imports another's instance (register / instance directives). The runner refuses any fused component with imports before loading. REQUIRED: the runner resolves a fused component's imports against instances the WAST registered or instantiated earlier, through kiln's linker, and still fails loud on an import nothing provides; the baseline is tightened in the same change. Verified by: the cm-wast gate with a tightened baseline, and a negative control where a deliberately missing registration fails with the import's name."
     tags: [component-model, wast, conformance]
     links:

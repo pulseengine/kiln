@@ -4,7 +4,7 @@ artifacts:
     type: requirement
     title: "Serves North Star O5: kiln CI runs the pinned dogfood components on kiln and wasmtime and fails on any difference"
     status: approved
-    release: v0.9.0
+    release: v0.10.0
     description: "Bet 1 of docs/architecture/v0.9.0-release-plan.md (draft, maintainer decides scope). REQUIRED: a required CI job shall run each component in a pinned dogfood manifest (first entry: pulseengine.eu's north-star-check, meld-fused) on kiln and on wasmtime, and shall fail on any difference in stdout, stderr or exit status. Inputs cover a passing case, the exit-2 cases and a rule-breaking case. Verified by: the job required and green on main, and a negative control where a manifest entry whose expected output is altered turns the job red. Indicator: O5 counts the gate only when the pulseengine.eu O5 script reports it (signature verified, equivalence test against the old implementation in CI, no *_GAP switch, inventory N published)."
     tags: [north-star-o5, dogfood, ci, wasip2]
     links:
@@ -19,7 +19,7 @@ artifacts:
     type: requirement
     title: "Serves North Star O1: kiln-runtime reports every trap with a code that is stable across releases and unique per spec trap class, emitted at the trap site"
     status: proposed
-    release: v0.9.0
+    release: backlog
     description: "Bet 2 of docs/architecture/v0.9.0-release-plan.md (draft). synth's execution-match oracle uses kiln-runtime as its reference engine and today compares traps by message. REQUIRED: kiln-runtime shall return each trap with a numeric trap-kind code that is unique per spec trap class (unreachable, integer divide by zero, integer overflow, invalid conversion, out-of-bounds memory or table access, indirect call type mismatch, null reference, call stack exhausted) and stable across releases; the same trap shall yield the same code on call, call_indirect, call_ref and return_call. Verified by: tests that trigger each class at its trap site on each call route and assert the code; and the spec suite's assert_trap directives checked by code. The O1 number (execution match on a shipped ELF) is synth's to report."
     tags: [north-star-o1, embedding, traps, synth-seam]
     provenance:
@@ -31,7 +31,7 @@ artifacts:
     type: requirement
     title: "Serves North Star O1: core WAST conformance is a required check over a fixed denominator of vendored spec files"
     status: proposed
-    release: v0.9.0
+    release: backlog
     description: "Bet 2 of docs/architecture/v0.9.0-release-plan.md (draft); sharpens SR-92. Baseline 2026-11-18: 263 of 281 files pass (safety/wast-conformance-baseline.txt lists the 18 failing). REQUIRED: the WAST conformance gate shall be a required check whose denominator is every .wast file in the pinned external/testsuite outside legacy/; excluding a file shall count as failing it; the passing count shall never decrease and the failing list shall never grow. Verified by: the check required and green on main, and a negative control where a deliberately broken instruction lowers the count and turns it red."
     tags: [north-star-o1, wast, conformance]
     links:
@@ -46,7 +46,7 @@ artifacts:
     type: requirement
     title: "Serves North Star O3: kiln's Kani proofs run as a required check with a ledger of every input-narrowing assumption that may only shrink"
     status: approved
-    release: v0.9.0
+    release: v0.10.0
     description: "Bet 3 of docs/architecture/v0.9.0-release-plan.md (draft); sharpens SR-103. REQUIRED: a per-PR required check shall run kiln's Kani harnesses; each harness shall name the function it proves and a live entry path on the product that calls it; a committed ledger shall list every assumption that narrows a harness's input range (kani::assume, unwind bounds, reduced input types, stubs) and CI shall fail when the ledger grows. Verified by: the check required and green on main; a mutation control where a change that breaks a proven property turns it red; and the ledger baseline committed with the first green run. Open for the maintainer: O3's definition also asks for a kernel axiom audit, which has no direct Kani equivalent."
     tags: [north-star-o3, kani, proofs, ledger]
     links:
@@ -61,7 +61,7 @@ artifacts:
     type: requirement
     title: "Serves North Star O4: kiln CI classifies changed paths with the shared classifier and runs every gate for any path it cannot classify"
     status: approved
-    release: v0.9.0
+    release: v0.10.0
     description: "Bet 4 of docs/architecture/v0.9.0-release-plan.md (draft). Baseline 2026-11-19: merged PRs 2026-10-19..2026-11-19 by people other than the maintainer: 0 (88 maintainer, 9 dependabot). REQUIRED: kiln CI shall use the shared path classifier (sieve, from the varve layer) so that heavy jobs run on a PR only when their inputs change and always on main; any path it cannot classify, and any change under .github/, tool pins or the submodule, shall run every gate; required checks shall still report on every PR. Verified by: a control on every PR in which a planted change to a heavy job's real input selects that job and a docs-only change does not. Indicator: O4 is assessed one varve layer after release (external human contributors only; bots and agent accounts excluded; guard: reverted or reopened work)."
     tags: [north-star-o4, ci, sieve]
     provenance:

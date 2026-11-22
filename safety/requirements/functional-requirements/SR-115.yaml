@@ -4,7 +4,7 @@ artifacts:
     type: requirement
     title: The build tooling does not depend on chrono
     status: proposed
-    release: v0.9.0
+    release: backlog
     description: "MEASURED 2026-11-17: RUSTSEC-2026-0543 marks chrono unmaintained; cargo-deny failed the SCORE job on PR #681 and the advisory is ignored in deny.toml as a stopgap. chrono 0.4.45 reaches the workspace through cargo-kiln and kiln-build-core (14 call sites, all formatting the current time as RFC 3339 or '%Y-%m-%d %H:%M:%S UTC', or local time in ci.rs, kani.rs, matrix.rs) and as a kiln-intercept dev-dependency; kilnd's normal dependency tree does not contain it on any of the 7 release targets. REQUIRED: no workspace crate depends on chrono, timestamps keep their current formats, and the RUSTSEC-2026-0543 ignore is removed from deny.toml. Verified by: cargo tree --workspace -i chrono finds no match, cargo deny check advisories passes without the ignore, and the VEX command's timestamp stays RFC 3339 with second precision and a Z suffix."
     tags: [build-tool, supply-chain]
     provenance:
