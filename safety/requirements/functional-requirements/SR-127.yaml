@@ -3,7 +3,7 @@ artifacts:
   - id: SR-127
     type: requirement
     title: A guest that reads wasi:cli/stdin receives the bytes the host gives kiln on stdin, then end-of-stream, as on wasmtime
-    status: approved
+    status: implemented
     release: v0.9.0
     description: "Issue #712. MEASURED 2026-11-21, kiln main 2211724a against wasmtime 50.0.1: a Rust 1.100.0 wasm32-wasip2 probe calling std::io::stdin().read_to_end, meld 0.69.0 fused, with a 151-byte file on stdin reads 0 bytes on kiln (with and without --wasi) and 151 on wasmtime. get-stdin creates an input-stream resource, but input-stream read only serves streams in stream_files (file-backed streams), so the stdin handle gets stream-error::closed on the first read. ordeal a7e3cb8's wasm/native differential, which pipes each fixture on stdin, agrees on 1 of 21 invocations on kiln and 21 of 21 on wasmtime. REQ_FUNC_036 claims stdin. REQUIRED: read and blocking-read on the get-stdin stream return the host's stdin bytes, at most len per call, and closed once host stdin is at end-of-file; subscribe on it does not report ready before data or end-of-file is available. Verified by: (1) kiln-wasi tests reading a known byte sequence and then closed through the stdin handle; (2) the stdin probe and ordeal's wasm_native_differential.sh run on kiln give the same stdout and exit status as on wasmtime. Maintainer decision 2026-11-22 (option dialogue): approved for v0.9.0."
     tags: [wasi, wasip2, cli, stdin, wasmtime-differential]
