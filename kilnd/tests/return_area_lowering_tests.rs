@@ -77,8 +77,8 @@ fn get_type_writes_return_area_and_pushes_nothing() {
     assert_eq!(run("kiln_sr102_gt.wasm", GET_TYPE, b""), [42, 0, 3]);
 }
 
-/// `input-stream.read(stdin, 16, 160)`: stdin is not a file-backed stream, so
-/// the host answers `result<list<u8>, stream-error>` = err (1) at +0 with
+/// `input-stream.read(stdin, 16, 160)` on an empty stdin (end-of-input; stdin
+/// carrying bytes is `stdin_tests.rs`): the host answers `result<list<u8>, stream-error>` = err (1) at +0 with
 /// `stream-error::closed` (1) at +4, and the stack carries nothing extra.
 const STDIN_READ: &str = r#"(module
     (type $w (func (param i32 i32 i32 i32)))
@@ -113,5 +113,5 @@ const STDIN_READ: &str = r#"(module
 
 #[test]
 fn input_stream_read_writes_return_area_and_pushes_nothing() {
-    assert_eq!(run("kiln_sr102_rd.wasm", STDIN_READ, b"hello"), [42, 1, 1]);
+    assert_eq!(run("kiln_sr102_rd.wasm", STDIN_READ, b""), [42, 1, 1]);
 }
