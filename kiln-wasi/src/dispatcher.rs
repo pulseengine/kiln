@@ -1671,43 +1671,82 @@ impl WasiDispatcher {
         v
     }
 
-    /// Open `path` (already authorized by [`Self::resolve_and_authorize`] against the
-    /// preopen `base`) and return the handle the descriptor will keep. This is the one
-    /// helper every file open goes through. The file is opened first and containment
-    /// is then verified on the opened handle ([`Self::verify_handle_contained`]), so a
-    /// path component swapped for a symlink after authorization is caught. The caller
-    /// has already checked the path is a regular file, so a FIFO swapped in later is
-    /// the only way to block here; the post-open check refuses anything that is not a
-    /// regular file. After this the descriptor operates on the handle, never on the
-    /// path again.
+    /// Open the existing regular file at `authorized` (returned by
+    /// [`Self::resolve_and_authorize`] against the preopen `base`) and return the
+    /// handle the descriptor will keep. This is the one helper every file open goes
+    /// through. The file is opened inside the authorized parent's handle
+    /// ([`Self::open_authorized_parent`]); its final component is checked without
+    /// following (it must be a regular file), opened, and the opened handle must be
+    /// that same file (device and inode). So the descriptor holds exactly the file
+    /// the gate (and its allow-list) authorized, whatever the path names afterwards.
+    /// After this the descriptor operates on the handle, never on the path again.
     ///
-    /// `truncate` empties the file only AFTER containment has been verified on the
-    /// handle, so a swapped path can never truncate a file outside the preopen.
+    /// `truncate` empties the file only after that identity check.
     ///
-    /// The outer `Err` is a sandbox violation; the inner `Err` is a host I/O error.
+    /// The outer `Err` is a sandbox refusal; the inner `Err` is a host I/O error.
     #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
     fn open_authorized_file(
         base: &std::path::Path,
-        path: &std::path::Path,
+        authorized: &std::path::Path,
         read: bool,
         write: bool,
         truncate: bool,
     ) -> Result<std::result::Result<std::fs::File, std::io::Error>> {
-        // Test-only seam: lets a test race a directory swap between authorization
-        // and the open.
+        // Test-only seam: lets a test race a swap between authorization and the open.
         #[cfg(test)]
         run_before_open_hook();
-        let file = match std::fs::OpenOptions::new().read(read || !write).write(write).open(path) {
-            Ok(f) => f,
+        let refused = || Error::wasi_permission_denied("Path changed after authorization");
+        let (parent, name) = match Self::open_authorized_parent(base, authorized)? {
+            Ok(parts) => parts,
             Err(e) => return Ok(Err(e)),
         };
-        Self::verify_handle_contained(base, path, &file)?;
+        let checked = match parent.symlink_metadata(&name) {
+            Ok(m) => m,
+            Err(e) => return Ok(Err(e)),
+        };
+        if !checked.is_file() {
+            return Err(refused());
+        }
+        let mut options = cap_std::fs::OpenOptions::new();
+        options.read(read || !write).write(write);
+        let file = match parent.open_with(&name, &options) {
+            Ok(f) => f.into_std(),
+            Err(e) => return Ok(Err(e)),
+        };
+        Self::require_same_file(&file, &checked).map_err(|_| refused())?;
         if truncate {
             if let Err(e) = file.set_len(0) {
                 return Ok(Err(e));
             }
         }
         Ok(Ok(file))
+    }
+
+    /// `file` must be the regular file `checked` describes (same device and inode).
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    fn require_same_file(file: &std::fs::File, checked: &cap_std::fs::Metadata) -> Result<()> {
+        #[cfg(unix)]
+        {
+            use cap_std::fs::MetadataExt as _;
+            use std::os::unix::fs::MetadataExt as _;
+            let opened = file
+                .metadata()
+                .map_err(|_| Error::wasi_permission_denied("File handle cannot be inspected"))?;
+            if opened.is_file() && (opened.dev(), opened.ino()) == (checked.dev(), checked.ino()) {
+                Ok(())
+            } else {
+                Err(Error::wasi_permission_denied(
+                    "File handle is not the checked file",
+                ))
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = (file, checked);
+            Err(Error::wasi_permission_denied(
+                "File handle identity check is not supported on this platform",
+            ))
+        }
     }
 
     /// The preopen `base` as a capability directory. Every path given to it is
@@ -1872,68 +1911,6 @@ impl WasiDispatcher {
         };
         Self::require_same_directory(&dir, &checked)?;
         Ok(Ok(dir.into_std_file()))
-    }
-
-    /// Containment check on the OPENED handle (not on the path, which an attacker can
-    /// swap): any directory component swapped for a symlink between authorization and
-    /// open makes the handle point outside the preopen, and this refuses it.
-    ///
-    /// * Linux: the handle's real path is read from `/proc/self/fd/<fd>` and must lie
-    ///   under the canonical preopen base.
-    /// * Other unix (macOS): `fcntl(F_GETPATH)` would need `libc` (not a dependency of
-    ///   this `#![deny(unsafe_code)]` crate), so identity is checked instead: the path
-    ///   is re-resolved, must lie under the canonical base, and must name the very
-    ///   inode (`dev`, `ino`) the handle refers to. A handle opened through a swapped
-    ///   directory refers to an outside inode, so it can never match an inside path.
-    /// * Elsewhere: fails loud as unsupported rather than skipping the check.
-    ///
-    /// A handle that is not a regular file is refused (FIFOs, devices).
-    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
-    fn verify_handle_contained(
-        base: &std::path::Path,
-        path: &std::path::Path,
-        file: &std::fs::File,
-    ) -> Result<()> {
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::MetadataExt as _;
-            let refused = || Error::wasi_permission_denied("Opened handle escapes the preopen");
-            let opened = file
-                .metadata()
-                .map_err(|_| Error::wasi_permission_denied("Opened handle cannot be inspected"))?;
-            if !opened.is_file() {
-                return Err(refused());
-            }
-            let real_base = std::fs::canonicalize(base)
-                .map_err(|_| Error::wasi_permission_denied("Preopen base cannot be resolved"))?;
-            #[cfg(target_os = "linux")]
-            {
-                use std::os::fd::AsRawFd as _;
-                let real = std::fs::read_link(format!("/proc/self/fd/{}", file.as_raw_fd()))
-                    .map_err(|_| {
-                        Error::wasi_permission_denied("Opened handle cannot be resolved")
-                    })?;
-                if !real.starts_with(&real_base) {
-                    return Err(refused());
-                }
-            }
-            let real = std::fs::canonicalize(path).map_err(|_| refused())?;
-            if !real.starts_with(&real_base) {
-                return Err(refused());
-            }
-            let on_disk = std::fs::metadata(&real).map_err(|_| refused())?;
-            if on_disk.dev() != opened.dev() || on_disk.ino() != opened.ino() {
-                return Err(refused());
-            }
-            Ok(())
-        }
-        #[cfg(not(unix))]
-        {
-            let _ = (base, path, file);
-            Err(Error::wasi_unsupported_operation(
-                "Handle containment check is not supported on this platform",
-            ))
-        }
     }
 
     /// Get the list of pre-opened directories
@@ -9123,6 +9100,42 @@ mod tests {
             matches!(res.as_deref(), Ok([CV::I32(0), CV::I32(_)]))
         }
 
+        /// open-at acts on the file the gate authorized: if that name is replaced
+        /// by a symlink to another file between the gate and the open, the open is
+        /// refused and the other file keeps its contents.
+        #[cfg(unix)]
+        #[serial_test::serial]
+        #[test]
+        fn truncate_acts_only_on_the_authorized_file() -> Result<()> {
+            kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+            let (root, sandbox) = fixture("sr107_trunc_authorized");
+            std::fs::write(sandbox.join("a.txt"), b"AAA").unwrap();
+            std::fs::write(sandbox.join("b.txt"), b"BBB").unwrap();
+            let mut d = WasiDispatcher::with_defaults()?;
+            let dir = d.add_preopen(sandbox.clone())?;
+            let mem = SliceMemory::with_size(0x10000);
+            let sb = sandbox.clone();
+            BEFORE_OPEN_HOOK.with(|h| {
+                *h.borrow_mut() = Some(Box::new(move || {
+                    std::fs::rename(sb.join("a.txt"), sb.join("a.orig")).unwrap();
+                    std::os::unix::fs::symlink(sb.join("b.txt"), sb.join("a.txt")).unwrap();
+                }));
+            });
+            let res = open(&mut d, &mem, dir, b"a.txt", TRUNCATE, DESC_WRITE);
+            BEFORE_OPEN_HOOK.with(|h| *h.borrow_mut() = None);
+            let b = std::fs::read(sandbox.join("b.txt")).unwrap();
+            std::fs::remove_dir_all(&root).ok();
+            assert!(
+                !is_ok(&res),
+                "a swapped final component must be refused, got {res:?}"
+            );
+            assert_eq!(
+                b, b"BBB",
+                "a file the gate did not authorize must not be truncated"
+            );
+            Ok(())
+        }
+
         fn err_code(res: &Result<Vec<CV>>) -> Option<i32> {
             match res.as_deref() {
                 Ok([CV::I32(1), CV::I32(c)]) => Some(*c),
@@ -10384,37 +10397,6 @@ mod fs_error_code_tests {
         assert_eq!(fs_error::INVALID, 12);
         let other = std::io::Error::from(std::io::ErrorKind::BrokenPipe);
         assert_eq!(WasiDispatcher::fs_error_code(&other), fs_error::IO);
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod verify_handle_contained_tests {
-    use super::*;
-
-    #[cfg(all(feature = "wasi-filesystem", feature = "std", unix))]
-    #[serial_test::serial]
-    #[test]
-    fn handle_for_other_inode_in_same_dir_is_refused() -> Result<()> {
-        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0);
-        let root = std::env::temp_dir().join(format!(
-            "kiln_verify_handle_{}_{}",
-            std::process::id(),
-            nanos
-        ));
-        std::fs::create_dir_all(&root).unwrap();
-        std::fs::write(root.join("a.txt"), b"A").unwrap();
-        std::fs::write(root.join("b.txt"), b"B").unwrap();
-        let handle = std::fs::File::open(root.join("a.txt")).unwrap();
-        let good = WasiDispatcher::verify_handle_contained(&root, &root.join("a.txt"), &handle);
-        let bad = WasiDispatcher::verify_handle_contained(&root, &root.join("b.txt"), &handle);
-        std::fs::remove_dir_all(&root).unwrap();
-        assert!(good.is_ok());
-        assert!(bad.is_err());
         Ok(())
     }
 }
