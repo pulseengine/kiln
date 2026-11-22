@@ -1740,6 +1740,15 @@ impl SimpleArgs {
 
         let mut i = 1; // Skip program name
         while i < args.len() {
+            // SR-128 (#713): kiln's options end at the module path. The module
+            // path and everything after it are the guest's argv, unchanged,
+            // including `-`, `--` and words that look like kiln options, as
+            // `wasmtime run [OPTIONS] <module> [ARGS]` does.
+            if result.module_path.is_some() {
+                #[cfg(feature = "wasi")]
+                result.wasi_args.extend(args[i..].iter().cloned());
+                break;
+            }
             match args[i].as_str() {
                 // SR-59 / #480: supply arguments to the invoked export. Values are
                 // parsed against the export's DECLARED core parameter types, so
@@ -1761,7 +1770,11 @@ impl SimpleArgs {
                 },
                 "--help" | "-h" => {
                     println!("Kiln WebAssembly Runtime ({bin_name})");
-                    println!("Usage: {bin_name} [OPTIONS] <module.wasm>");
+                    println!("Usage: {bin_name} [OPTIONS] <module.wasm> [ARGS]...");
+                    println!();
+                    println!(
+                        "Options come before the module; ARGS after it go to the guest unchanged."
+                    );
                     println!();
                     println!("Options:");
                     println!("  --function <name>     Function to execute (default: start)");
@@ -1902,27 +1915,17 @@ impl SimpleArgs {
                         result.component_interfaces.push(args[i].clone());
                     }
                 },
-                // Everything after "--" goes to wasi_args
+                // "--" before the module path ends kiln's options: the next
+                // argument is the module path, even if it starts with '-'.
                 "--" => {
-                    #[cfg(feature = "wasi")]
-                    {
-                        i += 1;
-                        while i < args.len() {
-                            result.wasi_args.push(args[i].clone());
-                            i += 1;
-                        }
+                    i += 1;
+                    if i < args.len() {
+                        result.module_path = Some(args[i].clone());
                     }
-                    break;
                 },
+                // The first non-flag argument is the module path.
                 arg if !arg.starts_with('-') => {
-                    // First non-flag argument is the module path
-                    if result.module_path.is_none() {
-                        result.module_path = Some(arg.to_string());
-                    } else {
-                        // Additional positional arguments go to wasi_args
-                        #[cfg(feature = "wasi")]
-                        result.wasi_args.push(arg.to_string());
-                    }
+                    result.module_path = Some(arg.to_string());
                 },
                 // FAIL LOUD on an unrecognised flag (CLAUDE.md: no fallback that
                 // masks a mistake). Silently ignoring these was actively unsafe:
@@ -1933,7 +1936,7 @@ impl SimpleArgs {
                 // CLI baseline (usage errors are 2, not 1). Issue #486.
                 unknown => {
                     eprintln!("error: unrecognized argument '{unknown}'");
-                    eprintln!("Usage: {bin_name} [OPTIONS] <module.wasm>");
+                    eprintln!("Usage: {bin_name} [OPTIONS] <module.wasm> [ARGS]...");
                     eprintln!("Try '{bin_name} --help' for available options.");
                     process::exit(2);
                 },

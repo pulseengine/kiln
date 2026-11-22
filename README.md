@@ -48,7 +48,7 @@ cd kiln
 cargo build --bin kiln --features "std,kiln-execution"
 
 # Run a WebAssembly component
-./target/debug/kiln your_component.wasm --component
+./target/debug/kiln --component your_component.wasm
 ```
 
 ## Architecture
@@ -64,13 +64,17 @@ cargo build --bin kiln --features "std,kiln-execution"
 
 ```bash
 # Basic component execution
-kiln component.wasm --component
+kiln --component component.wasm
 
 # With WASI support
-kiln component.wasm --component --wasi
+kiln --component --wasi component.wasm
 
 # Set resource limits
-kiln component.wasm --component --fuel 100000 --memory 1048576
+kiln --component --fuel 100000 --memory 1048576 component.wasm
+
+# kiln's options go before the module; everything after it is the guest's
+# argv, as with `wasmtime run`
+kiln --dir . tool.wasm check - --format json
 ```
 
 ## Building
@@ -91,7 +95,7 @@ cargo test --workspace
 **Early Development** — Basic WebAssembly component execution is working:
 
 ```bash
-./target/debug/kiln hello_rust.wasm --component
+./target/debug/kiln --component hello_rust.wasm
 # Output: Hello wasm component world from Rust!
 ```
 
