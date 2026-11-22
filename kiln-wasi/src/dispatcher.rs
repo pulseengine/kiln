@@ -842,6 +842,14 @@ pub struct WasiDispatcher {
     /// mistaken for a file descriptor by `descriptor.read`/`write`.
     #[cfg(feature = "std")]
     stream_files: HashMap<u32, std::fs::File>,
+    /// The host byte source behind every `wasi:cli/stdin` input-stream. It is read on
+    /// demand (never buffered up front) and shared by all `get-stdin` handles, as the
+    /// process has one stdin. Defaults to the process's stdin. SR-127.
+    #[cfg(feature = "std")]
+    stdin_source: Box<dyn std::io::Read + Send + Sync>,
+    /// The input-stream handles `get-stdin` returned and the guest has not dropped.
+    #[cfg(feature = "std")]
+    stdin_streams: std::collections::HashSet<u32>,
     /// The output-streams `write-via-stream`/`append-via-stream` created, keyed by
     /// stream handle. Each writes to a duplicate of the descriptor's kept `open-at`
     /// handle (never a re-opened path), at its own position or at the file's end.
@@ -945,6 +953,10 @@ impl WasiDispatcher {
             stream_offsets: HashMap::new(),
             #[cfg(feature = "std")]
             stream_files: HashMap::new(),
+            #[cfg(feature = "std")]
+            stdin_source: Box::new(std::io::stdin()),
+            #[cfg(feature = "std")]
+            stdin_streams: std::collections::HashSet::new(),
             #[cfg(feature = "std")]
             file_out_streams: HashMap::new(),
             #[cfg(feature = "std")]
@@ -1650,6 +1662,13 @@ impl WasiDispatcher {
         self.env_vars = env_vars;
     }
 
+    /// Replace the host byte source that `wasi:cli/stdin` streams read from (the
+    /// process's stdin by default), so an embedder or a test supplies its own. SR-127.
+    #[cfg(feature = "std")]
+    pub fn set_stdin_source(&mut self, source: Box<dyn std::io::Read + Send + Sync>) {
+        self.stdin_source = source;
+    }
+
     /// Set pre-allocated memory for arguments (from `cabi_realloc`)
     ///
     /// This is set by the engine after calling `cabi_realloc` to allocate
@@ -1758,6 +1777,7 @@ impl WasiDispatcher {
             WasiFn::GetStdin => {
                 // Preview2: dynamically allocate input-stream resource
                 let handle = self.resource_manager.create_input_stream("stdin")?;
+                self.stdin_streams.insert(handle);
                 Ok(vec![CoreValue::I32(handle as i32)])
             },
 
@@ -2688,6 +2708,7 @@ impl WasiDispatcher {
                     // Release the file handle duplicated for a file input-stream
                     // (closing it) and its read position.
                     self.stream_files.remove(&handle);
+                    self.stdin_streams.remove(&handle);
                     self.stream_offsets.remove(&handle);
                     self.file_out_streams.remove(&handle);
                     drop(self.resource_manager.remove_resource(handle));
@@ -3887,6 +3908,58 @@ impl WasiDispatcher {
 
                 // Consume the per-call read buffer (fresh each read).
                 let read_buf = self.read_buf_alloc.take();
+
+                // The host's stdin: read on demand from the stdin source. kiln streams are
+                // synchronous (`Pollable::AlwaysReady`), so `read` and `blocking-read` both
+                // wait on the host read until at least one byte or end-of-input: `read`
+                // never answers ok(empty) and then a spurious `closed` while data remains.
+                // A source may return fewer bytes than asked; that short read is returned
+                // as-is. End-of-input is `stream-error::closed`. SR-127.
+                if self.stdin_streams.contains(&stream_handle) {
+                    // The stdin capability gates host stdin, as stdout_access gates
+                    // writes to the standard output streams.
+                    if !self.capabilities.io.stdin_access {
+                        return Err(Error::wasi_permission_denied("Stream read access denied"));
+                    }
+                    if max_len == 0 {
+                        // A zero-length read takes no buffer: ok(empty list).
+                        return Ok(vec![
+                            CoreValue::I32(0),
+                            CoreValue::I32(0),
+                            CoreValue::I32(0),
+                        ]);
+                    }
+                    let (buf_ptr, buf_size) = match read_buf {
+                        Some((p, s)) => (p, s as usize),
+                        // FAIL LOUD: the engine allocated no guest buffer for this read.
+                        None => {
+                            return Err(Error::runtime_error(
+                                "input-stream read requires a cabi_realloc'd buffer (read_buf_alloc not set)",
+                            ));
+                        },
+                    };
+                    let mem =
+                        memory.ok_or_else(|| Error::wasi_invalid_argument("read: no memory"))?;
+                    let mut data = vec![0u8; core::cmp::min(max_len, buf_size)];
+                    let n = loop {
+                        match self.stdin_source.read(&mut data) {
+                            Ok(n) => break n,
+                            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {},
+                            Err(_) => {
+                                return Err(Error::runtime_error("reading host stdin failed"));
+                            },
+                        }
+                    };
+                    if n == 0 {
+                        return Ok(closed()); // end of host stdin
+                    }
+                    mem.write_bytes(buf_ptr, &data[..n])?;
+                    return Ok(vec![
+                        CoreValue::I32(0),
+                        CoreValue::I32(buf_ptr as i32),
+                        CoreValue::I32(n as i32),
+                    ]);
+                }
 
                 // Reads go through the handle kept from open-at (never a re-opened path).
                 let file = match self.stream_files.get(&stream_handle) {
@@ -10933,5 +11006,140 @@ mod input_stream_read_length_tests {
         assert!(matches!(&r[2], CV::I32(10)));
         assert_eq!(&b[..10], &content[..10]);
         Ok(())
+    }
+
+    /// SR-127: a guest reading `wasi:cli/stdin` receives the host's stdin bytes, then
+    /// end-of-stream.
+    #[cfg(feature = "std")]
+    mod sr127_stdin {
+        use super::*;
+        use kiln_foundation::traits::SliceMemory;
+        use kiln_foundation::values::Value as CV;
+
+        fn dispatcher_with_stdin(bytes: Vec<u8>) -> Result<(WasiDispatcher, i32)> {
+            kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+            let mut d = WasiDispatcher::with_defaults()?;
+            d.set_stdin_source(Box::new(std::io::Cursor::new(bytes)));
+            let mem = SliceMemory::with_size(0x10000);
+            let h = d.dispatch_core("wasi:cli/stdin", "get-stdin", &[], Some(&mem))?;
+            match h.as_slice() {
+                [CV::I32(h)] => Ok((d, *h)),
+                _ => Err(Error::runtime_error("get-stdin must return one handle")),
+            }
+        }
+
+        /// One read: `Ok(bytes)`, or `Err(())` for stream-error::closed.
+        fn read(
+            d: &mut WasiDispatcher,
+            func: &str,
+            h: i32,
+            len: i64,
+            buf_size: u32,
+        ) -> Result<core::result::Result<Vec<u8>, ()>> {
+            let mem = SliceMemory::with_size(0x10000);
+            d.read_buf_alloc = Some((0x2000, buf_size));
+            let r = d.dispatch_core(
+                "wasi:io/streams",
+                func,
+                &[CV::I32(h), CV::I64(len)],
+                Some(&mem),
+            )?;
+            match r.as_slice() {
+                [CV::I32(0), CV::I32(ptr), CV::I32(n)] => {
+                    let mut b = vec![0u8; *n as usize];
+                    mem.read_bytes(*ptr as u32, &mut b)?;
+                    Ok(Ok(b))
+                },
+                [CV::I32(1), CV::I32(1)] => Ok(Err(())),
+                _ => Err(Error::runtime_error("unexpected read result shape")),
+            }
+        }
+
+        #[serial_test::serial]
+        #[test]
+        fn stdin_stream_returns_host_bytes_in_small_reads_then_closed() -> Result<()> {
+            let (mut d, h) = dispatcher_with_stdin((0..10u8).collect())?;
+            let blocking = "[method]input-stream.blocking-read";
+            let plain = "[method]input-stream.read";
+            assert_eq!(read(&mut d, blocking, h, 4, 4096)?, Ok(vec![0, 1, 2, 3]));
+            assert_eq!(read(&mut d, plain, h, 4, 4096)?, Ok(vec![4, 5, 6, 7]));
+            assert_eq!(read(&mut d, blocking, h, 4, 4096)?, Ok(vec![8, 9]));
+            assert_eq!(read(&mut d, blocking, h, 4, 4096)?, Err(()));
+            assert_eq!(read(&mut d, plain, h, 4, 4096)?, Err(()));
+            Ok(())
+        }
+
+        #[serial_test::serial]
+        #[test]
+        fn stdin_read_is_capped_by_the_guest_buffer() -> Result<()> {
+            let (mut d, h) = dispatcher_with_stdin((0..10u8).collect())?;
+            assert_eq!(
+                read(&mut d, "[method]input-stream.blocking-read", h, 100, 3)?,
+                Ok(vec![0, 1, 2])
+            );
+            Ok(())
+        }
+
+        /// Without the stdin capability a read is refused and the host source is not
+        /// touched, as blocking-write-and-flush is refused without stdout_access.
+        #[serial_test::serial]
+        #[test]
+        fn stdin_read_refused_without_stdin_capability() -> Result<()> {
+            let (mut d, h) = dispatcher_with_stdin(b"secret".to_vec())?;
+            d.capabilities.io.stdin_access = false;
+            for func in [
+                "[method]input-stream.blocking-read",
+                "[method]input-stream.read",
+            ] {
+                assert!(
+                    read(&mut d, func, h, 16, 16).is_err(),
+                    "{func} must be refused"
+                );
+            }
+            d.capabilities.io.stdin_access = true;
+            assert_eq!(
+                read(&mut d, "[method]input-stream.read", h, 16, 16)?,
+                Ok(b"secret".to_vec()),
+                "a refused read must not consume host stdin"
+            );
+            Ok(())
+        }
+
+        #[serial_test::serial]
+        #[test]
+        fn empty_stdin_is_closed_at_once() -> Result<()> {
+            let (mut d, h) = dispatcher_with_stdin(Vec::new())?;
+            assert_eq!(
+                read(&mut d, "[method]input-stream.blocking-read", h, 16, 16)?,
+                Err(())
+            );
+            Ok(())
+        }
+
+        /// The host source may hand back fewer bytes than asked for; a short read is
+        /// returned as-is, never as ok(empty) followed by closed while data remains.
+        #[serial_test::serial]
+        #[test]
+        fn stdin_short_source_reads_never_yield_empty_ok() -> Result<()> {
+            struct OneByte(std::vec::IntoIter<u8>);
+            impl std::io::Read for OneByte {
+                fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+                    match self.0.next() {
+                        Some(b) if !buf.is_empty() => {
+                            buf[0] = b;
+                            Ok(1)
+                        },
+                        _ => Ok(0),
+                    }
+                }
+            }
+            let (mut d, h) = dispatcher_with_stdin(Vec::new())?;
+            d.set_stdin_source(Box::new(OneByte(vec![7u8, 8].into_iter())));
+            let plain = "[method]input-stream.read";
+            assert_eq!(read(&mut d, plain, h, 16, 16)?, Ok(vec![7]));
+            assert_eq!(read(&mut d, plain, h, 16, 16)?, Ok(vec![8]));
+            assert_eq!(read(&mut d, plain, h, 16, 16)?, Err(()));
+            Ok(())
+        }
     }
 }
