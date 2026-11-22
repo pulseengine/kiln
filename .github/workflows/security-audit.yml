@@ -120,5 +120,8 @@ jobs:
           allow-licenses: MIT, Apache-2.0, BSD-3-Clause, ISC, MPL-2.0, Unlicense, Zlib
           # Exclude packages with undetected licenses that we've manually verified
           # Using PURL format: pkg:cargo/package@version
-          allow-dependencies-licenses: |
-            pkg:cargo/chrono@0.4.*
+          # cap-primitives and winx (via cap-std, SR-107) are Apache-2.0 WITH
+          # LLVM-exception; allowed for these crates only, as in deny.toml
+          # (maintainer decision 2026-11-21).
+          # The action splits this list on commas, as in its README.
+          allow-dependencies-licenses: pkg:cargo/chrono, pkg:cargo/cap-primitives, pkg:cargo/winx

@@ -17,6 +17,14 @@ allow = [
 # unlicensed = "deny" # Behavior is now deny by default with version = 2
 # copyleft = "warn"   # Behavior is now deny by default unless allowed, with version = 2
 confidence-threshold = 0.92
+# cap-primitives and its Windows dependency winx (via cap-std in kiln-wasi:
+# preopen directory-handle filesystem calls, SR-107) are Apache-2.0 WITH
+# LLVM-exception only; the exception only adds permissions to Apache-2.0.
+# Allowed for these crates alone. Maintainer decision 2026-11-21 (add cap-std).
+exceptions = [
+    { allow = ["Apache-2.0 WITH LLVM-exception"], crate = "cap-primitives" },
+    { allow = ["Apache-2.0 WITH LLVM-exception"], crate = "winx" },
+]
 
 [bans]
 multiple-versions = "warn"
