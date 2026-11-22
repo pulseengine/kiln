@@ -147,6 +147,17 @@ pub enum FileDescriptorType {
     PreopenDirectory(PathBuf),
     /// Regular file with its path
     RegularFile(PathBuf),
+    /// A directory `open-at` opened. Path calls on it resolve relative to
+    /// `path` and cannot leave it (as in wasmtime, it is its own root); the
+    /// host operations act through the preopen `root` it was opened from. The
+    /// entry's `file` holds the opened directory, and every call first checks
+    /// that `path` still names that directory.
+    Directory {
+        /// The preopen this directory was opened from.
+        root: PathBuf,
+        /// The canonical path of the directory when it was opened.
+        path: PathBuf,
+    },
 }
 
 /// A file descriptor entry in the descriptor table
@@ -1331,6 +1342,116 @@ impl WasiDispatcher {
             })
     }
 
+    /// The directory `fd` names, for a path-taking call: `(base, root)`.
+    /// The sandbox gate resolves the guest path against `base`; the host
+    /// operation goes through the preopen `root`. For a preopen both are its
+    /// path. For a directory `open-at` returned, `base` is that directory,
+    /// after checking its path still names the opened directory (canonical,
+    /// inside the preopen, same device and inode as the kept handle).
+    /// `Ok(None)`: `fd` is not a directory descriptor.
+    ///
+    /// # Errors
+    ///
+    /// Returns `wasi_permission_denied` when the directory's path no longer
+    /// names the directory that was opened.
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    fn directory_bases(&self, fd: u32) -> Result<Option<(PathBuf, PathBuf)>> {
+        if let Some(p) = self.preopen_base(fd) {
+            return Ok(Some((p.clone(), p)));
+        }
+        match self.fd_table.get(&fd) {
+            Some(FileDescriptorEntry {
+                fd_type: FileDescriptorType::Directory { root, path },
+                file: Some(handle),
+                ..
+            }) => {
+                Self::require_opened_directory(root, path, handle)?;
+                #[cfg(test)]
+                run_before_gate_hook();
+                Ok(Some((path.clone(), root.clone())))
+            },
+            _ => Ok(None),
+        }
+    }
+
+    /// [`Self::resolve_and_authorize`] against `base`, and the result must lie
+    /// inside the preopen `root` (see [`Self::require_within_root`]).
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    fn gate(
+        &self,
+        base: &std::path::Path,
+        root: &std::path::Path,
+        guest_path: &str,
+    ) -> Result<std::path::PathBuf> {
+        Self::require_within_root(root, self.resolve_and_authorize(base, guest_path)?)
+    }
+
+    /// [`Self::resolve_and_authorize_nofollow`] against `base`, and the result
+    /// must lie inside the preopen `root` (see [`Self::require_within_root`]).
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    fn gate_nofollow(
+        &self,
+        base: &std::path::Path,
+        root: &std::path::Path,
+        guest_path: &str,
+    ) -> Result<std::path::PathBuf> {
+        Self::require_within_root(root, self.resolve_and_authorize_nofollow(base, guest_path)?)
+    }
+
+    /// The gate contains a path in its `base`. For a directory descriptor that
+    /// base is a path inside the preopen, re-resolved on every call; the
+    /// preopen `root` is the path the host configured. Requiring the result to
+    /// lie inside the canonical root keeps it in the preopen even if the
+    /// directory's path is replaced after [`Self::directory_bases`] checked it.
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    fn require_within_root(
+        root: &std::path::Path,
+        resolved: std::path::PathBuf,
+    ) -> Result<std::path::PathBuf> {
+        let real_root = std::fs::canonicalize(root)
+            .map_err(|_| Error::wasi_permission_denied("Preopen base cannot be resolved"))?;
+        if resolved.starts_with(&real_root) {
+            Ok(resolved)
+        } else {
+            Err(Error::wasi_permission_denied("Path escapes sandbox"))
+        }
+    }
+
+    /// `path` must still name the directory `handle` refers to: canonical
+    /// (no symlink on the way), inside the canonical preopen `root`, and the
+    /// same device and inode.
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    fn require_opened_directory(
+        root: &std::path::Path,
+        path: &std::path::Path,
+        handle: &std::fs::File,
+    ) -> Result<()> {
+        let changed = || Error::wasi_permission_denied("Directory changed after it was opened");
+        let real_root = std::fs::canonicalize(root)
+            .map_err(|_| Error::wasi_permission_denied("Preopen base cannot be resolved"))?;
+        let real = std::fs::canonicalize(path).map_err(|_| changed())?;
+        if real != path || !real.starts_with(&real_root) {
+            return Err(changed());
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt as _;
+            let on_disk = std::fs::metadata(&real).map_err(|_| changed())?;
+            let opened = handle.metadata().map_err(|_| changed())?;
+            if (on_disk.dev(), on_disk.ino()) != (opened.dev(), opened.ino()) {
+                return Err(changed());
+            }
+            Ok(())
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = handle;
+            Err(Error::wasi_permission_denied(
+                "Directory handle identity check is not supported on this platform",
+            ))
+        }
+    }
+
     /// Directory-mutating calls need the filesystem write capability.
     ///
     /// # Errors
@@ -1560,6 +1681,9 @@ impl WasiDispatcher {
     /// regular file. After this the descriptor operates on the handle, never on the
     /// path again.
     ///
+    /// `truncate` empties the file only AFTER containment has been verified on the
+    /// handle, so a swapped path can never truncate a file outside the preopen.
+    ///
     /// The outer `Err` is a sandbox violation; the inner `Err` is a host I/O error.
     #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
     fn open_authorized_file(
@@ -1567,21 +1691,187 @@ impl WasiDispatcher {
         path: &std::path::Path,
         read: bool,
         write: bool,
+        truncate: bool,
     ) -> Result<std::result::Result<std::fs::File, std::io::Error>> {
         // Test-only seam: lets a test race a directory swap between authorization
         // and the open.
         #[cfg(test)]
-        BEFORE_OPEN_HOOK.with(|h| {
-            if let Some(hook) = h.borrow_mut().take() {
-                hook();
-            }
-        });
+        run_before_open_hook();
         let file = match std::fs::OpenOptions::new().read(read || !write).write(write).open(path) {
             Ok(f) => f,
             Err(e) => return Ok(Err(e)),
         };
         Self::verify_handle_contained(base, path, &file)?;
+        if truncate {
+            if let Err(e) = file.set_len(0) {
+                return Ok(Err(e));
+            }
+        }
         Ok(Ok(file))
+    }
+
+    /// The preopen `base` as a capability directory. Every path given to it is
+    /// resolved by cap-std relative to this handle, one component at a time:
+    /// `..` above it, an absolute path, or a symlink leading out of it is refused
+    /// (permission denied), so a directory swapped on the host after
+    /// authorization cannot redirect a create or remove outside the preopen.
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    fn preopen_dir(base: &std::path::Path) -> std::io::Result<cap_std::fs::Dir> {
+        cap_std::fs::Dir::open_ambient_dir(base, cap_std::ambient_authority())
+    }
+
+    /// Split `authorized` (a path returned by the sandbox gate: the canonical
+    /// parent inside the canonical preopen, plus a final component) into a handle
+    /// on that parent directory and the final component.
+    ///
+    /// The parent is reached from the preopen handle one component at a time.
+    /// The gate canonicalized it, so no component is a symlink; each is checked
+    /// without following (`symlink_metadata`), opened, and the opened handle must
+    /// be the same directory (device and inode) as the one checked. Anything else
+    /// (a symlink, a non-directory, a different directory) is refused. The caller
+    /// then acts only on the final component inside the returned handle, so the
+    /// host operation happens in the directory the gate authorized, whatever the
+    /// path resolves to afterwards.
+    ///
+    /// The outer `Err` is a sandbox refusal; the inner `Err` is a host I/O error.
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    fn open_authorized_parent(
+        base: &std::path::Path,
+        authorized: &std::path::Path,
+    ) -> Result<std::io::Result<(cap_std::fs::Dir, std::ffi::OsString)>> {
+        let refused = || Error::wasi_permission_denied("Path changed after authorization");
+        let real_base = std::fs::canonicalize(base)
+            .map_err(|_| Error::wasi_permission_denied("Preopen base cannot be resolved"))?;
+        let name = authorized
+            .file_name()
+            .ok_or_else(|| Error::wasi_permission_denied("Path has no final component"))?
+            .to_os_string();
+        let parent = authorized
+            .parent()
+            .and_then(|p| p.strip_prefix(&real_base).ok())
+            .ok_or_else(|| Error::wasi_permission_denied("Path escapes sandbox"))?;
+        let mut dir = match Self::preopen_dir(base) {
+            Ok(d) => d,
+            Err(e) => return Ok(Err(e)),
+        };
+        for component in parent.components() {
+            let std::path::Component::Normal(part) = component else {
+                return Err(refused());
+            };
+            let checked = match dir.symlink_metadata(part) {
+                Ok(m) => m,
+                Err(e) => return Ok(Err(e)),
+            };
+            if !checked.is_dir() {
+                return Err(refused());
+            }
+            let next = match dir.open_dir(part) {
+                Ok(d) => d,
+                Err(e) => return Ok(Err(e)),
+            };
+            Self::require_same_directory(&next, &checked).map_err(|_| refused())?;
+            dir = next;
+        }
+        Ok(Ok((dir, name)))
+    }
+
+    /// `dir` must be the directory `checked` describes (same device and inode).
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    fn require_same_directory(
+        dir: &cap_std::fs::Dir,
+        checked: &cap_std::fs::Metadata,
+    ) -> Result<()> {
+        #[cfg(unix)]
+        {
+            use cap_std::fs::MetadataExt as _;
+            use std::os::unix::fs::MetadataExt as _;
+            let opened =
+                dir.try_clone().and_then(|d| d.into_std_file().metadata()).map_err(|_| {
+                    Error::wasi_permission_denied("Directory handle cannot be inspected")
+                })?;
+            if (opened.dev(), opened.ino()) == (checked.dev(), checked.ino()) {
+                Ok(())
+            } else {
+                Err(Error::wasi_permission_denied(
+                    "Directory handle is not the checked directory",
+                ))
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = (dir, checked);
+            Err(Error::wasi_permission_denied(
+                "Directory handle identity check is not supported on this platform",
+            ))
+        }
+    }
+
+    /// Create the regular file at `authorized` (returned by
+    /// [`Self::resolve_and_authorize`] for a missing path) and return its handle.
+    /// The create happens inside the authorized parent's handle
+    /// ([`Self::open_authorized_parent`]) with create-new (O_CREAT | O_EXCL, which
+    /// never follows a symlink on the final component), so it fails if anything
+    /// exists there.
+    ///
+    /// The outer `Err` is a sandbox refusal; the inner `Err` is a host I/O error.
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    fn create_authorized_file(
+        base: &std::path::Path,
+        authorized: &std::path::Path,
+        read: bool,
+        write: bool,
+    ) -> Result<std::io::Result<std::fs::File>> {
+        // Test-only seam: lets a test race a directory swap between authorization
+        // and the create.
+        #[cfg(test)]
+        run_before_open_hook();
+        let (dir, name) = match Self::open_authorized_parent(base, authorized)? {
+            Ok(parts) => parts,
+            Err(e) => return Ok(Err(e)),
+        };
+        let mut options = cap_std::fs::OpenOptions::new();
+        options.read(read || !write).write(write).create_new(true);
+        Ok(dir.open_with(&name, &options).map(cap_std::fs::File::into_std))
+    }
+
+    /// Open the directory at `authorized` (returned by the sandbox gate) and
+    /// return its handle. It is opened inside the authorized parent's handle
+    /// ([`Self::open_authorized_parent`]); the final component is checked
+    /// without following, opened, and must be the same directory. `authorized`
+    /// naming the preopen itself opens the preopen.
+    ///
+    /// The outer `Err` is a sandbox refusal; the inner `Err` is a host I/O error.
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    fn open_authorized_dir(
+        base: &std::path::Path,
+        authorized: &std::path::Path,
+    ) -> Result<std::io::Result<std::fs::File>> {
+        #[cfg(test)]
+        run_before_open_hook();
+        let real_base = std::fs::canonicalize(base)
+            .map_err(|_| Error::wasi_permission_denied("Preopen base cannot be resolved"))?;
+        if authorized == real_base {
+            return Ok(Self::preopen_dir(base).map(cap_std::fs::Dir::into_std_file));
+        }
+        let (parent, name) = match Self::open_authorized_parent(base, authorized)? {
+            Ok(parts) => parts,
+            Err(e) => return Ok(Err(e)),
+        };
+        let checked = match parent.symlink_metadata(&name) {
+            Ok(m) => m,
+            Err(e) => return Ok(Err(e)),
+        };
+        if !checked.is_dir() {
+            return Err(Error::wasi_permission_denied(
+                "Path changed after authorization",
+            ));
+        }
+        let dir = match parent.open_dir(&name) {
+            Ok(d) => d,
+            Err(e) => return Ok(Err(e)),
+        };
+        Self::require_same_directory(&dir, &checked)?;
+        Ok(Ok(dir.into_std_file()))
     }
 
     /// Containment check on the OPENED handle (not on the path, which an attacker can
@@ -3077,7 +3367,11 @@ impl WasiDispatcher {
                 };
                 let is_dir = self.preopens.iter().any(|(preopen_fd, _)| *preopen_fd == fd)
                     || self.fd_table.get(&fd).is_some_and(|e| {
-                        matches!(e.fd_type, FileDescriptorType::PreopenDirectory(_))
+                        matches!(
+                            e.fd_type,
+                            FileDescriptorType::PreopenDirectory(_)
+                                | FileDescriptorType::Directory { .. }
+                        )
                     });
                 // descriptor-type enum: 3=directory, 6=regular-file
                 let dtype = if is_dir { 3i32 } else { 6i32 };
@@ -3106,22 +3400,27 @@ impl WasiDispatcher {
                 mem.read_bytes(path_ptr, &mut path_buf)?;
                 let path_str = String::from_utf8_lossy(&path_buf).to_string();
 
-                // Resolve base directory from preopens or fd_table
-                let base_path = self
-                    .preopens
-                    .iter()
-                    .find(|(fd, _)| *fd == dir_fd)
-                    .map(|(_, p)| p.clone())
-                    .or_else(|| {
-                        self.fd_table.get(&dir_fd).and_then(|e| match &e.fd_type {
-                            FileDescriptorType::PreopenDirectory(p) => Some(p.clone()),
-                            _ => None,
-                        })
-                    });
-
-                if let Some(base) = base_path {
+                // The guest path resolves against `base` (a preopen or a directory
+                // open-at returned); host operations go through the preopen `root`.
+                if let Some((base, root)) = self.directory_bases(dir_fd)? {
+                    // open-flags (wasi:filesystem/types): create = bit 0,
+                    // directory = bit 1, exclusive = bit 2, truncate = bit 3.
+                    let open_flags = Self::core_u32(args, 4, "open-at: missing open-flags")?;
+                    let create = open_flags & 1 != 0;
+                    let directory = open_flags & 2 != 0;
+                    let exclusive = open_flags & 4 != 0;
+                    let truncate = open_flags & 8 != 0;
+                    // As in wasmtime: a directory cannot be created, exclusively
+                    // opened or truncated through open-at, and create or truncate
+                    // needs the right to change the directory's contents.
+                    if directory && (create || exclusive || truncate) {
+                        return Ok(fs_err(fs_error::INVALID));
+                    }
+                    if (create || truncate) && !self.capabilities.filesystem.write_access {
+                        return Ok(fs_err(fs_error::NOT_PERMITTED));
+                    }
                     // Sandbox gate: resolve → contain (symlink-safe) → allow-list.
-                    let full_path = match self.resolve_and_authorize(&base, &path_str) {
+                    let full_path = match self.gate(&base, &root, &path_str) {
                         Err(e) if e.is_wasi_path_not_found() => {
                             return Ok(fs_err(fs_error::NO_ENTRY));
                         },
@@ -3130,27 +3429,30 @@ impl WasiDispatcher {
                     if Self::trailing_slash_on_file(&path_str, &full_path) {
                         return Ok(fs_err(fs_error::NOT_DIRECTORY));
                     }
-                    if full_path.exists() {
-                        // Granted access = the guest's descriptor-flags (read = bit 0,
-                        // write = bit 1) ∩ the filesystem capabilities.
-                        let desc_flags =
-                            Self::core_u32(args, 5, "open-at: missing descriptor-flags")?;
-                        let read_access =
-                            desc_flags & 1 != 0 && self.capabilities.filesystem.read_access;
-                        let write_access =
-                            desc_flags & 2 != 0 && self.capabilities.filesystem.write_access;
+                    // Granted access = the guest's descriptor-flags (read = bit 0,
+                    // write = bit 1) ∩ the filesystem capabilities.
+                    let desc_flags = Self::core_u32(args, 5, "open-at: missing descriptor-flags")?;
+                    let read_access =
+                        desc_flags & 1 != 0 && self.capabilities.filesystem.read_access;
+                    let write_access =
+                        desc_flags & 2 != 0 && self.capabilities.filesystem.write_access;
+                    if truncate && !write_access {
+                        return Ok(fs_err(fs_error::INVALID));
+                    }
+                    let exists = full_path.exists();
+                    if exists || create {
+                        if exists && create && exclusive {
+                            return Ok(fs_err(fs_error::EXIST));
+                        }
                         // Keep the opened handle: read/write/sync-data use it and never
                         // reopen by path (TOCTOU). Directories get no file handle; nothing
                         // but a regular file is ever opened (a FIFO would block the runtime).
-                        let file_type = match std::fs::metadata(&full_path) {
-                            Ok(m) => m.file_type(),
-                            Err(e) => return Ok(fs_err(Self::fs_error_code(&e))),
-                        };
-                        let file = if file_type.is_dir() {
-                            None
-                        } else if file_type.is_file() {
-                            match Self::open_authorized_file(
-                                &base,
+                        // A missing path with create is created relative to the
+                        // preopen's directory handle (create_authorized_file).
+                        let mut opened_directory = false;
+                        let file = if !exists {
+                            match Self::create_authorized_file(
+                                &root,
                                 &full_path,
                                 read_access,
                                 write_access,
@@ -3159,7 +3461,35 @@ impl WasiDispatcher {
                                 Err(e) => return Ok(fs_err(Self::fs_error_code(&e))),
                             }
                         } else {
-                            return Ok(fs_err(fs_error::NOT_PERMITTED));
+                            let file_type = match std::fs::metadata(&full_path) {
+                                Ok(m) => m.file_type(),
+                                Err(e) => return Ok(fs_err(Self::fs_error_code(&e))),
+                            };
+                            if directory && !file_type.is_dir() {
+                                return Ok(fs_err(fs_error::NOT_DIRECTORY));
+                            }
+                            if file_type.is_dir() {
+                                // Kept so later path calls on this descriptor act
+                                // in this very directory (directory_bases).
+                                opened_directory = true;
+                                match Self::open_authorized_dir(&root, &full_path)? {
+                                    Ok(d) => Some(d),
+                                    Err(e) => return Ok(fs_err(Self::fs_error_code(&e))),
+                                }
+                            } else if file_type.is_file() {
+                                match Self::open_authorized_file(
+                                    &root,
+                                    &full_path,
+                                    read_access,
+                                    write_access,
+                                    truncate,
+                                )? {
+                                    Ok(f) => Some(f),
+                                    Err(e) => return Ok(fs_err(Self::fs_error_code(&e))),
+                                }
+                            } else {
+                                return Ok(fs_err(fs_error::NOT_PERMITTED));
+                            }
                         };
                         let path_for_resource = full_path.to_string_lossy().to_string();
                         let new_handle = self.resource_manager.create_file_descriptor(
@@ -3167,10 +3497,18 @@ impl WasiDispatcher {
                             read_access,
                             write_access,
                         )?;
+                        let fd_type = if opened_directory {
+                            FileDescriptorType::Directory {
+                                root,
+                                path: full_path,
+                            }
+                        } else {
+                            FileDescriptorType::RegularFile(full_path)
+                        };
                         self.fd_table.insert(
                             new_handle,
                             FileDescriptorEntry {
-                                fd_type: FileDescriptorType::RegularFile(full_path),
+                                fd_type,
                                 read: read_access,
                                 write: write_access,
                                 file,
@@ -3195,6 +3533,18 @@ impl WasiDispatcher {
                     Some(CoreValue::I32(v)) => *v as u32,
                     _ => return Err(Error::wasi_invalid_argument("stat: missing descriptor")),
                 };
+                if let Some(FileDescriptorEntry {
+                    fd_type: FileDescriptorType::Directory { .. },
+                    file: Some(handle),
+                    ..
+                }) = self.fd_table.get(&fd)
+                {
+                    // An opened directory: stat the handle, not the path.
+                    return match handle.metadata() {
+                        Ok(meta) => Ok(Self::stat_core_values(&meta)),
+                        Err(e) => Ok(fs_err(Self::fs_error_code(&e))),
+                    };
+                }
                 let file_path = self.fd_table.get(&fd).and_then(|e| match &e.fd_type {
                     FileDescriptorType::RegularFile(p) => Some(p.clone()),
                     FileDescriptorType::PreopenDirectory(p) => Some(p.clone()),
@@ -3230,21 +3580,9 @@ impl WasiDispatcher {
                 mem.read_bytes(path_ptr, &mut path_buf)?;
                 let path_str = String::from_utf8_lossy(&path_buf).to_string();
 
-                let base = self
-                    .preopens
-                    .iter()
-                    .find(|(fd, _)| *fd == dir_fd)
-                    .map(|(_, p)| p.clone())
-                    .or_else(|| {
-                        self.fd_table.get(&dir_fd).and_then(|e| match &e.fd_type {
-                            FileDescriptorType::PreopenDirectory(p) => Some(p.clone()),
-                            _ => None,
-                        })
-                    });
-
-                if let Some(base_path) = base {
+                if let Some((base_path, root)) = self.directory_bases(dir_fd)? {
                     // Sandbox gate: resolve → contain (symlink-safe) → allow-list.
-                    let full_path = match self.resolve_and_authorize(&base_path, &path_str) {
+                    let full_path = match self.gate(&base_path, &root, &path_str) {
                         Err(e) if e.is_wasi_path_not_found() => {
                             return Ok(fs_err(fs_error::NO_ENTRY));
                         },
@@ -3352,7 +3690,9 @@ impl WasiDispatcher {
                         ..
                     }) => (i32::from(*read) * READ) | (i32::from(*write) * WRITE),
                     Some(FileDescriptorEntry {
-                        fd_type: FileDescriptorType::PreopenDirectory(_),
+                        fd_type:
+                            FileDescriptorType::PreopenDirectory(_)
+                            | FileDescriptorType::Directory { .. },
                         read,
                         write,
                         ..
@@ -3376,32 +3716,69 @@ impl WasiDispatcher {
                         ));
                     },
                 };
-                let dir_path = self.fd_table.get(&fd).and_then(|e| match &e.fd_type {
-                    FileDescriptorType::PreopenDirectory(p)
-                    | FileDescriptorType::RegularFile(p) => Some(p.clone()),
-                    _ => None,
-                });
-                let dir_path = match dir_path {
-                    Some(p) => p,
-                    None => return Ok(fs_err(fs_error::BAD_DESCRIPTOR)),
+                // descriptor-type enum: unknown=0, block-device=1, character-device=2,
+                // directory=3, fifo=4, symbolic-link=5, regular-file=6, socket=7.
+                let tycode = |is_dir: bool, is_symlink: bool, is_file: bool| -> u8 {
+                    if is_dir {
+                        3
+                    } else if is_symlink {
+                        5
+                    } else if is_file {
+                        6
+                    } else {
+                        0
+                    }
                 };
                 let mut entries: Vec<(u8, String)> = Vec::new();
-                match std::fs::read_dir(&dir_path) {
-                    Ok(rd) => {
-                        for ent in rd.flatten() {
-                            // descriptor-type enum: unknown=0, block-device=1, character-device=2,
-                            // directory=3, fifo=4, symbolic-link=5, regular-file=6, socket=7.
-                            let ty = ent.file_type().ok();
-                            let tycode: u8 = match ty {
-                                Some(t) if t.is_dir() => 3,
-                                Some(t) if t.is_symlink() => 5,
-                                Some(t) if t.is_file() => 6,
-                                _ => 0,
-                            };
-                            entries.push((tycode, ent.file_name().to_string_lossy().into_owned()));
-                        }
-                    },
-                    Err(e) => return Ok(fs_err(Self::fs_error_code(&e))),
+                // A directory open-at opened is listed through its kept handle.
+                let opened = match self.fd_table.get(&fd) {
+                    Some(FileDescriptorEntry {
+                        fd_type: FileDescriptorType::Directory { .. },
+                        file: Some(handle),
+                        ..
+                    }) => Some(handle.try_clone()),
+                    _ => None,
+                };
+                if let Some(handle) = opened {
+                    self.directory_bases(fd)?;
+                    let listing =
+                        handle.map(cap_std::fs::Dir::from_std_file).and_then(|dir| dir.entries());
+                    match listing {
+                        Ok(rd) => {
+                            for ent in rd.flatten() {
+                                let ty = ent.file_type().ok();
+                                let code = ty
+                                    .map_or(0, |t| tycode(t.is_dir(), t.is_symlink(), t.is_file()));
+                                entries
+                                    .push((code, ent.file_name().to_string_lossy().into_owned()));
+                            }
+                        },
+                        Err(e) => return Ok(fs_err(Self::fs_error_code(&e))),
+                    }
+                } else {
+                    let dir_path = match self.directory_bases(fd)? {
+                        Some((base, _root)) => Some(base),
+                        None => self.fd_table.get(&fd).and_then(|e| match &e.fd_type {
+                            FileDescriptorType::RegularFile(p) => Some(p.clone()),
+                            _ => None,
+                        }),
+                    };
+                    let dir_path = match dir_path {
+                        Some(p) => p,
+                        None => return Ok(fs_err(fs_error::BAD_DESCRIPTOR)),
+                    };
+                    match std::fs::read_dir(&dir_path) {
+                        Ok(rd) => {
+                            for ent in rd.flatten() {
+                                let ty = ent.file_type().ok();
+                                let code = ty
+                                    .map_or(0, |t| tycode(t.is_dir(), t.is_symlink(), t.is_file()));
+                                entries
+                                    .push((code, ent.file_name().to_string_lossy().into_owned()));
+                            }
+                        },
+                        Err(e) => return Ok(fs_err(Self::fs_error_code(&e))),
+                    }
                 }
                 let handle = self.resource_manager.create_input_stream(&format!("dir:{}", fd))?;
                 self.dir_streams.insert(handle, (entries, 0));
@@ -3615,6 +3992,17 @@ impl WasiDispatcher {
                         }
                         std::fs::File::open(p).and_then(|d| d.sync_data())
                     },
+                    Some(FileDescriptorEntry {
+                        fd_type: FileDescriptorType::Directory { .. },
+                        write,
+                        file: Some(d),
+                        ..
+                    }) => {
+                        if !*write {
+                            return Ok(vec![CoreValue::I32(0)]);
+                        }
+                        d.sync_data()
+                    },
                     _ => return Ok(fs_err(fs_error::BAD_DESCRIPTOR)),
                 };
                 match synced {
@@ -3634,13 +4022,13 @@ impl WasiDispatcher {
                     .ok_or_else(|| Error::wasi_invalid_argument("directory op: no memory"))?;
                 let guest_path = Self::read_guest_path(mem, path_ptr, path_len)?;
                 self.require_fs_write()?;
-                let base = match self.preopen_base(fd) {
+                let (base, root) = match self.directory_bases(fd)? {
                     Some(b) => b,
                     None => return Ok(fs_err(fs_error::BAD_DESCRIPTOR)),
                 };
                 // Sandbox gate; the final component is never followed so unlinking a
                 // symlink removes the link, not its target.
-                let full_path = self.resolve_and_authorize_nofollow(&base, &guest_path)?;
+                let full_path = self.gate_nofollow(&base, &root, &guest_path)?;
                 // mkdir("file/") is EEXIST on POSIX, so create-directory-at keeps
                 // the host's answer; unlink and rmdir report not-directory.
                 if function != "[method]descriptor.create-directory-at"
@@ -3648,12 +4036,20 @@ impl WasiDispatcher {
                 {
                     return Ok(fs_err(fs_error::NOT_DIRECTORY));
                 }
+                #[cfg(test)]
+                run_before_open_hook();
+                // The host operation acts on the final component inside the handle
+                // of the directory the gate authorized.
+                let (dir, name) = match Self::open_authorized_parent(&root, &full_path)? {
+                    Ok(parts) => parts,
+                    Err(e) => return Ok(fs_err(Self::fs_error_code(&e))),
+                };
                 let outcome = match function {
-                    "[method]descriptor.create-directory-at" => std::fs::create_dir(&full_path),
-                    "[method]descriptor.remove-directory-at" => std::fs::remove_dir(&full_path),
-                    _ => match std::fs::symlink_metadata(&full_path) {
+                    "[method]descriptor.create-directory-at" => dir.create_dir(&name),
+                    "[method]descriptor.remove-directory-at" => dir.remove_dir(&name),
+                    _ => match dir.symlink_metadata(&name) {
                         Ok(meta) if meta.is_dir() => return Ok(fs_err(fs_error::IS_DIRECTORY)),
-                        Ok(_) => std::fs::remove_file(&full_path),
+                        Ok(_) => dir.remove_file(&name),
                         Err(e) => Err(e),
                     },
                 };
@@ -3679,15 +4075,15 @@ impl WasiDispatcher {
                 let old_guest = Self::read_guest_path(mem, old_ptr, old_len)?;
                 let new_guest = Self::read_guest_path(mem, new_ptr, new_len)?;
                 self.require_fs_write()?;
-                let (old_base, new_base) = match (self.preopen_base(fd), self.preopen_base(new_fd))
-                {
-                    (Some(o), Some(n)) => (o, n),
-                    _ => return Ok(fs_err(fs_error::BAD_DESCRIPTOR)),
-                };
+                let (old_base, new_base) =
+                    match (self.directory_bases(fd)?, self.directory_bases(new_fd)?) {
+                        (Some(o), Some(n)) => (o, n),
+                        _ => return Ok(fs_err(fs_error::BAD_DESCRIPTOR)),
+                    };
                 // BOTH paths pass the sandbox gate, each against its own descriptor,
                 // before anything is renamed.
-                let old_full = self.resolve_and_authorize_nofollow(&old_base, &old_guest)?;
-                let new_full = self.resolve_and_authorize_nofollow(&new_base, &new_guest)?;
+                let old_full = self.gate_nofollow(&old_base.0, &old_base.1, &old_guest)?;
+                let new_full = self.gate_nofollow(&new_base.0, &new_base.1, &new_guest)?;
                 if Self::trailing_slash_on_file(&old_guest, &old_full)
                     || Self::trailing_slash_on_file(&new_guest, &new_full)
                 {
@@ -3717,18 +4113,18 @@ impl WasiDispatcher {
                 let old_guest = Self::read_guest_path(mem, old_ptr, old_len)?;
                 let new_guest = Self::read_guest_path(mem, new_ptr, new_len)?;
                 self.require_fs_write()?;
-                let (old_base, new_base) = match (self.preopen_base(fd), self.preopen_base(new_fd))
-                {
-                    (Some(o), Some(n)) => (o, n),
-                    _ => return Ok(fs_err(fs_error::BAD_DESCRIPTOR)),
-                };
+                let (old_base, new_base) =
+                    match (self.directory_bases(fd)?, self.directory_bases(new_fd)?) {
+                        (Some(o), Some(n)) => (o, n),
+                        _ => return Ok(fs_err(fs_error::BAD_DESCRIPTOR)),
+                    };
                 // path-flags::symlink-follow is bit 0.
                 let old_full = if flags & 1 != 0 {
-                    self.resolve_and_authorize(&old_base, &old_guest)?
+                    self.gate(&old_base.0, &old_base.1, &old_guest)?
                 } else {
-                    self.resolve_and_authorize_nofollow(&old_base, &old_guest)?
+                    self.gate_nofollow(&old_base.0, &old_base.1, &old_guest)?
                 };
-                let new_full = self.resolve_and_authorize_nofollow(&new_base, &new_guest)?;
+                let new_full = self.gate_nofollow(&new_base.0, &new_base.1, &new_guest)?;
                 // The WIT permits hard links to regular files only; a symlink (reached
                 // without symlink-follow) or directory is `not-permitted`.
                 match std::fs::symlink_metadata(&old_full) {
@@ -3757,12 +4153,12 @@ impl WasiDispatcher {
                 let contents = Self::read_guest_path(mem, contents_ptr, contents_len)?;
                 let new_guest = Self::read_guest_path(mem, new_ptr, new_len)?;
                 self.require_fs_write()?;
-                let base = match self.preopen_base(fd) {
+                let (base, root) = match self.directory_bases(fd)? {
                     Some(b) => b,
                     None => return Ok(fs_err(fs_error::BAD_DESCRIPTOR)),
                 };
                 // The link's own location passes the sandbox gate...
-                let new_full = self.resolve_and_authorize_nofollow(&base, &new_guest)?;
+                let new_full = self.gate_nofollow(&base, &root, &new_guest)?;
                 // ...and its contents must be relative with no `..` component
                 // (absolute or `..`-bearing targets are `not-permitted`).
                 if !symlink_target_is_safe(std::path::Path::new(&contents)) {
@@ -3799,11 +4195,11 @@ impl WasiDispatcher {
                 let mem =
                     memory.ok_or_else(|| Error::wasi_invalid_argument("readlink-at: no memory"))?;
                 let guest_path = Self::read_guest_path(mem, path_ptr, path_len)?;
-                let base = match self.preopen_base(fd) {
+                let (base, root) = match self.directory_bases(fd)? {
                     Some(b) => b,
                     None => return Ok(fs_err(fs_error::BAD_DESCRIPTOR)),
                 };
-                let full_path = self.resolve_and_authorize_nofollow(&base, &guest_path)?;
+                let full_path = self.gate_nofollow(&base, &root, &guest_path)?;
                 let target = match std::fs::read_link(&full_path) {
                     Ok(t) => t,
                     Err(e) => return Ok(fs_err(Self::fs_error_code(&e))),
@@ -3860,7 +4256,8 @@ impl WasiDispatcher {
                 let handle = Self::core_u32(args, 0, "resource-drop: missing descriptor")?;
                 if self.preopen_base(handle).is_none() {
                     if let Some(FileDescriptorEntry {
-                        fd_type: FileDescriptorType::RegularFile(_),
+                        fd_type:
+                            FileDescriptorType::RegularFile(_) | FileDescriptorType::Directory { .. },
                         ..
                     }) = self.fd_table.get(&handle)
                     {
@@ -4427,11 +4824,41 @@ fn is_within_sandbox(base: &std::path::Path, full: &std::path::Path) -> bool {
     !full.components().any(|c| matches!(c, Component::ParentDir)) && full.starts_with(base)
 }
 
-/// Test-only: runs once, right before `open_authorized_file` opens the file.
+// Test-only: runs once, right before a filesystem call acts on an authorized path
+// (file open or create, create-directory-at, remove-directory-at, unlink-file-at),
+// so a test can swap a directory between authorization and the host operation.
 #[cfg(all(test, feature = "wasi-filesystem", feature = "std"))]
 thread_local! {
     static BEFORE_OPEN_HOOK: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
         const { std::cell::RefCell::new(None) };
+}
+
+/// Test-only: run (and clear) the hook set in [`BEFORE_OPEN_HOOK`], if any.
+#[cfg(all(test, feature = "wasi-filesystem", feature = "std"))]
+fn run_before_open_hook() {
+    BEFORE_OPEN_HOOK.with(|h| {
+        if let Some(hook) = h.borrow_mut().take() {
+            hook();
+        }
+    });
+}
+
+// Test-only seam: runs once after a directory descriptor's bases are checked
+// and before the sandbox gate resolves the guest path against them.
+#[cfg(all(test, feature = "wasi-filesystem", feature = "std"))]
+thread_local! {
+    static BEFORE_GATE_HOOK: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Test-only: run (and clear) the hook set in [`BEFORE_GATE_HOOK`], if any.
+#[cfg(all(test, feature = "wasi-filesystem", feature = "std"))]
+fn run_before_gate_hook() {
+    BEFORE_GATE_HOOK.with(|h| {
+        if let Some(hook) = h.borrow_mut().take() {
+            hook();
+        }
+    });
 }
 
 /// `wasi:filesystem/types` `error-code` enum indices (WASI 0.2 declaration order).
@@ -8636,6 +9063,770 @@ mod tests {
             sr96_symlink_at_dir_dotdot_link_slash,
             sr96_symlink_at_file_slash
         );
+    }
+
+    /// SR-107: open-at honours its open-flags (create, directory, exclusive,
+    /// truncate) as wasmtime does, inside the sandbox rules of SR-49. Driven
+    /// through the live `dispatch_core` path with real tempdir preopens.
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    mod sr107 {
+        use super::*;
+        use kiln_foundation::traits::SliceMemory;
+        use kiln_foundation::values::Value as CV;
+
+        // open-flags bits
+        const CREATE: i32 = 1;
+        const DIRECTORY: i32 = 2;
+        const EXCLUSIVE: i32 = 4;
+        const TRUNCATE: i32 = 8;
+        // descriptor-flags bits
+        const DESC_READ: i32 = 1;
+        const DESC_WRITE: i32 = 2;
+        // error-code enum indices from wasi:filesystem/types@0.2.x
+        const EXIST: i32 = 7;
+        const INVALID: i32 = 12;
+        const NOT_DIRECTORY: i32 = 24;
+        const NOT_PERMITTED: i32 = 31;
+
+        fn fixture(tag: &str) -> (std::path::PathBuf, std::path::PathBuf) {
+            let root = sandbox_fixture_dir(tag);
+            let sandbox = root.join("sandbox");
+            std::fs::create_dir_all(&sandbox).unwrap();
+            (root, sandbox)
+        }
+
+        fn open(
+            d: &mut WasiDispatcher,
+            mem: &SliceMemory,
+            dir: u32,
+            name: &[u8],
+            open_flags: i32,
+            desc_flags: i32,
+        ) -> Result<Vec<CV>> {
+            mem.write_bytes(0x1000, name)?;
+            d.dispatch_core(
+                "wasi:filesystem/types",
+                "[method]descriptor.open-at",
+                &[
+                    CV::I32(dir as i32),
+                    CV::I32(0),
+                    CV::I32(0x1000),
+                    CV::I32(name.len() as i32),
+                    CV::I32(open_flags),
+                    CV::I32(desc_flags),
+                ],
+                Some(mem),
+            )
+        }
+
+        fn is_ok(res: &Result<Vec<CV>>) -> bool {
+            matches!(res.as_deref(), Ok([CV::I32(0), CV::I32(_)]))
+        }
+
+        fn err_code(res: &Result<Vec<CV>>) -> Option<i32> {
+            match res.as_deref() {
+                Ok([CV::I32(1), CV::I32(c)]) => Some(*c),
+                _ => None,
+            }
+        }
+
+        fn setup(
+            tag: &str,
+        ) -> Result<(
+            std::path::PathBuf,
+            std::path::PathBuf,
+            WasiDispatcher,
+            u32,
+            SliceMemory,
+        )> {
+            MemoryInitializer::ensure_initialized()?;
+            let (root, sandbox) = fixture(tag);
+            let mut d = WasiDispatcher::with_defaults()?;
+            let dir = d.add_preopen(sandbox.clone())?;
+            Ok((root, sandbox, d, dir, SliceMemory::with_size(0x10000)))
+        }
+
+        // rivet: verifies SR-107
+        #[serial_test::serial]
+        #[test]
+        fn create_on_a_missing_file_creates_it() -> Result<()> {
+            let (root, sandbox, mut d, dir, mem) = setup("sr107_create")?;
+            let res = open(&mut d, &mem, dir, b"new.txt", CREATE, DESC_WRITE);
+            let created = sandbox.join("new.txt").is_file();
+            std::fs::remove_dir_all(&root).ok();
+            assert!(
+                is_ok(&res),
+                "create on a missing file must succeed, got {:?}",
+                res
+            );
+            assert!(created, "the file must exist on the host after create");
+            Ok(())
+        }
+
+        // rivet: verifies SR-107
+        #[serial_test::serial]
+        #[test]
+        fn create_in_a_subdirectory_creates_it() -> Result<()> {
+            let (root, sandbox, mut d, dir, mem) = setup("sr107_create_sub")?;
+            std::fs::create_dir(sandbox.join("sub")).unwrap();
+            let res = open(&mut d, &mem, dir, b"sub/inner.txt", CREATE, DESC_WRITE);
+            let created = sandbox.join("sub/inner.txt").is_file();
+            std::fs::remove_dir_all(&root).ok();
+            assert!(is_ok(&res), "got {:?}", res);
+            assert!(created);
+            Ok(())
+        }
+
+        // rivet: verifies SR-107
+        #[serial_test::serial]
+        #[test]
+        fn exclusive_create_on_an_existing_file_is_exist_and_keeps_it() -> Result<()> {
+            let (root, sandbox, mut d, dir, mem) = setup("sr107_excl_existing")?;
+            std::fs::write(sandbox.join("e.txt"), b"keep").unwrap();
+            let res = open(&mut d, &mem, dir, b"e.txt", CREATE | EXCLUSIVE, DESC_WRITE);
+            let contents = std::fs::read(sandbox.join("e.txt")).unwrap();
+            std::fs::remove_dir_all(&root).ok();
+            assert_eq!(err_code(&res), Some(EXIST), "got {:?}", res);
+            assert_eq!(contents, b"keep");
+            Ok(())
+        }
+
+        // rivet: verifies SR-107
+        #[serial_test::serial]
+        #[test]
+        fn exclusive_create_on_a_missing_file_creates_it() -> Result<()> {
+            let (root, sandbox, mut d, dir, mem) = setup("sr107_excl_missing")?;
+            let res = open(&mut d, &mem, dir, b"x.txt", CREATE | EXCLUSIVE, DESC_WRITE);
+            let created = sandbox.join("x.txt").is_file();
+            std::fs::remove_dir_all(&root).ok();
+            assert!(is_ok(&res), "got {:?}", res);
+            assert!(created);
+            Ok(())
+        }
+
+        // rivet: verifies SR-107
+        #[serial_test::serial]
+        #[test]
+        fn truncate_with_write_empties_the_file() -> Result<()> {
+            let (root, sandbox, mut d, dir, mem) = setup("sr107_trunc")?;
+            std::fs::write(sandbox.join("t.txt"), b"hello").unwrap();
+            let res = open(&mut d, &mem, dir, b"t.txt", TRUNCATE, DESC_WRITE);
+            let len = std::fs::metadata(sandbox.join("t.txt")).unwrap().len();
+            std::fs::remove_dir_all(&root).ok();
+            assert!(is_ok(&res), "got {:?}", res);
+            assert_eq!(len, 0, "truncate must empty the file");
+            Ok(())
+        }
+
+        // rivet: verifies SR-107
+        #[serial_test::serial]
+        #[test]
+        fn truncate_on_a_read_only_descriptor_is_invalid_and_keeps_the_file() -> Result<()> {
+            let (root, sandbox, mut d, dir, mem) = setup("sr107_trunc_ro")?;
+            std::fs::write(sandbox.join("t.txt"), b"hello").unwrap();
+            let res = open(&mut d, &mem, dir, b"t.txt", TRUNCATE, DESC_READ);
+            let contents = std::fs::read(sandbox.join("t.txt")).unwrap();
+            std::fs::remove_dir_all(&root).ok();
+            assert_eq!(err_code(&res), Some(INVALID), "got {:?}", res);
+            assert_eq!(contents, b"hello");
+            Ok(())
+        }
+
+        // rivet: verifies SR-107
+        #[serial_test::serial]
+        #[test]
+        fn create_or_truncate_without_write_capability_is_not_permitted() -> Result<()> {
+            let (root, sandbox, mut d, dir, mem) = setup("sr107_nowrite")?;
+            std::fs::write(sandbox.join("t.txt"), b"hello").unwrap();
+            d.capabilities.filesystem.write_access = false;
+            let create = open(&mut d, &mem, dir, b"new.txt", CREATE, DESC_WRITE);
+            let trunc = open(&mut d, &mem, dir, b"t.txt", TRUNCATE, DESC_WRITE);
+            let created = sandbox.join("new.txt").exists();
+            let contents = std::fs::read(sandbox.join("t.txt")).unwrap();
+            std::fs::remove_dir_all(&root).ok();
+            assert_eq!(err_code(&create), Some(NOT_PERMITTED), "got {:?}", create);
+            assert_eq!(err_code(&trunc), Some(NOT_PERMITTED), "got {:?}", trunc);
+            assert!(!created);
+            assert_eq!(contents, b"hello");
+            Ok(())
+        }
+
+        // rivet: verifies SR-107
+        #[serial_test::serial]
+        #[test]
+        fn directory_flag_on_a_file_is_not_directory() -> Result<()> {
+            let (root, sandbox, mut d, dir, mem) = setup("sr107_dirflag")?;
+            std::fs::write(sandbox.join("f.txt"), b"x").unwrap();
+            let res = open(&mut d, &mem, dir, b"f.txt", DIRECTORY, DESC_READ);
+            std::fs::remove_dir_all(&root).ok();
+            assert_eq!(err_code(&res), Some(NOT_DIRECTORY), "got {:?}", res);
+            Ok(())
+        }
+
+        // rivet: verifies SR-107
+        #[serial_test::serial]
+        #[test]
+        fn directory_flag_with_create_exclusive_or_truncate_is_invalid() -> Result<()> {
+            let (root, sandbox, mut d, dir, mem) = setup("sr107_dir_create")?;
+            let c = open(&mut d, &mem, dir, b"newdir", DIRECTORY | CREATE, DESC_READ);
+            let e = open(
+                &mut d,
+                &mem,
+                dir,
+                b"newdir",
+                DIRECTORY | EXCLUSIVE,
+                DESC_READ,
+            );
+            let t = open(
+                &mut d,
+                &mem,
+                dir,
+                b"newdir",
+                DIRECTORY | TRUNCATE,
+                DESC_READ,
+            );
+            let created = sandbox.join("newdir").exists();
+            std::fs::remove_dir_all(&root).ok();
+            assert_eq!(err_code(&c), Some(INVALID), "got {:?}", c);
+            assert_eq!(err_code(&e), Some(INVALID), "got {:?}", e);
+            assert_eq!(err_code(&t), Some(INVALID), "got {:?}", t);
+            assert!(!created);
+            Ok(())
+        }
+
+        // rivet: verifies SR-107
+        #[serial_test::serial]
+        #[test]
+        fn create_cannot_place_a_file_outside_the_preopen() -> Result<()> {
+            let (root, _sandbox, mut d, dir, mem) = setup("sr107_escape")?;
+            let res = open(&mut d, &mem, dir, b"../escaped.txt", CREATE, DESC_WRITE);
+            let escaped = root.join("escaped.txt").exists();
+            std::fs::remove_dir_all(&root).ok();
+            assert!(
+                !is_ok(&res),
+                "create outside the preopen must be refused, got {:?}",
+                res
+            );
+            assert!(!escaped, "no file may be created outside the preopen");
+            Ok(())
+        }
+
+        /// Arm the test hook: right before the host operation, replace
+        /// `sandbox/sub` with a symlink to `outside`.
+        #[cfg(unix)]
+        fn swap_sub_for_outside_symlink_before_the_operation(
+            sandbox: &std::path::Path,
+            outside: &std::path::Path,
+        ) {
+            let (sb, out) = (sandbox.to_path_buf(), outside.to_path_buf());
+            BEFORE_OPEN_HOOK.with(|h| {
+                *h.borrow_mut() = Some(Box::new(move || {
+                    std::fs::rename(sb.join("sub"), sb.join("sub.orig")).unwrap();
+                    std::os::unix::fs::symlink(&out, sb.join("sub")).unwrap();
+                }));
+            });
+        }
+
+        fn dir_op(
+            d: &mut WasiDispatcher,
+            mem: &SliceMemory,
+            func: &str,
+            dir: u32,
+            name: &[u8],
+        ) -> Result<Vec<CV>> {
+            mem.write_bytes(0x1000, name)?;
+            d.dispatch_core(
+                "wasi:filesystem/types",
+                func,
+                &[
+                    CV::I32(dir as i32),
+                    CV::I32(0x1000),
+                    CV::I32(name.len() as i32),
+                ],
+                Some(mem),
+            )
+        }
+
+        /// Create acts relative to the preopen's directory handle; the result
+        /// stays inside the preopen whatever the parent resolves to by then.
+        // rivet: verifies SR-107
+        #[cfg(unix)]
+        #[serial_test::serial]
+        #[test]
+        fn create_goes_through_the_preopen_directory_handle() -> Result<()> {
+            let (root, sandbox, mut d, dir, mem) = setup("sr107_swap_create")?;
+            let outside = root.join("outside");
+            std::fs::create_dir(&outside).unwrap();
+            std::fs::create_dir(sandbox.join("sub")).unwrap();
+            swap_sub_for_outside_symlink_before_the_operation(&sandbox, &outside);
+            let res = open(&mut d, &mem, dir, b"sub/new.txt", CREATE, DESC_WRITE);
+            BEFORE_OPEN_HOOK.with(|h| *h.borrow_mut() = None);
+            let escaped = outside.join("new.txt").exists();
+            std::fs::remove_dir_all(&root).ok();
+            assert!(!escaped, "no file may be created outside the preopen");
+            assert!(
+                !is_ok(&res),
+                "the guest must get no descriptor, got {:?}",
+                res
+            );
+            Ok(())
+        }
+
+        // rivet: verifies SR-107
+        #[cfg(unix)]
+        #[serial_test::serial]
+        #[test]
+        fn create_directory_at_goes_through_the_preopen_directory_handle() -> Result<()> {
+            let (root, sandbox, mut d, dir, mem) = setup("sr107_swap_mkdir")?;
+            let outside = root.join("outside");
+            std::fs::create_dir(&outside).unwrap();
+            std::fs::create_dir(sandbox.join("sub")).unwrap();
+            swap_sub_for_outside_symlink_before_the_operation(&sandbox, &outside);
+            let res = dir_op(
+                &mut d,
+                &mem,
+                "[method]descriptor.create-directory-at",
+                dir,
+                b"sub/newdir",
+            );
+            BEFORE_OPEN_HOOK.with(|h| *h.borrow_mut() = None);
+            let escaped = outside.join("newdir").exists();
+            std::fs::remove_dir_all(&root).ok();
+            assert!(!escaped, "no directory may be created outside the preopen");
+            assert!(!matches!(res.as_deref(), Ok([CV::I32(0)])), "got {:?}", res);
+            Ok(())
+        }
+
+        // rivet: verifies SR-107
+        #[cfg(unix)]
+        #[serial_test::serial]
+        #[test]
+        fn unlink_file_at_goes_through_the_preopen_directory_handle() -> Result<()> {
+            let (root, sandbox, mut d, dir, mem) = setup("sr107_swap_unlink")?;
+            let outside = root.join("outside");
+            std::fs::create_dir(&outside).unwrap();
+            std::fs::write(outside.join("victim.txt"), b"keep").unwrap();
+            std::fs::create_dir(sandbox.join("sub")).unwrap();
+            std::fs::write(sandbox.join("sub/victim.txt"), b"inside").unwrap();
+            swap_sub_for_outside_symlink_before_the_operation(&sandbox, &outside);
+            let res = dir_op(
+                &mut d,
+                &mem,
+                "[method]descriptor.unlink-file-at",
+                dir,
+                b"sub/victim.txt",
+            );
+            BEFORE_OPEN_HOOK.with(|h| *h.borrow_mut() = None);
+            let kept = outside.join("victim.txt").exists();
+            std::fs::remove_dir_all(&root).ok();
+            assert!(kept, "a file outside the preopen must never be deleted");
+            assert!(!matches!(res.as_deref(), Ok([CV::I32(0)])), "got {:?}", res);
+            Ok(())
+        }
+
+        // rivet: verifies SR-107
+        #[cfg(unix)]
+        #[serial_test::serial]
+        #[test]
+        fn remove_directory_at_goes_through_the_preopen_directory_handle() -> Result<()> {
+            let (root, sandbox, mut d, dir, mem) = setup("sr107_swap_rmdir")?;
+            let outside = root.join("outside");
+            std::fs::create_dir_all(outside.join("victim")).unwrap();
+            std::fs::create_dir_all(sandbox.join("sub/victim")).unwrap();
+            swap_sub_for_outside_symlink_before_the_operation(&sandbox, &outside);
+            let res = dir_op(
+                &mut d,
+                &mem,
+                "[method]descriptor.remove-directory-at",
+                dir,
+                b"sub/victim",
+            );
+            BEFORE_OPEN_HOOK.with(|h| *h.borrow_mut() = None);
+            let kept = outside.join("victim").is_dir();
+            std::fs::remove_dir_all(&root).ok();
+            assert!(
+                kept,
+                "a directory outside the preopen must never be removed"
+            );
+            assert!(!matches!(res.as_deref(), Ok([CV::I32(0)])), "got {:?}", res);
+            Ok(())
+        }
+
+        /// Arm the test hook: right before the host operation, replace
+        /// `sandbox/allowed` with a symlink to `sandbox/blocked`.
+        #[cfg(unix)]
+        fn retarget_allowed_before_the_operation(sandbox: &std::path::Path) {
+            let sb = sandbox.to_path_buf();
+            BEFORE_OPEN_HOOK.with(|h| {
+                *h.borrow_mut() = Some(Box::new(move || {
+                    std::fs::rename(sb.join("allowed"), sb.join("allowed.orig")).unwrap();
+                    // Relative target: it stays inside the preopen.
+                    std::os::unix::fs::symlink("blocked", sb.join("allowed")).unwrap();
+                }));
+            });
+        }
+
+        fn allow_list_setup(
+            tag: &str,
+        ) -> Result<(
+            std::path::PathBuf,
+            std::path::PathBuf,
+            WasiDispatcher,
+            u32,
+            SliceMemory,
+        )> {
+            let (root, sandbox, mut d, dir, mem) = setup(tag)?;
+            std::fs::create_dir(sandbox.join("allowed")).unwrap();
+            std::fs::create_dir(sandbox.join("blocked")).unwrap();
+            d.add_allowed_path(sandbox.join("allowed"))?;
+            Ok((root, sandbox, d, dir, mem))
+        }
+
+        /// Create acts on the directory the gate authorized (allow-list, SR-50).
+        // rivet: verifies SR-107
+        #[cfg(unix)]
+        #[serial_test::serial]
+        #[test]
+        fn create_acts_on_the_directory_the_gate_authorized() -> Result<()> {
+            let (root, sandbox, mut d, dir, mem) = allow_list_setup("sr107_allow_create")?;
+            retarget_allowed_before_the_operation(&sandbox);
+            let res = open(&mut d, &mem, dir, b"allowed/new.txt", CREATE, DESC_WRITE);
+            BEFORE_OPEN_HOOK.with(|h| *h.borrow_mut() = None);
+            let in_blocked = sandbox.join("blocked/new.txt").exists();
+            std::fs::remove_dir_all(&root).ok();
+            assert!(!in_blocked, "create must not land outside the allow-list");
+            assert!(!is_ok(&res), "got {:?}", res);
+            Ok(())
+        }
+
+        /// unlink-file-at acts on the directory the gate authorized (SR-50).
+        // rivet: verifies SR-107
+        #[cfg(unix)]
+        #[serial_test::serial]
+        #[test]
+        fn unlink_file_at_acts_on_the_directory_the_gate_authorized() -> Result<()> {
+            let (root, sandbox, mut d, dir, mem) = allow_list_setup("sr107_allow_unlink")?;
+            std::fs::write(sandbox.join("allowed/v.txt"), b"a").unwrap();
+            std::fs::write(sandbox.join("blocked/v.txt"), b"b").unwrap();
+            retarget_allowed_before_the_operation(&sandbox);
+            let res = dir_op(
+                &mut d,
+                &mem,
+                "[method]descriptor.unlink-file-at",
+                dir,
+                b"allowed/v.txt",
+            );
+            BEFORE_OPEN_HOOK.with(|h| *h.borrow_mut() = None);
+            let kept = sandbox.join("blocked/v.txt").exists();
+            std::fs::remove_dir_all(&root).ok();
+            assert!(kept, "unlink must not act outside the allow-list");
+            assert!(!matches!(res.as_deref(), Ok([CV::I32(0)])), "got {:?}", res);
+            Ok(())
+        }
+
+        // rivet: verifies SR-107
+        #[cfg(unix)]
+        #[serial_test::serial]
+        #[test]
+        fn create_through_a_dangling_symlink_does_not_create_its_target() -> Result<()> {
+            let (root, sandbox, mut d, dir, mem) = setup("sr107_symlink")?;
+            let outside = root.join("outside");
+            std::fs::create_dir(&outside).unwrap();
+            std::os::unix::fs::symlink(outside.join("target.txt"), sandbox.join("link")).unwrap();
+            let res = open(&mut d, &mem, dir, b"link", CREATE, DESC_WRITE);
+            let created = outside.join("target.txt").exists();
+            std::fs::remove_dir_all(&root).ok();
+            assert!(!is_ok(&res), "got {:?}", res);
+            assert!(
+                !created,
+                "create must not follow a symlink out of the preopen"
+            );
+            Ok(())
+        }
+
+        // ---- open-at relative to a directory descriptor open-at returned ----
+
+        fn handle(res: &Result<Vec<CV>>) -> u32 {
+            match res.as_deref() {
+                Ok([CV::I32(0), CV::I32(h)]) => *h as u32,
+                other => panic!("expected a descriptor, got {:?}", other),
+            }
+        }
+
+        fn get_type(d: &mut WasiDispatcher, fd: u32) -> Result<Vec<CV>> {
+            d.dispatch_core(
+                "wasi:filesystem/types",
+                "[method]descriptor.get-type",
+                &[CV::I32(fd as i32)],
+                None,
+            )
+        }
+
+        // rivet: verifies SR-107
+        #[serial_test::serial]
+        #[test]
+        fn open_at_relative_to_an_opened_directory_opens_its_file() -> Result<()> {
+            let (root, sandbox, mut d, dir, mem) = setup("sr107_nested_open")?;
+            std::fs::create_dir(sandbox.join("sub")).unwrap();
+            std::fs::write(sandbox.join("sub/f.txt"), b"hi").unwrap();
+            let sub = open(&mut d, &mem, dir, b"sub", DIRECTORY, DESC_READ);
+            let file = sub
+                .as_ref()
+                .ok()
+                .map(|_| open(&mut d, &mem, handle(&sub), b"f.txt", 0, DESC_READ));
+            std::fs::remove_dir_all(&root).ok();
+            assert!(is_ok(&sub), "got {:?}", sub);
+            let file = file.unwrap();
+            assert!(
+                is_ok(&file),
+                "open-at through the opened directory, got {:?}",
+                file
+            );
+            Ok(())
+        }
+
+        // rivet: verifies SR-107
+        #[serial_test::serial]
+        #[test]
+        fn create_relative_to_an_opened_directory_lands_in_it() -> Result<()> {
+            let (root, sandbox, mut d, dir, mem) = setup("sr107_nested_create")?;
+            std::fs::create_dir(sandbox.join("sub")).unwrap();
+            let sub = open(&mut d, &mem, dir, b"sub", DIRECTORY, DESC_READ);
+            let h = handle(&sub);
+            let res = open(&mut d, &mem, h, b"new.txt", CREATE, DESC_WRITE);
+            let mkdir = dir_op(
+                &mut d,
+                &mem,
+                "[method]descriptor.create-directory-at",
+                h,
+                b"d",
+            );
+            let created = sandbox.join("sub/new.txt").is_file();
+            let made = sandbox.join("sub/d").is_dir();
+            let wrong = sandbox.join("new.txt").exists() || sandbox.join("d").exists();
+            std::fs::remove_dir_all(&root).ok();
+            assert!(is_ok(&res), "got {:?}", res);
+            assert!(
+                matches!(mkdir.as_deref(), Ok([CV::I32(0)])),
+                "got {:?}",
+                mkdir
+            );
+            assert!(created && made, "entries must be created inside sub/");
+            assert!(!wrong, "nothing may be created in the preopen root");
+            Ok(())
+        }
+
+        // rivet: verifies SR-107
+        #[serial_test::serial]
+        #[test]
+        fn a_directory_opened_from_an_opened_directory_works() -> Result<()> {
+            let (root, sandbox, mut d, dir, mem) = setup("sr107_nested_twice")?;
+            std::fs::create_dir_all(sandbox.join("a/b")).unwrap();
+            std::fs::write(sandbox.join("a/b/f.txt"), b"x").unwrap();
+            let a = open(&mut d, &mem, dir, b"a", DIRECTORY, DESC_READ);
+            let b = open(&mut d, &mem, handle(&a), b"b", DIRECTORY, DESC_READ);
+            let f = open(&mut d, &mem, handle(&b), b"f.txt", 0, DESC_READ);
+            std::fs::remove_dir_all(&root).ok();
+            assert!(is_ok(&f), "got {:?}", f);
+            Ok(())
+        }
+
+        // rivet: verifies SR-107
+        #[serial_test::serial]
+        #[test]
+        fn an_opened_directory_reports_type_directory() -> Result<()> {
+            let (root, sandbox, mut d, dir, mem) = setup("sr107_nested_type")?;
+            std::fs::create_dir(sandbox.join("sub")).unwrap();
+            let sub = open(&mut d, &mem, dir, b"sub", DIRECTORY, DESC_READ);
+            let ty = get_type(&mut d, handle(&sub));
+            std::fs::remove_dir_all(&root).ok();
+            // descriptor-type::directory = 3
+            assert!(
+                matches!(ty.as_deref(), Ok([CV::I32(0), CV::I32(3)])),
+                "got {:?}",
+                ty
+            );
+            Ok(())
+        }
+
+        /// As in wasmtime, a directory descriptor is its own root: `..` cannot
+        /// leave it, even to a place inside the preopen.
+        // rivet: verifies SR-107
+        #[serial_test::serial]
+        #[test]
+        fn dotdot_above_an_opened_directory_is_refused() -> Result<()> {
+            let (root, sandbox, mut d, dir, mem) = setup("sr107_nested_dotdot")?;
+            std::fs::create_dir(sandbox.join("sub")).unwrap();
+            let sub = open(&mut d, &mem, dir, b"sub", DIRECTORY, DESC_READ);
+            let res = open(&mut d, &mem, handle(&sub), b"../up.txt", CREATE, DESC_WRITE);
+            let created = sandbox.join("up.txt").exists();
+            std::fs::remove_dir_all(&root).ok();
+            assert!(!is_ok(&res), "got {:?}", res);
+            assert!(!created);
+            Ok(())
+        }
+
+        /// The opened directory is the one later calls act in: if its path
+        /// names something else by then, the call is refused.
+        // rivet: verifies SR-107
+        #[cfg(unix)]
+        #[serial_test::serial]
+        #[test]
+        fn open_at_acts_on_the_directory_that_was_opened() -> Result<()> {
+            let (root, sandbox, mut d, dir, mem) = setup("sr107_nested_identity")?;
+            let outside = root.join("outside");
+            std::fs::create_dir(&outside).unwrap();
+            std::fs::create_dir(sandbox.join("other")).unwrap();
+            std::fs::write(sandbox.join("other/o.txt"), b"o").unwrap();
+            std::fs::create_dir(sandbox.join("sub")).unwrap();
+            let sub = open(&mut d, &mem, dir, b"sub", DIRECTORY, DESC_READ);
+            let h = handle(&sub);
+            std::fs::rename(sandbox.join("sub"), sandbox.join("sub.orig")).unwrap();
+            // Another directory inside the preopen now has the opened one's path.
+            std::os::unix::fs::symlink("other", sandbox.join("sub")).unwrap();
+            let read = open(&mut d, &mem, h, b"o.txt", 0, DESC_READ);
+            let create = open(&mut d, &mem, h, b"new.txt", CREATE, DESC_WRITE);
+            let created_other = sandbox.join("other/new.txt").exists();
+            // And a directory outside the preopen.
+            std::fs::remove_file(sandbox.join("sub")).unwrap();
+            std::os::unix::fs::symlink(&outside, sandbox.join("sub")).unwrap();
+            let create_out = open(&mut d, &mem, h, b"new.txt", CREATE, DESC_WRITE);
+            let created_out = outside.join("new.txt").exists();
+            std::fs::remove_dir_all(&root).ok();
+            assert!(!is_ok(&read), "got {:?}", read);
+            assert!(!is_ok(&create), "got {:?}", create);
+            assert!(!created_other, "create must not land in another directory");
+            assert!(!is_ok(&create_out), "got {:?}", create_out);
+            assert!(!created_out);
+            Ok(())
+        }
+
+        /// Arm the gate hook: after the directory descriptor is checked and
+        /// before the gate runs, replace `sandbox/sub` with a symlink to `outside`.
+        #[cfg(unix)]
+        fn swap_sub_before_the_gate(sandbox: &std::path::Path, outside: &std::path::Path) {
+            let (sb, out) = (sandbox.to_path_buf(), outside.to_path_buf());
+            BEFORE_GATE_HOOK.with(|h| {
+                *h.borrow_mut() = Some(Box::new(move || {
+                    std::fs::rename(sb.join("sub"), sb.join("sub.orig")).unwrap();
+                    std::os::unix::fs::symlink(&out, sb.join("sub")).unwrap();
+                }));
+            });
+        }
+
+        /// Fixture: `sandbox/sub` opened as a directory descriptor, `outside/a.txt`.
+        #[cfg(unix)]
+        fn opened_sub_and_outside(
+            tag: &str,
+        ) -> Result<(
+            std::path::PathBuf,
+            std::path::PathBuf,
+            std::path::PathBuf,
+            WasiDispatcher,
+            (u32, u32),
+            SliceMemory,
+        )> {
+            let (root, sandbox, mut d, dir, mem) = setup(tag)?;
+            let outside = root.join("outside");
+            std::fs::create_dir(&outside).unwrap();
+            std::fs::write(outside.join("a.txt"), b"o").unwrap();
+            std::fs::create_dir(sandbox.join("sub")).unwrap();
+            std::fs::write(sandbox.join("sub/a.txt"), b"i").unwrap();
+            let sub = open(&mut d, &mem, dir, b"sub", DIRECTORY, DESC_READ);
+            let h = handle(&sub);
+            Ok((root, sandbox, outside, d, (dir, h), mem))
+        }
+
+        /// rename-at from an opened directory into the preopen.
+        // rivet: verifies SR-107
+        #[cfg(unix)]
+        #[serial_test::serial]
+        #[test]
+        fn rename_at_on_an_opened_directory_stays_in_the_preopen() -> Result<()> {
+            let (root, sandbox, outside, mut d, (dir, h), mem) =
+                opened_sub_and_outside("sr107_nested_rename")?;
+            swap_sub_before_the_gate(&sandbox, &outside);
+            mem.write_bytes(0x1000, b"a.txt")?;
+            mem.write_bytes(0x1100, b"b.txt")?;
+            let res = d.dispatch_core(
+                "wasi:filesystem/types",
+                "[method]descriptor.rename-at",
+                &[
+                    CV::I32(h as i32),
+                    CV::I32(0x1000),
+                    CV::I32(5),
+                    CV::I32(dir as i32),
+                    CV::I32(0x1100),
+                    CV::I32(5),
+                ],
+                Some(&mem),
+            );
+            BEFORE_GATE_HOOK.with(|g| *g.borrow_mut() = None);
+            let kept = outside.join("a.txt").exists() && !sandbox.join("b.txt").exists();
+            std::fs::remove_dir_all(&root).ok();
+            assert!(kept, "nothing outside the preopen may be renamed");
+            assert!(!matches!(res.as_deref(), Ok([CV::I32(0)])), "got {:?}", res);
+            Ok(())
+        }
+
+        // rivet: verifies SR-107
+        #[cfg(unix)]
+        #[serial_test::serial]
+        #[test]
+        fn stat_at_on_an_opened_directory_stays_in_the_preopen() -> Result<()> {
+            let (root, sandbox, outside, mut d, (_, h), mem) =
+                opened_sub_and_outside("sr107_nested_stat")?;
+            swap_sub_before_the_gate(&sandbox, &outside);
+            mem.write_bytes(0x1000, b"a.txt")?;
+            let res = d.dispatch_core(
+                "wasi:filesystem/types",
+                "[method]descriptor.stat-at",
+                &[CV::I32(h as i32), CV::I32(0), CV::I32(0x1000), CV::I32(5)],
+                Some(&mem),
+            );
+            BEFORE_GATE_HOOK.with(|g| *g.borrow_mut() = None);
+            std::fs::remove_dir_all(&root).ok();
+            assert!(
+                !matches!(res.as_deref(), Ok([CV::I32(0), ..])),
+                "an entry outside the preopen must not be stat'ed, got {:?}",
+                res
+            );
+            Ok(())
+        }
+
+        /// read-directory lists the opened directory, whatever its path names.
+        // rivet: verifies SR-107
+        #[cfg(unix)]
+        #[serial_test::serial]
+        #[test]
+        fn read_directory_lists_the_opened_directory() -> Result<()> {
+            let (root, sandbox, outside, mut d, (_, h), _mem) =
+                opened_sub_and_outside("sr107_nested_readdir")?;
+            std::fs::write(outside.join("only_outside.txt"), b"o").unwrap();
+            swap_sub_before_the_gate(&sandbox, &outside);
+            let res = d.dispatch_core(
+                "wasi:filesystem/types",
+                "[method]descriptor.read-directory",
+                &[CV::I32(h as i32)],
+                None,
+            );
+            BEFORE_GATE_HOOK.with(|g| *g.borrow_mut() = None);
+            let listed: Vec<String> = match res.as_deref() {
+                Ok([CV::I32(0), CV::I32(s)]) => d
+                    .dir_streams
+                    .get(&(*s as u32))
+                    .map(|(entries, _)| entries.iter().map(|(_, n)| n.clone()).collect())
+                    .unwrap_or_default(),
+                _ => Vec::new(),
+            };
+            std::fs::remove_dir_all(&root).ok();
+            assert!(
+                !listed.iter().any(|n| n == "only_outside.txt"),
+                "listed a directory outside the preopen: {:?}",
+                listed
+            );
+            Ok(())
+        }
     }
 
     /// SR-91 / #625: monotonic-clock `subscribe-duration` / `subscribe-instant`

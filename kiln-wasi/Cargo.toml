@@ -25,6 +25,11 @@ tract-onnx = { version = "0.23", optional = true, default-features = false }
 # For capability storage in std environments
 once_cell = { version = "1.19", optional = true }
 
+# Filesystem calls that create or remove entries resolve the guest path relative
+# to an open preopen directory handle (openat-style; no escape through `..`,
+# absolute paths or symlinks), never by a host path that can be swapped.
+cap-std = { version = "4.0.3", optional = true }
+
 [features]
 default = ["std", "preview2", "wasi-filesystem", "wasi-cli", "wasi-clocks", "wasi-io", "wasi-random"]
 
@@ -39,7 +44,8 @@ std = [
     # "kiln-component/std",
     "kiln-platform/std",
     "kiln-format/std",
-    "dep:once_cell"
+    "dep:once_cell",
+    "dep:cap-std"
 ]
 
 # WASI version support
