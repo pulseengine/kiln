@@ -46,10 +46,6 @@ db-urls = ["https://github.com/rustsec/advisory-db"]
 yanked = "warn"
 # notice = "warn"         # Behavior is now deny by default with version = 2
 ignore = [
-    # RUSTSEC-2024-0384: instant crate is unmaintained, comes from wasm-tools transitive dependency
-    # wasm-tools -> wasm-mutate -> egg -> instant
-    # TODO: Monitor wasm-tools updates for fix or consider alternative tools
-    "RUSTSEC-2024-0384",
     # RUSTSEC-2026-0543: chrono is unmaintained. Only the build tooling uses it
     # (cargo-kiln, kiln-build-core: timestamp formatting) plus a kiln-intercept
     # dev-dependency; `cargo tree -p kilnd -e normal -i chrono` finds no match on
