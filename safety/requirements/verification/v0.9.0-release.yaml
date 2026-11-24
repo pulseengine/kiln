@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: VER-SR66-001
+    type: verification
+    title: "SR-66: the v0.9.0 release archives contain kiln and no kilnd, and kiln --version prints the tag's version"
+    status: verified
+    release: v0.9.0
+    description: "Tag v0.9.0 (signed, on 39f9f28e; main Rust CI 45063231041 success). Release workflow run 45475400620 completed success on attempt 2 (attempt 1: the aarch64-apple-darwin build was never acquired by a hosted macOS arm64 runner and was cancelled; the failed jobs were re-run on the same tag). Supervisor check of the published release, 2026-11-24: cosign verify-blob on SHA256SUMS.txt with identity https://github.com/pulseengine/kiln/.github/workflows/release.yml@refs/tags/v0.9.0 prints Verified OK, and shasum -c passes for all 10 non-signature assets. The six archives (x86_64 and aarch64 linux gnu and musl, aarch64-apple-darwin tar.gz; x86_64-pc-windows-msvc zip) list only kiln (kiln.exe), LICENSE and README.md; zero entries named kilnd or kilnd.exe. The published aarch64-apple-darwin kiln prints `kiln 0.9.0`. In CI, kilnd/tests/binary_name_tests.rs only_the_kiln_binary_is_declared_and_released and ci_does_not_run_a_kilnd_binary pass on main (Rust CI run 45063231041, Core Tests job 137333587688)."
+    fields:
+      method: inspection
+    links:
+      - type: verifies
+        target: SR-66
+      - type: verifies
+        target: AD-KILNBIN-001
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-24T21:30:00Z
