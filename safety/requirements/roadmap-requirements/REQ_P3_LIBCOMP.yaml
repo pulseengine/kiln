@@ -5,6 +5,7 @@ artifacts:
   description: |
     The runtime shall instantiate P3 async *library* components whose exports reference not-yet-instantiated source instances (InlineExports). Today these fail with "InlineExports source instance not instantiated".
   status: proposed
+  release: backlog
   tags:
   - component-model
   - p3

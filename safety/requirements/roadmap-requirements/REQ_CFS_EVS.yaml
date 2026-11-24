@@ -5,6 +5,7 @@ artifacts:
   description: |
     Kiln shall provide host-native structured event emission with severity levels, per-event filtering masks, and distribution via the Software Bus, modeled on NASA cFS Event Services.
   status: proposed
+  release: backlog
   tags:
   - cfs
   - host-extension

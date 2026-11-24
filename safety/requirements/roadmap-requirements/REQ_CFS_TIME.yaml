@@ -5,6 +5,7 @@ artifacts:
   description: |
     Kiln shall provide host-native spacecraft time correlation (UTC, TAI, Mission Elapsed Time, Spacecraft Time Correlation Factor) for WASM components, modeled on NASA cFS Time Services.
   status: proposed
+  release: backlog
   tags:
   - cfs
   - host-extension

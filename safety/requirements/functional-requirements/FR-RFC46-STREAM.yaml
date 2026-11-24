@@ -5,6 +5,7 @@ artifacts:
   description: |
     The runtime shall implement the RFC #46 stream and future intrinsics (stream_<type>_new, stream_<type>_read, stream_<type>_write, and corresponding future variants) with bounds-checked buffer access. For every stream_read(stream, memory, buffer, length) and stream_write(stream, memory, buffer, length) call, the runtime shall validate that the range [buffer, buffer + length) falls entirely within the bounds of the specified linear memory using checked arithmetic (detecting u32/u64 overflow). If the range is invalid, the intrinsic shall trap before any data is transferred. stream_new shall return a (writer, reader) pair as a packed i64 value per the RFC encoding. Read/write results shall use the COPY_RESULT constants: BLOCKED(0xFFFFFFFF), COMPLETED(0), DROPPED(1), CANCELLED(2).
   status: proposed
+  release: backlog
   tags:
   - rfc46
   - stream-intrinsics

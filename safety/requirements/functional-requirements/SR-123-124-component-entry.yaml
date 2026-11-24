@@ -10,6 +10,7 @@ artifacts:
       created-by: ai
       model: claude-opus-5-5
       timestamp: 2026-11-20T07:10:00Z
+    release: backlog
 
   - id: SR-124
     type: requirement

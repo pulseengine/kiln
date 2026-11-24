@@ -11,6 +11,7 @@ artifacts:
     Event codes shall use the defined constants: EVENT_NONE(0), EVENT_SUBTASK(1), EVENT_STREAM_READ(2), EVENT_STREAM_WRITE(3), EVENT_FUTURE_READ(4), EVENT_FUTURE_WRITE(5), EVENT_CANCELLED(6).
     Feedback loops: gale signals the executor (via event group bits) when a waitable becomes ready. The executor signals gale (via gale_task_yield_to or gale_event_group_set) when a waitable's state changes (e.g., stream data written). Stream-to-executor notification occurs when the ring buffer state changes (data available or space available).
   status: proposed
+  release: backlog
   tags:
   - rfc46
   - waitable-intrinsics

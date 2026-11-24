@@ -5,6 +5,7 @@ artifacts:
   description: |
     The interpreter shall implement the Custom Page Sizes proposal, including: page sizes of 1 byte and 65536 bytes (the standard Wasm page size), the page size encoded in memory type definitions, limits validation respecting the declared page size, memory.size returning the size in units of the declared page size, and memory.grow growing by the declared page size units. The decoder shall parse the custom-page-size annotation in memory types and validate that only allowed page sizes (1 and 65536) are used.
   status: proposed
+  release: backlog
   tags:
   - wasm-core
   - spec-conformance

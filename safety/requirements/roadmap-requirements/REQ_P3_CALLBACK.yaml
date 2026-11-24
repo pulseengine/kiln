@@ -5,6 +5,7 @@ artifacts:
   description: |
     The runtime shall support the P3 callback async-lifting mode (host calls an exported callback per event, no persistent per-call stack) so async components can run single-stack on Gale/embedded targets, in addition to the stackful mode.
   status: proposed
+  release: backlog
   tags:
   - component-model
   - p3

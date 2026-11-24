@@ -5,6 +5,7 @@ artifacts:
   description: |
     The runtime shall implement the RFC #46 resource management intrinsics (__wasm_import_<iface>_thing_new, thing_rep, thing_drop) with handle validation and double-free prevention. thing_new shall allocate a handle from the resource table with a generation counter and return a unique handle value. thing_rep shall validate that the handle is live (not dropped) and that the generation matches before returning the representation value. thing_drop shall validate the handle, deallocate the resource, increment the slot's generation counter, and mark the slot as free. Calling thing_drop on an already-dropped handle shall trap immediately (double-free prevention). Calling thing_rep on a dropped handle shall trap. Handle values shall encode both slot index and generation to detect stale references.
   status: proposed
+  release: backlog
   tags:
   - rfc46
   - resource-intrinsics
