@@ -10,6 +10,7 @@ artifacts:
     context0_get/context0_set shall operate on per-thread, per-component state stored in gale TLS or std thread_local. One component's context shall not be visible to another component.
     Completed threads shall be reaped: the backing gale task shall be deallocated (gale_task_delete) and the thread table slot shall be recycled.
   status: proposed
+  release: backlog
   tags:
   - rfc46
   - thread-intrinsics

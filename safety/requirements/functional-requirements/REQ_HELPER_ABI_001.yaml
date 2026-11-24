@@ -5,6 +5,7 @@ artifacts:
   description: |
     The AOT helper runtime (libkiln_helper) shall export a stable C ABI including functions for Wasm operations not efficiently inlined by the AOT compiler: kiln_memory_copy, kiln_memory_fill, kiln_memory_grow, kiln_atomic_wait, kiln_atomic_notify.
   status: proposed
+  release: backlog
   tags:
   - aot
   - synth-integration

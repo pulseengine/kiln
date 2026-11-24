@@ -5,6 +5,7 @@ artifacts:
   description: |
     The interpreter shall implement the GC proposal, including: struct and array heap reference types (struct.new, struct.get, struct.set, array.new, array.get, array.set, array.len, and fixed/default/data/elem variants), the type hierarchy (any > eq > i31/struct/array), ref.test and ref.cast type testing and casting operations, br_on_cast and br_on_cast_fail conditional branching, i31.new and i31.get_s/i31.get_u for unboxed 31-bit integers, and extern.internalize/extern.externalize for host reference conversion.
   status: proposed
+  release: backlog
   tags:
   - wasm-core
   - spec-conformance

@@ -5,6 +5,7 @@ artifacts:
   description: |
     Kiln shall provide a publish/subscribe message-routing host layer modeled on NASA cFS Software Bus (route by MsgId to subscriber pipes) for inter- component dispatch of WASM components.
   status: proposed
+  release: backlog
   tags:
   - cfs
   - host-extension

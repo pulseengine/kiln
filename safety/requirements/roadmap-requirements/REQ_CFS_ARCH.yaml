@@ -5,6 +5,7 @@ artifacts:
   description: |
     Kiln shall provide a reference architecture mapping NASA cFS flight- software patterns (PSP -> OSAL -> cFE -> Apps) onto the PulseEngine stack (kiln-platform -> WASI/Gale -> Kiln host services -> WASM components) as P3 async components.
   status: proposed
+  release: backlog
   tags:
   - cfs
   - architecture

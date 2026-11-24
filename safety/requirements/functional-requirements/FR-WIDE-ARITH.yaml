@@ -5,6 +5,7 @@ artifacts:
   description: |
     The interpreter shall implement the Wide Arithmetic proposal, including: i64.add128 (128-bit addition via two i64 operands and two i64 results), i64.sub128 (128-bit subtraction), i64.mul_wide_s (signed 64x64->128 multiplication), and i64.mul_wide_u (unsigned 64x64->128 multiplication). All operations shall handle overflow and sign extension correctly per the proposal specification.
   status: proposed
+  release: backlog
   tags:
   - wasm-core
   - spec-conformance

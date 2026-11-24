@@ -5,6 +5,7 @@ artifacts:
   description: |
     Kiln shall provide a host-native subset of NASA cFS Executive Services — application lifecycle, Critical Data Store (persistent across resets), startup scripts, performance logging — building on ComponentLinker.
   status: proposed
+  release: backlog
   tags:
   - cfs
   - host-extension

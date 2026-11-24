@@ -28,6 +28,7 @@ artifacts:
       zero. Rust's "as" cast shall not be used for float-to-int conversion
       without explicit boundary handling.
     status: draft
+    release: backlog
     tags: [execution, numeric, asil-d, stpa-derived]
     links:
       - type: derives-from
@@ -103,6 +104,7 @@ artifacts:
       in opcode dispatch shall return Err, not Ok.
     status: proposed
     delegation-note: "Canonical ABI delegated to Meld per BA RFC #46"
+    release: backlog
     tags: [execution, correctness, stpa-derived]
     links:
       - type: derives-from
@@ -125,6 +127,7 @@ artifacts:
       actual call depth (not frame count) to correctly handle tail calls.
     status: proposed
     delegation-note: "Canonical ABI delegated to Meld per BA RFC #46"
+    release: backlog
     tags: [execution, stack-safety, asil-d, stpa-derived]
     links:
       - type: derives-from
@@ -149,6 +152,7 @@ artifacts:
       Invalid indices shall trap. The engine shall not default to memory 0.
     status: proposed
     delegation-note: "Canonical ABI delegated to Meld per BA RFC #46"
+    release: backlog
     tags: [execution, memory-safety, stpa-derived]
     links:
       - type: derives-from
@@ -172,6 +176,7 @@ artifacts:
       defined in the WebAssembly spec.
     status: proposed
     delegation-note: "Canonical ABI delegated to Meld per BA RFC #46"
+    release: backlog
     tags: [decoder, validation, asil-d, stpa-derived]
     links:
       - type: derives-from
@@ -197,6 +202,7 @@ artifacts:
       elements. The limit check shall occur before the allocation, not after.
     status: proposed
     delegation-note: "Canonical ABI delegated to Meld per BA RFC #46"
+    release: backlog
     tags: [decoder, resource-containment, asil-d, stpa-derived]
     links:
       - type: derives-from
@@ -226,6 +232,7 @@ artifacts:
       shall match the encoding.
     status: proposed
     delegation-note: "Canonical ABI delegated to Meld per BA RFC #46"
+    release: backlog
     tags: [component-model, canonical-abi, strings, stpa-derived]
     links:
       - type: derives-from
@@ -249,6 +256,7 @@ artifacts:
       function shall be: align_up(x, a) = (x + a - 1) & !(a - 1).
     status: proposed
     delegation-note: "Canonical ABI delegated to Meld per BA RFC #46"
+    release: backlog
     tags: [component-model, canonical-abi, alignment, stpa-derived]
     links:
       - type: derives-from
@@ -271,6 +279,7 @@ artifacts:
       for all type families. Disagreement is a blocking defect.
     status: proposed
     delegation-note: "Canonical ABI delegated to Meld per BA RFC #46"
+    release: backlog
     tags: [component-model, canonical-abi, cross-toolchain, stpa-derived]
     links:
       - type: derives-from
@@ -295,6 +304,7 @@ artifacts:
       index. Generation counters or equivalent mechanism shall prevent aliasing
       even after rapid create/drop cycles.
     status: draft
+    release: backlog
     tags: [component-model, resources, stpa-derived]
     links:
       - type: derives-from
@@ -315,6 +325,7 @@ artifacts:
       Dropping a resource handle that has already been dropped shall produce
       a trap, not corrupt the resource table.
     status: draft
+    release: backlog
     tags: [component-model, resources, stpa-derived]
     links:
       - type: derives-from
@@ -332,6 +343,7 @@ artifacts:
     type: requirement
     title: Import resolution uses fully-qualified versioned names
     status: draft
+    release: backlog
     tags: [linker, component-model, stpa-derived]
     links:
       - type: derives-from
@@ -359,6 +371,7 @@ artifacts:
     type: requirement
     title: Instantiation order respects dependency graph
     status: draft
+    release: backlog
     tags: [linker, component-model, stpa-derived]
     links:
       - type: derives-from
@@ -431,6 +444,7 @@ artifacts:
     type: requirement
     title: Shadow stack instrumented for all call paths
     status: draft
+    release: backlog
     tags: [cfi, control-flow-integrity, stpa-derived]
     links:
       - type: derives-from
@@ -444,6 +458,7 @@ artifacts:
     type: requirement
     title: call_indirect validates against instruction type_idx
     status: draft
+    release: backlog
     tags: [cfi, type-safety, stpa-derived]
     links:
       - type: derives-from
@@ -477,6 +492,7 @@ artifacts:
     type: requirement
     title: BoundedVec uses configured capacity, not allocator capacity
     status: draft
+    release: backlog
     tags: [allocation, bounded-collections, stpa-derived]
     links:
       - type: derives-from
@@ -493,6 +509,7 @@ artifacts:
     type: requirement
     title: Shared wit-bindgen fixtures pass through Kiln
     status: draft
+    release: backlog
     tags: [cross-toolchain, canonical-abi, integration, stpa-derived]
     links:
       - type: derives-from
@@ -811,6 +828,7 @@ artifacts:
     status: proposed
     tags: [no-std, memory-safety, memory64, asil-d, stpa-derived]
     traced_to: [H-2, H-3, H-7]
+    release: backlog
     links:
       - type: derives-from
         target: SR-3
@@ -847,6 +865,7 @@ artifacts:
     status: proposed
     tags: [no-std, memory-safety, gc, asil-c, stpa-derived]
     traced_to: [H-1, H-3, H-7]
+    release: backlog
     links:
       - type: derives-from
         target: SR-8
@@ -880,6 +899,7 @@ artifacts:
     status: proposed
     tags: [no-std, threads, atomics, asil-b, stpa-derived]
     traced_to: [H-1, H-3, H-7]
+    release: backlog
     links:
       - type: derives-from
         target: SR-1
@@ -913,6 +933,7 @@ artifacts:
     status: proposed
     tags: [no-std, resource-containment, asil-d, stpa-derived]
     traced_to: [H-3, H-7]
+    release: backlog
     links:
       - type: derives-from
         target: SR-8
@@ -943,6 +964,7 @@ artifacts:
       time. ABI-breaking changes without version coordination shall be
       detected by integration tests.
     status: draft
+    release: backlog
     tags: [builtins, abi-stability, cross-toolchain, rfc46, stpa-derived]
     links:
       - type: derives-from
@@ -971,6 +993,7 @@ artifacts:
       function parameter count, parameter types, and return types for
       all host intrinsic imports.
     status: draft
+    release: backlog
     tags: [validation, meld-compat, cross-toolchain, rfc46, stpa-derived]
     links:
       - type: derives-from

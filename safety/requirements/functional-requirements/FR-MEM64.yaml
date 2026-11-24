@@ -5,6 +5,7 @@ artifacts:
   description: |
     The interpreter shall implement the Memory64 proposal, including: i64 addressing for all load/store and bulk memory operations (memory.copy, memory.fill, memory.init, data.drop), u64 offsets in memarg encoding, and memory.size/memory.grow returning i64 for memory64-typed memories. The decoder shall parse the memory64 flag in memory type definitions and validate that memory indices referencing memory64 memories use i64 operands throughout.
   status: proposed
+  release: backlog
   tags:
   - wasm-core
   - spec-conformance
