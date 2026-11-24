@@ -196,7 +196,14 @@ jobs:
         # unless listed, with a reason, in safety/unsafe-allowlist.yaml.
         run: cargo test -p kiln-build-core --test unsafe_policy
       - name: Install cargo-deny
-        run: cargo install cargo-deny --version 0.19.0 --locked
+        # The cache restores ~/.cargo/bin but not cargo's install records, so a
+        # plain `cargo install` refuses the restored binary. Install (or
+        # replace) unless the restored binary is exactly 0.19.0.
+        run: |
+          if [ "$(cargo deny --version 2>/dev/null)" != "cargo-deny 0.19.0" ]; then
+            cargo install cargo-deny --version 0.19.0 --locked --force
+          fi
+          cargo deny --version
       - name: Supply chain (advisories, bans, licenses, sources)
         run: cargo deny check
 
