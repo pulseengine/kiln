@@ -113,6 +113,41 @@ impl KaniVerifier {
         }
     }
 
+    /// The arguments passed to `cargo` to verify `package`.
+    fn cargo_kani_args(&self, package: &str) -> Vec<String> {
+        let mut args = vec!["kani".to_string(), "-p".to_string(), package.to_string()];
+        args.push("--tests".to_string());
+
+        if let Some(ref harness) = self.config.harness {
+            args.extend_from_slice(&["--harness".to_string(), harness.clone()]);
+        }
+
+        if self.config.verbose {
+            args.push("--verbose".to_string());
+        }
+
+        // Add profile-specific arguments
+        match self.config.profile {
+            AsilLevel::D => {
+                args.extend_from_slice(&[
+                    "--enable-unstable".to_string(),
+                    "--solver".to_string(),
+                    "cadical".to_string(),
+                ]);
+            },
+            AsilLevel::C | AsilLevel::B => {
+                args.extend_from_slice(&["--solver".to_string(), "cadical".to_string()]);
+            },
+            _ => {
+                args.extend_from_slice(&["--solver".to_string(), "minisat".to_string()]);
+            },
+        }
+
+        // Add extra arguments
+        args.extend_from_slice(&self.config.extra_args);
+        args
+    }
+
     /// Run KANI verification
     pub fn run_verification(&self) -> BuildResult<KaniVerificationResults> {
         println!("{} Kiln KANI Formal Verification", "🔍".bright_blue());
@@ -214,43 +249,13 @@ impl KaniVerifier {
             )));
         }
 
-        // Build KANI arguments
-        let mut args = vec!["kani".to_string(), "-p".to_string(), package.to_string()];
-        args.push("--tests".to_string());
-
-        if let Some(ref harness) = self.config.harness {
-            args.extend_from_slice(&["--harness".to_string(), harness.clone()]);
-        }
-
-        if self.config.verbose {
-            args.push("--verbose".to_string());
-        }
-
-        // Add profile-specific arguments
-        match self.config.profile {
-            AsilLevel::D => {
-                args.extend_from_slice(&[
-                    "--enable-unstable".to_string(),
-                    "--solver".to_string(),
-                    "cadical".to_string(),
-                ]);
-            },
-            AsilLevel::C | AsilLevel::B => {
-                args.extend_from_slice(&["--solver".to_string(), "cadical".to_string()]);
-            },
-            _ => {
-                args.extend_from_slice(&["--solver".to_string(), "minisat".to_string()]);
-            },
-        }
-
-        // Add extra arguments
-        args.extend_from_slice(&self.config.extra_args);
+        let args = self.cargo_kani_args(package);
 
         println!("Running: cargo {}", args.join(" "));
 
         // Execute KANI
         let output = Command::new("cargo")
-            .args(&args[1..]) // Skip "kani" since we're calling cargo directly
+            .args(&args)
             .current_dir(&self.workspace_root)
             .output()
             .map_err(|e| BuildError::Tool(format!("Failed to run KANI: {}", e)))?;
@@ -264,7 +269,7 @@ impl KaniVerifier {
             .map_err(|e| BuildError::Tool(format!("Failed to write log file: {}", e)))?;
 
         // Parse results
-        let passed = output.status.success();
+        let passed = kani_run_passed(output.status.success(), &output_string);
         let total_checks = self.count_checks(&output_string);
         let passed_checks = self.count_passed_checks(&output_string);
         let failures = if !passed { self.extract_failures(&output_string) } else { Vec::new() };
@@ -559,6 +564,22 @@ pub fn get_kani_version() -> BuildResult<String> {
         .to_string())
 }
 
+/// Whether a `cargo kani` run counts as a pass: it exited 0 and its summary line
+/// (`Complete - <n> successfully verified harnesses, <f> failures, <t> total.`)
+/// reports at least one harness. A run that finds no harness proves nothing.
+fn kani_run_passed(exit_ok: bool, output: &str) -> bool {
+    exit_ok && harnesses_in_summary(output).is_some_and(|total| total > 0)
+}
+
+/// The total harness count from Kani's `Complete - ... <t> total.` line, if any.
+fn harnesses_in_summary(output: &str) -> Option<usize> {
+    output.lines().rev().find_map(|line| {
+        let rest = line.trim().strip_prefix("Complete - ")?;
+        let total = rest.rsplit(", ").next()?.strip_suffix(" total.")?;
+        total.trim().parse().ok()
+    })
+}
+
 /// Lines of `cargo kani` output printed when a package fails.
 const FAILURE_EXCERPT_LINES: usize = 60;
 
@@ -579,6 +600,38 @@ mod tests {
             failure_excerpt(output, 2),
             "error[E0433]: failed to resolve\nerror: could not compile `kiln-sync`"
         );
+    }
+
+    #[test]
+    fn cargo_is_called_with_the_kani_subcommand_and_the_package() {
+        let verifier = KaniVerifier::new(PathBuf::from("."), KaniConfig::default());
+        let args = verifier.cargo_kani_args("kiln-sync");
+        assert_eq!(
+            &args[..4],
+            ["kani", "-p", "kiln-sync", "--tests"],
+            "cargo must get `kani` as its subcommand; without it cargo rejects `-p` and no proof runs"
+        );
+    }
+
+    #[test]
+    fn a_run_that_verifies_no_harness_fails() {
+        let output = "Manual Harness Summary:\nNo proof harnesses (functions with #[kani::proof]) were found to verify.\n";
+        assert!(
+            !kani_run_passed(true, output),
+            "exit 0 with no harness verified must not count as a pass"
+        );
+    }
+
+    #[test]
+    fn a_run_that_verifies_harnesses_with_no_failures_passes() {
+        let output = "VERIFICATION:- SUCCESSFUL\nComplete - 3 successfully verified harnesses, 0 failures, 3 total.\n";
+        assert!(kani_run_passed(true, output));
+    }
+
+    #[test]
+    fn a_run_whose_cargo_kani_exits_non_zero_fails() {
+        let output = "Complete - 2 successfully verified harnesses, 1 failures, 3 total.\n";
+        assert!(!kani_run_passed(false, output));
     }
 
     #[test]
