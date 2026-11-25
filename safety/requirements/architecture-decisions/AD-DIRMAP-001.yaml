@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: AD-DIRMAP-001
+    type: design-decision
+    title: A preopen carries its host path and its guest name separately; only get-directories sees the guest name, and a --dir with two `::` is refused
+    status: implemented
+    release: v0.10.0
+    description: "Implements SR-126. kilnd/src/lib.rs PreopenSpec::parse splits a --dir/--wasi-fs argument on `::` into HOST and GUEST (GUEST = HOST when there is no `::`) and refuses an empty part or a second `::`, naming the argument. register_preopens calls WasiDispatcher::add_preopen_as(host, guest) and add_allowed_path(host) and propagates both errors, replacing the two `let _ =` loops that ran the guest without a preopen that failed to register. kiln-wasi/src/dispatcher.rs stores Preopen { fd, host, guest_name }: preopen_base, the fd table and every cap-std resolution use host; get-directories and HostImportHandler::get_preopens return guest_name. add_preopen_as refuses an empty host, an empty guest name, and a host that is not an existing directory. Tests: kiln-wasi sr126_preopen_names (6), kilnd preopen_spec_tests (5), kilnd/tests/dir_mapping_tests.rs (4)."
+    tags: [cli, kilnd, wasi, filesystem, preopen, wasmtime-compat]
+    fields:
+      alternatives: "(1) Split on the first `::` and keep the rest as the guest name: wasmtime 50.0.1 reads `--dir host::a::b` as guest `a` (measured: the guest finds `a`, not `a::b`), so kiln would differ from wasmtime with no error on either side. (2) Copy wasmtime and drop the text after the second `::`: a silent loss of user input, against kiln's fail-loud rule. (3) Rewrite guest paths to host paths inside the dispatcher: the guest name never reaches path resolution in WASI p2 (wasi-libc maps a guest path to a preopen descriptor plus a relative path), so a rewrite would add a second resolver for no gain."
+      rationale: "Keeping resolution on the host path leaves SR-50 and SR-107 containment unchanged; the guest name is a label only. Refusing two `::` keeps every argument wasmtime handles correctly identical to wasmtime and makes the one it mishandles an error, not a different silent result."
+    links:
+      - type: satisfies
+        target: SR-126
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-25T01:30:00Z

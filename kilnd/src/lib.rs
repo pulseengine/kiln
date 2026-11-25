@@ -248,8 +248,10 @@ mod preopen_spec_tests {
 
     // rivet: verifies SR-126
     #[test]
-    fn only_the_first_double_colon_splits() {
-        assert_eq!(split("a::b::c"), Some(("a".into(), "b::c".into())));
+    fn a_second_double_colon_is_rejected() {
+        // wasmtime 50.0.1 reads `--dir host::a::b` as guest name `a` and drops
+        // `::b` silently; kiln refuses the argument instead.
+        assert!(PreopenSpec::parse("a::b::c").is_err());
     }
 
     // rivet: verifies SR-126
@@ -271,7 +273,8 @@ mod preopen_spec_tests {
 /// the guest sees for it (SR-126).
 ///
 /// `HOST` preopens HOST under its own name; `HOST::GUEST` preopens HOST under
-/// GUEST, split on the first `::` only, as `wasmtime run --dir` does. The
+/// GUEST, as `wasmtime run --dir` does. A second `::` is refused: wasmtime
+/// 50.0.1 would drop everything after it. The
 /// allow-list and every containment check apply to `host`, never to `guest`.
 #[cfg(feature = "wasi")]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -290,11 +293,14 @@ impl PreopenSpec {
     ///
     /// # Errors
     ///
-    /// Returns an error if HOST or GUEST is empty.
+    /// Returns an error if HOST or GUEST is empty, or the argument holds more
+    /// than one `::`.
     pub fn parse(arg: &str) -> Result<Self> {
         let (host, guest) = arg.split_once("::").unwrap_or((arg, arg));
-        if host.is_empty() || guest.is_empty() {
-            eprintln!("Error: --dir {arg}: expected HOST[::GUEST] with neither part empty");
+        if host.is_empty() || guest.is_empty() || guest.contains("::") {
+            eprintln!(
+                "Error: --dir {arg}: expected HOST[::GUEST] with neither part empty and one `::` at most"
+            );
             return Err(Error::wasi_invalid_argument(
                 "--dir needs a non-empty HOST and GUEST",
             ));
