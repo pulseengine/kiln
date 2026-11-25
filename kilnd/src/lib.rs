@@ -226,6 +226,107 @@ fn wasi_env_pairs(specs: &[String]) -> Result<Vec<(String, String)>> {
         .collect()
 }
 
+#[cfg(all(test, feature = "wasi"))]
+mod preopen_spec_tests {
+    use super::PreopenSpec;
+
+    fn split(arg: &str) -> Option<(String, String)> {
+        PreopenSpec::parse(arg).ok().map(|s| (s.host, s.guest))
+    }
+
+    // rivet: verifies SR-126
+    #[test]
+    fn host_double_colon_guest_splits() {
+        assert_eq!(split("a::b"), Some(("a".into(), "b".into())));
+    }
+
+    // rivet: verifies SR-126
+    #[test]
+    fn host_alone_is_its_own_guest_name() {
+        assert_eq!(split("a"), Some(("a".into(), "a".into())));
+    }
+
+    // rivet: verifies SR-126
+    #[test]
+    fn only_the_first_double_colon_splits() {
+        assert_eq!(split("a::b::c"), Some(("a".into(), "b::c".into())));
+    }
+
+    // rivet: verifies SR-126
+    #[test]
+    fn a_single_colon_is_part_of_the_host() {
+        assert_eq!(split("C:/dir"), Some(("C:/dir".into(), "C:/dir".into())));
+    }
+
+    // rivet: verifies SR-126
+    #[test]
+    fn an_empty_part_is_rejected() {
+        for arg in ["a::", "::b", "::", ""] {
+            assert!(PreopenSpec::parse(arg).is_err(), "{arg:?} must be rejected");
+        }
+    }
+}
+
+/// A `--dir`/`--wasi-fs` argument: the host directory to preopen and the name
+/// the guest sees for it (SR-126).
+///
+/// `HOST` preopens HOST under its own name; `HOST::GUEST` preopens HOST under
+/// GUEST, split on the first `::` only, as `wasmtime run --dir` does. The
+/// allow-list and every containment check apply to `host`, never to `guest`.
+#[cfg(feature = "wasi")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreopenSpec {
+    /// The argument exactly as given, for error messages
+    pub arg: String,
+    /// The host directory
+    pub host: String,
+    /// The guest-visible name
+    pub guest: String,
+}
+
+#[cfg(feature = "wasi")]
+impl PreopenSpec {
+    /// Parse one `--dir` argument.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if HOST or GUEST is empty.
+    pub fn parse(arg: &str) -> Result<Self> {
+        let (host, guest) = arg.split_once("::").unwrap_or((arg, arg));
+        if host.is_empty() || guest.is_empty() {
+            eprintln!("Error: --dir {arg}: expected HOST[::GUEST] with neither part empty");
+            return Err(Error::wasi_invalid_argument(
+                "--dir needs a non-empty HOST and GUEST",
+            ));
+        }
+        Ok(Self {
+            arg: arg.to_string(),
+            host: host.to_string(),
+            guest: guest.to_string(),
+        })
+    }
+}
+
+/// Register every `--dir` preopen on `dispatcher`: the directory under its guest
+/// name, and the HOST path on the sandbox allow-list (SR-50). A preopen that
+/// cannot be registered is an error naming its argument, not a missing preopen.
+#[cfg(feature = "wasi")]
+fn register_preopens(
+    dispatcher: &mut kiln_wasi::WasiDispatcher,
+    specs: &[PreopenSpec],
+) -> Result<()> {
+    for spec in specs {
+        dispatcher
+            .add_preopen_as(&spec.host, &spec.guest)
+            .and_then(|_| dispatcher.add_allowed_path(&spec.host))
+            .map_err(|e| {
+                eprintln!("Error: --dir {}: cannot preopen: {e}", spec.arg);
+                e
+            })?;
+    }
+    Ok(())
+}
+
 /// Chained host import handler for WAC-composed P3 components.
 /// Routes WASI calls to WasiDispatcher and inter-component calls
 /// to nested component engines.
@@ -348,7 +449,7 @@ pub struct KilndConfig {
     pub wasi_args: Vec<String>,
     /// Filesystem paths to preopen for WASI access
     #[cfg(feature = "wasi")]
-    pub wasi_fs_paths: Vec<String>,
+    pub wasi_fs_paths: Vec<PreopenSpec>,
     /// Enable component model support
     #[cfg(feature = "component-model")]
     pub enable_component_model: bool,
@@ -758,10 +859,7 @@ impl KilndEngine {
                                 // register each as an allowed path so the sandbox
                                 // allow-list is actually enforced on the live path
                                 // (SR-50), not just populated on an unused object.
-                                for path in &self.config.wasi_fs_paths {
-                                    let _ = dispatcher.add_preopen(path);
-                                    let _ = dispatcher.add_allowed_path(path);
-                                }
+                                register_preopens(&mut dispatcher, &self.config.wasi_fs_paths)?;
                                 let _ = self.logger.handle_minimal_log(
                                     LogLevel::Info,
                                     "WASI dispatcher connected to component instance",
@@ -999,10 +1097,7 @@ impl KilndEngine {
                         // Add filesystem preopens from CLI args and register each
                         // as an allowed path so the sandbox allow-list is enforced
                         // on the live path (SR-50).
-                        for path in &self.config.wasi_fs_paths {
-                            let _ = dispatcher.add_preopen(path);
-                            let _ = dispatcher.add_allowed_path(path);
-                        }
+                        register_preopens(&mut dispatcher, &self.config.wasi_fs_paths)?;
                         engine.set_host_handler(Box::new(dispatcher));
                         let _ = self
                             .logger
@@ -1672,7 +1767,7 @@ pub struct SimpleArgs {
     pub wasi_version: Option<WasiVersion>,
     /// WASI filesystem paths
     #[cfg(feature = "wasi")]
-    pub wasi_fs_paths: Vec<String>,
+    pub wasi_fs_paths: Vec<PreopenSpec>,
     /// WASI environment variables to expose
     #[cfg(feature = "wasi")]
     pub wasi_env_vars: Vec<String>,
@@ -1796,7 +1891,8 @@ impl SimpleArgs {
                         println!("  --wasi               Enable WASI support");
                         println!("  --wasi-version <v>   WASI version (preview2)");
                         println!(
-                            "  --wasi-fs <path>     Allow filesystem access to path (alias: --dir)"
+                            "  --dir <HOST[::GUEST]>  Preopen HOST, visible to the guest as GUEST \
+                             (default: HOST); alias: --wasi-fs"
                         );
                         println!("  --wasi-env <var>     Expose environment variable to WASI");
                         println!("  --wasi-arg <arg>     Pass argument to WASI program");
@@ -1871,7 +1967,7 @@ impl SimpleArgs {
                 "--wasi-fs" | "--dir" => {
                     i += 1;
                     if i < args.len() {
-                        result.wasi_fs_paths.push(args[i].clone());
+                        result.wasi_fs_paths.push(PreopenSpec::parse(&args[i])?);
                     }
                 },
                 #[cfg(feature = "wasi")]
@@ -2076,8 +2172,11 @@ pub fn run(bin_name: &str) -> Result<()> {
                 capabilities.filesystem.metadata_access = true;
             }
             // Add filesystem access paths
-            for path in &args.wasi_fs_paths {
-                let _ = capabilities.filesystem.add_allowed_path(path);
+            for spec in &args.wasi_fs_paths {
+                capabilities.filesystem.add_allowed_path(&spec.host).map_err(|e| {
+                    eprintln!("Error: --dir {}: cannot allow path: {e}", spec.arg);
+                    e
+                })?;
             }
 
             // Configure environment variables

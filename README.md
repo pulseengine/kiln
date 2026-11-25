@@ -75,6 +75,10 @@ kiln --component --fuel 100000 --memory 1048576 component.wasm
 # kiln's options go before the module; everything after it is the guest's
 # argv, as with `wasmtime run`
 kiln --dir . tool.wasm check - --format json
+
+# --dir HOST::GUEST preopens HOST under the guest-visible name GUEST, as with
+# `wasmtime run --dir`; --dir HOST uses HOST as the name
+kiln --dir ./data::/data tool.wasm
 ```
 
 ## Building
