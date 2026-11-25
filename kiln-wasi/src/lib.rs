@@ -93,6 +93,8 @@ pub mod value_compat;
 // Unified WASI dispatcher
 #[cfg(feature = "preview2")]
 pub mod dispatcher;
+#[cfg(all(feature = "preview2", feature = "std"))]
+pub use dispatcher::Preopen;
 #[cfg(feature = "preview2")]
 pub use dispatcher::WasiDispatcher;
 // Re-export global args/env functions for use by kilnd

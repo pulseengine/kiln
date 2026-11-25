@@ -807,6 +807,22 @@ fn served_wasi_fn(interface: &str, function: &str) -> Option<WasiFn> {
         .map(|(_, _, served)| *served)
 }
 
+/// A pre-opened directory: the host directory every path resolves against and
+/// the name the guest sees for it (SR-126).
+///
+/// The guest name is only the label `wasi:filesystem/preopens.get-directories`
+/// returns. Resolution, containment and the allow-list act on `host`.
+#[cfg(feature = "std")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Preopen {
+    /// The descriptor handle of the preopen
+    pub fd: u32,
+    /// The host directory
+    pub host: PathBuf,
+    /// The guest-visible name
+    pub guest_name: String,
+}
+
 /// WASI Dispatcher - unified entry point for all WASI function calls
 pub struct WasiDispatcher {
     /// WASI capabilities for this dispatcher
@@ -829,9 +845,9 @@ pub struct WasiDispatcher {
     /// Note: This is separate from `resource_manager` - used for filesystem operations
     #[cfg(feature = "std")]
     fd_table: HashMap<u32, FileDescriptorEntry>,
-    /// Pre-opened directories (list of (handle, path) pairs)
+    /// Pre-opened directories
     #[cfg(feature = "std")]
-    preopens: Vec<(u32, PathBuf)>,
+    preopens: Vec<Preopen>,
     /// Pre-allocated memory for the get-directories list return (`list_ptr`, `string_ptrs`).
     /// Set by the engine after calling `cabi_realloc`; mirrors `args_alloc`. The
     /// canonical-ABI return area for `list<tuple<descriptor,string>>` is only 8 bytes,
@@ -1067,6 +1083,42 @@ impl WasiDispatcher {
     #[cfg(feature = "std")]
     pub fn add_preopen(&mut self, path: impl Into<PathBuf>) -> Result<u32> {
         let path = path.into();
+        let guest_name = path.to_string_lossy().into_owned();
+        self.add_preopen_as(path, guest_name)
+    }
+
+    /// Add a pre-opened directory to the WASI sandbox under a guest-visible name
+    /// (`--dir HOST::GUEST`, SR-126).
+    ///
+    /// `host` is the directory every path resolves against; `guest_name` is only
+    /// the label `get-directories` reports. Returns the descriptor handle.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `host` or `guest_name` is empty, if `host` does not
+    /// exist or is not a directory, or if the directory handle cannot be created
+    /// in the resource manager. Nothing is registered on error.
+    #[cfg(feature = "std")]
+    pub fn add_preopen_as(
+        &mut self,
+        host: impl Into<PathBuf>,
+        guest_name: impl Into<String>,
+    ) -> Result<u32> {
+        let path = host.into();
+        let guest_name = guest_name.into();
+        if path.as_os_str().is_empty() {
+            return Err(Error::wasi_invalid_argument(
+                "Preopen host directory is empty",
+            ));
+        }
+        if guest_name.is_empty() {
+            return Err(Error::wasi_invalid_argument("Preopen guest name is empty"));
+        }
+        if !path.is_dir() {
+            return Err(Error::wasi_invalid_argument(
+                "Preopen host path does not exist or is not a directory",
+            ));
+        }
         let path_str = path.to_string_lossy();
 
         // Use resource manager to allocate handle (Preview2 style)
@@ -1084,7 +1136,11 @@ impl WasiDispatcher {
         );
 
         // Add to preopens list
-        self.preopens.push((handle, path));
+        self.preopens.push(Preopen {
+            fd: handle,
+            host: path,
+            guest_name,
+        });
 
         Ok(handle)
     }
@@ -1330,16 +1386,12 @@ impl WasiDispatcher {
     /// calls resolve relative to this directory only.
     #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
     fn preopen_base(&self, fd: u32) -> Option<PathBuf> {
-        self.preopens
-            .iter()
-            .find(|(preopen_fd, _)| *preopen_fd == fd)
-            .map(|(_, p)| p.clone())
-            .or_else(|| {
-                self.fd_table.get(&fd).and_then(|e| match &e.fd_type {
-                    FileDescriptorType::PreopenDirectory(p) => Some(p.clone()),
-                    _ => None,
-                })
+        self.preopens.iter().find(|p| p.fd == fd).map(|p| p.host.clone()).or_else(|| {
+            self.fd_table.get(&fd).and_then(|e| match &e.fd_type {
+                FileDescriptorType::PreopenDirectory(p) => Some(p.clone()),
+                _ => None,
             })
+        })
     }
 
     /// The directory `fd` names, for a path-taking call: `(base, root)`.
@@ -1915,7 +1967,7 @@ impl WasiDispatcher {
 
     /// Get the list of pre-opened directories
     #[cfg(feature = "std")]
-    pub fn get_preopens(&self) -> &[(u32, PathBuf)] {
+    pub fn get_preopens(&self) -> &[Preopen] {
         &self.preopens
     }
 
@@ -3342,7 +3394,7 @@ impl WasiDispatcher {
                     Some(CoreValue::I32(v)) => *v as u32,
                     _ => return Err(Error::wasi_invalid_argument("get-type: missing descriptor")),
                 };
-                let is_dir = self.preopens.iter().any(|(preopen_fd, _)| *preopen_fd == fd)
+                let is_dir = self.preopens.iter().any(|p| p.fd == fd)
                     || self.fd_table.get(&fd).is_some_and(|e| {
                         matches!(
                             e.fd_type,
@@ -4439,10 +4491,9 @@ impl WasiDispatcher {
 
                     // Each entry is (descriptor: u32, path_ptr: u32, path_len: u32) = 12 bytes.
                     let entry_size = 12u32;
-                    for (i, (fd, path)) in self.preopens.iter().enumerate() {
+                    for (i, Preopen { fd, guest_name, .. }) in self.preopens.iter().enumerate() {
                         let (string_ptr, alloc_len) = string_ptrs[i];
-                        let path_str = path.to_string_lossy();
-                        let path_bytes = path_str.as_bytes();
+                        let path_bytes = guest_name.as_bytes();
                         let path_len = core::cmp::min(path_bytes.len() as u32, alloc_len);
                         // Write the path string into its own cabi_realloc'd buffer.
                         mem.write_bytes(string_ptr, &path_bytes[..path_len as usize])?;
@@ -4767,10 +4818,7 @@ impl kiln_foundation::HostImportHandler for WasiDispatcher {
     }
 
     fn get_preopens(&self) -> Vec<(u32, String)> {
-        self.preopens
-            .iter()
-            .map(|(fd, path)| (*fd, path.to_string_lossy().into_owned()))
-            .collect()
+        self.preopens.iter().map(|p| (p.fd, p.guest_name.clone())).collect()
     }
 
     fn set_preopens_allocation(&mut self, list_ptr: u32, string_ptrs: Vec<(u32, u32)>) {
@@ -9042,6 +9090,137 @@ mod tests {
         );
     }
 
+    /// SR-126: a preopen registered under a guest name (`--dir HOST::GUEST`) is
+    /// reported to the guest under that name, while resolution and containment
+    /// still act on the HOST directory.
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    mod sr126_preopen_names {
+        use super::*;
+        use kiln_foundation::traits::SliceMemory;
+        use kiln_foundation::values::Value as CV;
+
+        fn host_fixture(tag: &str) -> (std::path::PathBuf, std::path::PathBuf) {
+            let root = sandbox_fixture_dir(tag);
+            let host = root.join("hostdir");
+            std::fs::create_dir_all(&host).unwrap();
+            (root, host)
+        }
+
+        fn is_ok(res: &Result<Vec<CV>>) -> bool {
+            matches!(res.as_deref(), Ok([CV::I32(0), CV::I32(_)]))
+        }
+
+        // rivet: verifies SR-126
+        #[serial_test::serial]
+        #[test]
+        fn get_preopens_reports_the_guest_name_not_the_host_path() -> Result<()> {
+            MemoryInitializer::ensure_initialized()?;
+            let (root, host) = host_fixture("sr126_name");
+            let mut d = WasiDispatcher::with_defaults()?;
+            let fd = d.add_preopen_as(host.clone(), "guest")?;
+            let got = kiln_foundation::HostImportHandler::get_preopens(&d);
+            std::fs::remove_dir_all(&root).ok();
+            assert_eq!(got, vec![(fd, String::from("guest"))]);
+            Ok(())
+        }
+
+        // rivet: verifies SR-126
+        #[serial_test::serial]
+        #[test]
+        fn add_preopen_without_a_guest_name_keeps_the_host_path_as_name() -> Result<()> {
+            MemoryInitializer::ensure_initialized()?;
+            let (root, host) = host_fixture("sr126_same");
+            let mut d = WasiDispatcher::with_defaults()?;
+            let fd = d.add_preopen(host.clone())?;
+            let got = kiln_foundation::HostImportHandler::get_preopens(&d);
+            std::fs::remove_dir_all(&root).ok();
+            assert_eq!(got, vec![(fd, host.to_string_lossy().into_owned())]);
+            Ok(())
+        }
+
+        // rivet: verifies SR-126
+        #[serial_test::serial]
+        #[test]
+        fn open_at_under_a_renamed_preopen_resolves_on_the_host_dir() -> Result<()> {
+            MemoryInitializer::ensure_initialized()?;
+            let (root, host) = host_fixture("sr126_open");
+            std::fs::write(host.join("file"), b"data").unwrap();
+            let mut d = WasiDispatcher::with_defaults()?;
+            let fd = d.add_preopen_as(host.clone(), "guest")?;
+            let mem = SliceMemory::with_size(0x10000);
+            let present = core_open_at(&mut d, &mem, fd, b"file");
+            let absent = core_open_at(&mut d, &mem, fd, b"missing");
+            std::fs::remove_dir_all(&root).ok();
+            assert!(is_ok(&present), "HOST/file must open, got {present:?}");
+            assert!(
+                !is_ok(&absent),
+                "HOST/missing must not open, got {absent:?}"
+            );
+            Ok(())
+        }
+
+        // rivet: verifies SR-126
+        #[serial_test::serial]
+        #[test]
+        fn dotdot_out_of_a_renamed_preopen_is_still_refused() -> Result<()> {
+            MemoryInitializer::ensure_initialized()?;
+            let (root, host) = host_fixture("sr126_dotdot");
+            std::fs::write(root.join("SECRET.txt"), b"TOPSECRET").unwrap();
+            let mut d = WasiDispatcher::with_defaults()?;
+            let fd = d.add_preopen_as(host.clone(), "guest")?;
+            let mem = SliceMemory::with_size(0x10000);
+            let res = core_open_at(&mut d, &mem, fd, b"../SECRET.txt");
+            std::fs::remove_dir_all(&root).ok();
+            assert!(res.is_err(), "`..` must stay refused, got {res:?}");
+            Ok(())
+        }
+
+        // rivet: verifies SR-126
+        #[serial_test::serial]
+        #[test]
+        fn a_preopen_that_cannot_be_registered_is_an_error() -> Result<()> {
+            MemoryInitializer::ensure_initialized()?;
+            let (root, host) = host_fixture("sr126_invalid");
+            std::fs::write(root.join("afile"), b"x").unwrap();
+            let mut d = WasiDispatcher::with_defaults()?;
+            let empty_host = d.add_preopen_as("", "g").is_err();
+            let empty_guest = d.add_preopen_as(host.clone(), "").is_err();
+            let missing_host = d.add_preopen_as(root.join("nope"), "g").is_err();
+            let file_host = d.add_preopen_as(root.join("afile"), "g").is_err();
+            let registered = kiln_foundation::HostImportHandler::get_preopens(&d);
+            std::fs::remove_dir_all(&root).ok();
+            assert!(empty_host, "empty HOST must be rejected");
+            assert!(empty_guest, "empty GUEST must be rejected");
+            assert!(missing_host, "missing HOST must be rejected");
+            assert!(file_host, "a HOST that is a file must be rejected");
+            assert!(
+                registered.is_empty(),
+                "nothing may be registered: {registered:?}"
+            );
+            Ok(())
+        }
+
+        // rivet: verifies SR-126
+        #[serial_test::serial]
+        #[test]
+        fn the_guest_name_is_never_a_host_path() -> Result<()> {
+            MemoryInitializer::ensure_initialized()?;
+            let (root, host) = host_fixture("sr126_guestname_host");
+            // A guest name that is itself an existing directory must not be
+            // consulted: the file exists only under the HOST directory.
+            let decoy = root.join("decoy");
+            std::fs::create_dir_all(&decoy).unwrap();
+            std::fs::write(decoy.join("only_in_decoy"), b"x").unwrap();
+            let mut d = WasiDispatcher::with_defaults()?;
+            let fd = d.add_preopen_as(host.clone(), decoy.to_string_lossy().into_owned())?;
+            let mem = SliceMemory::with_size(0x10000);
+            let res = core_open_at(&mut d, &mem, fd, b"only_in_decoy");
+            std::fs::remove_dir_all(&root).ok();
+            assert!(!is_ok(&res), "guest name must not be resolved, got {res:?}");
+            Ok(())
+        }
+    }
+
     /// SR-107: open-at honours its open-flags (create, directory, exclusive,
     /// truncate) as wasmtime does, inside the sandbox rules of SR-49. Driven
     /// through the live `dispatch_core` path with real tempdir preopens.
@@ -10425,8 +10604,8 @@ mod get_preopens_tests {
         let h = d.add_preopen(root.clone())?;
         let list = WasiDispatcher::get_preopens(&d);
         assert_eq!(list.len(), 1);
-        assert_eq!(list[0].0, h);
-        assert_eq!(list[0].1, root);
+        assert_eq!(list[0].fd, h);
+        assert_eq!(list[0].host, root);
         std::fs::remove_dir_all(&root).unwrap();
         Ok(())
     }
@@ -10454,8 +10633,8 @@ mod get_preopens_tests {
         let hb = d.add_preopen(b.clone())?;
         let list = WasiDispatcher::get_preopens(&d);
         assert_eq!(list.len(), 2);
-        assert_eq!(list[0], (ha, a.clone()));
-        assert_eq!(list[1], (hb, b.clone()));
+        assert_eq!((list[0].fd, &list[0].host), (ha, &a));
+        assert_eq!((list[1].fd, &list[1].host), (hb, &b));
         std::fs::remove_dir_all(&root).unwrap();
         Ok(())
     }
@@ -11804,7 +11983,11 @@ mod get_type_fd_table_tests {
         use kiln_foundation::values::Value as CV;
         kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
         let mut d = WasiDispatcher::with_defaults()?;
-        d.preopens.push((9999u32, std::path::PathBuf::from(".")));
+        d.preopens.push(Preopen {
+            fd: 9999u32,
+            host: std::path::PathBuf::from("."),
+            guest_name: String::from("."),
+        });
         d.fd_table.insert(
             8888u32,
             FileDescriptorEntry {
