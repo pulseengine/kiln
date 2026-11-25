@@ -91,8 +91,14 @@ fn admit_regex() -> Result<Regex> {
 pub fn scan_text(file: &str, text: &str, out: &mut ScanResult) -> Result<()> {
     let fn_re = fn_regex()?;
     let admit_re = admit_regex()?;
-    let alias_re =
-        Regex::new(concat!(r"\buse\s+", "kani", r"\s*(::|as\b)")).context("compile alias regex")?;
+    let alias_re = Regex::new(concat!(
+        r"\buse\s+(::\s*)?",
+        "kani",
+        r"\s*(::|as\b)|\bextern\s+crate\s+",
+        "kani",
+        r"\s+as\b"
+    ))
+    .context("compile alias regex")?;
     let lines: Vec<&str> = text.lines().collect();
     let is_comment = |l: &str| l.trim_start().starts_with("//");
 
@@ -306,22 +312,38 @@ impl Ledger {
 }
 
 /// Parse `cargo kani` output: harness name -> verified.
+///
+/// A harness is verified only if its section has an exact
+/// `VERIFICATION:- SUCCESSFUL` line and no `VERIFICATION:- FAILED` line, and it
+/// was checked only once (a second `Checking harness` for the same name with a
+/// failure keeps it failed).
 pub fn parse_kani_log(text: &str) -> BTreeMap<String, bool> {
-    let mut out = BTreeMap::new();
+    let mut success: BTreeMap<String, bool> = BTreeMap::new();
+    let mut failed: BTreeSet<String> = BTreeSet::new();
     let mut current: Option<String> = None;
     for line in text.lines() {
         let t = line.trim();
         if let Some(rest) = t.strip_prefix("Checking harness ") {
             let name = rest.trim().trim_end_matches('.').trim().to_string();
-            out.entry(name.clone()).or_insert(false);
+            success.entry(name.clone()).or_insert(false);
             current = Some(name);
-        } else if t.contains("VERIFICATION:- SUCCESSFUL") {
+        } else if t == "VERIFICATION:- SUCCESSFUL" {
             if let Some(name) = &current {
-                out.insert(name.clone(), true);
+                success.insert(name.clone(), true);
+            }
+        } else if t == "VERIFICATION:- FAILED" {
+            if let Some(name) = &current {
+                failed.insert(name.clone());
             }
         }
     }
-    out
+    success
+        .into_iter()
+        .map(|(name, ok)| {
+            let ok = ok && !failed.contains(&name);
+            (name, ok)
+        })
+        .collect()
 }
 
 /// Outcome of `check`.
@@ -841,12 +863,13 @@ count = 1
     fn aliased_kani_import_is_a_violation_but_plain_use_is_not() {
         let mut s = ScanResult::default();
         let text = format!(
-            "use {k};\nuse {k}::assume;\nuse {k} as k;\nfn h() {{ assume(true); }}\n",
+            "use {k};\nuse {k}::assume;\nuse {k} as k;\nfn h() {{ assume(true); }}\n\
+             use ::{k}::{{assume}};\nextern crate {k} as kk;\npub use {k}_verification::*;\n",
             k = "kani"
         );
         scan_text("p/src/a.rs", &text, &mut s).expect("scan");
         let lines: Vec<usize> = s.aliased_imports.iter().map(|(_, l)| *l).collect();
-        assert_eq!(lines, vec![2, 3]);
+        assert_eq!(lines, vec![2, 3, 5, 6]);
         let ledger = Ledger::default();
         let r = check_ledger(&ledger, &s, None, None);
         assert!(r.violations.iter().any(|l| l.contains("aliased kani import: p/src/a.rs:2")));
@@ -861,6 +884,14 @@ count = 1
         assert_eq!(m["m::h"], true);
         assert_eq!(m["m::bad"], false);
         assert_eq!(m["m::none"], false);
+
+        // Only the exact verdict line counts, and a failure for a harness wins.
+        let tricky = "Checking harness m::a...\nnot VERIFICATION:- SUCCESSFUL here\n\
+                      Checking harness m::b...\nVERIFICATION:- SUCCESSFUL\n\
+                      Checking harness m::b...\nVERIFICATION:- FAILED\n";
+        let m = parse_kani_log(tricky);
+        assert_eq!(m["m::a"], false);
+        assert_eq!(m["m::b"], false);
     }
 
     #[test]
