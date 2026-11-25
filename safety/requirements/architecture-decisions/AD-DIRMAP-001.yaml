@@ -3,7 +3,7 @@ artifacts:
   - id: AD-DIRMAP-001
     type: design-decision
     title: A preopen carries its host path and its guest name separately; only get-directories sees the guest name, and a --dir with two `::` is refused
-    status: implemented
+    status: verified
     release: v0.10.0
     description: "Implements SR-126. kilnd/src/lib.rs PreopenSpec::parse splits a --dir/--wasi-fs argument on `::` into HOST and GUEST (GUEST = HOST when there is no `::`) and refuses an empty part or a second `::`, naming the argument. register_preopens calls WasiDispatcher::add_preopen_as(host, guest) and add_allowed_path(host) and propagates both errors, replacing the two `let _ =` loops that ran the guest without a preopen that failed to register. kiln-wasi/src/dispatcher.rs stores Preopen { fd, host, guest_name }: preopen_base, the fd table and every cap-std resolution use host; get-directories and HostImportHandler::get_preopens return guest_name. add_preopen_as refuses an empty host, an empty guest name, and a host that is not an existing directory. Tests: kiln-wasi sr126_preopen_names (6), kilnd preopen_spec_tests (5), kilnd/tests/dir_mapping_tests.rs (4)."
     tags: [cli, kilnd, wasi, filesystem, preopen, wasmtime-compat]

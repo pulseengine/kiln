@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: VER-SR126-001
+    type: verification
+    title: "SR-126: kiln run --dir HOST::GUEST gives the guest HOST under the name GUEST, with the same output and exit status as wasmtime 50.0.1"
+    status: verified
+    release: v0.10.0
+    description: "Merged in PR #727 as 728dcb77 (squash, all required checks SUCCESS on head e3c4361a; main tree equals the PR head tree e9aaea2d). Main Rust CI run 45527323251 completed success; its Core Tests job 138913790128 ran and passed kiln-wasi dispatcher::tests::sr126_preopen_names (6 tests: guest name reported by get-directories, open-at under a renamed preopen resolves on the host directory, `..` out of a renamed preopen still refused, a preopen that cannot be registered is an error), kilnd preopen_spec_tests (5 tests, including a_second_double_colon_is_rejected and an_empty_part_is_rejected) and kilnd/tests/dir_mapping_tests.rs (4 tests: host_double_colon_guest_reports_the_guest_name, host_alone_reports_the_host_as_given, a_missing_host_ends_kiln_and_names_the_argument, an_empty_guest_name_ends_kiln_and_names_the_argument). End-to-end differential, 2026-11-25, on the PR head build: a Rust 1.99.1 wasm32-wasip2 program fused with meld lists the preopen, reads hello.txt, writes, reads and removes inner/w.txt under the guest name. For --dir host::sandbox, host::/data, host and host::. kiln's stdout, stderr and exit status are identical to wasmtime 50.0.1 (4 of 4). Baseline: the published v0.9.0 kiln with --dir host::sandbox exits 1 (read_dir NotFound) where wasmtime exits 0. A missing host, an empty host, an empty guest and a::b::c each exit 1 with a message naming the argument before the guest runs. The probe's `../outside.txt` attempt does not read outside HOST; the run then ends with E0BC2 instead of returning an error code to the guest, which is SR-106 (backlog), not SR-126."
+    fields:
+      method: test
+    links:
+      - type: verifies
+        target: SR-126
+      - type: verifies
+        target: AD-DIRMAP-001
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-25T03:30:00Z
