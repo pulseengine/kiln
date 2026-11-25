@@ -12,7 +12,7 @@
 ![WebAssembly](https://img.shields.io/badge/WebAssembly-654FF0?style=flat-square&logo=webassembly&logoColor=white&labelColor=1a1b27)
 ![no_std](https://img.shields.io/badge/no__std-compatible-654FF0?style=flat-square&labelColor=1a1b27)
 [![WebAssembly spec suite](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fpulseengine%2Fkiln%2Fbadges%2Fspec-suite.json&style=flat-square&labelColor=1a1b27)](https://github.com/pulseengine/kiln/actions/workflows/verification-honesty.yml)
-![Kani-checked (selected)](https://img.shields.io/badge/Kani-checked_selected_components-1f6feb?style=flat-square&labelColor=1a1b27)
+![Kani: 4 of 109 harnesses verify, rest ledgered](https://img.shields.io/badge/Kani-4_of_109_harnesses_verify%2C_rest_ledgered-1f6feb?style=flat-square&labelColor=1a1b27)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square&labelColor=1a1b27)
 
 &nbsp;
@@ -133,11 +133,13 @@ not (yet) a mechanized proof of its WebAssembly execution semantics. We state th
   should-be-invalid modules are currently accepted) and the `custom-descriptors` parse
   failure. Reproduce locally with `cargo-kiln testsuite --run-wast`.
 - **Unit tests:** 300+ across the interpreter core.
-- **Kani (CBMC bounded model checking):** proof harnesses on *selected* safety-relevant
-  components (foundation collections, arithmetic overflow, LEB128, host dispatch,
-  wasi-nn bounds, platform sync) &mdash; bounded proofs of those components, **not** of
-  the interpreter core (`kiln-runtime` / `kiln-instructions` / `kiln-decoder` carry no
-  formal proofs today).
+- **Kani (CBMC bounded model checking):** 4 of 109 harnesses verify, and the rest are
+  ledgered. The four are the kiln-async scheduler invariants (3) and the kiln-builtins import
+  dispatch with no platform (1); they run on every PR in the "Kani proofs and ledger" job.
+  [`safety/verification/proof-ledger.toml`](safety/verification/proof-ledger.toml) records
+  why each other harness does not run (most do not compile under Kani) and every
+  input-narrowing assumption, and CI fails if that list grows. The interpreter core
+  (`kiln-runtime` / `kiln-instructions` / `kiln-decoder`) has no formal proofs.
 - **Not claimed:** formal proof of the interpreter's execution semantics. Mechanized
   semantics (WasmCert-style) is a research direction, not a shipped guarantee.
 
@@ -154,6 +156,6 @@ MIT License &mdash; see [LICENSE](LICENSE).
 
 <div align="center">
 
-<sub>Part of <a href="https://github.com/pulseengine">PulseEngine</a> &mdash; a WebAssembly toolchain for safety-critical systems, grounded in spec-suite conformance and Kani model-checking of critical components</sub>
+<sub>Part of <a href="https://github.com/pulseengine">PulseEngine</a> &mdash; a WebAssembly toolchain for safety-critical systems, grounded in spec-suite conformance and a ledgered Kani baseline</sub>
 
 </div>

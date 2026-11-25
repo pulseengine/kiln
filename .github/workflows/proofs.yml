@@ -51,11 +51,20 @@ jobs:
 
       - name: Install Kani
         run: |
-          if ! cargo kani --version 2>/dev/null | grep -qF "$KANI_VERSION"; then
-            cargo install --locked --version "$KANI_VERSION" kani-verifier
+          # First line of `cargo kani --version` is e.g. "Kani Rust Verifier 0.68.0 (cargo plugin)".
+          # Capture the whole output first: a reader that closes the pipe early makes cargo-kani panic.
+          kani_version_line() { local out; out="$(cargo kani --version 2>/dev/null)" || return 0; printf '%s\n' "${out%%$'\n'*}"; }
+          if [ "$(kani_version_line)" != "Kani Rust Verifier $KANI_VERSION (cargo plugin)" ]; then
+            cargo install --locked --force --version "$KANI_VERSION" kani-verifier
           fi
           cargo kani setup
-          cargo kani --version
+          # A cached or runner-local cargo-kani of another version must not run the proofs.
+          installed="$(kani_version_line)"
+          echo "$installed"
+          if [ "$installed" != "Kani Rust Verifier $KANI_VERSION (cargo plugin)" ]; then
+            echo "::error::cargo kani reports '$installed', the pin is $KANI_VERSION"
+            exit 1
+          fi
 
       - name: Build cargo-kiln
         run: cargo build --locked -p cargo-kiln
