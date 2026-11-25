@@ -74,6 +74,9 @@ pub struct ScanResult {
     pub harnesses: BTreeSet<ScannedHarness>,
     /// Narrowing site counts by (file, function, kind).
     pub narrowing: BTreeMap<NarrowKey, u32>,
+    /// (file, 1-based line) of `use kani::...` / `use kani as ...`, which would
+    /// let a narrowing call appear without the `kani::` prefix the scan matches.
+    pub aliased_imports: BTreeSet<(String, usize)>,
 }
 
 fn fn_regex() -> Result<Regex> {
@@ -88,6 +91,8 @@ fn admit_regex() -> Result<Regex> {
 pub fn scan_text(file: &str, text: &str, out: &mut ScanResult) -> Result<()> {
     let fn_re = fn_regex()?;
     let admit_re = admit_regex()?;
+    let alias_re =
+        Regex::new(concat!(r"\buse\s+", "kani", r"\s*(::|as\b)")).context("compile alias regex")?;
     let lines: Vec<&str> = text.lines().collect();
     let is_comment = |l: &str| l.trim_start().starts_with("//");
 
@@ -144,6 +149,9 @@ pub fn scan_text(file: &str, text: &str, out: &mut ScanResult) -> Result<()> {
         let n = admit_re.find_iter(line).count();
         if n > 0 {
             add(prev[i], "admit", n as u32, out);
+        }
+        if alias_re.is_match(line) {
+            out.aliased_imports.insert((file.to_string(), i + 1));
         }
     }
     Ok(())
@@ -422,6 +430,13 @@ pub fn check_ledger(
         }
     }
 
+    for (file, line) in &scan.aliased_imports {
+        r.violations.push(format!(
+            "aliased kani import: {file}:{line} imports kani items or renames kani; \
+             write kani::<item> in full so the ledger scan sees every narrowing call"
+        ));
+    }
+
     // Rule 3: status requirements.
     for h in &ledger.harness {
         if h.status == "verified" && !(nonempty(&h.proves) && nonempty(&h.entry_path)) {
@@ -491,6 +506,27 @@ pub fn check_ledger(
                 r.violations.push(format!(
                     "ledger grew: {} {} {} is {count}, base has {was}",
                     key.0, key.1, key.2
+                ));
+            }
+        }
+        // A floor harness may not leave the floor: the verified set only grows.
+        for bf in &base.floor {
+            for n in &bf.harnesses {
+                let kept =
+                    ledger.floor.iter().any(|f| f.package == bf.package && f.harnesses.contains(n));
+                if !kept {
+                    r.violations.push(format!(
+                        "floor shrank: package {} harness {n} is in the base floor but not in this ledger",
+                        bf.package
+                    ));
+                }
+            }
+        }
+        // An excluded file is not scanned, so a new exclusion could hide new sites.
+        for x in &ledger.scan.exclude {
+            if !base.scan.exclude.contains(x) {
+                r.violations.push(format!(
+                    "ledger grew: [scan].exclude adds {x}, which the base does not exclude"
                 ));
             }
         }
@@ -775,6 +811,45 @@ count = 1
         let bigger_base = Ledger::parse(&GOOD.replace("count = 1", "count = 4")).expect("base");
         let r = check_ledger(&ledger, &scan, Some(&bigger_base), None);
         assert!(!r.violations.iter().any(|l| l.contains("ledger grew")));
+    }
+
+    #[test]
+    fn rule5_new_exclusion_counts_as_growth() {
+        let base = Ledger::parse(GOOD).expect("base");
+        let mut ledger = Ledger::parse(GOOD).expect("ledger");
+        ledger.scan.exclude.push("p/src/hidden.rs".to_string());
+        let r = check_ledger(&ledger, &good_scan(), Some(&base), None);
+        assert!(r.violations.iter().any(|l| l.contains("[scan].exclude adds p/src/hidden.rs")));
+        let r = check_ledger(&ledger, &good_scan(), Some(&ledger.clone()), None);
+        assert!(!r.violations.iter().any(|l| l.contains("[scan].exclude")));
+    }
+
+    #[test]
+    fn rule5_floor_removal_counts_as_shrink_of_the_gate() {
+        let base = Ledger::parse(GOOD).expect("base");
+        let mut ledger = Ledger::parse(GOOD).expect("ledger");
+        ledger.floor.clear();
+        let r = check_ledger(&ledger, &good_scan(), Some(&base), None);
+        assert!(
+            r.violations.iter().any(|l| l.contains("floor shrank")),
+            "{:?}",
+            r.violations
+        );
+    }
+
+    #[test]
+    fn aliased_kani_import_is_a_violation_but_plain_use_is_not() {
+        let mut s = ScanResult::default();
+        let text = format!(
+            "use {k};\nuse {k}::assume;\nuse {k} as k;\nfn h() {{ assume(true); }}\n",
+            k = "kani"
+        );
+        scan_text("p/src/a.rs", &text, &mut s).expect("scan");
+        let lines: Vec<usize> = s.aliased_imports.iter().map(|(_, l)| *l).collect();
+        assert_eq!(lines, vec![2, 3]);
+        let ledger = Ledger::default();
+        let r = check_ledger(&ledger, &s, None, None);
+        assert!(r.violations.iter().any(|l| l.contains("aliased kani import: p/src/a.rs:2")));
     }
 
     #[test]

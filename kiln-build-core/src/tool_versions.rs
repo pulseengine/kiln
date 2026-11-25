@@ -299,9 +299,9 @@ impl ToolVersionConfig {
         tools.insert(
             "kani".to_string(),
             ToolVersion {
-                version: "0.63.0".to_string(),
+                version: "0.68.0".to_string(),
                 requirement_type: VersionRequirement::Exact,
-                install_command: "cargo install --locked --version 0.63.0 kani-verifier && \
+                install_command: "cargo install --locked --version 0.68.0 kani-verifier && \
                                      cargo kani setup"
                     .to_string(),
                 version_check_args: vec!["--version".to_string()],
@@ -666,10 +666,10 @@ mod tests {
 
         // Test exact version requirement
         if let Some(kani_version) = config.get_tool_version("kani") {
-            let comparison = config.check_version_compatibility("kani", "0.63.0");
+            let comparison = config.check_version_compatibility("kani", "0.68.0");
             assert_eq!(comparison, Some(VersionComparison::Satisfies));
 
-            let comparison = config.check_version_compatibility("kani", "0.62.0");
+            let comparison = config.check_version_compatibility("kani", "0.63.0");
             assert!(matches!(
                 comparison,
                 Some(VersionComparison::Mismatch { .. })
@@ -690,7 +690,7 @@ mod tests {
             .join("..")
             .join("tool-versions.yaml");
         let config = ToolVersionConfig::load_from_file(&path).unwrap();
-        assert_eq!(config.tools["kani"].version, "0.63.0");
+        assert_eq!(config.tools["kani"].version, "0.68.0");
         assert_eq!(
             config.tools["kani"].requirement_type,
             VersionRequirement::Exact

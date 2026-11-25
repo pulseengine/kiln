@@ -87,9 +87,9 @@ tools:
 
   # Formal verification tools
   kani:
-    version: "0.63.0"
+    version: "0.68.0"
     requirement_type: Exact
-    install_command: cargo install --locked --version 0.63.0 kani-verifier && cargo kani setup
+    install_command: cargo install --locked --version 0.68.0 kani-verifier && cargo kani setup
     version_check_args: ["--version"]
     version_pattern: 'kani (\d+\.\d+\.\d+)'
     required: false
@@ -241,3 +241,4 @@ tools:
 # version_history:
 #   "2025-06-19": Initial tool version configuration
 #   "2025-06-20": Updated kani to 0.63.0 for improved CBMC backend
+#   "2026-11-25": Updated kani to 0.68.0 (CBMC 6.11), the version the SR-121 proof ledger was measured with

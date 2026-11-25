@@ -31,51 +31,9 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Quick verification for all PRs
-  quick-verification:
-    name: Quick Verification (ASIL-A)
-    runs-on: ubuntu-24.04
-    if: github.event_name == 'pull_request'
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
-        with:
-          toolchain: nightly-2024-01-01
-          components: rust-src
-      
-      - name: Cache Cargo
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-kani-${{ hashFiles('**/Cargo.lock') }}
-      
-      - name: Install and setup cargo-kiln with Kani
-        run: |
-          cargo build --package cargo-kiln
-          cargo install --path cargo-kiln --force
-          cargo-kiln setup --all # Setup all tools including Kani automatically
-      
-      - name: Verify tool setup
-        run: cargo-kiln setup --check
-      
-      - name: Run Quick Verification
-        run: |
-          cargo-kiln kani-verify --asil-profile a --package kiln-integration-tests
-        continue-on-error: true
-      
-      - name: Upload Quick Report
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        if: always()
-        with:
-          name: kani-quick-report
-          path: target/kani-reports/verification_report_*.md
+  # The per-PR Kani gate is proofs.yml (SR-121). This workflow never runs on
+  # pull_request, so its former PR-only quick job (which targeted a package
+  # that does not exist) is removed.
 
   # Matrix verification for different ASIL levels and packages
   matrix-verification:
@@ -86,15 +44,19 @@ jobs:
       fail-fast: false
       matrix:
         asil: [b, c]
-        package: 
+        # Workspace packages only; every harness's status is in
+        # safety/verification/proof-ledger.toml (SR-121). The per-PR gate is
+        # proofs.yml; this weekly matrix keeps the not-yet-compiling packages visible.
+        package:
           - kiln-foundation
           - kiln-component
           - kiln-sync
-          - kiln-integration-tests
+          - kiln-async
+          - kiln-builtins
         include:
           # Add ASIL-D verification for critical packages only
           - asil: d
-            package: kiln-integration-tests
+            package: kiln-async
           - asil: d
             package: kiln-foundation
     
@@ -238,13 +200,12 @@ jobs:
   verification-summary:
     name: Verification Summary
     runs-on: ubuntu-24.04
-    needs: [quick-verification, matrix-verification]
+    needs: [matrix-verification]
     if: always()
     steps:
       - name: Check Verification Results
         run: |
-          if [ "${{ needs.quick-verification.result }}" == "failure" ] || 
-             [ "${{ needs.matrix-verification.result }}" == "failure" ]; then
+          if [ "${{ needs.matrix-verification.result }}" == "failure" ]; then
             echo "::error::One or more verification jobs failed"
             exit 1
           fi
