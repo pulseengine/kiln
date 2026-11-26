@@ -45,7 +45,7 @@ artifacts:
   - id: SR-121
     type: requirement
     title: "Serves North Star O3: kiln's Kani proofs run as a required check with a ledger of every input-narrowing assumption that may only shrink"
-    status: implemented
+    status: verified
     release: v0.10.0
     description: "Bet 3 of docs/architecture/v0.9.0-release-plan.md (draft); sharpens SR-103. REQUIRED: a per-PR required check shall run kiln's Kani harnesses; each harness shall name the function it proves and a live entry path on the product that calls it; a committed ledger shall list every assumption that narrows a harness's input range (kani::assume, unwind bounds, reduced input types, stubs) and CI shall fail when the ledger grows. Verified by: the check required and green on main; a mutation control where a change that breaks a proven property turns it red; and the ledger baseline committed with the first green run. Open for the maintainer: O3's definition also asks for a kernel axiom audit, which has no direct Kani equivalent."
     tags: [north-star-o3, kani, proofs, ledger]

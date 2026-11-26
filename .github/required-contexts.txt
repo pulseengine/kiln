@@ -1,0 +1,15 @@
+build
+CI Checks & Docs
+Core Tests, Analysis & Coverage
+Safety Analysis with Clippy
+SCORE-Inspired Safety Verification
+Security Audit (ubuntu-latest)
+Security Audit (macos-latest)
+Security Audit (windows-latest)
+Traceability (rivet validate)
+Kani proofs and ledger
+Claim check (README ↔ evidence)
+Code Quality Checks
+MSRV (rustc 1.85.0: kiln-platform and the SR-97 crates)
+Static musl build (SR-68)
+Dependency Review

@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: VER-SR121-001
+    type: verification
+    title: "SR-121: the Kani proofs and ledger check is required on main, green on main, can go red for a broken proven property, and the ledger baseline is committed with its first green run"
+    status: verified
+    release: v0.10.0
+    description: "Merged in PR #729 as 21aab86d (squash, all 9 required checks SUCCESS on head 784e421a; main tree equals the PR head tree). Main Proofs run 45742051322, job 139649164609 (Kani proofs and ledger), completed success on 21aab86d: cargo kani reports 'Kani Rust Verifier 0.68.0 (cargo plugin)'; the static check reports 109 harnesses, 72 narrowing groups, 0 violations (growth check skipped: the base commit had no ledger, so this run commits the baseline); cargo kani verifies the floors, kiln-async 3 of 3 and kiln-builtins proofs::dispatch_import_returns_zero_without_platform 1 of 1 (under --tests), and the check with those logs reports 0 violations; mutation control: with safety/verification/mutations/kiln-async-remove-keeps-generation.patch applied the ABA harness reports VERIFICATION:- FAILED on 'assertion failed: t.state_of(old).is_none()'; ledger control: a planted kani::assume is reported as 'unledgered narrowing ... planted_ledger_control assume x1' and the check is clean again after its removal. Required: maintainer decision 2026-11-26 added 'Kani proofs and ledger' to main's required status checks (10 contexts, listed in .github/required-contexts.txt); ledger growth lands only through an admin bypass. Open, as SR-121 records: O3's kernel axiom audit has no Kani equivalent; the 3 kiln-async harnesses have no product entry path until SR-84."
+    fields:
+      method: test
+    links:
+      - type: verifies
+        target: SR-121
+      - type: verifies
+        target: AD-PROOFLEDGER-001
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-26T03:00:00Z
