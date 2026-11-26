@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: AD-STARTUP-001
+    type: design-decision
+    title: HeapProvider allocates its buffer as it is written, up to its capacity; creating or cloning one costs what it holds, and reading bytes never written is an error
+    status: implemented
+    release: v0.10.0
+    description: "Implements SR-129. kiln-foundation/src/heap_provider.rs: HeapProvider keeps capacity as a field and data as the written prefix. write_data, get_slice_mut, copy_within (destination) and ensure_used_up_to grow data to the end they touch, zero-filled, within capacity; verify_access checks against capacity; borrow_slice and the source of copy_within fail with memory_out_of_bounds ('Read of bytes never written') for bytes past the written prefix instead of returning zeros. Clone copies the written prefix. Before: new zero-filled the whole capacity and clone copied it with data.to_vec(), so each of the many containers built over the 8 MiB runtime provider (RUNTIME_MEMORY_SIZE) during module load cost an 8 MiB copy. MEASURED 2026-11-26 (aarch64-apple-darwin, load 2.5/10 cores), sieve 0.4.3 fused by meld 0.66.0, 'kiln --wasi --component sieve.fused.wasm --version': kiln 0.9.0 6.75-7.46 s; after this change 0.04-0.05 s (5 runs, first 0.28 s); stdout, stderr and exit status equal wasmtime 50.0.1's for --help, --version, classify without a config and an unknown command, and for hello_rust and hello_c_cli. Tests: kiln-foundation heap_provider::tests (clone keeps capacity and written bytes; writes bounded by capacity; unwritten reads fail), kiln-runtime instruction_parser::tests::br_table_parse_does_not_copy_the_provider_buffer (64 br_tables parse in under 10 ms; 99.8 ms before)."
+    tags: [performance, startup, kiln-foundation, memory]
+    fields:
+      alternatives: "(1) Clone into a zeroed allocation (vec![0; capacity]) and copy only the used prefix: measured 4.1-6.5 s, because the platform allocator zero-fills a reused 8 MiB block (_xzm_malloc_large_huge -> __bzero) on every clone. (2) Give each container a provider sized to its content: touches every construction site in kiln-runtime and kiln-decoder, and still pays the 8 MiB zero-fill wherever a full-size provider is created. (3) Return zeros for reads past the written prefix: needs either the zero-filled buffer this change removes or a shared zero page that cannot serve an arbitrary length; failing the read follows the project's fail-loud rule, and the test suites show no reader depends on it."
+      rationale: "The capacity is a bound, not storage. Allocating on write makes load cost follow the module's content, which is what SR-129 requires, and removes the 8 MiB zero-fill from every provider creation as well as every clone."
+    links:
+      - type: satisfies
+        target: SR-129
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-26T11:00:00Z

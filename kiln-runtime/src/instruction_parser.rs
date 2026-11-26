@@ -2423,4 +2423,29 @@ mod tests {
             other => panic!("Expected ExternConvertAny, got {:?}", other),
         }
     }
+
+    /// SR-129: parsing cost follows the body, not the provider's capacity.
+    /// Each br_table holds a BoundedVec over a clone of the 8 MiB runtime
+    /// provider; a clone that copies the whole buffer made 64 br_tables
+    /// cost about 1 GiB of memmove.
+    #[test]
+    fn br_table_parse_does_not_copy_the_provider_buffer() {
+        const N: usize = 64;
+        let mut bytecode = Vec::with_capacity(N * 3 + 1);
+        for _ in 0..N {
+            // br_table with no targets and default label 0
+            bytecode.extend_from_slice(&[0x0E, 0x00, 0x00]);
+        }
+        bytecode.push(0x0B);
+
+        let start = std::time::Instant::now();
+        let result = parse_instructions(&bytecode).unwrap();
+        let elapsed = start.elapsed();
+
+        assert_eq!(result.len(), N + 1);
+        assert!(
+            elapsed < std::time::Duration::from_millis(10),
+            "parsing {N} br_table instructions took {elapsed:?}; the provider buffer is being copied per instruction"
+        );
+    }
 }
