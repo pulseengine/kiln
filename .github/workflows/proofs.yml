@@ -1,0 +1,127 @@
+name: Proofs
+
+# SR-121 / AD-PROOFLEDGER-001: runs on every PR and push to main.
+# - the proof ledger (safety/verification/proof-ledger.toml) matches the sources
+#   and has not grown against the base commit;
+# - every floor harness listed in the ledger verifies under cargo kani;
+# - a planted break of a proven property turns Kani red (mutation control);
+# - a planted unledgered kani::assume turns the ledger check red (ledger control).
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  KANI_VERSION: "0.68.0"
+
+jobs:
+  kani-ledger:
+    name: Kani proofs and ledger
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # HEAD^1 is the base: main for a PR merge commit, the previous main for a push.
+          fetch-depth: 2
+
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          toolchain: 1.86.0
+
+      - name: Cache Kani
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            ~/.kani
+            ~/.cargo/bin/kani
+            ~/.cargo/bin/cargo-kani
+          key: ${{ runner.os }}-kani-${{ env.KANI_VERSION }}
+
+      - name: Install Kani
+        run: |
+          # First line of `cargo kani --version` is e.g. "Kani Rust Verifier 0.68.0 (cargo plugin)".
+          # Capture the whole output first: a reader that closes the pipe early makes cargo-kani panic.
+          kani_version_line() { local out; out="$(cargo kani --version 2>/dev/null)" || return 0; printf '%s\n' "${out%%$'\n'*}"; }
+          if [ "$(kani_version_line)" != "Kani Rust Verifier $KANI_VERSION (cargo plugin)" ]; then
+            cargo install --locked --force --version "$KANI_VERSION" kani-verifier
+          fi
+          cargo kani setup
+          # A cached or runner-local cargo-kani of another version must not run the proofs.
+          installed="$(kani_version_line)"
+          echo "$installed"
+          if [ "$installed" != "Kani Rust Verifier $KANI_VERSION (cargo plugin)" ]; then
+            echo "::error::cargo kani reports '$installed', the pin is $KANI_VERSION"
+            exit 1
+          fi
+
+      - name: Build cargo-kiln
+        run: cargo build --locked -p cargo-kiln
+
+      - name: Ledger matches the sources and has not grown
+        run: |
+          if git show HEAD^1:safety/verification/proof-ledger.toml > "$RUNNER_TEMP/base-ledger.toml" 2>/dev/null; then
+            ./target/debug/cargo-kiln proof-ledger check --base "$RUNNER_TEMP/base-ledger.toml"
+          else
+            echo "no ledger on the base commit; growth check skipped"
+            ./target/debug/cargo-kiln proof-ledger check
+          fi
+
+      - name: Kani on the floor harnesses
+        run: |
+          # The default run shell is `bash -e` without pipefail; without this a failing
+          # cargo kani behind `| tee` leaves the step green.
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/kani"
+          cargo kani -p kiln-async -Z unstable-options --harness-timeout 10m \
+            2>&1 | tee "$RUNNER_TEMP/kani/kiln-async.log"
+          # --tests: the lib build defines #[panic_handler] (no_std), which collides with the
+          # std that Kani links (E0152); under cfg(test) the crate builds with std and no handler.
+          cargo kani -p kiln-builtins --tests --harness proofs::dispatch_import_returns_zero_without_platform \
+            -Z unstable-options --harness-timeout 10m \
+            2>&1 | tee "$RUNNER_TEMP/kani/kiln-builtins.log"
+
+      - name: Every floor harness verified
+        run: |
+          ./target/debug/cargo-kiln proof-ledger check \
+            --kani-log kiln-async="$RUNNER_TEMP/kani/kiln-async.log" \
+            --kani-log kiln-builtins="$RUNNER_TEMP/kani/kiln-builtins.log"
+
+      - name: Mutation control - a broken proven property turns Kani red
+        run: |
+          git apply safety/verification/mutations/kiln-async-remove-keeps-generation.patch
+          if cargo kani -p kiln-async --harness kani_proofs::verify_task_table_generation_aba_safe \
+               > "$RUNNER_TEMP/kani/mutant.log" 2>&1; then
+            cat "$RUNNER_TEMP/kani/mutant.log"
+            echo "::error::TaskTable::remove without the generation bump still verified: the ABA proof cannot fail"
+            exit 1
+          fi
+          grep -F "assertion failed: t.state_of(old).is_none()" "$RUNNER_TEMP/kani/mutant.log"
+          grep -F "VERIFICATION:- FAILED" "$RUNNER_TEMP/kani/mutant.log"
+          git checkout -- kiln-async/src/task.rs
+
+      - name: Ledger control - an unledgered kani::assume turns the check red
+        run: |
+          printf 'fn planted_ledger_control() {\n    kani::assume(true);\n}\n' > kiln-async/src/planted_ledger_control.rs
+          if ./target/debug/cargo-kiln proof-ledger check > "$RUNNER_TEMP/ledger-control.log" 2>&1; then
+            cat "$RUNNER_TEMP/ledger-control.log"
+            echo "::error::a planted kani::assume passed the ledger check"
+            exit 1
+          fi
+          grep -F "planted_ledger_control" "$RUNNER_TEMP/ledger-control.log"
+          rm kiln-async/src/planted_ledger_control.rs
+          ./target/debug/cargo-kiln proof-ledger check
+
+      - name: Upload Kani logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: kani-logs
+          path: ${{ runner.temp }}/kani/

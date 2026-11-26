@@ -55,6 +55,7 @@ pub mod kani;
 pub mod matrix;
 pub mod memory;
 pub mod parsers;
+pub mod proof_ledger;
 pub mod requirements;
 pub mod test;
 pub mod text_search;

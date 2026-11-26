@@ -473,6 +473,12 @@ enum Commands {
         extra_args: Vec<String>,
     },
 
+    /// Scan and check the Kani/Verus proof ledger (SR-121)
+    ProofLedger {
+        #[command(subcommand)]
+        command: ProofLedgerCommand,
+    },
+
     /// Run code validation checks
     Validate {
         /// Check for test files in src/
@@ -691,6 +697,36 @@ enum AsilArg {
     C,
     #[value(name = "d")]
     D,
+}
+
+/// Proof-ledger subcommands
+#[derive(Subcommand, Clone)]
+enum ProofLedgerCommand {
+    /// Print a draft ledger for the harnesses and narrowing sites found under --root
+    Scan {
+        /// Repository root to scan
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+    },
+
+    /// Fail when the ledger disagrees with the source, grows, or a floor does not verify
+    Check {
+        /// Repository root to scan
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+
+        /// Ledger file
+        #[arg(long, default_value = "safety/verification/proof-ledger.toml")]
+        ledger: PathBuf,
+
+        /// Ledger from the target branch; the ledger may only shrink against it
+        #[arg(long)]
+        base: Option<PathBuf>,
+
+        /// cargo kani output for a package, as PACKAGE=PATH (repeatable)
+        #[arg(long = "kani-log", value_name = "PACKAGE=PATH")]
+        kani_log: Vec<String>,
+    },
 }
 
 /// Requirements management subcommands
@@ -1421,6 +1457,7 @@ async fn main() -> Result<()> {
             )
             .await
         },
+        Commands::ProofLedger { command } => cmd_proof_ledger(command),
         Commands::Validate {
             check_test_files,
             check_docs,
@@ -2549,6 +2586,45 @@ async fn cmd_simulate_ci(
 }
 
 /// KANI verify command implementation
+/// Run a proof-ledger subcommand; exits non-zero when `check` finds violations.
+fn cmd_proof_ledger(command: &ProofLedgerCommand) -> Result<()> {
+    use kiln_build_core::proof_ledger;
+
+    match command {
+        ProofLedgerCommand::Scan { root } => {
+            print!("{}", proof_ledger::run_scan(root)?);
+            Ok(())
+        },
+        ProofLedgerCommand::Check {
+            root,
+            ledger,
+            base,
+            kani_log,
+        } => {
+            let mut logs = Vec::new();
+            for spec in kani_log {
+                let (pkg, path) = spec
+                    .split_once('=')
+                    .filter(|(p, f)| !p.is_empty() && !f.is_empty())
+                    .with_context(|| format!("--kani-log expects PACKAGE=PATH, got `{spec}`"))?;
+                logs.push((pkg.to_string(), PathBuf::from(path)));
+            }
+            let report = proof_ledger::run_check(root, ledger, base.as_deref(), &logs)?;
+            for note in &report.notes {
+                println!("note: {note}");
+            }
+            for violation in &report.violations {
+                println!("violation: {violation}");
+            }
+            println!("{}", report.summary());
+            if !report.violations.is_empty() {
+                process::exit(1);
+            }
+            Ok(())
+        },
+    }
+}
+
 async fn cmd_kani_verify(
     build_system: &BuildSystem,
     asil_profile: AsilArg,

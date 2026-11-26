@@ -1,0 +1,13 @@
+diff --git a/kiln-async/src/task.rs b/kiln-async/src/task.rs
+index 4f862459..3326fbd9 100644
+--- a/kiln-async/src/task.rs
++++ b/kiln-async/src/task.rs
+@@ -253,7 +253,7 @@ pub fn remove(&mut self, id: TaskId) -> Result<()> {
+                 Error::validation_error("kiln-async: remove of a stale or unknown task handle")
+             })?;
+         slot.state = None;
+-        slot.generation = slot.generation.wrapping_add(1);
++        slot.generation = slot.generation.wrapping_add(0);
+         slot.wake_pending = false; // the flag dies with the slot, never leaks
+         self.live -= 1;
+         Ok(())

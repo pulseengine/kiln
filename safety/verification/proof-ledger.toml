@@ -1,0 +1,1122 @@
+# Proof ledger (SR-121, AD-PROOFLEDGER-001).
+#
+# Every Kani harness and every input-narrowing site in kiln's sources, checked on
+# every PR by `cargo-kiln proof-ledger check` (.github/workflows/proofs.yml):
+# - a harness or narrowing site without a row, or a stale row, fails;
+# - against the base commit's ledger, no narrowing count, no total, and no
+#   [scan].exclude entry may grow, and no floor harness may leave its floor;
+# - every [[floor]] harness must report VERIFICATION:- SUCCESSFUL in cargo kani.
+#
+# Baseline measured 2026-11-25 with kani 0.68.0 (CBMC 6.11): 4 of 110 harness
+# markers verify. Each other row says why it does not run.
+# Narrowing kinds: assume (kani::assume), unwind (kani::unwind), stub (kani::stub),
+# external_body and admit (Verus).
+
+[scan]
+# Holds a test fixture string containing the harness attribute, not a harness.
+exclude = ["kiln-build-core/src/kani.rs"]
+
+[[floor]]
+package = "kiln-async"
+features = []
+harnesses = [
+    "kani_proofs::verify_fsm_step_total_and_terminal_absorbing",
+    "kani_proofs::verify_ready_queue_never_overflows",
+    "kani_proofs::verify_task_table_generation_aba_safe",
+]
+
+[[floor]]
+package = "kiln-builtins"
+features = []
+harnesses = ["proofs::dispatch_import_returns_zero_without_platform"]
+
+
+[[harness]]
+file = "kiln-async/src/kani_proofs.rs"
+name = "verify_fsm_step_total_and_terminal_absorbing"
+status = "verified"
+proves = "TaskState::step (kiln-async/src/task.rs): total over every (state, event); terminal states absorbing"
+entry_path = "none yet: kiln-async has no product caller until SR-84 wires it into kiln-builtins"
+
+[[harness]]
+file = "kiln-async/src/kani_proofs.rs"
+name = "verify_ready_queue_never_overflows"
+status = "verified"
+proves = "ReadyQueue::push and ReadyQueue::pop (kiln-async/src/ready.rs): len never exceeds capacity over 6 operations"
+entry_path = "none yet: kiln-async has no product caller until SR-84 wires it into kiln-builtins"
+
+[[harness]]
+file = "kiln-async/src/kani_proofs.rs"
+name = "verify_task_table_generation_aba_safe"
+status = "verified"
+proves = "TaskTable::spawn and TaskTable::remove (kiln-async/src/task.rs): a freed handle no longer resolves after slot reuse"
+entry_path = "none yet: kiln-async has no product caller until SR-84 wires it into kiln-builtins"
+
+[[harness]]
+file = "kiln-builtins/src/lib.rs"
+name = "cabi_realloc_alignment_correct"
+status = "unbounded"
+note = "cabi_realloc's compare_exchange_weak retry loop has no unwind bound; CBMC unwound it past 4900 iterations in 17 h without terminating (2026-11-25)"
+
+[[harness]]
+file = "kiln-builtins/src/lib.rs"
+name = "cabi_realloc_never_overflows"
+status = "unbounded"
+note = "cabi_realloc's compare_exchange_weak retry loop has no unwind bound; CBMC unwound it past 4900 iterations in 17 h without terminating (2026-11-25)"
+
+[[harness]]
+file = "kiln-builtins/src/lib.rs"
+name = "dispatch_import_returns_zero_without_platform"
+status = "verified"
+proves = "__meld_dispatch_import (kiln-builtins/src/lib.rs) returns 0 when no platform is registered"
+entry_path = "synth-compiled code calls __meld_dispatch_import for every import (BL __meld_dispatch_import)"
+
+[[harness]]
+file = "kiln-component/src/verify/mod.rs"
+name = "verify_component_instance_safety"
+status = "not-compiled"
+note = "dependency: kiln-platform does not compile under cfg(kani): E0425 (WASM_PAGE_SIZE, lock, Ordering not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-component/src/verify/mod.rs"
+name = "verify_component_type_safety"
+status = "not-compiled"
+note = "dependency: kiln-platform does not compile under cfg(kani): E0425 (WASM_PAGE_SIZE, lock, Ordering not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-component/src/verify/mod.rs"
+name = "verify_import_export_consistency"
+status = "not-compiled"
+note = "dependency: kiln-platform does not compile under cfg(kani): E0425 (WASM_PAGE_SIZE, lock, Ordering not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-component/src/verify/mod.rs"
+name = "verify_namespace_operations"
+status = "not-compiled"
+note = "dependency: kiln-platform does not compile under cfg(kani): E0425 (WASM_PAGE_SIZE, lock, Ordering not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-component/src/verify/mod.rs"
+name = "verify_value_type_safety"
+status = "not-compiled"
+note = "dependency: kiln-platform does not compile under cfg(kani): E0425 (WASM_PAGE_SIZE, lock, Ordering not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-error/src/verify.rs"
+name = "verify_error_creation_and_display"
+status = "not-compiled"
+note = "the verify module is included only under cfg(doc) (lib.rs), so cargo kani never compiles it"
+
+[[harness]]
+file = "kiln-error/src/verify.rs"
+name = "verify_error_from_verify_error"
+status = "not-compiled"
+note = "the verify module is included only under cfg(doc) (lib.rs), so cargo kani never compiles it"
+
+[[harness]]
+file = "kiln-error/src/verify.rs"
+name = "verify_factory_methods"
+status = "not-compiled"
+note = "the verify module is included only under cfg(doc) (lib.rs), so cargo kani never compiles it"
+
+[[harness]]
+file = "kiln-error/src/verify.rs"
+name = "verify_result_type"
+status = "not-compiled"
+note = "the verify module is included only under cfg(doc) (lib.rs), so cargo kani never compiles it"
+
+[[harness]]
+file = "kiln-format/src/lib.rs"
+name = "verify_leb128_roundtrip"
+status = "not-compiled"
+note = "dependency: kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-format/src/verify.rs"
+name = "verify_feature_detection"
+status = "not-compiled"
+note = "dependency: kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-format/src/verify.rs"
+name = "verify_memory_limits"
+status = "not-compiled"
+note = "dependency: kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-format/src/verify.rs"
+name = "verify_module_version_detection"
+status = "not-compiled"
+note = "dependency: kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-format/src/verify.rs"
+name = "verify_rle_roundtrip"
+status = "not-compiled"
+note = "dependency: kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-format/src/verify.rs"
+name = "verify_state_section_roundtrip"
+status = "not-compiled"
+note = "dependency: kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/bounded.rs"
+name = "verify_bounded_string_utf8"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/bounded.rs"
+name = "verify_bounded_vec_indexing"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/bounded.rs"
+name = "verify_bounded_vec_pop_state"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/bounded.rs"
+name = "verify_bounded_vec_push_capacity"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/bounded.rs"
+name = "verify_memory_provider_bounds"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/bounded.rs"
+name = "verify_no_overflow_in_capacity_calculation"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/collections/static_map.rs"
+name = "verify_capacity_enforcement"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/collections/static_map.rs"
+name = "verify_remove"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/collections/static_map.rs"
+name = "verify_sorted_order"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/collections/static_map.rs"
+name = "verify_update_existing"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/collections/static_queue.rs"
+name = "verify_capacity_enforcement"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/collections/static_queue.rs"
+name = "verify_circular_wraparound"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/collections/static_queue.rs"
+name = "verify_drop_cleanup"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/collections/static_queue.rs"
+name = "verify_fifo_order"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/collections/static_vec.rs"
+name = "verify_bounds_checking"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/collections/static_vec.rs"
+name = "verify_drop_cleanup"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/collections/static_vec.rs"
+name = "verify_push_never_exceeds_capacity"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/collections/static_vec.rs"
+name = "verify_wcet_determinism"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/formal_verification.rs"
+name = "memory_coordinator_harness"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/formal_verification.rs"
+name = "verify_allocation_ids_unique"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/formal_verification.rs"
+name = "verify_budget_never_exceeded"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/formal_verification.rs"
+name = "verify_crate_budget_never_exceeded"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/linear_memory.rs"
+name = "verify_no_overflow_in_bounds_check"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/linear_memory.rs"
+name = "verify_safe_slice_bounds"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/linear_memory.rs"
+name = "verify_safe_slice_mut_bounds"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/resource.rs"
+name = "verify_resource_access_safety"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/resource.rs"
+name = "verify_resource_bounds_checking"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/resource.rs"
+name = "verify_resource_handle_properties"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/resource.rs"
+name = "verify_resource_id_operations"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/resource.rs"
+name = "verify_resource_operation_permissions"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/resource.rs"
+name = "verify_resource_type_serialization"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/verified_allocator.rs"
+name = "verify_budget_safety"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/verified_allocator.rs"
+name = "verify_deallocation_reduces"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/verify.rs"
+name = "verify_arithmetic_safety"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/verify.rs"
+name = "verify_atomic_memory_operations"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/verify.rs"
+name = "verify_bounded_collections_memory_safety"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/verify.rs"
+name = "verify_bounds_checking"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/verify.rs"
+name = "verify_component_value_type_safety"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/verify.rs"
+name = "verify_safe_memory_bounds"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-foundation/src/verify.rs"
+name = "verify_value_type_validation"
+status = "not-compiled"
+note = "kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-host/src/verify/mod.rs"
+name = "verify_callback_registry"
+status = "not-compiled"
+note = "dependency: kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-host/src/verify/mod.rs"
+name = "verify_cloneable_fn"
+status = "not-compiled"
+note = "dependency: kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-intercept/src/verify/mod.rs"
+name = "verify_error_passthrough"
+status = "not-compiled"
+note = "dependency: kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-intercept/src/verify/mod.rs"
+name = "verify_interceptor_modifies_args"
+status = "not-compiled"
+note = "dependency: kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-intercept/src/verify/mod.rs"
+name = "verify_interceptor_passthrough"
+status = "not-compiled"
+note = "dependency: kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-intercept/src/verify/mod.rs"
+name = "verify_multiple_strategies"
+status = "not-compiled"
+note = "dependency: kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-logging/src/verify/mod.rs"
+name = "verify_log_level"
+status = "not-compiled"
+note = "dependency: kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-logging/src/verify/mod.rs"
+name = "verify_log_operation"
+status = "not-compiled"
+note = "dependency: kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-logging/src/verify/mod.rs"
+name = "verify_logging_ext"
+status = "not-compiled"
+note = "dependency: kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-math/src/safety.rs"
+name = "verify_i32_safe_add"
+status = "wrong-config"
+note = "needs --features formal-verification-required; asserts saturating_add but safe_add saturates only under asil-d (default wrapping_add), so it FAILS as built"
+
+[[harness]]
+file = "kiln-math/src/safety.rs"
+name = "verify_i32_safe_div"
+status = "feature-gated"
+note = "needs --features formal-verification-required; with it, timed out at 10 min (2026-11-25)"
+
+[[harness]]
+file = "kiln-platform/src/formal_verification.rs"
+name = "comprehensive_safety_proof"
+status = "not-compiled"
+note = "kiln-platform does not compile under cfg(kani): E0425 (WASM_PAGE_SIZE, lock, Ordering not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-platform/src/formal_verification.rs"
+name = "verify_atomic_operations_safety"
+status = "not-compiled"
+note = "kiln-platform does not compile under cfg(kani): E0425 (WASM_PAGE_SIZE, lock, Ordering not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-platform/src/formal_verification.rs"
+name = "verify_bounds_checking"
+status = "not-compiled"
+note = "kiln-platform does not compile under cfg(kani): E0425 (WASM_PAGE_SIZE, lock, Ordering not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-platform/src/formal_verification.rs"
+name = "verify_concurrent_safety"
+status = "not-compiled"
+note = "kiln-platform does not compile under cfg(kani): E0425 (WASM_PAGE_SIZE, lock, Ordering not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-platform/src/formal_verification.rs"
+name = "verify_memory_safety"
+status = "not-compiled"
+note = "kiln-platform does not compile under cfg(kani): E0425 (WASM_PAGE_SIZE, lock, Ordering not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-platform/src/formal_verification.rs"
+name = "verify_mpsc_queue_safety"
+status = "not-compiled"
+note = "kiln-platform does not compile under cfg(kani): E0425 (WASM_PAGE_SIZE, lock, Ordering not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-platform/src/formal_verification.rs"
+name = "verify_scheduling_properties"
+status = "not-compiled"
+note = "kiln-platform does not compile under cfg(kani): E0425 (WASM_PAGE_SIZE, lock, Ordering not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-platform/src/formal_verification.rs"
+name = "verify_wasm_page_allocation"
+status = "not-compiled"
+note = "kiln-platform does not compile under cfg(kani): E0425 (WASM_PAGE_SIZE, lock, Ordering not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-sync/src/verify.rs"
+name = "verify_atomic_operations_safety"
+status = "not-compiled"
+note = "the verify module is included only under cfg(doc) (lib.rs), so cargo kani never compiles it"
+
+[[harness]]
+file = "kiln-sync/src/verify.rs"
+name = "verify_mutex_guard_deref"
+status = "not-compiled"
+note = "the verify module is included only under cfg(doc) (lib.rs), so cargo kani never compiles it"
+
+[[harness]]
+file = "kiln-sync/src/verify.rs"
+name = "verify_mutex_guard_deref_mut"
+status = "not-compiled"
+note = "the verify module is included only under cfg(doc) (lib.rs), so cargo kani never compiles it"
+
+[[harness]]
+file = "kiln-sync/src/verify.rs"
+name = "verify_mutex_new_lock_unlock"
+status = "not-compiled"
+note = "the verify module is included only under cfg(doc) (lib.rs), so cargo kani never compiles it"
+
+[[harness]]
+file = "kiln-sync/src/verify.rs"
+name = "verify_mutex_no_data_races"
+status = "not-compiled"
+note = "the verify module is included only under cfg(doc) (lib.rs), so cargo kani never compiles it"
+
+[[harness]]
+file = "kiln-sync/src/verify.rs"
+name = "verify_rwlock_concurrent_access"
+status = "not-compiled"
+note = "the verify module is included only under cfg(doc) (lib.rs), so cargo kani never compiles it"
+
+[[harness]]
+file = "kiln-sync/src/verify.rs"
+name = "verify_rwlock_new_read_read"
+status = "not-compiled"
+note = "the verify module is included only under cfg(doc) (lib.rs), so cargo kani never compiles it"
+
+[[harness]]
+file = "kiln-sync/src/verify.rs"
+name = "verify_rwlock_new_write_read"
+status = "not-compiled"
+note = "the verify module is included only under cfg(doc) (lib.rs), so cargo kani never compiles it"
+
+[[harness]]
+file = "kiln-sync/src/verify.rs"
+name = "verify_rwlock_read_guard_deref"
+status = "not-compiled"
+note = "the verify module is included only under cfg(doc) (lib.rs), so cargo kani never compiles it"
+
+[[harness]]
+file = "kiln-sync/src/verify.rs"
+name = "verify_rwlock_write_guard_derefmut"
+status = "not-compiled"
+note = "the verify module is included only under cfg(doc) (lib.rs), so cargo kani never compiles it"
+
+[[harness]]
+file = "kiln-sync/tests/kani_proofs.rs"
+name = "verify_mutex_guard_deref"
+status = "feature-gated"
+note = "file is #![cfg(feature = \"kani\")] in tests/; needs --features kani --tests; not measured"
+
+[[harness]]
+file = "kiln-sync/tests/kani_proofs.rs"
+name = "verify_mutex_guard_deref_mut"
+status = "feature-gated"
+note = "file is #![cfg(feature = \"kani\")] in tests/; needs --features kani --tests; not measured"
+
+[[harness]]
+file = "kiln-sync/tests/kani_proofs.rs"
+name = "verify_mutex_new_lock_unlock"
+status = "feature-gated"
+note = "file is #![cfg(feature = \"kani\")] in tests/; needs --features kani --tests; not measured"
+
+[[harness]]
+file = "kiln-sync/tests/kani_proofs.rs"
+name = "verify_rwlock_new_read_read"
+status = "feature-gated"
+note = "file is #![cfg(feature = \"kani\")] in tests/; needs --features kani --tests; not measured"
+
+[[harness]]
+file = "kiln-sync/tests/kani_proofs.rs"
+name = "verify_rwlock_new_write_read"
+status = "feature-gated"
+note = "file is #![cfg(feature = \"kani\")] in tests/; needs --features kani --tests; not measured"
+
+[[harness]]
+file = "kiln-sync/tests/kani_proofs.rs"
+name = "verify_rwlock_read_guard_deref"
+status = "feature-gated"
+note = "file is #![cfg(feature = \"kani\")] in tests/; needs --features kani --tests; not measured"
+
+[[harness]]
+file = "kiln-sync/tests/kani_proofs.rs"
+name = "verify_rwlock_read_unlocks_for_write"
+status = "feature-gated"
+note = "file is #![cfg(feature = \"kani\")] in tests/; needs --features kani --tests; not measured"
+
+[[harness]]
+file = "kiln-sync/tests/kani_proofs.rs"
+name = "verify_rwlock_write_guard_derefmut"
+status = "feature-gated"
+note = "file is #![cfg(feature = \"kani\")] in tests/; needs --features kani --tests; not measured"
+
+[[harness]]
+file = "kiln-sync/tests/kani_proofs.rs"
+name = "verify_rwlock_write_unlocks_for_read"
+status = "feature-gated"
+note = "file is #![cfg(feature = \"kani\")] in tests/; needs --features kani --tests; not measured"
+
+[[harness]]
+file = "kiln-wasi/src/nn/formal_verification.rs"
+name = "verify_capability_consistency"
+status = "not-compiled"
+note = "dependencies: kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25; kiln-platform does not compile under cfg(kani): E0425 (WASM_PAGE_SIZE, lock, Ordering not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-wasi/src/nn/formal_verification.rs"
+name = "verify_context_isolation"
+status = "not-compiled"
+note = "dependencies: kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25; kiln-platform does not compile under cfg(kani): E0425 (WASM_PAGE_SIZE, lock, Ordering not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-wasi/src/nn/formal_verification.rs"
+name = "verify_error_categorization"
+status = "not-compiled"
+note = "dependencies: kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25; kiln-platform does not compile under cfg(kani): E0425 (WASM_PAGE_SIZE, lock, Ordering not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-wasi/src/nn/formal_verification.rs"
+name = "verify_model_size_limits"
+status = "not-compiled"
+note = "dependencies: kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25; kiln-platform does not compile under cfg(kani): E0425 (WASM_PAGE_SIZE, lock, Ordering not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-wasi/src/nn/formal_verification.rs"
+name = "verify_model_validation"
+status = "not-compiled"
+note = "dependencies: kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25; kiln-platform does not compile under cfg(kani): E0425 (WASM_PAGE_SIZE, lock, Ordering not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-wasi/src/nn/formal_verification.rs"
+name = "verify_rate_limiting_bounds"
+status = "not-compiled"
+note = "dependencies: kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25; kiln-platform does not compile under cfg(kani): E0425 (WASM_PAGE_SIZE, lock, Ordering not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-wasi/src/nn/formal_verification.rs"
+name = "verify_resource_cleanup"
+status = "not-compiled"
+note = "dependencies: kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25; kiln-platform does not compile under cfg(kani): E0425 (WASM_PAGE_SIZE, lock, Ordering not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-wasi/src/nn/formal_verification.rs"
+name = "verify_resource_id_no_wraparound"
+status = "not-compiled"
+note = "dependencies: kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25; kiln-platform does not compile under cfg(kani): E0425 (WASM_PAGE_SIZE, lock, Ordering not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-wasi/src/nn/formal_verification.rs"
+name = "verify_tensor_dimension_no_overflow"
+status = "not-compiled"
+note = "dependencies: kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25; kiln-platform does not compile under cfg(kani): E0425 (WASM_PAGE_SIZE, lock, Ordering not in scope), kani 0.68.0, 2026-11-25"
+
+[[harness]]
+file = "kiln-wasi/src/nn/formal_verification.rs"
+name = "verify_tensor_memory_bounded"
+status = "not-compiled"
+note = "dependencies: kiln-foundation does not compile under cfg(kani): E0425 (Vec, is_reference, is_numeric, verify_access not in scope), kani 0.68.0, 2026-11-25; kiln-platform does not compile under cfg(kani): E0425 (WASM_PAGE_SIZE, lock, Ordering not in scope), kani 0.68.0, 2026-11-25"
+
+[[narrowing]]
+file = "kiln-async/src/kani_proofs.rs"
+function = "verify_ready_queue_never_overflows"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-builtins/src/lib.rs"
+function = "cabi_realloc_alignment_correct"
+kind = "assume"
+count = 3
+
+[[narrowing]]
+file = "kiln-builtins/src/lib.rs"
+function = "cabi_realloc_never_overflows"
+kind = "assume"
+count = 3
+
+[[narrowing]]
+file = "kiln-component/src/verify/mod.rs"
+function = "verify_component_instance_safety"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-component/src/verify/mod.rs"
+function = "verify_component_type_safety"
+kind = "assume"
+count = 1
+
+[[narrowing]]
+file = "kiln-component/src/verify/mod.rs"
+function = "verify_component_type_safety"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-component/src/verify/mod.rs"
+function = "verify_import_export_consistency"
+kind = "assume"
+count = 5
+
+[[narrowing]]
+file = "kiln-component/src/verify/mod.rs"
+function = "verify_import_export_consistency"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-component/src/verify/mod.rs"
+function = "verify_namespace_operations"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-component/src/verify/mod.rs"
+function = "verify_value_type_safety"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-format/src/lib.rs"
+function = "verify_leb128_roundtrip"
+kind = "assume"
+count = 1
+
+[[narrowing]]
+file = "kiln-foundation/src/collections/static_queue.rs"
+function = "verify_drop_cleanup"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-foundation/src/collections/static_vec.rs"
+function = "verify_drop_cleanup"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-foundation/src/formal_verification.rs"
+function = "memory_coordinator_harness"
+kind = "assume"
+count = 4
+
+[[narrowing]]
+file = "kiln-foundation/src/formal_verification.rs"
+function = "verify_allocation_ids_unique"
+kind = "assume"
+count = 1
+
+[[narrowing]]
+file = "kiln-foundation/src/formal_verification.rs"
+function = "verify_budget_never_exceeded"
+kind = "assume"
+count = 3
+
+[[narrowing]]
+file = "kiln-foundation/src/formal_verification.rs"
+function = "verify_crate_budget_never_exceeded"
+kind = "assume"
+count = 2
+
+[[narrowing]]
+file = "kiln-foundation/src/verify.rs"
+function = "verify_arithmetic_safety"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-foundation/src/verify.rs"
+function = "verify_atomic_memory_operations"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-foundation/src/verify.rs"
+function = "verify_bounded_collections_memory_safety"
+kind = "assume"
+count = 3
+
+[[narrowing]]
+file = "kiln-foundation/src/verify.rs"
+function = "verify_bounded_collections_memory_safety"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-foundation/src/verify.rs"
+function = "verify_bounds_checking"
+kind = "assume"
+count = 5
+
+[[narrowing]]
+file = "kiln-foundation/src/verify.rs"
+function = "verify_bounds_checking"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-foundation/src/verify.rs"
+function = "verify_component_value_type_safety"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-foundation/src/verify.rs"
+function = "verify_safe_memory_bounds"
+kind = "assume"
+count = 6
+
+[[narrowing]]
+file = "kiln-foundation/src/verify.rs"
+function = "verify_safe_memory_bounds"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-foundation/src/verify.rs"
+function = "verify_value_type_validation"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-foundation/src/verus_proofs/safe_memory_proofs.rs"
+function = "axiom_checksum_collision_resistant"
+kind = "external_body"
+count = 1
+
+[[narrowing]]
+file = "kiln-foundation/src/verus_proofs/safe_memory_proofs.rs"
+function = "axiom_checksum_deterministic"
+kind = "external_body"
+count = 1
+
+[[narrowing]]
+file = "kiln-foundation/src/verus_proofs/static_string_proofs.rs"
+function = "axiom_append_valid_utf8"
+kind = "external_body"
+count = 1
+
+[[narrowing]]
+file = "kiln-foundation/src/verus_proofs/static_string_proofs.rs"
+function = "axiom_ascii_byte_is_valid_utf8"
+kind = "external_body"
+count = 1
+
+[[narrowing]]
+file = "kiln-foundation/src/verus_proofs/static_string_proofs.rs"
+function = "axiom_empty_is_valid_utf8"
+kind = "external_body"
+count = 1
+
+[[narrowing]]
+file = "kiln-platform/src/formal_verification.rs"
+function = "assert_bounds"
+kind = "assume"
+count = 1
+
+[[narrowing]]
+file = "kiln-platform/src/formal_verification.rs"
+function = "assert_valid_memory"
+kind = "assume"
+count = 1
+
+[[narrowing]]
+file = "kiln-platform/src/formal_verification.rs"
+function = "assert_valid_ptr"
+kind = "assume"
+count = 2
+
+[[narrowing]]
+file = "kiln-platform/src/formal_verification.rs"
+function = "verify_atomic_operations_safety"
+kind = "assume"
+count = 1
+
+[[narrowing]]
+file = "kiln-platform/src/formal_verification.rs"
+function = "verify_bounds_checking"
+kind = "assume"
+count = 2
+
+[[narrowing]]
+file = "kiln-platform/src/formal_verification.rs"
+function = "verify_bounds_checking"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-platform/src/formal_verification.rs"
+function = "verify_concurrent_safety"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-platform/src/formal_verification.rs"
+function = "verify_control_flow_integrity"
+kind = "assume"
+count = 1
+
+[[narrowing]]
+file = "kiln-platform/src/formal_verification.rs"
+function = "verify_memory_safety"
+kind = "assume"
+count = 1
+
+[[narrowing]]
+file = "kiln-platform/src/formal_verification.rs"
+function = "verify_memory_safety"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-platform/src/formal_verification.rs"
+function = "verify_mpsc_queue_safety"
+kind = "assume"
+count = 4
+
+[[narrowing]]
+file = "kiln-platform/src/formal_verification.rs"
+function = "verify_wasm_page_allocation"
+kind = "assume"
+count = 1
+
+[[narrowing]]
+file = "kiln-sync/src/verify.rs"
+function = "verify_atomic_operations_safety"
+kind = "assume"
+count = 4
+
+[[narrowing]]
+file = "kiln-sync/src/verify.rs"
+function = "verify_atomic_operations_safety"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-sync/src/verify.rs"
+function = "verify_mutex_guard_deref"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-sync/src/verify.rs"
+function = "verify_mutex_guard_deref_mut"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-sync/src/verify.rs"
+function = "verify_mutex_new_lock_unlock"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-sync/src/verify.rs"
+function = "verify_mutex_no_data_races"
+kind = "assume"
+count = 2
+
+[[narrowing]]
+file = "kiln-sync/src/verify.rs"
+function = "verify_mutex_no_data_races"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-sync/src/verify.rs"
+function = "verify_rwlock_concurrent_access"
+kind = "assume"
+count = 1
+
+[[narrowing]]
+file = "kiln-sync/src/verify.rs"
+function = "verify_rwlock_concurrent_access"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-sync/src/verify.rs"
+function = "verify_rwlock_new_read_read"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-sync/src/verify.rs"
+function = "verify_rwlock_new_write_read"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-sync/src/verify.rs"
+function = "verify_rwlock_read_guard_deref"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-sync/src/verify.rs"
+function = "verify_rwlock_write_guard_derefmut"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-sync/tests/kani_proofs.rs"
+function = "verify_mutex_guard_deref"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-sync/tests/kani_proofs.rs"
+function = "verify_mutex_guard_deref_mut"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-sync/tests/kani_proofs.rs"
+function = "verify_mutex_new_lock_unlock"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-sync/tests/kani_proofs.rs"
+function = "verify_rwlock_new_read_read"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-sync/tests/kani_proofs.rs"
+function = "verify_rwlock_new_write_read"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-sync/tests/kani_proofs.rs"
+function = "verify_rwlock_read_guard_deref"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-sync/tests/kani_proofs.rs"
+function = "verify_rwlock_read_unlocks_for_write"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-sync/tests/kani_proofs.rs"
+function = "verify_rwlock_write_guard_derefmut"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-sync/tests/kani_proofs.rs"
+function = "verify_rwlock_write_unlocks_for_read"
+kind = "unwind"
+count = 1
+
+[[narrowing]]
+file = "kiln-wasi/src/nn/formal_verification.rs"
+function = "verify_capability_consistency"
+kind = "assume"
+count = 1
+
+[[narrowing]]
+file = "kiln-wasi/src/nn/formal_verification.rs"
+function = "verify_context_isolation"
+kind = "assume"
+count = 1
+
+[[narrowing]]
+file = "kiln-wasi/src/nn/formal_verification.rs"
+function = "verify_model_validation"
+kind = "assume"
+count = 2
+
+[[narrowing]]
+file = "kiln-wasi/src/nn/formal_verification.rs"
+function = "verify_resource_id_no_wraparound"
+kind = "assume"
+count = 1
+
+[[narrowing]]
+file = "kiln-wasi/src/nn/formal_verification.rs"
+function = "verify_tensor_dimension_no_overflow"
+kind = "assume"
+count = 2
+
+[[narrowing]]
+file = "kiln-wasi/src/nn/formal_verification.rs"
+function = "verify_tensor_memory_bounded"
+kind = "assume"
+count = 2

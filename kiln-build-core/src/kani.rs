@@ -128,14 +128,7 @@ impl KaniVerifier {
 
         // Add profile-specific arguments
         match self.config.profile {
-            AsilLevel::D => {
-                args.extend_from_slice(&[
-                    "--enable-unstable".to_string(),
-                    "--solver".to_string(),
-                    "cadical".to_string(),
-                ]);
-            },
-            AsilLevel::C | AsilLevel::B => {
+            AsilLevel::D | AsilLevel::C | AsilLevel::B => {
                 args.extend_from_slice(&["--solver".to_string(), "cadical".to_string()]);
             },
             _ => {
