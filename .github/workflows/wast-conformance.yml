@@ -37,7 +37,9 @@ jobs:
           submodules: recursive
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master; toolchain set in with:
+        with:
+          toolchain: stable
 
       - name: Run WAST suite
         # The suite exits non-zero whenever any assertion fails (there are known,

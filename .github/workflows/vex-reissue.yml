@@ -60,7 +60,9 @@ jobs:
           path: release-src
           submodules: recursive
 
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master; toolchain set in with:
+        with:
+          toolchain: stable
 
       - name: Install cargo-audit
         run: cargo install --locked cargo-audit --version "$CARGO_AUDIT_VERSION"
