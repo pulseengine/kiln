@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: VER-SR116-001
+    type: verification
+    title: "SR-116: the meld-fused north-star-check component runs on kiln with the same stdout and exit status as wasmtime, and pulseengine.eu's north-star-component job passes with KILN_GAP removed"
+    status: verified
+    release: v0.9.0
+    description: "(1) Unit tests, main 21aab86d, Rust CI run 45742051085, Core Tests job 139649164256 (success): kiln-wasi dispatcher::tests::exit_with_code_returns_the_status_to_the_embedder, sr72::write_via_stream_writes_at_offset, sr72::append_via_stream_writes_at_end, sr72::get_flags_reports_how_the_descriptor_was_opened, sr72::write_and_append_via_stream_refuse_a_read_only_descriptor, wasip2_host::sr72_lowering_tests::descriptor_write_streams_and_get_flags_return_through_a_retptr; kilnd tests/guest_exit_tests.rs exit_with_code_0_ends_kiln_with_status_0, exit_with_code_3_ends_kiln_with_status_3, exit_with_code_259_lifts_to_status_3; all ok. (2) and (3) pulseengine.eu PR #416 (covalent 2026.11.27, KILN_GAP removed) merged as 37e1107c; its merge-group run 45721100305 for that commit, job north-star-component 139579337569, conclusion success. In that job the layer's kiln reports 'kiln 0.9.0' and wasmtime 'wasmtime 51.0.0'; the differential over 220 cases (1 committed, 19 planted, 200 fuzz; reference exit statuses 1 x 0, 118 x 1, 101 x 2) compared python, wasmtime, loom, signed and kiln and reports 'all agree'; the job's planted-mutant control reports its expected disagreement; the log contains no KILN_GAP. The run's overall conclusion is failure because of seam-check-rust, a non-required job unrelated to kiln."
+    fields:
+      method: test
+    links:
+      - type: verifies
+        target: SR-116
+      - type: verifies
+        target: AD-WASIEXIT-001
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-26T02:40:00Z

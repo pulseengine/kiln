@@ -3,7 +3,7 @@ artifacts:
   - id: AD-WASIEXIT-001
     type: design-decision
     title: A guest exit travels as a guest-exit error to the kiln CLI, which turns it into the process status; descriptor streams wrap a duplicate of the open-at handle
-    status: implemented
+    status: verified
     release: v0.9.0
     description: "Implements SR-116 (PRs #693 main 0a2d90bd, #704 main b5700e90, #705 main b66776a2). (1) wasi:cli/exit exit-with-code, exit and proc_exit return Error::guest_exit / guest_exit_status through the engine; kiln-wasi and kiln-runtime never call std::process::exit, and kilnd maps the status to its exit status. exit-with-code lifts its u8 from the low 8 bits of the core i32 (Canonical ABI lift_flat_unsigned). (2) The result of the fused module's wasi:cli/run#run export (one i32) maps 0 to status 0 and 1 to status 1; any other value is a runtime error. (3) descriptor write-via-stream(offset) and append-via-stream return output-streams over a duplicate of the descriptor's open-at handle; a descriptor not opened for writing gets bad-descriptor; dropping the stream releases the handle. The engine's signature table lowers their results and get-flags' to the retptr. (4) get-flags reports the access open-at granted. (5) --wasi-env NAME=VALUE or NAME becomes the guest's get-environment list, in order, empty without --wasi-env. Tests: kilnd/tests/guest_exit_tests.rs, kilnd/tests/wasi_env_tests.rs, kiln-wasi dispatcher tests."
     tags: [wasi, wasip2, cli, exit, streams, environment]
