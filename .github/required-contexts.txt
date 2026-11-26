@@ -1,0 +1,10 @@
+build
+CI Checks & Docs
+Core Tests, Analysis & Coverage
+Safety Analysis with Clippy
+SCORE-Inspired Safety Verification
+Security Audit (ubuntu-latest)
+Security Audit (macos-latest)
+Security Audit (windows-latest)
+Traceability (rivet validate)
+Kani proofs and ledger
