@@ -1,0 +1,13 @@
+artifacts:
+
+  - id: SR-129
+    type: requirement
+    title: kiln loads and instantiates a 4 MB meld-fused component in at most 1 s, so a short guest call is not dominated by kiln's startup
+    status: approved
+    release: v0.10.0
+    description: "MEASURED 2026-11-26 on an aarch64-apple-darwin machine (10 cores, load average 3.0), kiln 0.9.0 release binary, sieve 0.4.3 (wasm32-wasip2) fused by meld 0.66.0 into a 4,160,135-byte core module: 'kiln --wasi --component sieve.fused.wasm --version' takes 6.75-7.46 s (3 runs); wasmtime 50.0.1 runs the unfused component's --version in 0.02-0.13 s. kiln --verbose timestamps put 6.47 s between host-function registration and 'Executing function' (module load and instantiation) and about 0.10 s in execution (10,319 fuel). A sample of a symbolized build attributes most load time to _platform_memmove under kiln_runtime::instruction_parser::parse_instructions_with_provider: cloning an Instruction that holds a BoundedVec, and the per-function provider clone, run HeapProvider::clone, which copies the provider's whole 8 MiB buffer (RUNTIME_MEMORY_SIZE) with data.to_vec(). sieve-f1's corpus run on 2026-11-26 (55 cases, 221 calls) took 1952 s on kiln against 13.3 s on wasmtime 42.0.1, about 7 s per call even for a case that classifies an empty path list. REQUIRED: (1) loading, validating and instantiating a fused core module shall not copy a memory provider's buffer per function or per instruction; the cost of parsing a function body shall grow with the body's size, not with the provider's capacity. (2) On the reference measurement above, 'kiln --wasi --component sieve.fused.wasm --version' shall complete in at most 1.0 s (median of 5 runs, quiet machine), from 7 s today. Verified by: a kiln-runtime test that parses a body of many br_table instructions and asserts no provider buffer copy per instruction (it fails on today's HeapProvider::clone); a CI job that times the pinned fused sieve fixture's --version and fails above 2.0 s on the CI runner (a negative control restoring the per-instruction clone turns it red); the reference measurement repeated and recorded in the verification artifact. Out of scope here: interpreter execution speed per instruction, which this measurement does not reach (0.10 s of 7 s). Maintainer decision 2026-11-26 (option dialogue): interpreter speed is v0.10.0 scope with a measured target."
+    tags: [performance, startup, kiln-runtime, wasmtime-compat]
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-26T09:30:00Z
