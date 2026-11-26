@@ -105,8 +105,9 @@ jobs:
           ref: ${{ inputs.tag || github.ref }}
           submodules: recursive
 
-      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master; toolchain set in with:
         with:
+          toolchain: stable
           targets: ${{ matrix.target }}
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
@@ -285,7 +286,9 @@ jobs:
             -exec cp {} release-assets/ \;
           ls -la release-assets/
 
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master; toolchain set in with:
+        with:
+          toolchain: stable
 
       # ── rivet snapshot ───────────────────────────────────────────────
       # Every release carries an audit-ready snapshot of the rivet

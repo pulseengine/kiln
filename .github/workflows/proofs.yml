@@ -32,7 +32,7 @@ jobs:
           # HEAD^1 is the base: main for a PR merge commit, the previous main for a push.
           fetch-depth: 2
 
-      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master; toolchain set in with:
         with:
           toolchain: 1.86.0
 

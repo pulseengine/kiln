@@ -1,15 +1,37 @@
 version: 2
+# Grouped monthly updates (fleet template, owner decision 2026-11-21).
+# Every entry runs monthly (the 1st, 02:00 UTC), keeps at most 2 PRs open, and
+# waits 7 days after a release (cooldown). Lockstep groups come first because
+# Dependabot puts a dependency in the FIRST group it matches; then one
+# minor-patch group. Majors stay ungrouped, one PR each, so a breaking change
+# is read on its own. Security updates ignore the schedule and the limit.
 updates:
-  # Check for updates to Rust crate dependencies.
-  # Grouped: one PR per run instead of one per crate, so CI runs once.
-  - package-ecosystem: "cargo"
-    directory: "/"
+  - package-ecosystem: github-actions
+    directory: /
     schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 10
+      interval: monthly
+      time: "02:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 2
+    cooldown:
+      default-days: 7
     labels:
-      - "dependencies"
-      - "rust"
+      - dependencies
+    groups:
+      github-actions-all:
+        patterns:
+          - "*"
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: monthly
+      time: "02:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 2
+    cooldown:
+      default-days: 7
+    labels:
+      - dependencies
     # SR-80/#616: these versions require rustc 1.95, above the declared MSRV 1.85.
     ignore:
       - dependency-name: "parking_lot"
@@ -19,20 +41,16 @@ updates:
       - dependency-name: "lock_api"
         versions: [">=0.5.0"]
     groups:
-      cargo:
+      # wasmparser, wasm-encoder, wat and wast come from one wasm-tools release
+      # and must move together.
+      wasm-tools-family:
         patterns:
-          - "*"
-
-  # Check for updates to GitHub Actions (grouped, as above)
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "github-actions"
-    groups:
-      github-actions:
-        patterns:
-          - "*"
+          - "wasmparser"
+          - "wasm-encoder"
+          - "wasmprinter"
+          - "wat"
+          - "wast"
+      minor-patch:
+        update-types:
+          - minor
+          - patch

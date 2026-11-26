@@ -221,7 +221,7 @@ jobs:
           disk-cache: ${{ github.workflow }}-verus
           repository-cache: true
       - name: Install Rust toolchain (for Verus sysroot)
-        uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master
+        uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master; toolchain set in with:
         with:
           toolchain: "1.93.0"
       - name: Run Verus verification (StaticVec + StaticQueue + StaticString)
@@ -291,8 +291,9 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master; toolchain set in with:
         with:
+          toolchain: stable
           components: llvm-tools-preview
       - name: Setup Rust targets
         run: rustup target add wasm32-unknown-unknown wasm32-wasip1 wasm32-wasip2 || true
@@ -363,7 +364,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master; toolchain set in with:
         with:
           toolchain: "1.85.0"
       - name: Check kiln-platform builds on the VxWorks SDK's rustc
@@ -429,8 +430,9 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master; toolchain set in with:
         with:
+          toolchain: stable
           targets: x86_64-unknown-linux-musl,aarch64-unknown-linux-musl
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
