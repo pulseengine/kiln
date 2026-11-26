@@ -2521,8 +2521,8 @@ dependencies = [
 
 [[package]]
 name = "rivet-yaml"
-version = "0.41.0"
-source = "git+https://github.com/pulseengine/rivet?tag=v0.41.0#c15754a3c09e224d502dea3ba31f3435d1ae48d5"
+version = "0.42.2"
+source = "git+https://github.com/pulseengine/rivet?tag=v0.42.2#a712e840b213825922066021e526968bec9a3e72"
 dependencies = [
  "indexmap",
  "itoa",
