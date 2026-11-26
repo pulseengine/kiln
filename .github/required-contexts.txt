@@ -8,3 +8,8 @@ Security Audit (macos-latest)
 Security Audit (windows-latest)
 Traceability (rivet validate)
 Kani proofs and ledger
+Claim check (README ↔ evidence)
+Code Quality Checks
+MSRV (rustc 1.85.0: kiln-platform and the SR-97 crates)
+Static musl build (SR-68)
+Dependency Review
