@@ -36,10 +36,6 @@ jobs:
         with:
           toolchain: 1.86.0
 
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
-        with:
-          key: proofs
-
       - name: Cache Kani
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
@@ -80,10 +76,15 @@ jobs:
 
       - name: Kani on the floor harnesses
         run: |
+          # The default run shell is `bash -e` without pipefail; without this a failing
+          # cargo kani behind `| tee` leaves the step green.
+          set -o pipefail
           mkdir -p "$RUNNER_TEMP/kani"
           cargo kani -p kiln-async -Z unstable-options --harness-timeout 10m \
             2>&1 | tee "$RUNNER_TEMP/kani/kiln-async.log"
-          cargo kani -p kiln-builtins --harness proofs::dispatch_import_returns_zero_without_platform \
+          # --tests: the lib build defines #[panic_handler] (no_std), which collides with the
+          # std that Kani links (E0152); under cfg(test) the crate builds with std and no handler.
+          cargo kani -p kiln-builtins --tests --harness proofs::dispatch_import_returns_zero_without_platform \
             -Z unstable-options --harness-timeout 10m \
             2>&1 | tee "$RUNNER_TEMP/kani/kiln-builtins.log"
 

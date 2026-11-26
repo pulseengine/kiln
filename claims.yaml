@@ -24,14 +24,22 @@ claims:
       - kind: file-exists
         path: external/testsuite/i32.wast
 
-  # "Kani-checked (selected components)" — the Kani harnesses genuinely exist on the
-  # utility crates. If they vanish, the badge is unbacked → red.
+  # The Kani badge counts the harnesses that verify against all harnesses in the proof
+  # ledger (SR-121). The ledger check in .github/workflows/proofs.yml keeps the 109 rows
+  # equal to the harness markers in the sources; the verified count may not exceed 4
+  # without this claim being rewritten.
   - id: KILN-KANI-SELECTED
     doc: README.md
-    text: "Kani-checked (selected)"
+    text: "Kani: 4 of 109 harnesses verify, rest ledgered"
     evidence:
       - kind: file-exists
-        path: kiln-math/src/safety.rs
+        path: safety/verification/proof-ledger.toml
+      - kind: file-exists
+        path: .github/workflows/proofs.yml
+      - kind: count-max
+        pattern: 'status = "verified"'
+        glob: ['safety/verification/proof-ledger.toml']
+        max: 4
       - kind: count-max
         pattern: '#\[kani::proof\]'
         glob: ['kiln-runtime/src/**/*.rs']
