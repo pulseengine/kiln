@@ -148,7 +148,9 @@ jobs:
             exit 1
           fi
           {
-            echo '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Kiln API Documentation</title></head>'
+            echo '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Kiln API Documentation</title>'
+            # Build marker: the deploy job fetches the live page and requires it.
+            echo "<meta name=\"kiln-build\" content=\"${GITHUB_SHA}\"></head>"
             echo '<body><h1>Kiln API Documentation</h1><ul>'
             for c in $crates; do
               echo "<li><a href=\"$c/index.html\">${c#api/}</a></li>"
@@ -181,3 +183,23 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5
+
+      # A deploy that reports success can still leave the site stale or 404
+      # (the repo homepage pointed at a dead /wrt/ URL until 2026-11-27).
+      # Fetch the live page and require HTTP 200 and this run's build marker.
+      - name: Verify the live site serves this build
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          set -u
+          for attempt in $(seq 1 12); do
+            code=$(curl -sS -o page.html -w '%{http_code}' -H 'Cache-Control: no-cache' "${PAGE_URL}?v=${GITHUB_SHA}" || echo 000)
+            if [ "$code" = 200 ] && grep -Fq "content=\"${GITHUB_SHA}\"" page.html; then
+              echo "live: ${PAGE_URL} serves ${GITHUB_SHA}"
+              exit 0
+            fi
+            echo "attempt ${attempt}: HTTP ${code}, build marker $(grep -o 'name="kiln-build" content="[0-9a-f]*"' page.html || echo absent)"
+            sleep 15
+          done
+          echo "::error::${PAGE_URL} did not serve build ${GITHUB_SHA} with HTTP 200 within 3 minutes"
+          exit 1
