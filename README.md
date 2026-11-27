@@ -107,13 +107,15 @@ cargo test --workspace
 
 - WebAssembly Component Model parsing and instantiation
 - WASI 0.2 stdout/stderr output (`wasi:cli/stdout`, `wasi:io/streams`)
+- WASI 0.2 arguments, environment (`--wasi-env NAME`) and exit status for meld-fused command components
+- WASI 0.2 filesystem under `--dir HOST::GUEST` preopens: open, read and write (including via streams and append), stat, read-directory, create and remove directories, unlink and rename
 - Core WebAssembly module execution
 - Basic memory management with bounds checking
 - `no_std` compatible foundation
 
 ### In Progress
 
-- Additional WASI 0.2 interfaces (filesystem, environment)
+- WASI filesystem error reporting as in wasmtime: a path the sandbox refuses ends the run instead of returning an error code to the guest, and a `..` that stays inside the preopen is refused (SR-106)
 - Cross-component function calls
 - Full Component Model linking
 
