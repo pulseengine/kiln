@@ -1,0 +1,16 @@
+artifacts:
+
+  - id: SR-130
+    type: requirement
+    title: kiln provides the pulseengine:native-exec@0.1.0 host interface, which runs a program only if its canonical path is on the host's allowlist
+    status: approved
+    release: v0.10.0
+    description: "Seam kiln-kapsel/native-exec (pulseengine/kiln#741; consumer pulseengine/kapsel, design in pulseengine/kapsel#140). kapsel is a WASM capability shell for agents under zwinger, run on wasmtime and kiln differentially; it needs to run allowlisted native tools (git, cargo, bazel) mid-pipeline. REQUIRED: (1) kiln holds the WIT for package pulseengine:native-exec@0.1.0: a request of program, args, env, cwd and explicit wasi:io input and output stream handles; a result of an exit code (u8) or an error that is not-allowed, not-found or failed, with death by signal a separate signaled(u8) case. (2) kiln serves it through a HostImportHandler beside kiln-wasi that shares kiln-wasi's resource table for the stream handles. (3) The host canonicalizes the requested program and refuses it with not-allowed unless the canonical path is on the allowlist given to kiln at startup; with no allowlist every request is refused. The host spawns exactly the canonical path it checked, never the guest's string, and refuses the request if the file at that path is no longer the one recorded when the allowlist was loaded (same device and inode), so swapping a symlink or file between the check and the spawn cannot run a different program. (4) A component that imports native-exec while kiln was started without it is refused at instantiation (SR-65), not at call time. Verified by: kilnd tests that run an allowed program and check its exit code and the bytes written to the output stream; refuse a program not on the allowlist, a symlink or relative path that canonicalizes outside it, and every request with no allowlist; refuse a request after the allowlisted file has been replaced since the allowlist was loaded; report a signal death as signaled; and a meld-fused wasm32-wasip2 component that calls native-exec giving the same result on kiln as on kapsel's wasmtime implementation. Out of scope: what a spawned program itself starts (build scripts, hooks, toolchains), which needs an OS mechanism kapsel chooses (open question in #140); the gale+synth variant through kiln-builtins, which needs its own design pass. Maintainer decisions 2026-11-27: package name and org ownership (kiln decision window); WIT file in the kiln repo (kapsel option dialog, recorded in pulseengine/kapsel#140); approved for v0.10.0 (kiln option dialogue)."
+    tags: [native-exec, host-interface, kapsel, seam, capability]
+    links:
+      - type: refines
+        target: SR-65
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-27T09:00:00Z
