@@ -158,6 +158,6 @@ MIT License &mdash; see [LICENSE](LICENSE).
 
 <div align="center">
 
-<sub>Part of <a href="https://github.com/pulseengine">PulseEngine</a> &mdash; a WebAssembly toolchain for safety-critical systems, grounded in spec-suite conformance and a ledgered Kani baseline</sub>
+<sub>Part of <a href="https://github.com/pulseengine">PulseEngine</a> &mdash; a WebAssembly Component Model engine for safety-critical systems, grounded in spec-suite conformance and a ledgered Kani baseline</sub>
 
 </div>
