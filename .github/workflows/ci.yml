@@ -500,3 +500,95 @@ jobs:
               ./kiln empty.wasm
               echo "kiln empty.wasm exit 0"
             '
+
+  # SR-129: kiln loads and instantiates a 4 MB meld-fused component fast
+  # enough that a short call is not dominated by startup. The fixture is
+  # built here, not committed: sieve at a pinned commit for wasm32-wasip2,
+  # fused by a pinned meld, cached on those two pins.
+  sr129_fused_startup:
+    name: Fused sieve startup within 2.0 s (SR-129)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      SIEVE_REV: fade9e699b08b86ca0362526f23f3e85b6479b35 # sieve v0.4.6
+      SIEVE_VERSION: 0.4.6
+      MELD_VERSION: v0.70.0
+      MELD_SHA256: 9ff3e50d538a54fd129a8962733b766569218eb9dbb8b9be642b389b6063895c
+      KILN_CONTROL_VERSION: v0.9.0 # before #737; must exceed the limit
+      KILN_CONTROL_SHA256: 768a1f5971656635d24b614d48fb50337e810da0e8c8006f8e863d40bc550ec2
+      LIMIT_SECONDS: "2.0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master; toolchain set in with:
+        with:
+          toolchain: stable
+          targets: wasm32-wasip2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          key: ci-sr129
+      - name: Cache the fused sieve fixture
+        id: fixture
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: sr129-fixture
+          key: sr129-sieve-${{ env.SIEVE_REV }}-meld-${{ env.MELD_VERSION }}
+      - name: Build sieve (wasm32-wasip2) and fuse it with meld
+        if: steps.fixture.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          w="$RUNNER_TEMP/sr129"
+          mkdir -p "$w" sr129-fixture
+          git init -q "$w/sieve"
+          git -C "$w/sieve" fetch -q --depth 1 https://github.com/pulseengine/sieve "$SIEVE_REV"
+          git -C "$w/sieve" checkout -q FETCH_HEAD
+          (cd "$w/sieve" && CARGO_TARGET_DIR="$w/target" cargo build --locked --release --target wasm32-wasip2)
+          m="meld-$MELD_VERSION-x86_64-unknown-linux-musl"
+          curl -fsSL -o "$w/$m.tar.gz" "https://github.com/pulseengine/meld/releases/download/$MELD_VERSION/$m.tar.gz"
+          echo "$MELD_SHA256  $w/$m.tar.gz" | sha256sum -c -
+          tar -xzf "$w/$m.tar.gz" -C "$w" "$m/meld"
+          "$w/$m/meld" fuse --reproducible --memory multi \
+            --emit-import-map sr129-fixture/sieve.map.json \
+            -o sr129-fixture/sieve.fused.wasm "$w/target/wasm32-wasip2/release/sieve.wasm"
+      - name: Build kiln
+        run: cargo build --release -p kilnd
+      - name: Time fused sieve --version (median of 5, limit 2.0 s)
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -l sr129-fixture/sieve.fused.wasm
+          sha256sum sr129-fixture/sieve.fused.wasm
+          times=()
+          for i in 1 2 3 4 5; do
+            s=$(date +%s.%N)
+            out=$(target/release/kiln --wasi --import-map sr129-fixture/sieve.map.json sr129-fixture/sieve.fused.wasm --version)
+            e=$(date +%s.%N)
+            head -n1 <<<"$out" | grep -qx "sieve $SIEVE_VERSION"
+            t=$(echo "$e - $s" | bc)
+            echo "run $i: $t s"
+            times+=("$t")
+          done
+          median=$(printf '%s\n' "${times[@]}" | sort -g | sed -n 3p)
+          echo "median: $median s (limit $LIMIT_SECONDS s)"
+          [ "$(echo "$median <= $LIMIT_SECONDS" | bc)" = 1 ]
+      # Negative control: the same measurement on kiln 0.9.0, which copies the
+      # provider buffer per instruction (fixed in #737), must exceed the limit.
+      # A pass here means the gate cannot tell the regression apart.
+      - name: Negative control, kiln 0.9.0 exceeds the limit
+        shell: bash
+        run: |
+          set -euo pipefail
+          w="$RUNNER_TEMP/sr129-control"
+          mkdir -p "$w"
+          a="kiln-$KILN_CONTROL_VERSION-x86_64-unknown-linux-musl.tar.gz"
+          curl -fsSL -o "$w/$a" "https://github.com/pulseengine/kiln/releases/download/$KILN_CONTROL_VERSION/$a"
+          echo "$KILN_CONTROL_SHA256  $w/$a" | sha256sum -c -
+          tar -xzf "$w/$a" -C "$w" ./kiln
+          s=$(date +%s.%N)
+          rc=0
+          timeout 30 "$w/kiln" --wasi --import-map sr129-fixture/sieve.map.json sr129-fixture/sieve.fused.wasm --version || rc=$?
+          e=$(date +%s.%N)
+          t=$(echo "$e - $s" | bc)
+          echo "kiln $KILN_CONTROL_VERSION: rc $rc, $t s"
+          if [ "$rc" != 0 ] && [ "$rc" != 124 ]; then echo "control failed for another reason (rc $rc)"; exit 1; fi
+          [ "$(echo "$t > $LIMIT_SECONDS" | bc)" = 1 ]
