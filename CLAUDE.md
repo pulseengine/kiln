@@ -524,7 +524,7 @@ The JSON output follows LSP (Language Server Protocol) specification for maximum
 {
   "version": "1.0",
   "timestamp": "2025-06-21T11:39:57.067142+00:00",
-  "workspace_root": "/Users/r/git/kiln",
+  "workspace_root": "/path/to/kiln",
   "command": "build",
   "diagnostics": [
     {
