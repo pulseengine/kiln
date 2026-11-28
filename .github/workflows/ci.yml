@@ -571,10 +571,12 @@ jobs:
           median=$(printf '%s\n' "${times[@]}" | sort -g | sed -n 3p)
           echo "median: $median s (limit $LIMIT_SECONDS s)"
           [ "$(echo "$median <= $LIMIT_SECONDS" | bc)" = 1 ]
-      # Negative control: the same measurement on kiln 0.9.0, which copies the
-      # provider buffer per instruction (fixed in #737), must exceed the limit.
-      # A pass here means the gate cannot tell the regression apart.
-      - name: Negative control, kiln 0.9.0 exceeds the limit
+      # Negative control: the gate's predicate (exit 0, prints the version,
+      # within the limit) must reject kiln 0.9.0, which copies the provider
+      # buffer per instruction (fixed in #737). Unbounded, 0.9.0 reaches a
+      # 50 GB peak footprint on this fixture (macOS) and the hosted runner is
+      # lost, so the run is capped at 4 GiB of address space and 30 s.
+      - name: Negative control, the gate rejects kiln 0.9.0
         shell: bash
         run: |
           set -euo pipefail
@@ -586,9 +588,14 @@ jobs:
           tar -xzf "$w/$a" -C "$w" ./kiln
           s=$(date +%s.%N)
           rc=0
-          timeout 30 "$w/kiln" --wasi --import-map sr129-fixture/sieve.map.json sr129-fixture/sieve.fused.wasm --version || rc=$?
+          out=$( (ulimit -v 4194304; timeout 30 "$w/kiln" --wasi --import-map sr129-fixture/sieve.map.json sr129-fixture/sieve.fused.wasm --version) 2>"$w/stderr") || rc=$?
           e=$(date +%s.%N)
           t=$(echo "$e - $s" | bc)
           echo "kiln $KILN_CONTROL_VERSION: rc $rc, $t s"
-          if [ "$rc" != 0 ] && [ "$rc" != 124 ]; then echo "control failed for another reason (rc $rc)"; exit 1; fi
-          [ "$(echo "$t > $LIMIT_SECONDS" | bc)" = 1 ]
+          tail -n 3 "$w/stderr"
+          if [ "$rc" = 0 ] && head -n1 <<<"$out" | grep -qx "sieve $SIEVE_VERSION" \
+            && [ "$(echo "$t <= $LIMIT_SECONDS" | bc)" = 1 ]; then
+            echo "the gate passes kiln $KILN_CONTROL_VERSION: it cannot detect the regression"
+            exit 1
+          fi
+          echo "the gate rejects kiln $KILN_CONTROL_VERSION"
