@@ -30,7 +30,7 @@ Measurement only, taken on branch `feat/kani-census` off `62e3102f`. Nothing in 
 
 ## Commands
 
-Environment for every run: `CARGO_TARGET_DIR=/Volumes/Home/cargo-target-kani-census CARGO_BUILD_JOBS=4`, prefix `nice -n 19`, `timeout 2400`, run in `kiln` worktree root.
+Environment for every run: a dedicated `CARGO_TARGET_DIR`, `CARGO_BUILD_JOBS=4`, prefix `nice -n 19`, `timeout 2400`, run in `kiln` worktree root.
 
 | Run | Command (after `nice -n 19`) | Outcome |
 |---|---|---|
@@ -52,7 +52,7 @@ Environment for every run: `CARGO_TARGET_DIR=/Volumes/Home/cargo-target-kani-cen
 | component | `cargo kani -p kiln-component --features kani` | 21 errors, `kiln-platform/src/formal_verification.rs` |
 | foundation | `cargo kani -p kiln-foundation` and `... --features kani` | 72 errors each |
 
-Raw logs are not committed. They were written to `/Volumes/Home/kani-census-logs/*.log`.
+Raw logs are not committed.
 
 ## Per-harness table
 
