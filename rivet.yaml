@@ -59,19 +59,19 @@ commits:
 externals:
   meld:
     git: https://github.com/pulseengine/meld.git
-    path: /Volumes/Home/git/pulseengine/meld
+    path: ../meld
     ref: main
     prefix: meld
 
   synth:
     git: https://github.com/pulseengine/synth.git
-    path: /Volumes/Home/git/pulseengine/synth
+    path: ../synth
     ref: main
     prefix: synth
 
   gale:
     git: https://github.com/pulseengine/gale.git
-    path: /Volumes/Home/git/pulseengine/gale
+    path: ../gale
     ref: main
     prefix: gale
 
@@ -79,19 +79,19 @@ externals:
     # gust artifacts live in the gale repo (gale-gust is a gale checkout); distinct
     # prefix for the OS/gust artifact set.
     git: https://github.com/pulseengine/gale.git
-    path: /Volumes/Home/git/pulseengine/gale-gust
+    path: ../gale-gust
     ref: main
     prefix: gust
 
   loom:
     git: https://github.com/pulseengine/loom.git
-    path: /Volumes/Home/git/pulseengine/loom
+    path: ../loom
     ref: main
     prefix: loom
 
   sigil:
     git: https://github.com/pulseengine/sigil.git
-    path: /Volumes/Home/git/pulseengine/sigil
+    path: ../sigil
     ref: main
     prefix: sigil
 

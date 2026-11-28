@@ -232,10 +232,10 @@ Test Coverage: Comprehensive unit and integration tests
 
 ```bash
 # Verify no unsafe code
-find /Users/r/git/wrt2/kiln-wasi/src/nn -name "*.rs" | xargs grep -n "unsafe"
+find kiln-wasi/src/nn -name "*.rs" | xargs grep -n "unsafe"
 
 # Check for unwrap calls
-find /Users/r/git/wrt2/kiln-wasi/src/nn -name "*.rs" | xargs grep -n "\.unwrap()"
+find kiln-wasi/src/nn -name "*.rs" | xargs grep -n "\.unwrap()"
 
 # Verify compilation
 cargo check -p kiln-wasi --features "nn-preview2,tract"
